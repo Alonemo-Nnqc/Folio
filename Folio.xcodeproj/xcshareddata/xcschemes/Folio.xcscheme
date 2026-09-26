@@ -29,6 +29,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "1CD6F615502B2F1F3198986F"
+               BuildableName = "FolioTests.xctest"
+               BlueprintName = "FolioTests"
+               ReferencedContainer = "container:Folio.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "E9A949E9A6596932E120989F"
                BuildableName = "FolioUITests.xctest"
                BlueprintName = "FolioUITests"
@@ -53,6 +67,17 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "1CD6F615502B2F1F3198986F"
+               BuildableName = "FolioTests.xctest"
+               BlueprintName = "FolioTests"
+               ReferencedContainer = "container:Folio.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
          <TestableReference
             skipped = "NO"
             parallelizable = "NO">

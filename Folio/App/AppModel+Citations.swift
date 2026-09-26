@@ -3,20 +3,6 @@ import FolioCitation
 import FolioCore
 import UniformTypeIdentifiers
 
-enum CitationStyleOption: String, CaseIterable, Identifiable {
-    case bibtex, gbt7714, apa
-    var id: String { rawValue }
-    var title: String { style.displayName }
-
-    var style: CitationStyle {
-        switch self {
-        case .bibtex: .bibtex
-        case .gbt7714: .gbt7714
-        case .apa: .apa
-        }
-    }
-}
-
 extension AppModel {
     /// Items to cite: the given ids, else the selection, else the whole current view (CITE-02).
     func citationEntries(_ itemIds: [String]?) -> [CitationEntry] {

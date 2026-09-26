@@ -43,6 +43,26 @@ targets:
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+  FolioTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: FolioTests
+      - path: Folio/Views/Sidebar/SidebarDragRules.swift
+      - path: Folio/Views/ItemList/ItemMenuBuilder.swift
+      - path: Folio/App/CitationStyleOption.swift
+      - path: Folio/Support/AppKitExtensions.swift
+    dependencies:
+      - package: FolioCore
+        product: FolioCore
+      - package: FolioCore
+        product: FolioCitation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.FolioTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
   FolioUITests:
     type: bundle.ui-testing
     platform: macOS
@@ -63,6 +83,8 @@ schemes:
       targets:
         Folio: all
         FolioUITests: [test]
+        FolioTests: [test]
     test:
       targets:
+        - FolioTests
         - FolioUITests
