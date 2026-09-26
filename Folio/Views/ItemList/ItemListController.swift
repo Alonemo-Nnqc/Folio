@@ -256,7 +256,8 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         switch column {
         case .title:
             let cell = make(TitleCell.self, TitleCell.identifier)
-            cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL))
+            let origin = entry.originItemId.flatMap { snapshot.items[$0]?.title }
+            cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin)
             return cell
         case .tags:
             let cell = make(TagsCell.self, TagsCell.identifier)

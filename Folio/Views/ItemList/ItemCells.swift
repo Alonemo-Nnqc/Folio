@@ -21,6 +21,10 @@ final class TitleCell: NSTableCellView {
         spinner.isDisplayedWhenStopped = false
         spinner.setAccessibilityIdentifier("retrievalSpinner")
         label.lineBreakMode = .byTruncatingTail
+        label.maximumNumberOfLines = 1
+        label.cell?.wraps = false
+        label.cell?.truncatesLastVisibleLine = true
+        label.allowsExpansionToolTips = true
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         badge.font = .systemFont(ofSize: 10, weight: .semibold)
         badge.textColor = .white
@@ -54,15 +58,15 @@ final class TitleCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
-    func configureItem(_ item: Item, fileURL: URL?) {
+    /// `origin` is the title of the item a trashed file was deleted from (TRASH-03).
+    func configureItem(_ item: Item, fileURL: URL?, origin: String? = nil) {
+        // Set the base font before any attributed text so the smaller secondary run survives.
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
         let retrieving = item.kind == .standalone && item.metadataState == .pending
         if retrieving {
             icon.isHidden = true
             spinner.startAnimation(nil)
-            let text = NSMutableAttributedString(string: item.title, attributes: [.foregroundColor: NSColor.labelColor])
-            text.append(NSAttributedString(string: "   正在检索元数据…", attributes: [
-                .foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]))
-            label.attributedStringValue = text
+            label.attributedStringValue = Self.title(item.title, secondary: "正在检索元数据…")
         } else {
             spinner.stopAnimation(nil)
             icon.isHidden = false
@@ -73,9 +77,12 @@ final class TitleCell: NSTableCellView {
                 icon.image = NSImage(systemSymbolName: Self.symbol(for: item.type), accessibilityDescription: item.type.displayName)
                 icon.contentTintColor = .secondaryLabelColor
             }
-            label.stringValue = item.title
+            if let origin {
+                label.attributedStringValue = Self.title(item.title, secondary: "来自：\(origin)")
+            } else {
+                label.stringValue = item.title
+            }
         }
-        label.font = .systemFont(ofSize: NSFont.systemFontSize)
         badge.isHidden = true
         setAccessibilityLabel(item.title)
     }
@@ -89,6 +96,18 @@ final class TitleCell: NSTableCellView {
         label.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
         badge.isHidden = !isDefault
         setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : ""))
+    }
+
+    /// Title plus a smaller grey note, kept on one line and truncated at the tail.
+    static func title(_ title: String, secondary: String) -> NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        let text = NSMutableAttributedString(string: title, attributes: [
+            .foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize), .paragraphStyle: style])
+        text.append(NSAttributedString(string: "   " + secondary, attributes: [
+            .foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .paragraphStyle: style]))
+        return text
     }
 
     static func symbol(for type: ItemType) -> String {

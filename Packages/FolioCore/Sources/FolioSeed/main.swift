@@ -151,6 +151,12 @@ func demo(root: URL, realPDFs: URL?) throws {
         try library.setMetadataState(.failed, for: id)
     }
     try library.trashItems([ids[10]])
+    // A file deleted on its own: shows in the trash with "来自：<item>" (TRASH-03).
+    let extra = work.appending(path: "Rebuttal Letter.pdf")
+    try makePDF(at: extra, lines: ["Response to reviewers"])
+    if case .added(let fileId) = try library.addFiles([extra], toItem: ids[2], autoRename: false).first {
+        try library.trashFiles([fileId])
+    }
     print("demo library: \(root.path) — \(ids.count) items")
 }
 
