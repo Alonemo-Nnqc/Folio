@@ -7,14 +7,56 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		115FA95DA4AB73ADE12ED00B /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
+		179802828504A543D5DF8A24 /* ItemColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E1F116DA3A1C23CF222150 /* ItemColumn.swift */; };
+		1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */; };
+		1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */; };
+		229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */; };
+		233BD9CB989E0FD7C545E321 /* SidebarNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F56119AC33A554616DDE332 /* SidebarNode.swift */; };
 		262F73093B1C8E9406AF514E /* FolioZotero in Frameworks */ = {isa = PBXBuildFile; productRef = 4838D9DEB8300120A13D43FC /* FolioZotero */; };
+		2732748DFC335EE44FFA6CE6 /* ItemPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */; };
+		2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */; };
+		3624365AEB367D46C2802000 /* ItemListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C29581C2726A31CD4224B6 /* ItemListView.swift */; };
 		3FF47E02AA57991DB804FA5D /* FolioLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029EAFA7C40470957052F41F /* FolioLaunchTests.swift */; };
+		4BC2A1948DCAB52C765B3842 /* SidebarSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */; };
+		4FF862D239D685675C901BD2 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2CFA125AFED333B13901F8 /* AppSettings.swift */; };
+		5BCA4C0023D1FD6E0EAA406C /* ManualMatchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */; };
 		5D66D20231FB94CF147E9066 /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = B6A8CA359CE44514A50D825D /* FolioCore */; };
+		656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */; };
+		66E27378BA905196D0308E5C /* SidebarOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10666DC9FC84148371857AB2 /* SidebarOutline.swift */; };
 		67CCE0A5B8A3B6D30755169C /* FolioMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 34BF6DC9FEBBB9959304E9DE /* FolioMetadata */; };
+		6B1F28583E7C5542B2D06D70 /* TagPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98AAA2320C6674271F19228 /* TagPalette.swift */; };
+		769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7932EDA311090181F8A01857 /* MetadataResolving.swift */; };
+		76B60A3A04FB3326B0F61A3A /* AppModel+Citations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */; };
+		7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */; };
+		7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2196364CD8371363D279F008 /* AppModel.swift */; };
+		8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF15B612B7CD351CEF0B6188 /* ItemCells.swift */; };
+		95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4908084420120AA90A895B /* MetadataInspector.swift */; };
+		97CF6EEC520A880BCAE68556 /* TagChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E97D45E0A435766ED8C239 /* TagChipsView.swift */; };
+		A5588AAA10F73CC9344282E1 /* TagEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */; };
+		A889AF7C74556047D6DB2181 /* SidebarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1DF7E040C9F5D52316FBA /* SidebarController.swift */; };
+		A9779657A8C5513D3DEBB246 /* ItemMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */; };
+		B210957E96EDEA3B77CD1BB2 /* AppModel+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA65511EB946A0A4443109A /* AppModel+Actions.swift */; };
+		B2E8FD7BE7D85C42C5D206B1 /* AnnotationsInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2665EEEE580536C3E363B20 /* AnnotationsInspector.swift */; };
 		B589D7C031675E6E6AAF8D65 /* FolioCitation in Frameworks */ = {isa = PBXBuildFile; productRef = 1CC1347A7F8DE0904600241B /* FolioCitation */; };
 		B6ADB5796E64EF2F629B917F /* FolioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4556A712E7A2B56DE80CBD /* FolioApp.swift */; };
+		BBED3A3CE0EED3D1B26D8D74 /* ItemListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4ADEF94FCB91031CE5894A /* ItemListController.swift */; };
+		C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD3544693B93059CC5B0428 /* SettingsView.swift */; };
+		C97FD1887524C189537B0BFB /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472CC312BD78A83D303A6C60 /* SidebarView.swift */; };
+		CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */; };
+		D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A38FE3A131A9C4668478500 /* FileOpener.swift */; };
+		D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */; };
+		D7AEEF4E6167A1046372E74E /* TagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88490FC0D6D0D20CD3A4860 /* TagChip.swift */; };
+		DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28A6B25C2466839A4E87F5AA /* DropOverlay.swift */; };
+		DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */; };
+		E218836AD24B41E87754962A /* FolioCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */; };
 		EDF3F8A2FB9F7FAAD1566577 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4262FBCFBF74F063C7B2307A /* AppDelegate.swift */; };
+		F108F71D328BE0544A7E874A /* SidebarCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817AFCCB14872930FD292CAD /* SidebarCells.swift */; };
 		F1F44CC82CD26BB6095683E6 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43B0042A3248AE904583DC0 /* RootView.swift */; };
+		F41912C8FCEEAFF0C0C89154 /* ItemOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDBE8A588DC57A16209351D /* ItemOutline.swift */; };
+		FCADCFAF105CF550A7F82477 /* StandaloneFileInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB30C7AC3422C1A7BBE75E0 /* StandaloneFileInspector.swift */; };
+		FE0E9B582AA7521356256C94 /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CC934F2839FEC9900FD8D2A /* RatingControl.swift */; };
+		FED85B9905E600BBC82747AA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70249B1A04E6A957FCB8B5C /* NetworkMonitor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -29,14 +71,56 @@
 
 /* Begin PBXFileReference section */
 		029EAFA7C40470957052F41F /* FolioLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioLaunchTests.swift; sourceTree = "<group>"; };
+		0A38FE3A131A9C4668478500 /* FileOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileOpener.swift; sourceTree = "<group>"; };
+		10666DC9FC84148371857AB2 /* SidebarOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarOutline.swift; sourceTree = "<group>"; };
+		1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemPasteboard.swift; sourceTree = "<group>"; };
+		2196364CD8371363D279F008 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		24F1DF7E040C9F5D52316FBA /* SidebarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarController.swift; sourceTree = "<group>"; };
+		27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualMatchSheet.swift; sourceTree = "<group>"; };
+		28A6B25C2466839A4E87F5AA /* DropOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropOverlay.swift; sourceTree = "<group>"; };
+		2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemMenuBuilder.swift; sourceTree = "<group>"; };
+		385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPickerPopover.swift; sourceTree = "<group>"; };
+		3CC934F2839FEC9900FD8D2A /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
+		3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSearchField.swift; sourceTree = "<group>"; };
 		4262FBCFBF74F063C7B2307A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		472CC312BD78A83D303A6C60 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
+		5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarDragRules.swift; sourceTree = "<group>"; };
 		5B8BAAD0990BFEBF5AC22207 /* Folio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Folio.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5DA65511EB946A0A4443109A /* AppModel+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Actions.swift"; sourceTree = "<group>"; };
+		6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentifierAddSheet.swift; sourceTree = "<group>"; };
+		6F4908084420120AA90A895B /* MetadataInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataInspector.swift; sourceTree = "<group>"; };
+		750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoteroImportSheet.swift; sourceTree = "<group>"; };
+		75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
+		7932EDA311090181F8A01857 /* MetadataResolving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataResolving.swift; sourceTree = "<group>"; };
+		7C2CFA125AFED333B13901F8 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportCoordinator.swift; sourceTree = "<group>"; };
+		7F56119AC33A554616DDE332 /* SidebarNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNode.swift; sourceTree = "<group>"; };
+		7FB30C7AC3422C1A7BBE75E0 /* StandaloneFileInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StandaloneFileInspector.swift; sourceTree = "<group>"; };
+		817AFCCB14872930FD292CAD /* SidebarCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCells.swift; sourceTree = "<group>"; };
 		87D83803635133CE2F717E30 /* Folio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Folio.entitlements; sourceTree = "<group>"; };
 		88E736E10A3E272DD912AF5C /* FolioCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = FolioCore; path = Packages/FolioCore; sourceTree = SOURCE_ROOT; };
 		8B4EA41EDA75780003D86348 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		98E1F116DA3A1C23CF222150 /* ItemColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemColumn.swift; sourceTree = "<group>"; };
+		994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatePrompter.swift; sourceTree = "<group>"; };
 		9CEC680A68AB0D3810F2F61D /* FolioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A70249B1A04E6A957FCB8B5C /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		B2665EEEE580536C3E363B20 /* AnnotationsInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationsInspector.swift; sourceTree = "<group>"; };
+		C4E97D45E0A435766ED8C239 /* TagChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChipsView.swift; sourceTree = "<group>"; };
+		C98AAA2320C6674271F19228 /* TagPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPalette.swift; sourceTree = "<group>"; };
+		CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorsEditor.swift; sourceTree = "<group>"; };
+		DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastOverlay.swift; sourceTree = "<group>"; };
+		DEDBE8A588DC57A16209351D /* ItemOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemOutline.swift; sourceTree = "<group>"; };
+		E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Citations.swift"; sourceTree = "<group>"; };
+		E2C29581C2726A31CD4224B6 /* ItemListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListView.swift; sourceTree = "<group>"; };
 		E43B0042A3248AE904583DC0 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastCenter.swift; sourceTree = "<group>"; };
+		E88490FC0D6D0D20CD3A4860 /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
 		ED4556A712E7A2B56DE80CBD /* FolioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioApp.swift; sourceTree = "<group>"; };
+		EF15B612B7CD351CEF0B6188 /* ItemCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCells.swift; sourceTree = "<group>"; };
+		EF4ADEF94FCB91031CE5894A /* ItemListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListController.swift; sourceTree = "<group>"; };
+		EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioCommands.swift; sourceTree = "<group>"; };
+		FAD3544693B93059CC5B0428 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,7 +152,12 @@
 			isa = PBXGroup;
 			children = (
 				4262FBCFBF74F063C7B2307A /* AppDelegate.swift */,
+				2196364CD8371363D279F008 /* AppModel.swift */,
+				5DA65511EB946A0A4443109A /* AppModel+Actions.swift */,
+				E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */,
+				7C2CFA125AFED333B13901F8 /* AppSettings.swift */,
 				ED4556A712E7A2B56DE80CBD /* FolioApp.swift */,
+				EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -77,8 +166,41 @@
 			isa = PBXGroup;
 			children = (
 				E43B0042A3248AE904583DC0 /* RootView.swift */,
+				3CDE13E47C9A1ACC37838A10 /* Inspector */,
+				5A0BDF2B586650B8CF686F45 /* ItemList */,
+				E269DC8824BA97149E186E6E /* Overlays */,
+				DE2F93611EA52C42351C186D /* Settings */,
+				BBD723AC5EDB66386EB1FE7E /* Sheets */,
+				F3CDDE99DB031355A987C459 /* Sidebar */,
+				622445697A6A1393E6CDE54D /* Tags */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		3C1337645959FC89A220EA0F /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */,
+				0A38FE3A131A9C4668478500 /* FileOpener.swift */,
+				7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */,
+				7932EDA311090181F8A01857 /* MetadataResolving.swift */,
+				A70249B1A04E6A957FCB8B5C /* NetworkMonitor.swift */,
+				E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		3CDE13E47C9A1ACC37838A10 /* Inspector */ = {
+			isa = PBXGroup;
+			children = (
+				B2665EEEE580536C3E363B20 /* AnnotationsInspector.swift */,
+				CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */,
+				75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */,
+				6F4908084420120AA90A895B /* MetadataInspector.swift */,
+				3CC934F2839FEC9900FD8D2A /* RatingControl.swift */,
+				7FB30C7AC3422C1A7BBE75E0 /* StandaloneFileInspector.swift */,
+			);
+			path = Inspector;
 			sourceTree = "<group>";
 		};
 		547453B486D036F9CE95ED9B /* FolioUITests */ = {
@@ -87,6 +209,32 @@
 				029EAFA7C40470957052F41F /* FolioLaunchTests.swift */,
 			);
 			path = FolioUITests;
+			sourceTree = "<group>";
+		};
+		5A0BDF2B586650B8CF686F45 /* ItemList */ = {
+			isa = PBXGroup;
+			children = (
+				EF15B612B7CD351CEF0B6188 /* ItemCells.swift */,
+				98E1F116DA3A1C23CF222150 /* ItemColumn.swift */,
+				EF4ADEF94FCB91031CE5894A /* ItemListController.swift */,
+				E2C29581C2726A31CD4224B6 /* ItemListView.swift */,
+				2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */,
+				DEDBE8A588DC57A16209351D /* ItemOutline.swift */,
+				1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */,
+				C4E97D45E0A435766ED8C239 /* TagChipsView.swift */,
+			);
+			path = ItemList;
+			sourceTree = "<group>";
+		};
+		622445697A6A1393E6CDE54D /* Tags */ = {
+			isa = PBXGroup;
+			children = (
+				E88490FC0D6D0D20CD3A4860 /* TagChip.swift */,
+				556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */,
+				C98AAA2320C6674271F19228 /* TagPalette.swift */,
+				385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */,
+			);
+			path = Tags;
 			sourceTree = "<group>";
 		};
 		62523BE78BDC40FAA03B8BBD /* Products */ = {
@@ -106,15 +254,57 @@
 			path = Packages;
 			sourceTree = "<group>";
 		};
+		BBD723AC5EDB66386EB1FE7E /* Sheets */ = {
+			isa = PBXGroup;
+			children = (
+				6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */,
+				27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */,
+				750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */,
+			);
+			path = Sheets;
+			sourceTree = "<group>";
+		};
 		D43EB5CE0E77CD5592721DA7 /* Folio */ = {
 			isa = PBXGroup;
 			children = (
 				87D83803635133CE2F717E30 /* Folio.entitlements */,
 				8B4EA41EDA75780003D86348 /* Info.plist */,
 				218D0BBA62C139CC9BAFEE74 /* App */,
+				3C1337645959FC89A220EA0F /* Services */,
 				39941FBBE2E1B98D3B4893C0 /* Views */,
 			);
 			path = Folio;
+			sourceTree = "<group>";
+		};
+		DE2F93611EA52C42351C186D /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				FAD3544693B93059CC5B0428 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		E269DC8824BA97149E186E6E /* Overlays */ = {
+			isa = PBXGroup;
+			children = (
+				28A6B25C2466839A4E87F5AA /* DropOverlay.swift */,
+				DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */,
+			);
+			path = Overlays;
+			sourceTree = "<group>";
+		};
+		F3CDDE99DB031355A987C459 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				817AFCCB14872930FD292CAD /* SidebarCells.swift */,
+				24F1DF7E040C9F5D52316FBA /* SidebarController.swift */,
+				5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */,
+				7F56119AC33A554616DDE332 /* SidebarNode.swift */,
+				10666DC9FC84148371857AB2 /* SidebarOutline.swift */,
+				3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */,
+				472CC312BD78A83D303A6C60 /* SidebarView.swift */,
+			);
+			path = Sidebar;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -208,9 +398,51 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B2E8FD7BE7D85C42C5D206B1 /* AnnotationsInspector.swift in Sources */,
 				EDF3F8A2FB9F7FAAD1566577 /* AppDelegate.swift in Sources */,
+				B210957E96EDEA3B77CD1BB2 /* AppModel+Actions.swift in Sources */,
+				76B60A3A04FB3326B0F61A3A /* AppModel+Citations.swift in Sources */,
+				7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */,
+				4FF862D239D685675C901BD2 /* AppSettings.swift in Sources */,
+				7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */,
+				DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */,
+				D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */,
+				D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */,
 				B6ADB5796E64EF2F629B917F /* FolioApp.swift in Sources */,
+				E218836AD24B41E87754962A /* FolioCommands.swift in Sources */,
+				1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */,
+				656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */,
+				DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */,
+				8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */,
+				179802828504A543D5DF8A24 /* ItemColumn.swift in Sources */,
+				BBED3A3CE0EED3D1B26D8D74 /* ItemListController.swift in Sources */,
+				3624365AEB367D46C2802000 /* ItemListView.swift in Sources */,
+				A9779657A8C5513D3DEBB246 /* ItemMenuBuilder.swift in Sources */,
+				F41912C8FCEEAFF0C0C89154 /* ItemOutline.swift in Sources */,
+				2732748DFC335EE44FFA6CE6 /* ItemPasteboard.swift in Sources */,
+				5BCA4C0023D1FD6E0EAA406C /* ManualMatchSheet.swift in Sources */,
+				95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */,
+				769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */,
+				FED85B9905E600BBC82747AA /* NetworkMonitor.swift in Sources */,
+				FE0E9B582AA7521356256C94 /* RatingControl.swift in Sources */,
 				F1F44CC82CD26BB6095683E6 /* RootView.swift in Sources */,
+				C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */,
+				F108F71D328BE0544A7E874A /* SidebarCells.swift in Sources */,
+				A889AF7C74556047D6DB2181 /* SidebarController.swift in Sources */,
+				115FA95DA4AB73ADE12ED00B /* SidebarDragRules.swift in Sources */,
+				233BD9CB989E0FD7C545E321 /* SidebarNode.swift in Sources */,
+				66E27378BA905196D0308E5C /* SidebarOutline.swift in Sources */,
+				4BC2A1948DCAB52C765B3842 /* SidebarSearchField.swift in Sources */,
+				C97FD1887524C189537B0BFB /* SidebarView.swift in Sources */,
+				FCADCFAF105CF550A7F82477 /* StandaloneFileInspector.swift in Sources */,
+				D7AEEF4E6167A1046372E74E /* TagChip.swift in Sources */,
+				97CF6EEC520A880BCAE68556 /* TagChipsView.swift in Sources */,
+				A5588AAA10F73CC9344282E1 /* TagEditorSheet.swift in Sources */,
+				6B1F28583E7C5542B2D06D70 /* TagPalette.swift in Sources */,
+				2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */,
+				1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */,
+				229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */,
+				CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
