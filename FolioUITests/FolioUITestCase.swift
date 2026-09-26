@@ -23,6 +23,7 @@ class FolioUITestCase: XCTestCase {
 
     override func tearDownWithError() throws {
         app?.terminate()
+        library = nil   // close the database before deleting its folder
         try? FileManager.default.removeItem(at: libraryURL.deletingLastPathComponent())
     }
 
@@ -32,7 +33,7 @@ class FolioUITestCase: XCTestCase {
     func launch() {
         app = XCUIApplication()
         app.launchArguments = ["-FolioLibraryPath", libraryURL.path, "-FolioOpenLog", openLogURL.path,
-                               "-ApplePersistenceIgnoreState", "YES", "-includeSubgroupItems", "YES"]
+                               "-ApplePersistenceIgnoreState", "YES", "-includeSubgroupItems", "YES", "-FolioUITesting", "YES"]
         app.launch()
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
     }
@@ -91,8 +92,31 @@ class FolioUITestCase: XCTestCase {
         itemList.outlineRows.containing(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
     }
 
+    /// An item of the open context menu (not the menu bar, which has its own "删除" etc.).
     func menuItem(_ title: String) -> XCUIElement {
-        app.menuItems[title].firstMatch
+        app.windows.firstMatch.descendants(matching: .menuItem)[title].firstMatch
+    }
+
+    /// A real mouse drag built from CGEvents. XCUITest's synthesized drags are not recognised by
+    /// NSOutlineView, while posted HID events behave exactly like the user's mouse.
+    func drag(_ source: XCUICoordinate, to target: XCUICoordinate) {
+        let from = source.screenPoint, to = target.screenPoint
+        func post(_ type: CGEventType, _ point: CGPoint) {
+            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?
+                .post(tap: .cghidEventTap)
+        }
+        post(.mouseMoved, from)
+        usleep(150_000)
+        post(.leftMouseDown, from)
+        usleep(250_000)
+        for step in 1...40 {
+            let t = CGFloat(step) / 40
+            post(.leftMouseDragged, CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t))
+            usleep(25_000)
+        }
+        usleep(600_000)
+        post(.leftMouseUp, to)
+        usleep(300_000)
     }
 
     func waitFor(_ element: XCUIElement, timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {

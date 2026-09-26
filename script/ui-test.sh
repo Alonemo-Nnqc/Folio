@@ -9,5 +9,5 @@ ONLY="${1:-FolioUITests}"
 xcodebuild -project Folio.xcodeproj -scheme Folio -derivedDataPath build/DerivedData -destination 'platform=macOS' \
   -allowProvisioningUpdates test -only-testing:"$ONLY" > /tmp/folio-uitest.log 2>&1
 STATUS=$?
-grep -E "error:|Test Case .*(passed|failed)|XCTAssert|failed -|TEST (SUCCEEDED|FAILED)" /tmp/folio-uitest.log | sed 's/^.*FolioUITests\//  /' | head -80
+grep -E "^Test Case .*(passed|failed)|: error: -\[|^\*\* TEST|\.swift:[0-9]+:[0-9]+: error" /tmp/folio-uitest.log | sed 's#^/.*/FolioUITests/#  #' | head -80
 exit $STATUS

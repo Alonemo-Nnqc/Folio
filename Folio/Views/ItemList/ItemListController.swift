@@ -98,8 +98,11 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             outline.addTableColumn(tableColumn)
             if column == .title { outline.outlineTableColumn = tableColumn }
         }
-        outline.autosaveName = "FolioItemColumns"
-        outline.autosaveTableColumns = true
+        // UI tests (`-FolioUITesting YES`) must not overwrite the user's column layout.
+        if !UserDefaults.standard.bool(forKey: "FolioUITesting") {
+            outline.autosaveName = "FolioItemColumns"
+            outline.autosaveTableColumns = true
+        }
         if let title = outline.tableColumn(withIdentifier: ItemColumn.title.identifier) { title.isHidden = false }
 
         let headerMenu = NSMenu()
