@@ -35,6 +35,7 @@
 		66E27378BA905196D0308E5C /* SidebarOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10666DC9FC84148371857AB2 /* SidebarOutline.swift */; };
 		67CCE0A5B8A3B6D30755169C /* FolioMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 34BF6DC9FEBBB9959304E9DE /* FolioMetadata */; };
 		6B1F28583E7C5542B2D06D70 /* TagPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98AAA2320C6674271F19228 /* TagPalette.swift */; };
+		7622528FDD18D475E60DE8EA /* Folio.icon in Resources */ = {isa = PBXBuildFile; fileRef = 5437B0A45443DA1FFBC67DAB /* Folio.icon */; };
 		769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7932EDA311090181F8A01857 /* MetadataResolving.swift */; };
 		76B60A3A04FB3326B0F61A3A /* AppModel+Citations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */; };
 		7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */; };
@@ -105,6 +106,7 @@
 		46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarUITests.swift; sourceTree = "<group>"; };
 		472CC312BD78A83D303A6C60 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioUITestCase.swift; sourceTree = "<group>"; };
+		5437B0A45443DA1FFBC67DAB /* Folio.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Folio.icon; sourceTree = "<group>"; };
 		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
 		5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarDragRules.swift; sourceTree = "<group>"; };
 		5B8BAAD0990BFEBF5AC22207 /* Folio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Folio.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -341,11 +343,20 @@
 				87D83803635133CE2F717E30 /* Folio.entitlements */,
 				8B4EA41EDA75780003D86348 /* Info.plist */,
 				218D0BBA62C139CC9BAFEE74 /* App */,
+				D4FB9A636E6175FE47B5C7BF /* Resources */,
 				3C1337645959FC89A220EA0F /* Services */,
 				7764F009465AF58943DC6E43 /* Support */,
 				39941FBBE2E1B98D3B4893C0 /* Views */,
 			);
 			path = Folio;
+			sourceTree = "<group>";
+		};
+		D4FB9A636E6175FE47B5C7BF /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5437B0A45443DA1FFBC67DAB /* Folio.icon */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		DE2F93611EA52C42351C186D /* Settings */ = {
@@ -387,6 +398,7 @@
 			buildConfigurationList = 053AAE1D1B4F8AD6CAC8296F /* Build configuration list for PBXNativeTarget "Folio" */;
 			buildPhases = (
 				3859F542EDB723E250691952 /* Sources */,
+				8AF20F2D7ED0809F38E8AD11 /* Resources */,
 				9DDB037244D0F79104ADBCB6 /* Frameworks */,
 			);
 			buildRules = (
@@ -491,6 +503,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8AF20F2D7ED0809F38E8AD11 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7622528FDD18D475E60DE8EA /* Folio.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		2DB195A7169B335485DDE5AE /* Sources */ = {
@@ -605,7 +628,7 @@
 		1F56EB963860C7169EDF99BD /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Folio;
 				CODE_SIGN_ENTITLEMENTS = Folio/Folio.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -748,7 +771,7 @@
 		DA92BB9625393CF84A265C86 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = Folio;
 				CODE_SIGN_ENTITLEMENTS = Folio/Folio.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
