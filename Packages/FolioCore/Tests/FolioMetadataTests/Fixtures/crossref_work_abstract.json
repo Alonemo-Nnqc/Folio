@@ -1,0 +1,89 @@
+{
+ "status": "ok",
+ "message-type": "work",
+ "message-version": "1.0.0",
+ "message": {
+  "publisher": "Springer Science and Business Media LLC",
+  "published-online": {
+   "date-parts": [
+    [
+     2025,
+     11,
+     21
+    ]
+   ]
+  },
+  "DOI": "10.1186/s12880-025-02021-4",
+  "type": "journal-article",
+  "created": {
+   "date-parts": [
+    [
+     2025,
+     11,
+     21
+    ]
+   ],
+   "date-time": "2025-11-21T15:25:33Z",
+   "timestamp": 1763738733000
+  },
+  "title": [
+   "Full-scale representation guided network for retinal vessel segmentation"
+  ],
+  "subtitle": [],
+  "volume": "25",
+  "issue": "1",
+  "author": [
+   {
+    "given": "Sunyong",
+    "family": "Seo",
+    "sequence": "first",
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   },
+   {
+    "given": "Sangwook",
+    "family": "Yoo",
+    "sequence": "additional",
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   },
+   {
+    "given": "Huisu",
+    "family": "Yoon",
+    "sequence": "additional",
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   }
+  ],
+  "container-title": [
+   "BMC Medical Imaging"
+  ],
+  "issued": {
+   "date-parts": [
+    [
+     2025,
+     11,
+     21
+    ]
+   ]
+  },
+  "URL": "https://doi.org/10.1186/s12880-025-02021-4",
+  "resource": {
+   "primary": {
+    "URL": "https://link.springer.com/10.1186/s12880-025-02021-4"
+   }
+  }
+ }
+}

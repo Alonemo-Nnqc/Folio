@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/sKcaCB4l3wArxvWnym7cmpUp31w</id>
+  <title>arXiv Query: search_query=&amp;id_list=2405.02717&amp;start=0&amp;max_results=10</title>
+  <updated>2026-09-26T12:01:47Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=&amp;start=0&amp;max_results=10&amp;id_list=2405.02717" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>10</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2405.02717v1</id>
+    <title>AFter: Attention-based Fusion Router for RGBT Tracking</title>
+    <updated>2024-05-04T17:24:09Z</updated>
+    <link href="https://arxiv.org/abs/2405.02717v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2405.02717v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Multi-modal feature fusion as a core investigative component of RGBT tracking emerges numerous fusion studies in recent years. However, existing RGBT tracking methods widely adopt fixed fusion structures to integrate multi-modal feature, which are hard to handle various challenges in dynamic scenarios. To address this problem, this work presents a novel \emph{A}ttention-based \emph{F}usion rou\emph{ter} called AFter, which optimizes the fusion structure to adapt to the dynamic challenging scenarios, for robust RGBT tracking. In particular, we design a fusion structure space based on the hierarchical attention network, each attention-based fusion unit corresponding to a fusion operation and a combination of these attention units corresponding to a fusion structure. Through optimizing the combination of attention-based fusion units, we can dynamically select the fusion structure to adapt to various challenging scenarios. Unlike complex search of different structures in neural architecture search algorithms, we develop a dynamic routing algorithm, which equips each attention-based fusion unit with a router, to predict the combination weights for efficient optimization of the fusion structure. Extensive experiments on five mainstream RGBT tracking datasets demonstrate the superior performance of the proposed AFter against state-of-the-art RGBT trackers. We release the code in https://github.com/Alexadlu/AFter.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-05-04T17:24:09Z</published>
+    <arxiv:comment>Peer review</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Andong Lu</name>
+    </author>
+    <author>
+      <name>Wanyu Wang</name>
+    </author>
+    <author>
+      <name>Chenglong Li</name>
+    </author>
+    <author>
+      <name>Jin Tang</name>
+    </author>
+    <author>
+      <name>Bin Luo</name>
+    </author>
+  </entry>
+</feed>

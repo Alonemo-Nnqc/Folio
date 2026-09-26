@@ -1,0 +1,992 @@
+{
+ "meta": {
+  "count": 2,
+  "db_response_time_ms": 626,
+  "page": 1,
+  "per_page": 5,
+  "groups_count": null,
+  "x_query": {
+   "oql": "works where title has (AFter Attention-based Fusion Router for RGBT Tracking)",
+   "oqo": {
+    "get_rows": "works",
+    "filter_rows": [
+     {
+      "column_id": "display_name.search",
+      "value": "AFter Attention-based Fusion Router for RGBT Tracking",
+      "operator": "has"
+     }
+    ]
+   },
+   "url": "/works?filter=display_name.search:AFter Attention-based Fusion Router for RGBT Tracking&per_page=5"
+  },
+  "cost_usd": 0.001
+ },
+ "results": [
+  {
+   "id": "https://openalex.org/W4412444991",
+   "doi": "https://doi.org/10.1109/tip.2025.3586467",
+   "title": "AFTER: Attention-Based Fusion Router for RGBT Tracking",
+   "display_name": "AFTER: Attention-Based Fusion Router for RGBT Tracking",
+   "publication_year": 2025,
+   "publication_date": "2025-01-01",
+   "type": "article",
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "display_name": "Andong Lu"
+     }
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "display_name": "Wanyu Wang"
+     }
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "display_name": "Chenglong Li"
+     }
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "display_name": "Jin Tang"
+     }
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "display_name": "Bin Luo"
+     }
+    }
+   ],
+   "primary_location": {
+    "landing_page_url": "https://doi.org/10.1109/tip.2025.3586467",
+    "source": {
+     "display_name": "IEEE Transactions on Image Processing",
+     "host_organization_name": "Institute of Electrical and Electronics Engineers",
+     "type": "journal"
+    }
+   },
+   "biblio": {
+    "volume": "34",
+    "issue": null,
+    "first_page": "4386",
+    "last_page": "4401"
+   },
+   "abstract_inverted_index": {
+    "Multi-modal": [
+     0
+    ],
+    "feature": [
+     1
+    ],
+    "fusion": [
+     2,
+     13,
+     26,
+     59,
+     77,
+     88,
+     93,
+     105,
+     113,
+     120,
+     149,
+     164
+    ],
+    "as": [
+     3
+    ],
+    "a": [
+     4,
+     49,
+     76,
+     92,
+     96,
+     104,
+     141,
+     152
+    ],
+    "core": [
+     5
+    ],
+    "investigative": [
+     6
+    ],
+    "component": [
+     7
+    ],
+    "of": [
+     8,
+     98,
+     111,
+     131,
+     162,
+     178
+    ],
+    "RGBT": [
+     9,
+     20,
+     70,
+     171,
+     184
+    ],
+    "tracking": [
+     10,
+     21,
+     172
+    ],
+    "emerges": [
+     11
+    ],
+    "numerous": [
+     12
+    ],
+    "studies": [
+     14
+    ],
+    "in": [
+     15,
+     39,
+     134,
+     190
+    ],
+    "recent": [
+     16
+    ],
+    "years.": [
+     17
+    ],
+    "However,": [
+     18
+    ],
+    "existing": [
+     19
+    ],
+    "methods": [
+     22
+    ],
+    "widely": [
+     23
+    ],
+    "adopt": [
+     24
+    ],
+    "fixed": [
+     25
+    ],
+    "structures": [
+     27,
+     133
+    ],
+    "to": [
+     28,
+     35,
+     61,
+     63,
+     91,
+     103,
+     122,
+     124,
+     154
+    ],
+    "integrate": [
+     29
+    ],
+    "multi-modal": [
+     30
+    ],
+    "feature,": [
+     31
+    ],
+    "which": [
+     32,
+     56,
+     145
+    ],
+    "are": [
+     33
+    ],
+    "hard": [
+     34
+    ],
+    "handle": [
+     36
+    ],
+    "various": [
+     37,
+     125
+    ],
+    "challenges": [
+     38
+    ],
+    "dynamic": [
+     40,
+     65,
+     142
+    ],
+    "scenarios.": [
+     41,
+     127
+    ],
+    "To": [
+     42
+    ],
+    "address": [
+     43
+    ],
+    "this": [
+     44,
+     46
+    ],
+    "problem,": [
+     45
+    ],
+    "work": [
+     47
+    ],
+    "presents": [
+     48
+    ],
+    "novel": [
+     50
+    ],
+    "Attention-based": [
+     51
+    ],
+    "Fusion": [
+     52
+    ],
+    "router": [
+     53
+    ],
+    "called": [
+     54
+    ],
+    "AFTER,": [
+     55
+    ],
+    "optimizes": [
+     57
+    ],
+    "the": [
+     58,
+     64,
+     82,
+     109,
+     119,
+     156,
+     163,
+     175,
+     179,
+     188
+    ],
+    "structure": [
+     60,
+     78,
+     121
+    ],
+    "adapt": [
+     62,
+     123
+    ],
+    "challenging": [
+     66,
+     126
+    ],
+    "scenarios,": [
+     67
+    ],
+    "for": [
+     68,
+     159
+    ],
+    "robust": [
+     69
+    ],
+    "tracking.": [
+     71
+    ],
+    "In": [
+     72
+    ],
+    "particular,": [
+     73
+    ],
+    "we": [
+     74,
+     115,
+     139
+    ],
+    "design": [
+     75
+    ],
+    "space": [
+     79
+    ],
+    "based": [
+     80
+    ],
+    "on": [
+     81,
+     168
+    ],
+    "hierarchical": [
+     83
+    ],
+    "attention": [
+     84,
+     100
+    ],
+    "network,": [
+     85
+    ],
+    "each": [
+     86,
+     147
+    ],
+    "attention-based": [
+     87,
+     112,
+     148
+    ],
+    "unit": [
+     89,
+     150
+    ],
+    "corresponding": [
+     90,
+     102
+    ],
+    "operation": [
+     94
+    ],
+    "and": [
+     95
+    ],
+    "combination": [
+     97,
+     110,
+     157
+    ],
+    "these": [
+     99
+    ],
+    "units": [
+     101
+    ],
+    "structure.": [
+     106,
+     165
+    ],
+    "Through": [
+     107
+    ],
+    "optimizing": [
+     108
+    ],
+    "units,": [
+     114
+    ],
+    "can": [
+     116
+    ],
+    "dynamically": [
+     117
+    ],
+    "select": [
+     118
+    ],
+    "Unlike": [
+     128
+    ],
+    "complex": [
+     129
+    ],
+    "search": [
+     130,
+     137
+    ],
+    "different": [
+     132
+    ],
+    "neural": [
+     135
+    ],
+    "architecture": [
+     136
+    ],
+    "algorithms,": [
+     138
+    ],
+    "develop": [
+     140
+    ],
+    "routing": [
+     143
+    ],
+    "algorithm,": [
+     144
+    ],
+    "equips": [
+     146
+    ],
+    "with": [
+     151
+    ],
+    "router,": [
+     153
+    ],
+    "predict": [
+     155
+    ],
+    "weights": [
+     158
+    ],
+    "efficient": [
+     160
+    ],
+    "optimization": [
+     161
+    ],
+    "Extensive": [
+     166
+    ],
+    "experiments": [
+     167
+    ],
+    "five": [
+     169
+    ],
+    "mainstream": [
+     170
+    ],
+    "datasets": [
+     173
+    ],
+    "demonstrate": [
+     174
+    ],
+    "superior": [
+     176
+    ],
+    "performance": [
+     177
+    ],
+    "proposed": [
+     180
+    ],
+    "AFTER": [
+     181
+    ],
+    "against": [
+     182
+    ],
+    "state-of-the-art": [
+     183
+    ],
+    "trackers.": [
+     185
+    ],
+    "We": [
+     186
+    ],
+    "release": [
+     187
+    ],
+    "code": [
+     189
+    ],
+    "https://github.com/Alexadlu/AFter.": [
+     191
+    ]
+   }
+  },
+  {
+   "id": "https://openalex.org/W4396717808",
+   "doi": "https://doi.org/10.48550/arxiv.2405.02717",
+   "title": "AFter: Attention-based Fusion Router for RGBT Tracking",
+   "display_name": "AFter: Attention-based Fusion Router for RGBT Tracking",
+   "publication_year": 2024,
+   "publication_date": "2024-05-04",
+   "type": "preprint",
+   "authorships": [
+    {
+     "author_position": "first",
+     "author": {
+      "display_name": "Andong Lu"
+     }
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "display_name": "Wanyu Wang"
+     }
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "display_name": "Chenglong Li"
+     }
+    },
+    {
+     "author_position": "middle",
+     "author": {
+      "display_name": "Jin Tang"
+     }
+    },
+    {
+     "author_position": "last",
+     "author": {
+      "display_name": "Bin Luo"
+     }
+    }
+   ],
+   "primary_location": {
+    "landing_page_url": "http://arxiv.org/abs/2405.02717",
+    "source": {
+     "display_name": "arXiv (Cornell University)",
+     "host_organization_name": "Cornell University",
+     "type": "repository"
+    }
+   },
+   "biblio": {
+    "volume": null,
+    "issue": null,
+    "first_page": null,
+    "last_page": null
+   },
+   "abstract_inverted_index": {
+    "Multi-modal": [
+     0
+    ],
+    "feature": [
+     1
+    ],
+    "fusion": [
+     2,
+     13,
+     26,
+     59,
+     77,
+     88,
+     93,
+     105,
+     113,
+     120,
+     149,
+     164
+    ],
+    "as": [
+     3
+    ],
+    "a": [
+     4,
+     49,
+     76,
+     92,
+     96,
+     104,
+     141,
+     152
+    ],
+    "core": [
+     5
+    ],
+    "investigative": [
+     6
+    ],
+    "component": [
+     7
+    ],
+    "of": [
+     8,
+     98,
+     111,
+     131,
+     162,
+     178
+    ],
+    "RGBT": [
+     9,
+     20,
+     70,
+     171,
+     184
+    ],
+    "tracking": [
+     10,
+     21,
+     172
+    ],
+    "emerges": [
+     11
+    ],
+    "numerous": [
+     12
+    ],
+    "studies": [
+     14
+    ],
+    "in": [
+     15,
+     39,
+     134,
+     190
+    ],
+    "recent": [
+     16
+    ],
+    "years.": [
+     17
+    ],
+    "However,": [
+     18
+    ],
+    "existing": [
+     19
+    ],
+    "methods": [
+     22
+    ],
+    "widely": [
+     23
+    ],
+    "adopt": [
+     24
+    ],
+    "fixed": [
+     25
+    ],
+    "structures": [
+     27,
+     133
+    ],
+    "to": [
+     28,
+     35,
+     61,
+     63,
+     91,
+     103,
+     122,
+     124,
+     154
+    ],
+    "integrate": [
+     29
+    ],
+    "multi-modal": [
+     30
+    ],
+    "feature,": [
+     31
+    ],
+    "which": [
+     32,
+     56,
+     145
+    ],
+    "are": [
+     33
+    ],
+    "hard": [
+     34
+    ],
+    "handle": [
+     36
+    ],
+    "various": [
+     37,
+     125
+    ],
+    "challenges": [
+     38
+    ],
+    "dynamic": [
+     40,
+     65,
+     142
+    ],
+    "scenarios.": [
+     41,
+     127
+    ],
+    "To": [
+     42
+    ],
+    "address": [
+     43
+    ],
+    "this": [
+     44,
+     46
+    ],
+    "problem,": [
+     45
+    ],
+    "work": [
+     47
+    ],
+    "presents": [
+     48
+    ],
+    "novel": [
+     50
+    ],
+    "\\emph{A}ttention-based": [
+     51
+    ],
+    "\\emph{F}usion": [
+     52
+    ],
+    "rou\\emph{ter}": [
+     53
+    ],
+    "called": [
+     54
+    ],
+    "AFter,": [
+     55
+    ],
+    "optimizes": [
+     57
+    ],
+    "the": [
+     58,
+     64,
+     82,
+     109,
+     119,
+     156,
+     163,
+     175,
+     179,
+     188
+    ],
+    "structure": [
+     60,
+     78,
+     121
+    ],
+    "adapt": [
+     62,
+     123
+    ],
+    "challenging": [
+     66,
+     126
+    ],
+    "scenarios,": [
+     67
+    ],
+    "for": [
+     68,
+     159
+    ],
+    "robust": [
+     69
+    ],
+    "tracking.": [
+     71
+    ],
+    "In": [
+     72
+    ],
+    "particular,": [
+     73
+    ],
+    "we": [
+     74,
+     115,
+     139
+    ],
+    "design": [
+     75
+    ],
+    "space": [
+     79
+    ],
+    "based": [
+     80
+    ],
+    "on": [
+     81,
+     168
+    ],
+    "hierarchical": [
+     83
+    ],
+    "attention": [
+     84,
+     100
+    ],
+    "network,": [
+     85
+    ],
+    "each": [
+     86,
+     147
+    ],
+    "attention-based": [
+     87,
+     112,
+     148
+    ],
+    "unit": [
+     89,
+     150
+    ],
+    "corresponding": [
+     90,
+     102
+    ],
+    "operation": [
+     94
+    ],
+    "and": [
+     95
+    ],
+    "combination": [
+     97,
+     110,
+     157
+    ],
+    "these": [
+     99
+    ],
+    "units": [
+     101
+    ],
+    "structure.": [
+     106,
+     165
+    ],
+    "Through": [
+     107
+    ],
+    "optimizing": [
+     108
+    ],
+    "units,": [
+     114
+    ],
+    "can": [
+     116
+    ],
+    "dynamically": [
+     117
+    ],
+    "select": [
+     118
+    ],
+    "Unlike": [
+     128
+    ],
+    "complex": [
+     129
+    ],
+    "search": [
+     130,
+     137
+    ],
+    "different": [
+     132
+    ],
+    "neural": [
+     135
+    ],
+    "architecture": [
+     136
+    ],
+    "algorithms,": [
+     138
+    ],
+    "develop": [
+     140
+    ],
+    "routing": [
+     143
+    ],
+    "algorithm,": [
+     144
+    ],
+    "equips": [
+     146
+    ],
+    "with": [
+     151
+    ],
+    "router,": [
+     153
+    ],
+    "predict": [
+     155
+    ],
+    "weights": [
+     158
+    ],
+    "efficient": [
+     160
+    ],
+    "optimization": [
+     161
+    ],
+    "Extensive": [
+     166
+    ],
+    "experiments": [
+     167
+    ],
+    "five": [
+     169
+    ],
+    "mainstream": [
+     170
+    ],
+    "datasets": [
+     173
+    ],
+    "demonstrate": [
+     174
+    ],
+    "superior": [
+     176
+    ],
+    "performance": [
+     177
+    ],
+    "proposed": [
+     180
+    ],
+    "AFter": [
+     181
+    ],
+    "against": [
+     182
+    ],
+    "state-of-the-art": [
+     183
+    ],
+    "trackers.": [
+     185
+    ],
+    "We": [
+     186
+    ],
+    "release": [
+     187
+    ],
+    "code": [
+     189
+    ],
+    "https://github.com/Alexadlu/AFter.": [
+     191
+    ]
+   }
+  }
+ ]
+}

@@ -1,0 +1,41 @@
+{
+ "key": "/works/OL17801809W",
+ "title": "Deep Learning",
+ "authors": [
+  {
+   "author": {
+    "key": "/authors/OL7402121A"
+   },
+   "type": {
+    "key": "/type/author_role"
+   }
+  },
+  {
+   "author": {
+    "key": "/authors/OL3781605A"
+   },
+   "type": {
+    "key": "/type/author_role"
+   }
+  },
+  {
+   "author": {
+    "key": "/authors/OL7402122A"
+   },
+   "type": {
+    "key": "/type/author_role"
+   }
+  },
+  {
+   "author": {
+    "key": "/authors/OL8063937A"
+   },
+   "type": {
+    "key": "/type/author_role"
+   }
+  }
+ ],
+ "type": {
+  "key": "/type/work"
+ }
+}
