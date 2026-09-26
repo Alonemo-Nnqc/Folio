@@ -17,7 +17,7 @@ struct ItemOutline: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
-        _ = (model.rows, model.snapshot, model.selectedItemIDs, model.selectedFileIDs, model.currentSort)
+        _ = (model.rows, model.snapshot, model.selectedItemIDs, model.selectedFileIDs, model.currentSort, model.previewExpandRequest)
         context.coordinator.update()
     }
 }

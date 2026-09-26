@@ -50,6 +50,12 @@ final class AppModel {
     /// Bumped to ask the sidebar search field to take focus.
     var searchFocusRequest = 0
     var activeSheet: ActiveSheet?
+    // Screenshot hooks (see PreviewHooks).
+    var previewExpandRequest: String?
+    var previewInspectorTab: String?
+    var previewDropCount = 0
+    var previewExpandAllGroups = false
+    var previewOpenSettings = false
 
     @ObservationIgnored private var fulltextMatches: Set<String>?
     @ObservationIgnored private var observationTask: Task<Void, Never>?
@@ -124,7 +130,10 @@ final class AppModel {
         if case .group(let id) = sidebarSelection, snapshot.groupsById[id] == nil { sidebarSelection = .all }
         if case .tag(let id) = sidebarSelection, snapshot.tagsById[id] == nil { sidebarSelection = .all }
         recompute()
-        if firstLoad { importer.libraryDidLoad() }
+        if firstLoad {
+            importer.libraryDidLoad()
+            PreviewHooks.apply(to: self)
+        }
     }
 
     // MARK: Derived state

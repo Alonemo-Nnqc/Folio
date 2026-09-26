@@ -23,6 +23,7 @@ struct InspectorView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .onChange(of: model.previewInspectorTab) { _, value in if value == "annotations" { tab = .annotations } }
     }
 
     @ViewBuilder

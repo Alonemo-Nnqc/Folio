@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		115FA95DA4AB73ADE12ED00B /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
 		179802828504A543D5DF8A24 /* ItemColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E1F116DA3A1C23CF222150 /* ItemColumn.swift */; };
+		17983CD1B463FAE5A41B8DE5 /* PreviewHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */; };
 		1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */; };
 		1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */; };
 		229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */; };
@@ -131,6 +132,7 @@
 		EF15B612B7CD351CEF0B6188 /* ItemCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCells.swift; sourceTree = "<group>"; };
 		EF4ADEF94FCB91031CE5894A /* ItemListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListController.swift; sourceTree = "<group>"; };
 		EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioCommands.swift; sourceTree = "<group>"; };
+		F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewHooks.swift; sourceTree = "<group>"; };
 		FAD3544693B93059CC5B0428 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -177,6 +179,7 @@
 				7C2CFA125AFED333B13901F8 /* AppSettings.swift */,
 				ED4556A712E7A2B56DE80CBD /* FolioApp.swift */,
 				EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */,
+				F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -452,6 +455,7 @@
 				95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */,
 				769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */,
 				FED85B9905E600BBC82747AA /* NetworkMonitor.swift in Sources */,
+				17983CD1B463FAE5A41B8DE5 /* PreviewHooks.swift in Sources */,
 				FE0E9B582AA7521356256C94 /* RatingControl.swift in Sources */,
 				F1F44CC82CD26BB6095683E6 /* RootView.swift in Sources */,
 				C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */,

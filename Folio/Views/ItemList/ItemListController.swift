@@ -91,7 +91,7 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             let tableColumn = NSTableColumn(identifier: column.identifier)
             tableColumn.title = column.header
             tableColumn.width = column.defaultWidth
-            tableColumn.minWidth = column == .title ? 160 : 40
+            tableColumn.minWidth = column.minimumWidth
             tableColumn.resizingMask = column == .title ? [.autoresizingMask, .userResizingMask] : .userResizingMask
             tableColumn.isHidden = !column.visibleByDefault
             tableColumn.sortDescriptorPrototype = NSSortDescriptor(key: column.rawValue, ascending: true)
@@ -147,6 +147,10 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             reloadVisibleRows()
         }
         applySortIndicator(model.currentSort)
+        if let id = model.previewExpandRequest, let node = itemNodes[id] {
+            model.previewExpandRequest = nil
+            outline.expandItem(node)
+        }
         restoreSelection(items: model.selectedItemIDs, files: model.selectedFileIDs)
         fitColumnsOnce()
     }

@@ -18,7 +18,7 @@ struct SidebarOutline: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         // Touch the observed state so SwiftUI re-runs this when it changes.
-        _ = (model.snapshot, model.counts, model.sidebarSelection, model.groupPendingRename)
+        _ = (model.snapshot, model.counts, model.sidebarSelection, model.groupPendingRename, model.previewExpandAllGroups)
         context.coordinator.update()
     }
 }

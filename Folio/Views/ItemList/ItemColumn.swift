@@ -43,6 +43,19 @@ enum ItemColumn: String, CaseIterable {
         }
     }
 
+    /// Narrowest width that still shows typical content (dates must stay readable).
+    var minimumWidth: CGFloat {
+        switch self {
+        case .title: 160
+        case .dateAdded, .dateModified: 86
+        case .year, .volume, .issue, .fileCount: 44
+        case .rating: 76
+        case .readStatus: 40
+        case .tags: 70
+        default: 60
+        }
+    }
+
     var visibleByDefault: Bool {
         [.title, .source, .authors, .year, .tags, .dateAdded].contains(self)
     }

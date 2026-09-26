@@ -79,7 +79,10 @@ public enum AnnotationReader {
         } else {
             rects = [annotation.bounds]
         }
-        let pieces = rects.compactMap { page.selection(for: $0.insetBy(dx: 0, dy: 1))?.string }
+        // Line by line, so text wrapped across lines keeps a space at each break.
+        let pieces = rects.compactMap { page.selection(for: $0.insetBy(dx: 0, dy: 1)) }
+            .flatMap { $0.selectionsByLine() }
+            .compactMap(\.string)
         return pieces.joined(separator: " ")
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }

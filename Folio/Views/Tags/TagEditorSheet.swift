@@ -53,6 +53,7 @@ struct TagEditorSheet: View {
                     }
                     ColorPicker("自定义颜色", selection: customColor, supportsOpacity: false)
                         .labelsHidden()
+                        .frame(width: 28)
                         .help("自定义颜色")
                 }
             }

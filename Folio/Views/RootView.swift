@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RootView: View {
     @Bindable var model: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         NavigationSplitView {
@@ -32,6 +33,7 @@ struct RootView: View {
         } message: {
             Text(model.loadError ?? "")
         }
+        .onChange(of: model.previewOpenSettings) { _, open in if open { openSettings() } }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.importer.refreshChangedFiles()
         }

@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "FolioMetadata", targets: ["FolioMetadata"]),
         .library(name: "FolioCitation", targets: ["FolioCitation"]),
         .library(name: "FolioZotero", targets: ["FolioZotero"]),
+        .executable(name: "folio-seed", targets: ["FolioSeed"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1"),
@@ -19,6 +20,8 @@ let package = Package(
         .target(name: "FolioMetadata", dependencies: ["FolioCore"]),
         .target(name: "FolioCitation", dependencies: ["FolioCore"], resources: [.copy("Resources")]),
         .target(name: "FolioZotero", dependencies: ["FolioCore", .product(name: "GRDB", package: "GRDB.swift")]),
+        // Developer tool: seeds demo / performance libraries for screenshots and measurements.
+        .executableTarget(name: "FolioSeed", dependencies: ["FolioCore"]),
         .testTarget(name: "FolioCoreTests", dependencies: ["FolioCore"]),
         .testTarget(name: "FolioMetadataTests", dependencies: ["FolioMetadata"], resources: [.copy("Fixtures")]),
         .testTarget(name: "FolioCitationTests", dependencies: ["FolioCitation"]),

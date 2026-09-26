@@ -23,13 +23,18 @@ final class TagChipsView: NSView {
         let height: CGFloat = 18
         let y = (bounds.height - height) / 2
         var x: CGFloat = 2
+        let limit = bounds.width - 2
         for (index, tag) in tags.enumerated() {
-            let width = Self.chipWidth(tag.name)
+            var width = Self.chipWidth(tag.name)
             let remaining = tags.count - index - 1
             let reserve: CGFloat = remaining > 0 ? Self.badgeWidth(remaining) + Self.spacing : 0
-            if x + width + reserve > bounds.width - 2 {
-                drawBadge("+\(tags.count - index)", x: x, y: y, height: height)
-                return
+            if x + width + reserve > limit {
+                guard index == 0 else {
+                    drawBadge("+\(tags.count - index)", x: x, y: y, height: height)
+                    return
+                }
+                // Always show the first tag, truncated to the space left.
+                width = max(limit - x - reserve, 28)
             }
             drawChip(tag, x: x, y: y, width: width, height: height)
             x += width + Self.spacing

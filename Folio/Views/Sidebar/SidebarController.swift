@@ -80,6 +80,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             outline.reloadData(forRowIndexes: IndexSet(integersIn: visible.location..<visible.location + visible.length),
                                columnIndexes: [0])
         }
+        if model.previewExpandAllGroups {
+            model.previewExpandAllGroups = false
+            for root in tree.roots where !root.children.isEmpty { outline.expandItem(root) }
+        }
         syncSelection()
         if let pending = model.groupPendingRename, let node = tree.node(for: .group(pending)) {
             model.groupPendingRename = nil
@@ -134,6 +138,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     private func persistExpansion() {
+        guard !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
         let ids = tree.roots.filter { outline.isItemExpanded($0) }.compactMap(\.groupId)
         UserDefaults.standard.set(ids, forKey: Self.expandedKey)
     }

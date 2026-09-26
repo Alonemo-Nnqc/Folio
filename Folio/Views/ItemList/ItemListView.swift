@@ -23,6 +23,10 @@ struct ItemListView: View {
         }
         .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.18), value: dropTargeted)
         .onDrop(of: [.fileURL], delegate: FinderDropDelegate(model: model, targeted: $dropTargeted, count: $dropCount))
+        .onChange(of: model.previewDropCount) { _, count in
+            dropCount = count
+            dropTargeted = count > 0
+        }
     }
 
     @ViewBuilder

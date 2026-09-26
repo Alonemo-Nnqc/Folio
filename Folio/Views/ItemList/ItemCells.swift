@@ -94,11 +94,11 @@ final class TitleCell: NSTableCellView {
     static func symbol(for type: ItemType) -> String {
         switch type {
         case .journalArticle: "doc.text"
-        case .conferencePaper: "person.3.sequence"
+        case .conferencePaper: "doc.richtext"
         case .preprint: "doc.plaintext"
         case .book, .bookChapter: "book.closed"
         case .thesis: "graduationcap"
-        case .report: "doc.richtext"
+        case .report: "doc.append"
         case .webpage: "globe"
         case .dataset: "tablecells"
         case .other: "doc"
