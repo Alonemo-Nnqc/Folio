@@ -15,6 +15,7 @@
 		233BD9CB989E0FD7C545E321 /* SidebarNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F56119AC33A554616DDE332 /* SidebarNode.swift */; };
 		262F73093B1C8E9406AF514E /* FolioZotero in Frameworks */ = {isa = PBXBuildFile; productRef = 4838D9DEB8300120A13D43FC /* FolioZotero */; };
 		2732748DFC335EE44FFA6CE6 /* ItemPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */; };
+		2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */; };
 		2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */; };
 		3624365AEB367D46C2802000 /* ItemListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C29581C2726A31CD4224B6 /* ItemListView.swift */; };
 		3FF47E02AA57991DB804FA5D /* FolioLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029EAFA7C40470957052F41F /* FolioLaunchTests.swift */; };
@@ -30,6 +31,7 @@
 		76B60A3A04FB3326B0F61A3A /* AppModel+Citations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */; };
 		7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */; };
 		7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2196364CD8371363D279F008 /* AppModel.swift */; };
+		84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9205ABEB146D8780222EF2F7 /* CitationService.swift */; };
 		8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF15B612B7CD351CEF0B6188 /* ItemCells.swift */; };
 		95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4908084420120AA90A895B /* MetadataInspector.swift */; };
 		97CF6EEC520A880BCAE68556 /* TagChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E97D45E0A435766ED8C239 /* TagChipsView.swift */; };
@@ -89,6 +91,7 @@
 		5B8BAAD0990BFEBF5AC22207 /* Folio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Folio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DA65511EB946A0A4443109A /* AppModel+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Actions.swift"; sourceTree = "<group>"; };
 		6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentifierAddSheet.swift; sourceTree = "<group>"; };
+		6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineResolver.swift; sourceTree = "<group>"; };
 		6F4908084420120AA90A895B /* MetadataInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataInspector.swift; sourceTree = "<group>"; };
 		750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoteroImportSheet.swift; sourceTree = "<group>"; };
 		75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
@@ -101,6 +104,7 @@
 		87D83803635133CE2F717E30 /* Folio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Folio.entitlements; sourceTree = "<group>"; };
 		88E736E10A3E272DD912AF5C /* FolioCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = FolioCore; path = Packages/FolioCore; sourceTree = SOURCE_ROOT; };
 		8B4EA41EDA75780003D86348 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9205ABEB146D8780222EF2F7 /* CitationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationService.swift; sourceTree = "<group>"; };
 		98E1F116DA3A1C23CF222150 /* ItemColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemColumn.swift; sourceTree = "<group>"; };
 		994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatePrompter.swift; sourceTree = "<group>"; };
 		9CEC680A68AB0D3810F2F61D /* FolioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -180,7 +184,9 @@
 		3C1337645959FC89A220EA0F /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				9205ABEB146D8780222EF2F7 /* CitationService.swift */,
 				994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */,
+				6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */,
 				0A38FE3A131A9C4668478500 /* FileOpener.swift */,
 				7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */,
 				7932EDA311090181F8A01857 /* MetadataResolving.swift */,
@@ -405,8 +411,10 @@
 				7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */,
 				4FF862D239D685675C901BD2 /* AppSettings.swift in Sources */,
 				7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */,
+				84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */,
 				DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */,
 				D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */,
+				2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */,
 				D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */,
 				B6ADB5796E64EF2F629B917F /* FolioApp.swift in Sources */,
 				E218836AD24B41E87754962A /* FolioCommands.swift in Sources */,

@@ -55,6 +55,7 @@ final class AppModel {
     @ObservationIgnored private var observationTask: Task<Void, Never>?
     @ObservationIgnored private var fulltextTask: Task<Void, Never>?
     @ObservationIgnored lazy var importer = ImportCoordinator(model: self)
+    @ObservationIgnored let citations = CitationService()
 
     enum ActiveSheet: Identifiable {
         case identifierAdd
@@ -80,7 +81,18 @@ final class AppModel {
             loadError = error.localizedDescription
             library = try! Library.temporary()
         }
+        refreshResolver()
         startObserving()
+        let citations = self.citations
+        Task.detached(priority: .background) {
+            try? await Task.sleep(for: .seconds(2))
+            await citations.warmUp()
+        }
+    }
+
+    /// Rebuilds the metadata engine after retrieval settings change.
+    func refreshResolver() {
+        importer.resolver = EngineResolver(mailto: settings.crossrefMailto, openAlexAPIKey: settings.openAlexAPIKey)
     }
 
     /// Re-opens the library at a new location (settings → 文献库位置).

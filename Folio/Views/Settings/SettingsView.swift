@@ -11,7 +11,7 @@ struct SettingsView: View {
                 .tabItem { Label("通用", systemImage: "gearshape") }
             LibrarySettings(model: model)
                 .tabItem { Label("文献库", systemImage: "books.vertical") }
-            RetrievalSettings(settings: model.settings)
+            RetrievalSettings(settings: model.settings, model: model)
                 .tabItem { Label("检索", systemImage: "magnifyingglass") }
             ImportSettings(model: model)
                 .tabItem { Label("导入", systemImage: "square.and.arrow.down") }
@@ -118,15 +118,26 @@ private struct LibrarySettings: View {
 
 private struct RetrievalSettings: View {
     @Bindable var settings: AppSettings
+    let model: AppModel
 
     var body: some View {
         Form {
-            TextField("联系邮箱（选填）", text: $settings.crossrefMailto, prompt: Text("name@example.com"))
-            Text("填写后，Crossref 与 OpenAlex 会把请求放进响应更快的礼貌访问池。邮箱只随检索请求发送给这两个服务。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Section {
+                TextField("联系邮箱（选填）", text: $settings.crossrefMailto, prompt: Text("name@example.com"))
+                Text("填写后，Crossref 会把请求放进响应更快的礼貌访问池。邮箱只随检索请求发送给 Crossref 和 OpenAlex。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                SecureField("OpenAlex API Key（选填）", text: $settings.openAlexAPIKey)
+                Text("OpenAlex 对不带 Key 的请求按 IP 限额，Key 可在 openalex.org 免费申请。不填也能正常检索：Crossref、arXiv 和 DBLP 已经能覆盖大多数论文。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+        .onChange(of: settings.crossrefMailto) { model.refreshResolver() }
+        .onChange(of: settings.openAlexAPIKey) { model.refreshResolver() }
     }
 }
 

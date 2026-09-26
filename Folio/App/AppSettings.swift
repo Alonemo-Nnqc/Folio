@@ -23,6 +23,7 @@ final class AppSettings {
         static let autoRenameFiles = "autoRenameFiles"
         static let autoPurgeTrash = "autoPurgeTrash"
         static let crossrefMailto = "crossrefMailto"
+        static let openAlexAPIKey = "openAlexAPIKey"
         static let libraryPath = "libraryPath"
     }
 
@@ -34,6 +35,7 @@ final class AppSettings {
     var autoRenameFiles: Bool { didSet { defaults.set(autoRenameFiles, forKey: Key.autoRenameFiles) } }
     var autoPurgeTrash: Bool { didSet { defaults.set(autoPurgeTrash, forKey: Key.autoPurgeTrash) } }
     var crossrefMailto: String { didSet { defaults.set(crossrefMailto, forKey: Key.crossrefMailto) } }
+    var openAlexAPIKey: String { didSet { defaults.set(openAlexAPIKey, forKey: Key.openAlexAPIKey) } }
     var libraryPath: String { didSet { defaults.set(libraryPath, forKey: Key.libraryPath) } }
 
     init(defaults: UserDefaults = .standard) {
@@ -51,6 +53,7 @@ final class AppSettings {
         autoRenameFiles = defaults.bool(forKey: Key.autoRenameFiles)
         autoPurgeTrash = defaults.bool(forKey: Key.autoPurgeTrash)
         crossrefMailto = defaults.string(forKey: Key.crossrefMailto) ?? ""
+        openAlexAPIKey = defaults.string(forKey: Key.openAlexAPIKey) ?? ""
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String
             ?? defaults.string(forKey: Key.libraryPath)!
