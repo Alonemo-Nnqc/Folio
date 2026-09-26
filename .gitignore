@@ -5,3 +5,4 @@ DerivedData/
 build/
 .build/
 .swiftpm/
+.worktrees/
