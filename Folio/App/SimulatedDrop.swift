@@ -5,6 +5,9 @@ import AppKit
 /// from Finder — and writes the outcome to `-FolioSimulateDropLog <file>`. No input events involved.
 enum SimulatedDrop {
     static func run(path: String, model: AppModel) {
+        if let groupName = UserDefaults.standard.string(forKey: "FolioSimulateDropGroup") {
+            return runOnSidebar(path: path, groupName: groupName, model: model)
+        }
         guard let controller = model.itemListController else { return }
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("com.nnqc.folio.simulated-drop"))
         pasteboard.clearContents()
@@ -17,6 +20,24 @@ enum SimulatedDrop {
         let line = "validate=\(operation.rawValue) overlayCount=\(overlay) accepted=\(accepted) overlayAfter=\(model.externalDropCount)\n"
         if let log = UserDefaults.standard.string(forKey: "FolioSimulateDropLog") {
             try? line.write(toFile: log, atomically: true, encoding: .utf8)
+        }
+    }
+}
+
+extension SimulatedDrop {
+    /// `-FolioSimulateDropGroup <name>`: drop the file onto that sidebar group instead (DND-02).
+    static func runOnSidebar(path: String, groupName: String, model: AppModel) {
+        guard let sidebar = model.sidebarController, let node = sidebar.node(forGroupNamed: groupName) else { return }
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("com.nnqc.folio.simulated-drop"))
+        pasteboard.clearContents()
+        pasteboard.writeObjects([URL(filePath: path) as NSURL])
+        let info = FakeDraggingInfo(pasteboard: pasteboard)
+        let operation = sidebar.outlineView(sidebar.outline, validateDrop: info, proposedItem: node,
+                                            proposedChildIndex: NSOutlineViewDropOnItemIndex)
+        let accepted = operation.isEmpty ? false
+            : sidebar.outlineView(sidebar.outline, acceptDrop: info, item: node, childIndex: NSOutlineViewDropOnItemIndex)
+        if let log = UserDefaults.standard.string(forKey: "FolioSimulateDropLog") {
+            try? "sidebar validate=\(operation.rawValue) accepted=\(accepted)\n".write(toFile: log, atomically: true, encoding: .utf8)
         }
     }
 }

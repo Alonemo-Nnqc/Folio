@@ -320,6 +320,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return pasteboardItem
     }
 
+    /// Sidebar node for a group name (simulated-drop checks).
+    func node(forGroupNamed name: String) -> SidebarNode? {
+        guard let id = model?.snapshot.groupsById.values.first(where: { $0.name == name })?.id else { return nil }
+        return tree.node(for: .group(id))
+    }
+
     // MARK: Drop target
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?,

@@ -13,6 +13,7 @@ struct SidebarOutline: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
         scroll.documentView = context.coordinator.outline
+        model.sidebarController = context.coordinator
         return scroll
     }
 

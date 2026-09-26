@@ -65,6 +65,7 @@ final class AppModel {
     @ObservationIgnored let citations = CitationService()
     /// The live list controller, for the simulated-drop check (see SimulatedDrop).
     @ObservationIgnored weak var itemListController: ItemListController?
+    @ObservationIgnored weak var sidebarController: SidebarController?
 
     enum ActiveSheet: Identifiable {
         case identifierAdd
