@@ -101,11 +101,30 @@ final class AppModel {
         importer.resolver = EngineResolver(mailto: settings.crossrefMailto, openAlexAPIKey: settings.openAlexAPIKey)
     }
 
-    /// Re-opens the library at a new location (settings → 文献库位置).
-    func reopenLibrary(at url: URL) throws {
-        let newLibrary = try Library(root: url)
+    /// Moves the whole library folder into `parent` and reopens it there (STORE-01). The database is
+    /// closed first so nothing writes to the files while they move; on failure the old location is reopened.
+    func relocateLibrary(into parent: URL) throws -> URL {
+        let source = library.root
+        let destination = parent.appending(path: source.lastPathComponent, directoryHint: .isDirectory)
+        guard destination.standardizedFileURL != source.standardizedFileURL else { return source }
+        guard !FileManager.default.fileExists(atPath: destination.path) else {
+            throw LibraryError.invalidOperation("目标位置已存在同名文件夹")
+        }
         observationTask?.cancel()
-        library = newLibrary
+        try library.close()
+        do {
+            try FileManager.default.moveItem(at: source, to: destination)
+            try reopenLibrary(at: destination)
+            settings.libraryPath = destination.path
+            return destination
+        } catch {
+            try? reopenLibrary(at: source)
+            throw error
+        }
+    }
+
+    private func reopenLibrary(at url: URL) throws {
+        library = try Library(root: url)
         snapshot = .empty
         sidebarSelection = .all
         startObserving()

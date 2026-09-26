@@ -59,6 +59,7 @@ targets:
       - path: Folio/Views/ItemList/ItemMenuBuilder.swift
       - path: Folio/App/CitationStyleOption.swift
       - path: Folio/Support/AppKitExtensions.swift
+      - path: Folio/Services/CitationService.swift
     dependencies:
       - package: FolioCore
         product: FolioCore

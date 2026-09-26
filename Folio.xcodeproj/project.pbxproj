@@ -59,6 +59,7 @@
 		C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD3544693B93059CC5B0428 /* SettingsView.swift */; };
 		C7872D907B14D5E1A5F16D3D /* ItemMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */; };
 		C97FD1887524C189537B0BFB /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472CC312BD78A83D303A6C60 /* SidebarView.swift */; };
+		C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */; };
 		CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */; };
 		CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */; };
 		CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */; };
@@ -69,6 +70,7 @@
 		DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */; };
 		E218836AD24B41E87754962A /* FolioCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */; };
 		EDF3F8A2FB9F7FAAD1566577 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4262FBCFBF74F063C7B2307A /* AppDelegate.swift */; };
+		F0C54F2368DDFD4986BAD8B6 /* CitationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9205ABEB146D8780222EF2F7 /* CitationService.swift */; };
 		F108F71D328BE0544A7E874A /* SidebarCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817AFCCB14872930FD292CAD /* SidebarCells.swift */; };
 		F1F44CC82CD26BB6095683E6 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43B0042A3248AE904583DC0 /* RootView.swift */; };
 		F41912C8FCEEAFF0C0C89154 /* ItemOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDBE8A588DC57A16209351D /* ItemOutline.swift */; };
@@ -105,6 +107,7 @@
 		4262FBCFBF74F063C7B2307A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarUITests.swift; sourceTree = "<group>"; };
 		472CC312BD78A83D303A6C60 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationServiceTests.swift; sourceTree = "<group>"; };
 		4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioUITestCase.swift; sourceTree = "<group>"; };
 		5437B0A45443DA1FFBC67DAB /* Folio.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Folio.icon; sourceTree = "<group>"; };
 		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
@@ -215,6 +218,7 @@
 		360934E47C7F5273A0F37E7B /* FolioTests */ = {
 			isa = PBXGroup;
 			children = (
+				4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */,
 				6B2A27867558A6BA5A3F7C39 /* ItemMenuBuilderTests.swift */,
 				E077F23D80ED8250C4C5833E /* SidebarDragRulesTests.swift */,
 			);
@@ -521,6 +525,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				C48037879CB4E088FD6C45FC /* AppKitExtensions.swift in Sources */,
+				F0C54F2368DDFD4986BAD8B6 /* CitationService.swift in Sources */,
+				C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */,
 				296B30BFD850FA76A75ED9BD /* CitationStyleOption.swift in Sources */,
 				C7872D907B14D5E1A5F16D3D /* ItemMenuBuilder.swift in Sources */,
 				0A3F072E7983DCCA9A328BF4 /* ItemMenuBuilderTests.swift in Sources */,

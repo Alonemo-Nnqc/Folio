@@ -57,3 +57,22 @@ import Testing
         #expect(mode == "wal")
     }
 }
+
+@Suite struct RelocationTests {
+    /// STORE-01: a closed library folder can be moved and reopened with all data and files.
+    @Test func closeMoveAndReopen() throws {
+        let base = try Fixture.directory()
+        let original = base.appending(path: "Folio")
+        var library: Library? = try Library(root: original)
+        let id = try library!.importItem("Moving Paper")
+        try library!.close()
+        library = nil
+        let moved = base.appending(path: "Elsewhere/Folio")
+        try FileManager.default.createDirectory(at: moved.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.moveItem(at: original, to: moved)
+        let reopened = try Library(root: moved)
+        let file = try #require(try reopened.files(ofItem: id).first)
+        #expect(try reopened.item(id)?.title == "Moving Paper")
+        #expect(FileManager.default.fileExists(atPath: reopened.fileURL(for: file).path))
+    }
+}

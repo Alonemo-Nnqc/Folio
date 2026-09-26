@@ -32,6 +32,11 @@ public final class Library: Sendable {
         return try Library(root: root, database: .makeTemporary())
     }
 
+    /// Closes the database so the library folder can be moved (STORE-01).
+    public func close() throws {
+        try database.writer.close()
+    }
+
     public func fileURL(for file: FileRecord) -> URL {
         store.url(for: file.relativePath)
     }

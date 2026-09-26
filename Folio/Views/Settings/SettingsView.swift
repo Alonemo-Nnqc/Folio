@@ -92,25 +92,12 @@ private struct LibrarySettings: View {
         panel.prompt = "移到这里"
         panel.message = "选择新的文献库位置，Folio 会把整个文献库移动过去"
         guard panel.runModal() == .OK, let parent = panel.url else { return }
-        let destination = parent.appending(path: model.library.root.lastPathComponent, directoryHint: .isDirectory)
-        guard destination.standardizedFileURL != model.library.root.standardizedFileURL else { return }
-        if FileManager.default.fileExists(atPath: destination.path) {
-            error = "目标位置已存在同名文件夹"
-            return
-        }
         moving = true
-        let source = model.library.root
         do {
-            try FileManager.default.moveItem(at: source, to: destination)
-            try model.reopenLibrary(at: destination)
-            model.settings.libraryPath = destination.path
+            _ = try model.relocateLibrary(into: parent)
             error = nil
         } catch {
             self.error = "无法移动文献库：\(error.localizedDescription)"
-            if !FileManager.default.fileExists(atPath: source.path) {
-                try? FileManager.default.moveItem(at: destination, to: source)
-            }
-            try? model.reopenLibrary(at: source)
         }
         moving = false
     }
