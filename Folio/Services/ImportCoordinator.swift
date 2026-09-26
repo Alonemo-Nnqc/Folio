@@ -7,6 +7,8 @@ final class ImportCoordinator {
     private weak var model: AppModel?
     var resolver: any MetadataResolving = UnavailableResolver()
 
+    /// Bump when the metadata engine learns new sources: files that failed before get one more try.
+    static let engineRevision = 2   // 2: CVF open access (CVPR / ICCV / WACV)
     private let maxConcurrent = 4
     private let maxNetworkRetries = 3
     private var queue: [String] = []
@@ -30,9 +32,24 @@ final class ImportCoordinator {
 
     func libraryDidLoad() {
         guard let snapshot = model?.snapshot else { return }
-        for item in snapshot.items.values where !item.isTrashed && item.kind == .standalone
-            && (item.metadataState == .pending || (item.metadataState == .networkFailed && item.retryCount < maxNetworkRetries)) {
-            enqueue(item.id)
+        let revisionKey = "metadataEngineRevision"
+        let retryFailed = UserDefaults.standard.integer(forKey: revisionKey) < Self.engineRevision
+        // Test instances must not mark the user's real library as already retried.
+        if !UserDefaults.standard.bool(forKey: "FolioUITesting") {
+            UserDefaults.standard.set(Self.engineRevision, forKey: revisionKey)
+        }
+        for item in snapshot.items.values where !item.isTrashed && item.kind == .standalone {
+            let isPDF = snapshot.files(of: item.id).first?.isPDF ?? false
+            switch item.metadataState {
+            case .pending:
+                enqueue(item.id)
+            case .networkFailed where item.retryCount < maxNetworkRetries:
+                enqueue(item.id)
+            case .failed where retryFailed && isPDF:
+                retrieve(itemId: item.id)
+            default:
+                break
+            }
         }
         networkMonitor.onReconnect = { [weak self] in self?.retryNetworkFailures() }
         networkMonitor.start()

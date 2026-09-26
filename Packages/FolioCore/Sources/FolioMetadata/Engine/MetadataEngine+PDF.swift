@@ -13,9 +13,10 @@ extension MetadataEngine {
         let guesses = TitleGuesser.guesses(from: facts)
         guard !plan.identifiers.isEmpty || !guesses.isEmpty else { return .notFound }
         let scorer = CandidateScorer(pageText: facts.firstPageText + "\n" + facts.secondPageText, guesses: guesses)
+        let cvfLookup = CVFLookup.detect(facts, guesses: guesses)
         let started = ContinuousClock.now
         let outcome = await Deadline.run(overallTimeout) {
-            await self.identify(plan: plan, guesses: guesses, scorer: scorer, started: started)
+            await self.identify(plan: plan, guesses: guesses, cvf: cvfLookup, scorer: scorer, started: started)
         }
         return outcome ?? .networkError
     }
@@ -25,12 +26,14 @@ extension MetadataEngine {
     enum Event: Sendable {
         case identifier(FoundIdentifier, Result<Metadata?, SourceError>)
         case search(SourceKind, Result<[Metadata], SourceError>)
+        case cvf(Result<Metadata?, SourceError>)
         case graceElapsed
 
         var traceDescription: String {
             switch self {
             case let .identifier(found, result): "id \(found.identifier) → \(result.map { $0?.title.prefix(40) ?? "nil" })"
             case let .search(source, result): "search \(source) → \(result.map { "\($0.count) records" })"
+            case let .cvf(result): "cvf → \(result.map { $0?.title.prefix(40) ?? "nil" })"
             case .graceElapsed: "grace elapsed"
             }
         }
@@ -58,7 +61,7 @@ extension MetadataEngine {
         }
     }
 
-    private func identify(plan: LookupPlan, guesses: [String], scorer: CandidateScorer,
+    private func identify(plan: LookupPlan, guesses: [String], cvf: CVFLookup?, scorer: CandidateScorer,
                           started: ContinuousClock.Instant) async -> ResolveResult {
         var tally = Tally()
         var accepted: [(candidate: Candidate, evaluation: CandidateScorer.Evaluation)] = []
@@ -72,12 +75,16 @@ extension MetadataEngine {
             let includeIdentifiers = round == 0
             let guess = guesses.indices.contains(round) ? guesses[round] : nil
             let result = await runRound(plan: includeIdentifiers ? plan : nil, guess: guess,
+                                        cvf: includeIdentifiers ? cvf : nil,
                                         searchArxiv: !plan.pdfHasArxivID, scorer: scorer,
                                         tally: &tally, accepted: &accepted)
             if let result { return result }
             if !accepted.isEmpty { break }
         }
         guard let best = CandidateRanking.best(accepted, pdfHasArxivID: plan.pdfHasArxivID) else {
+            // A CVF paper that no source knows yet (new, or a workshop paper): its own verified
+            // title/author fields are still a trustworthy record.
+            if let fallback = cvf?.fallback { return .found(fallback) }
             return tally.outcomeWithoutMatch
         }
         return .found(await enriched(best.candidate))
@@ -87,13 +94,25 @@ extension MetadataEngine {
     /// Returns a result when an identifier lookup was verified; otherwise fills `accepted`.
     /// `searchArxiv` is false when the PDF carries an arXiv ID: its lookup already covers arXiv, and
     /// arXiv's one-request-per-second limit makes a second request there the slowest part of a batch.
-    private func runRound(plan: LookupPlan?, guess: String?, searchArxiv: Bool, scorer: CandidateScorer, tally: inout Tally,
+    private func runRound(plan: LookupPlan?, guess: String?, cvf: CVFLookup?, searchArxiv: Bool, scorer: CandidateScorer, tally: inout Tally,
                           accepted: inout [(candidate: Candidate, evaluation: CandidateScorer.Evaluation)]) async -> ResolveResult? {
         await withTaskGroup(of: Event.self) { group in
             var pending = 0
+            // Lookups the PDF itself points to (arXiv stamp, its own DOI, its CVF page) beat title-search
+            // hits, so the grace period only starts once none of them is outstanding.
+            var pendingAuthoritative = 0
             for found in plan?.identifiers ?? [] {
                 pending += 1
+                if found.isSelfDescribing { pendingAuthoritative += 1 }
                 group.addTask { .identifier(found, await self.lookup(found.identifier)) }
+            }
+            if let cvf {
+                pending += 1
+                pendingAuthoritative += 1
+                group.addTask {
+                    do throws(SourceError) { return .cvf(.success(try await self.cvf.paper(for: cvf))) }
+                    catch { return .cvf(.failure(error)) }
+                }
             }
             if let guess {
                 let sources: [SourceKind] = searchArxiv ? [.crossref, .openAlex, .dblp, .arxiv] : [.crossref, .openAlex, .dblp]
@@ -112,10 +131,27 @@ extension MetadataEngine {
                     return nil
                 case let .identifier(found, result):
                     pending -= 1
+                    if found.isSelfDescribing { pendingAuthoritative -= 1 }
                     switch result {
                     case .success(let metadata?):
                         tally.answered += 1
                         if scorer.verifiesIdentifierResult(metadata, selfDescribing: found.isSelfDescribing) {
+                            group.cancelAll()
+                            return .found(metadata)
+                        }
+                    case .success(nil):
+                        tally.answered += 1
+                    case .failure(let error):
+                        tally.record(error, identifier: true)
+                    }
+                case let .cvf(result):
+                    pending -= 1
+                    pendingAuthoritative -= 1
+                    switch result {
+                    case .success(let metadata?):
+                        tally.answered += 1
+                        // The page was addressed from this PDF's own title and author (self-describing).
+                        if scorer.verifiesIdentifierResult(metadata, selfDescribing: true) {
                             group.cancelAll()
                             return .found(metadata)
                         }
@@ -140,7 +176,7 @@ extension MetadataEngine {
                         tally.record(error, identifier: false)
                     }
                 }
-                if !accepted.isEmpty && !graceStarted && pending > 0 {
+                if !accepted.isEmpty && !graceStarted && pending > 0 && pendingAuthoritative == 0 {
                     graceStarted = true
                     let grace = searchGrace
                     group.addTask {

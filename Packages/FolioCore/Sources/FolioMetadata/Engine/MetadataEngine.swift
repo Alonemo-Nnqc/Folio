@@ -14,6 +14,7 @@ public final class MetadataEngine: Sendable {
     let openAlex: OpenAlexClient
     let dblp: DBLPClient
     let openLibrary: OpenLibraryClient
+    let cvf: CVFClient
     /// How long to keep waiting for a better-ranked source once an acceptable match is in hand.
     let searchGrace: Duration
 
@@ -25,11 +26,13 @@ public final class MetadataEngine: Sendable {
     public convenience init(configuration: MetadataEngineConfiguration = .init(), http: (any HTTPClient)? = nil) {
         self.init(configuration: configuration,
                   http: http ?? URLSessionHTTPClient(timeout: configuration.requestTimeout),
+                  // CVF's server is slow (6–7 s for a small page is common), so it gets its own timeout.
+                  cvfHTTP: http ?? URLSessionHTTPClient(timeout: max(configuration.requestTimeout, 12)),
                   throttle: .shared)
     }
 
-    init(configuration: MetadataEngineConfiguration, http: any HTTPClient, throttle: HostThrottle,
-         searchGrace: Duration = .milliseconds(800)) {
+    init(configuration: MetadataEngineConfiguration, http: any HTTPClient, cvfHTTP: (any HTTPClient)? = nil,
+         throttle: HostThrottle, searchGrace: Duration = .milliseconds(800)) {
         self.configuration = configuration
         let transport = Transport(http: http, throttle: throttle, mailto: configuration.mailto)
         crossref = CrossrefClient(transport: transport, mailto: FieldNormalizer.nonEmpty(configuration.mailto))
@@ -39,6 +42,7 @@ public final class MetadataEngine: Sendable {
                                   apiKey: FieldNormalizer.nonEmpty(configuration.openAlexAPIKey))
         dblp = DBLPClient(transport: transport)
         openLibrary = OpenLibraryClient(transport: transport)
+        cvf = CVFClient(transport: Transport(http: cvfHTTP ?? http, throttle: throttle, mailto: configuration.mailto))
         self.searchGrace = searchGrace
     }
 
