@@ -30,9 +30,10 @@ enum ItemColumn: String, CaseIterable {
 
     var defaultWidth: CGFloat {
         switch self {
-        case .title: 380
-        case .source, .authors: 170
-        case .tags: 170
+        case .title: 300
+        case .source: 140
+        case .authors: 150
+        case .tags: 130
         case .year, .volume, .issue, .fileCount: 56
         case .readStatus: 64
         case .rating: 78

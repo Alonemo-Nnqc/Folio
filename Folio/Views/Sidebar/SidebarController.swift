@@ -69,7 +69,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     // MARK: Updates from the model
 
     func update() {
-        guard let model else { return }
+        // Reloading rows would reconfigure the cell being edited and end the rename.
+        guard let model, renamingGroupId == nil else { return }
         let structureChanged = tree.rebuild(from: model.snapshot)
         if structureChanged {
             outline.reloadData()
@@ -82,7 +83,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         syncSelection()
         if let pending = model.groupPendingRename, let node = tree.node(for: .group(pending)) {
             model.groupPendingRename = nil
-            if let parent = outline.parent(forItem: node) { outline.expandItem(parent) }
+            expandAncestors(of: node)
             let row = outline.row(forItem: node)
             if row >= 0 {
                 DispatchQueue.main.async { self.beginRenaming(row: row) }
@@ -98,12 +99,25 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case .tag(let id): .tag(id)
         }
         guard let node = tree.node(for: kind) else { return }
-        if let parent = outline.parent(forItem: node), !outline.isItemExpanded(parent) { outline.expandItem(parent) }
+        expandAncestors(of: node)
         let row = outline.row(forItem: node)
         guard row >= 0, outline.selectedRow != row else { return }
         isSyncingSelection = true
         outline.selectRowIndexes([row], byExtendingSelection: false)
         isSyncingSelection = false
+    }
+
+    /// Expands the node's parent. `NSOutlineView.parent(forItem:)` is nil for children of collapsed
+    /// items (they are not loaded yet), so the parent comes from the snapshot instead.
+    private func expandAncestors(of node: SidebarNode) {
+        let parentKind: SidebarNode.Kind? = switch node.kind {
+        case .group(let id): model?.snapshot.groupsById[id]?.parentId.map { .group($0) }
+        case .tag: .tagsHeader
+        default: nil
+        }
+        if let parentKind, let parent = tree.node(for: parentKind), !outline.isItemExpanded(parent) {
+            outline.expandItem(parent)
+        }
     }
 
     private func restoreExpansion() {
@@ -244,6 +258,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         if field.stringValue != original && !model.renameGroup(groupId, to: field.stringValue) {
             field.stringValue = original
         }
+        update()
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {

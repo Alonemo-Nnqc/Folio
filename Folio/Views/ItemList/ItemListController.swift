@@ -57,9 +57,11 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
     private var rows: [ItemNode] = []
     private var lastRowIds: [String] = []
     private var lastFileLists: [String: [String]] = [:]
+    private var lastExpandable: Set<String> = []
     private var expandedIds: Set<String> = []
     private var isApplyingModel = false
     private var lastSort: SortState?
+    private var didInitialFit = false
 
     init(model: AppModel) {
         self.model = model
@@ -124,13 +126,16 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         let snapshot = model.snapshot
         let ids = model.rows
         let fileLists = Dictionary(uniqueKeysWithValues: ids.map { ($0, snapshot.filesByItem[$0] ?? []) })
+        // A standalone file turning into an item keeps its id and file but gains a disclosure arrow.
+        let expandable = Set(ids.filter { snapshot.items[$0]?.kind == .regular && !(fileLists[$0] ?? []).isEmpty })
         isApplyingModel = true
         defer { isApplyingModel = false }
 
-        if ids != lastRowIds || fileLists != lastFileLists {
+        if ids != lastRowIds || fileLists != lastFileLists || expandable != lastExpandable {
             rows = ids.map(itemNode)
             lastRowIds = ids
             lastFileLists = fileLists
+            lastExpandable = expandable
             outline.reloadData()
             for node in rows where expandedIds.contains(node.id) && !(fileLists[node.id] ?? []).isEmpty {
                 outline.expandItem(node)
@@ -140,6 +145,25 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         }
         applySortIndicator(model.currentSort)
         restoreSelection(items: model.selectedItemIDs, files: model.selectedFileIDs)
+        fitColumnsOnce()
+    }
+
+    /// On first layout, make every visible column fit: the title column keeps at least 260 pt and
+    /// the other columns shrink proportionally.
+    private func fitColumnsOnce() {
+        guard !didInitialFit, let clip = outline.enclosingScrollView?.contentView, clip.bounds.width > 100 else { return }
+        didInitialFit = true
+        let visible = outline.tableColumns.filter { !$0.isHidden }
+        let spacing = outline.intercellSpacing.width * CGFloat(visible.count) + 24
+        let available = clip.bounds.width - spacing
+        guard visible.reduce(0, { $0 + $1.width }) > available,
+              let title = visible.first(where: { $0.identifier == ItemColumn.title.identifier }) else { return }
+        let others = visible.filter { $0 !== title }
+        let othersWidth = others.reduce(0) { $0 + $1.width }
+        let titleWidth = max(260, available - othersWidth)
+        let scale = min(1, (available - titleWidth) / max(othersWidth, 1))
+        for column in others { column.width = max(column.minWidth, floor(column.width * scale)) }
+        title.width = max(title.minWidth, available - others.reduce(0) { $0 + $1.width })
     }
 
     private func reloadVisibleRows() {

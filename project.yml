@@ -50,6 +50,8 @@ targets:
       - path: FolioUITests
     dependencies:
       - target: Folio
+      - package: FolioCore
+        product: FolioCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.FolioUITests

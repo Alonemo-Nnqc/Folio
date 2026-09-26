@@ -18,11 +18,13 @@
 		2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */; };
 		2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */; };
 		3624365AEB367D46C2802000 /* ItemListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C29581C2726A31CD4224B6 /* ItemListView.swift */; };
+		36CA89AF28F8E5E6772D24B5 /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6F8E5765AAB4BA57B5EA366C /* FolioCore */; };
 		3FF47E02AA57991DB804FA5D /* FolioLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029EAFA7C40470957052F41F /* FolioLaunchTests.swift */; };
 		4BC2A1948DCAB52C765B3842 /* SidebarSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */; };
 		4FF862D239D685675C901BD2 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2CFA125AFED333B13901F8 /* AppSettings.swift */; };
 		5BCA4C0023D1FD6E0EAA406C /* ManualMatchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */; };
 		5D66D20231FB94CF147E9066 /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = B6A8CA359CE44514A50D825D /* FolioCore */; };
+		6072439EB16E2AF204EE4430 /* FolioUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */; };
 		656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */; };
 		66E27378BA905196D0308E5C /* SidebarOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10666DC9FC84148371857AB2 /* SidebarOutline.swift */; };
 		67CCE0A5B8A3B6D30755169C /* FolioMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 34BF6DC9FEBBB9959304E9DE /* FolioMetadata */; };
@@ -45,6 +47,7 @@
 		BBED3A3CE0EED3D1B26D8D74 /* ItemListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4ADEF94FCB91031CE5894A /* ItemListController.swift */; };
 		C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD3544693B93059CC5B0428 /* SettingsView.swift */; };
 		C97FD1887524C189537B0BFB /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472CC312BD78A83D303A6C60 /* SidebarView.swift */; };
+		CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */; };
 		CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */; };
 		D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A38FE3A131A9C4668478500 /* FileOpener.swift */; };
 		D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */; };
@@ -85,7 +88,9 @@
 		3CC934F2839FEC9900FD8D2A /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
 		3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSearchField.swift; sourceTree = "<group>"; };
 		4262FBCFBF74F063C7B2307A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarUITests.swift; sourceTree = "<group>"; };
 		472CC312BD78A83D303A6C60 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioUITestCase.swift; sourceTree = "<group>"; };
 		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
 		5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarDragRules.swift; sourceTree = "<group>"; };
 		5B8BAAD0990BFEBF5AC22207 /* Folio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Folio.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -128,6 +133,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		4759F87C15191EA6EABC3C5F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				36CA89AF28F8E5E6772D24B5 /* FolioCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9DDB037244D0F79104ADBCB6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -213,6 +226,8 @@
 			isa = PBXGroup;
 			children = (
 				029EAFA7C40470957052F41F /* FolioLaunchTests.swift */,
+				4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */,
+				46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */,
 			);
 			path = FolioUITests;
 			sourceTree = "<group>";
@@ -343,6 +358,7 @@
 			buildConfigurationList = AF2FE57B1F75110DCFD829F1 /* Build configuration list for PBXNativeTarget "FolioUITests" */;
 			buildPhases = (
 				8715968575E48F5D200C77E5 /* Sources */,
+				4759F87C15191EA6EABC3C5F /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -351,6 +367,7 @@
 			);
 			name = FolioUITests;
 			packageProductDependencies = (
+				6F8E5765AAB4BA57B5EA366C /* FolioCore */,
 			);
 			productName = FolioUITests;
 			productReference = 9CEC680A68AB0D3810F2F61D /* FolioUITests.xctest */;
@@ -459,6 +476,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				3FF47E02AA57991DB804FA5D /* FolioLaunchTests.swift in Sources */,
+				6072439EB16E2AF204EE4430 /* FolioUITestCase.swift in Sources */,
+				CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -731,6 +750,10 @@
 		4838D9DEB8300120A13D43FC /* FolioZotero */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FolioZotero;
+		};
+		6F8E5765AAB4BA57B5EA366C /* FolioCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FolioCore;
 		};
 		B6A8CA359CE44514A50D825D /* FolioCore */ = {
 			isa = XCSwiftPackageProductDependency;
