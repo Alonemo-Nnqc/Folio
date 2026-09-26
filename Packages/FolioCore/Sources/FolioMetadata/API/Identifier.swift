@@ -28,9 +28,9 @@ public enum Identifier: Sendable, Equatable {
             return .isbn(isbn)
         }
         // Bare arXiv IDs are only accepted when the whole input is the ID.
-        if let arxiv = IdentifierExtractor.arxivIDs(in: text, requireContext: false).first,
-           IdentifierExtractor.isBareArxivID(text) {
-            return .arxiv(arxiv)
+        if IdentifierExtractor.isBareArxivID(text) {
+            let bare = text.replacingOccurrences(of: #"v\d+$"#, with: "", options: .regularExpression)
+            return .arxiv(IdentifierExtractor.arxivIDs(in: text, requireContext: false).first ?? bare)
         }
         return nil
     }

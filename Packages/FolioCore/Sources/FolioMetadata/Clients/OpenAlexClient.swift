@@ -5,6 +5,8 @@ import Foundation
 struct OpenAlexClient: Sendable {
     let transport: Transport
     let mailto: String?
+    /// OpenAlex now meters anonymous use per IP; a personal key avoids 429s.
+    var apiKey: String? = nil
 
     static let selectFields = "id,doi,title,display_name,publication_year,publication_date,type,type_crossref,"
         + "authorships,primary_location,biblio,abstract_inverted_index"
@@ -16,7 +18,7 @@ struct OpenAlexClient: Sendable {
         let query = TitleNormalizer.normalize(title)
         guard !query.isEmpty, let url = URL.make("https://api.openalex.org/works", query: [
             ("filter", "title.search:\(query)"), ("per-page", String(perPage)), ("select", Self.selectFields),
-            ("mailto", mailto),
+            ("mailto", mailto), ("api_key", apiKey),
         ]) else { return [] }
         guard let response = try await transport.getJSON(Response.self, from: url) else { return [] }
         return response.results.compactMap(Self.metadata(from:))

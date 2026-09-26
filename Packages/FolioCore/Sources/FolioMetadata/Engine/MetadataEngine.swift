@@ -35,7 +35,8 @@ public final class MetadataEngine: Sendable {
         crossref = CrossrefClient(transport: transport, mailto: FieldNormalizer.nonEmpty(configuration.mailto))
         negotiation = DOIContentNegotiationClient(transport: transport)
         arxiv = ArxivClient(transport: transport)
-        openAlex = OpenAlexClient(transport: transport, mailto: FieldNormalizer.nonEmpty(configuration.mailto))
+        openAlex = OpenAlexClient(transport: transport, mailto: FieldNormalizer.nonEmpty(configuration.mailto),
+                                  apiKey: FieldNormalizer.nonEmpty(configuration.openAlexAPIKey))
         dblp = DBLPClient(transport: transport)
         openLibrary = OpenLibraryClient(transport: transport)
         self.searchGrace = searchGrace
