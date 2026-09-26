@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/o91+jHNgRj658qof+BLh4XeYTRk</id>
+  <title>arXiv Query: search_query=ti:"Guided Curriculum Model Adaptation"&amp;id_list=&amp;start=0&amp;max_results=5</title>
+  <updated>2026-09-26T12:11:35Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=ti:%22Guided+Curriculum+Model+Adaptation%22&amp;start=0&amp;max_results=5&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>5</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1901.05946v2</id>
+    <title>Guided Curriculum Model Adaptation and Uncertainty-Aware Evaluation for Semantic Nighttime Image Segmentation</title>
+    <updated>2019-07-26T14:29:46Z</updated>
+    <link href="https://arxiv.org/abs/1901.05946v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1901.05946v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Most progress in semantic segmentation reports on daytime images taken under favorable illumination conditions. We instead address the problem of semantic segmentation of nighttime images and improve the state-of-the-art, by adapting daytime models to nighttime without using nighttime annotations. Moreover, we design a new evaluation framework to address the substantial uncertainty of semantics in nighttime images. Our central contributions are: 1) a curriculum framework to gradually adapt semantic segmentation models from day to night via labeled synthetic images and unlabeled real images, both for progressively darker times of day, which exploits cross-time-of-day correspondences for the real images to guide the inference of their labels; 2) a novel uncertainty-aware annotation and evaluation framework and metric for semantic segmentation, designed for adverse conditions and including image regions beyond human recognition capability in the evaluation in a principled fashion; 3) the Dark Zurich dataset, which comprises 2416 unlabeled nighttime and 2920 unlabeled twilight images with correspondences to their daytime counterparts plus a set of 151 nighttime images with fine pixel-level annotations created with our protocol, which serves as a first benchmark to perform our novel evaluation. Experiments show that our guided curriculum adaptation significantly outperforms state-of-the-art methods on real nighttime sets both for standard metrics and our uncertainty-aware metric. Furthermore, our uncertainty-aware evaluation reveals that selective invalidation of predictions can lead to better results on data with ambiguous content such as our nighttime benchmark and profit safety-oriented applications which involve invalid inputs.</summary>
+    <category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-01-17T18:40:39Z</published>
+    <arxiv:comment>ICCV 2019 camera-ready</arxiv:comment>
+    <arxiv:primary_category term="cs.CV"/>
+    <author>
+      <name>Christos Sakaridis</name>
+    </author>
+    <author>
+      <name>Dengxin Dai</name>
+    </author>
+    <author>
+      <name>Luc Van Gool</name>
+    </author>
+  </entry>
+</feed>

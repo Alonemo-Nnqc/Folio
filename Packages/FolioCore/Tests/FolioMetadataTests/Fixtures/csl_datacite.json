@@ -1,0 +1,45 @@
+{
+  "type": "article",
+  "id": "https://doi.org/10.48550/arxiv.2405.02717",
+  "categories": [
+    "Computer Vision and Pattern Recognition (cs.CV)",
+    "FOS: Computer and information sciences",
+    "FOS: Computer and information sciences"
+  ],
+  "author": [
+    {
+      "family": "Lu",
+      "given": "Andong"
+    },
+    {
+      "family": "Wang",
+      "given": "Wanyu"
+    },
+    {
+      "family": "Li",
+      "given": "Chenglong"
+    },
+    {
+      "family": "Tang",
+      "given": "Jin"
+    },
+    {
+      "family": "Luo",
+      "given": "Bin"
+    }
+  ],
+  "issued": {
+    "date-parts": [
+      [
+        2024
+      ]
+    ]
+  },
+  "abstract": "Multi-modal feature fusion as a core investigative component of RGBT tracking emerges numerous fusion studies in recent years. However, existing RGBT tracking methods widely adopt fixed fusion structures to integrate multi-modal feature, which are hard to handle various challenges in dynamic scenarios. To address this problem, this work presents a novel \\emph{A}ttention-based \\emph{F}usion rou\\emph{ter} called AFter, which optimizes the fusion structure to adapt to the dynamic challenging scenarios, for robust RGBT tracking. In particular, we design a fusion structure space based on the hierarchical attention network, each attention-based fusion unit corresponding to a fusion operation and a combination of these attention units corresponding to a fusion structure. Through optimizing the combination of attention-based fusion units, we can dynamically select the fusion structure to adapt to various challenging scenarios. Unlike complex search of different structures in neural architecture search algorithms, we develop a dynamic routing algorithm, which equips each attention-based fusion unit with a router, to predict the combination weights for efficient optimization of the fusion structure. Extensive experiments on five mainstream RGBT tracking datasets demonstrate the superior performance of the proposed AFter against state-of-the-art RGBT trackers. We release the code in https://github.com/Alexadlu/AFter.",
+  "DOI": "10.48550/ARXIV.2405.02717",
+  "publisher": "arXiv",
+  "title": "AFter: Attention-based Fusion Router for RGBT Tracking",
+  "URL": "https://arxiv.org/abs/2405.02717",
+  "copyright": "arXiv.org perpetual, non-exclusive license",
+  "version": "1"
+}

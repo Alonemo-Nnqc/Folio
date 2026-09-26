@@ -1,0 +1,23 @@
+{
+ "publishers": [
+  "MIT Press"
+ ],
+ "number_of_pages": 800,
+ "title": "Deep Learning",
+ "publish_date": "3 January 2017",
+ "key": "/books/OL26455783M",
+ "works": [
+  {
+   "key": "/works/OL17801809W"
+  }
+ ],
+ "isbn_10": [
+  "0262035618"
+ ],
+ "isbn_13": [
+  "9780262035613"
+ ],
+ "type": {
+  "key": "/type/edition"
+ }
+}

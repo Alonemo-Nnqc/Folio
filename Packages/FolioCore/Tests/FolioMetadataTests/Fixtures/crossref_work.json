@@ -1,0 +1,76 @@
+{
+ "status": "ok",
+ "message-type": "work",
+ "message-version": "1.0.0",
+ "message": {
+  "publisher": "Elsevier BV",
+  "published-print": {
+   "date-parts": [
+    [
+     2024,
+     9
+    ]
+   ]
+  },
+  "DOI": "10.1016/j.bspc.2024.106296",
+  "type": "journal-article",
+  "created": {
+   "date-parts": [
+    [
+     2024,
+     5,
+     1
+    ]
+   ],
+   "date-time": "2024-05-01T13:00:29Z",
+   "timestamp": 1714568429000
+  },
+  "page": "106296",
+  "title": [
+   "RVS-FDSC: A retinal vessel segmentation method with four-directional strip convolution to enhance feature extraction"
+  ],
+  "subtitle": [],
+  "volume": "95",
+  "author": [
+   {
+    "given": "Linfeng",
+    "family": "Kong",
+    "sequence": "first",
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   },
+   {
+    "given": "Yun",
+    "family": "Wu",
+    "sequence": "additional",
+    "role": [
+     {
+      "vocabulary": "crossref",
+      "role": "author"
+     }
+    ]
+   }
+  ],
+  "container-title": [
+   "Biomedical Signal Processing and Control"
+  ],
+  "issued": {
+   "date-parts": [
+    [
+     2024,
+     9
+    ]
+   ]
+  },
+  "URL": "https://doi.org/10.1016/j.bspc.2024.106296",
+  "resource": {
+   "primary": {
+    "URL": "https://linkinghub.elsevier.com/retrieve/pii/S1746809424003549"
+   }
+  }
+ }
+}
