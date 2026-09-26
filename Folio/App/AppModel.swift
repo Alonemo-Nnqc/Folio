@@ -59,6 +59,8 @@ final class AppModel {
     var previewOpenSettings = false
 
     @ObservationIgnored private var fulltextMatches: Set<String>?
+    /// Set once the first snapshot arrives. (Comparing with `.empty` misfires for an empty library.)
+    @ObservationIgnored private var didLoadLibrary = false
     @ObservationIgnored private var observationTask: Task<Void, Never>?
     @ObservationIgnored private var fulltextTask: Task<Void, Never>?
     @ObservationIgnored lazy var importer = ImportCoordinator(model: self)
@@ -129,6 +131,7 @@ final class AppModel {
 
     private func reopenLibrary(at url: URL) throws {
         library = try Library(root: url)
+        didLoadLibrary = false
         snapshot = .empty
         sidebarSelection = .all
         startObserving()
@@ -148,7 +151,8 @@ final class AppModel {
     }
 
     private func apply(_ newSnapshot: LibrarySnapshot) {
-        let firstLoad = snapshot == .empty
+        let firstLoad = !didLoadLibrary
+        didLoadLibrary = true
         snapshot = newSnapshot
         if case .group(let id) = sidebarSelection, snapshot.groupsById[id] == nil { sidebarSelection = .all }
         if case .tag(let id) = sidebarSelection, snapshot.tagsById[id] == nil { sidebarSelection = .all }

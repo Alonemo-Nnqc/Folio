@@ -3,7 +3,7 @@
 set -uo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
-pkill -x Folio >/dev/null 2>&1 || true
+pkill -f "DerivedData/Build/Products/Debug/Folio.app/Contents/MacOS/Folio" >/dev/null 2>&1 || true
 xcodegen generate --quiet
 ONLY="${1:-FolioUITests}"
 xcodebuild -project Folio.xcodeproj -scheme Folio -derivedDataPath build/DerivedData -destination 'platform=macOS' \

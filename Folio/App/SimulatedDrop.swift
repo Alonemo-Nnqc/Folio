@@ -4,11 +4,19 @@ import AppKit
 /// with a pasteboard holding that file URL — the same calls AppKit makes when a file is dropped
 /// from Finder — and writes the outcome to `-FolioSimulateDropLog <file>`. No input events involved.
 enum SimulatedDrop {
-    static func run(path: String, model: AppModel) {
+    static func run(path: String, model: AppModel, attempt: Int = 0) {
         if let groupName = UserDefaults.standard.string(forKey: "FolioSimulateDropGroup") {
             return runOnSidebar(path: path, groupName: groupName, model: model)
         }
-        guard let controller = model.itemListController else { return }
+        guard let controller = model.itemListController else {
+            // The list may not exist yet right after launch; try again shortly.
+            if attempt < 20 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { run(path: path, model: model, attempt: attempt + 1) }
+            } else if let log = UserDefaults.standard.string(forKey: "FolioSimulateDropLog") {
+                append("no item list controller\n", to: log)
+            }
+            return
+        }
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("com.nnqc.folio.simulated-drop"))
         pasteboard.clearContents()
         pasteboard.writeObjects([URL(filePath: path) as NSURL])
@@ -17,8 +25,21 @@ enum SimulatedDrop {
         let overlay = model.externalDropCount
         let accepted = operation.isEmpty ? false
             : controller.outlineView(controller.outline, acceptDrop: info, item: nil, childIndex: NSOutlineViewDropOnItemIndex)
+        // AppKit ends every session with these callbacks; they must not raise.
+        controller.outline.draggingExited(info)
+        controller.outline.draggingEnded(info)
         let line = "validate=\(operation.rawValue) overlayCount=\(overlay) accepted=\(accepted) overlayAfter=\(model.externalDropCount)\n"
         if let log = UserDefaults.standard.string(forKey: "FolioSimulateDropLog") {
+            append(line, to: log)
+        }
+    }
+
+    static func append(_ line: String, to log: String) {
+        if let handle = FileHandle(forWritingAtPath: log) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
             try? line.write(toFile: log, atomically: true, encoding: .utf8)
         }
     }
@@ -37,7 +58,7 @@ extension SimulatedDrop {
         let accepted = operation.isEmpty ? false
             : sidebar.outlineView(sidebar.outline, acceptDrop: info, item: node, childIndex: NSOutlineViewDropOnItemIndex)
         if let log = UserDefaults.standard.string(forKey: "FolioSimulateDropLog") {
-            try? "sidebar validate=\(operation.rawValue) accepted=\(accepted)\n".write(toFile: log, atomically: true, encoding: .utf8)
+            append("sidebar validate=\(operation.rawValue) accepted=\(accepted)\n", to: log)
         }
     }
 }

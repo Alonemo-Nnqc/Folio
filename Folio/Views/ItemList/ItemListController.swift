@@ -37,7 +37,9 @@ final class ItemOutlineView: NSOutlineView {
     }
 
     override func draggingEnded(_ sender: any NSDraggingInfo) {
-        super.draggingEnded(sender)
+        // No super call: NSOutlineView does not implement draggingEnded:, so super raises an
+        // "unrecognized selector" exception inside AppKit's drag completion, which breaks every
+        // later drag into this window.
         controller?.model?.externalDropCount = 0
         draggingDestinationFeedbackStyle = .gap
     }

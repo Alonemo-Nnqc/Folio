@@ -11,7 +11,9 @@ CONFIG="Debug"
 DERIVED="$ROOT_DIR/build/DerivedData"
 APP_BUNDLE="$DERIVED/Build/Products/$CONFIG/$APP_NAME.app"
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+# Only restart the development build (never the user's installed Folio), and only when launching it.
+stop_dev() { pkill -f "$DERIVED/Build/Products/.*/$APP_NAME.app/Contents/MacOS/$APP_NAME" >/dev/null 2>&1 || true; }
+case "$MODE" in run|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify) stop_dev ;; esac
 
 cd "$ROOT_DIR"
 xcodegen generate --quiet

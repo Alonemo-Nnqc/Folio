@@ -51,8 +51,11 @@ enum PreviewHooks {
         if let toast = defaults.string(forKey: "FolioPreviewToast") { model.toasts.show(toast, systemImage: "folder.badge.plus") }
         if defaults.bool(forKey: "FolioPreviewExpandGroups") { model.previewExpandAllGroups = true }
         if defaults.bool(forKey: "FolioPreviewSettings") { model.previewOpenSettings = true }
-        if let path = defaults.string(forKey: "FolioPreviewSimulateDrop") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { SimulatedDrop.run(path: path, model: model) }
+        if let paths = defaults.string(forKey: "FolioPreviewSimulateDrop") {
+            // "a.pdf|b.pdf": one drop per file, two seconds apart, to exercise repeated drops.
+            for (index, path) in paths.split(separator: "|").map(String.init).enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5 + Double(index) * 2) { SimulatedDrop.run(path: path, model: model) }
+            }
         }
     }
 }

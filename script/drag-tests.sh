@@ -15,7 +15,7 @@ check() { # name expected actual
   if [[ "$2" == "$3" ]]; then echo "  ✔ $1"; PASS=$((PASS+1)); else echo "  ✘ $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi
 }
 launch() {
-  pkill -x Folio >/dev/null 2>&1; sleep 0.5
+  pkill -f "DerivedData/Build/Products/Debug/Folio.app/Contents/MacOS/Folio" >/dev/null 2>&1; sleep 0.5
   open -n "$APP" --args -FolioLibraryPath "$LIB" -FolioUITesting YES -ApplePersistenceIgnoreState YES
   sleep 3
   read -r WX WY < <(swift -e '
@@ -35,7 +35,7 @@ builtinRow() { echo $((WY + 92 + 28 * $1)); }
 groupRow() { echo $((WY + 189 + 28 * $1)); }
 
 echo "▶ seeding $LIB"
-launch; pkill -x Folio; sleep 1
+launch; pkill -f "DerivedData/Build/Products/Debug/Folio.app/Contents/MacOS/Folio"; sleep 1
 q "INSERT INTO libraryGroup (id, parentId, name, position, dateCreated) VALUES
    ('gA', NULL, 'Alpha', 0, '2026-09-26 12:00:00.000'), ('gB', NULL, 'Beta', 1, '2026-09-26 12:00:00.000'),
    ('gC', NULL, 'Gamma', 2, '2026-09-26 12:00:00.000');
@@ -78,6 +78,6 @@ echo "▶ TRASH-10 item → 回收站"
 drag $((WX + LIST_X)) "$(listRow 0)" $((WX + SIDEBAR_X)) "$(builtinRow 2)"
 check "one item trashed" 1 "$(q "SELECT count(*) FROM item WHERE trashedAt IS NOT NULL")"
 
-pkill -x Folio
+pkill -f "DerivedData/Build/Products/Debug/Folio.app/Contents/MacOS/Folio"
 echo "drag tests: $PASS passed, $FAIL failed"
 [[ $FAIL -eq 0 ]]

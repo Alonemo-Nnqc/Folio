@@ -5,9 +5,13 @@ import Network
 final class NetworkMonitor {
     private let monitor = NWPathMonitor()
     private var wasSatisfied = true
+    private var started = false
     var onReconnect: (() -> Void)?
 
+    /// Idempotent: an NWPathMonitor may only be started once.
     func start() {
+        guard !started else { return }
+        started = true
         monitor.pathUpdateHandler = { [weak self] path in
             let satisfied = path.status == .satisfied
             Task { @MainActor in
