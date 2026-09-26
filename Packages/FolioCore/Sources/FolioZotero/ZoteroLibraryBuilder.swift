@@ -53,6 +53,14 @@ enum ZoteroLibraryBuilder {
         var keptFilesByParent: [Int64: [PreparedFile]] = [:]
         var keptStandalone: [RawAttachment] = []
 
+        func keep(_ attachment: RawAttachment) {
+            if let parentItemID = attachment.parentItemID {
+                keptFilesByParent[parentItemID, default: []].append(resolvedFile(for: attachment))
+            } else {
+                keptStandalone.append(attachment)
+            }
+        }
+
         func classify(_ attachment: RawAttachment) {
             if raw.deletedItemIDs.contains(attachment.itemID) {
                 report.skippedTrashed += 1
@@ -60,15 +68,18 @@ enum ZoteroLibraryBuilder {
             }
             switch attachment.linkMode {
             case ZoteroLinkMode.importedURL:
-                report.skippedSnapshots += 1
+                // linkMode 1 covers both real web snapshots (HTML) and files the browser
+                // connector downloaded automatically (often PDFs) — only the former are
+                // "snapshots" to skip per ZOT-03; the rest are kept like any other file.
+                if ZoteroAttachmentResolver.isHTMLSnapshot(contentType: attachment.contentType, path: attachment.path) {
+                    report.skippedSnapshots += 1
+                } else {
+                    keep(attachment)
+                }
             case ZoteroLinkMode.linkedURL:
                 report.skippedLinks += 1
             default:
-                if let parentItemID = attachment.parentItemID {
-                    keptFilesByParent[parentItemID, default: []].append(resolvedFile(for: attachment))
-                } else {
-                    keptStandalone.append(attachment)
-                }
+                keep(attachment)
             }
         }
         for (_, attachments) in raw.attachmentsByParent {

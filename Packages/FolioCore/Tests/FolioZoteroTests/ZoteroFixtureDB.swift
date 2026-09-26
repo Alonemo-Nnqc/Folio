@@ -113,11 +113,11 @@ final class ZoteroFixtureDB {
     }
 
     @discardableResult
-    func addAttachment(id: Int, parent: Int?, linkMode: Int, path: String?, dateAdded: String = "2026-01-01 00:00:00", key: String? = nil) throws -> Int {
+    func addAttachment(id: Int, parent: Int?, linkMode: Int, path: String?, contentType: String? = nil, dateAdded: String = "2026-01-01 00:00:00", key: String? = nil) throws -> Int {
         try addItem(id: id, type: Self.attachmentType, dateAdded: dateAdded, key: key)
         try exec("""
-            INSERT INTO itemAttachments (itemID, parentItemID, linkMode, path)
-            VALUES (\(id), \(Self.literal(parent)), \(linkMode), \(Self.quote(path)))
+            INSERT INTO itemAttachments (itemID, parentItemID, linkMode, path, contentType)
+            VALUES (\(id), \(Self.literal(parent)), \(linkMode), \(Self.quote(path)), \(Self.quote(contentType)))
             """)
         return id
     }
@@ -163,7 +163,7 @@ final class ZoteroFixtureDB {
     CREATE TABLE creatorTypes (creatorTypeID INTEGER PRIMARY KEY, creatorType TEXT);
     CREATE TABLE creators (creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, fieldMode INT);
     CREATE TABLE itemCreators (itemID INT, creatorID INT, creatorTypeID INT, orderIndex INT);
-    CREATE TABLE itemAttachments (itemID INTEGER PRIMARY KEY, parentItemID INT, linkMode INT, path TEXT);
+    CREATE TABLE itemAttachments (itemID INTEGER PRIMARY KEY, parentItemID INT, linkMode INT, path TEXT, contentType TEXT);
     CREATE TABLE collections (collectionID INTEGER PRIMARY KEY, key TEXT, collectionName TEXT, parentCollectionID INT, libraryID INT);
     CREATE TABLE collectionItems (collectionID INT, itemID INT);
     CREATE TABLE tags (tagID INTEGER PRIMARY KEY, name TEXT);

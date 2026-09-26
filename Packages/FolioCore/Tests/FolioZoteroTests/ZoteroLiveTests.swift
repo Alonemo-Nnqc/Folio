@@ -50,8 +50,18 @@ import FolioCore
             }
         }
         print("files existing=\(existing) missing=\(missing)")
-        #expect(existing >= 85) // known fact: 93 importable (linkMode 0) files, all present on disk
+        // Known facts: 93 linkMode-0 files (all present) + 29 linkMode-1 attachments whose
+        // contentType isn't text/html (the connector downloaded these the same way it takes
+        // snapshots, but they're real PDFs, not snapshots) = 122 kept files that exist, plus
+        // 2 more linkMode-1 rows with an empty contentType/path that resolve to nothing.
+        #expect(existing == 122)
+        #expect(missing == 2)
         #expect(existing + missing == library.entries.flatMap(\.files).count)
+
+        // Only real web snapshots (contentType text/html) are skipped; the linked URL stays skipped too.
+        #expect(report.skippedSnapshots == 16)
+        #expect(report.skippedLinks == 1)
+        #expect(report.skippedTrashed == 1)
 
         // Automatic tags are available but excluded unless explicitly requested.
         #expect(report.automaticTagsAvailable == 55)

@@ -15,6 +15,7 @@ struct RawAttachment {
     let parentItemID: Int64?
     let linkMode: Int
     let path: String?
+    let contentType: String?
     let dateAdded: Date
     let dateModified: Date
 }

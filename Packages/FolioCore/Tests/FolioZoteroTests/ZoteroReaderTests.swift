@@ -49,17 +49,20 @@ import FolioCore
         #expect(kept?.groupKeys == ["MID1"])
     }
 
-    @Test func linkedFileWithAbsolutePathAndSnapshotAndLinkedURLSkip() throws {
+    @Test func linkedFileAndConnectorDownloadedAttachmentsAreKeptOnlyHTMLSnapshotIsSkipped() throws {
         let fixture = try ZoteroFixtureDB()
         try fixture.addItem(id: 20, type: ZoteroFixtureDB.journalArticleType)
         try fixture.addField(item: 20, name: "title", value: "Item With Attachments")
 
         // linkMode 2: linked file with an absolute path — kept.
         try fixture.addAttachment(id: 21, parent: 20, linkMode: ZoteroFixtureDB.linkedFileLinkMode, path: "/Users/me/Papers/linked.pdf")
-        // linkMode 1: web snapshot — skipped.
-        try fixture.addAttachment(id: 22, parent: 20, linkMode: ZoteroFixtureDB.snapshotLinkMode, path: "storage:snapshot.html")
+        // linkMode 1, contentType text/html: an actual web snapshot — skipped.
+        try fixture.addAttachment(id: 22, parent: 20, linkMode: ZoteroFixtureDB.snapshotLinkMode, path: "storage:snapshot.html", contentType: "text/html")
         // linkMode 3: linked URL — skipped.
         try fixture.addAttachment(id: 23, parent: 20, linkMode: ZoteroFixtureDB.linkedURLLinkMode, path: nil)
+        // linkMode 1, contentType application/pdf: the browser connector downloaded this PDF
+        // the same way it downloads snapshots — must be kept like an imported file.
+        try fixture.addAttachment(id: 24, parent: 20, linkMode: ZoteroFixtureDB.snapshotLinkMode, path: "storage:downloaded.pdf", contentType: "application/pdf")
 
         let reader = try ZoteroReader(dataDirectory: fixture.directory)
         let (library, report) = try reader.read(options: ZoteroReadOptions())
@@ -67,8 +70,9 @@ import FolioCore
         #expect(report.skippedSnapshots == 1)
         #expect(report.skippedLinks == 1)
         let entry = library.entries.first!
-        #expect(entry.files.count == 1)
-        #expect(entry.files[0].sourceURL.path == "/Users/me/Papers/linked.pdf")
+        #expect(entry.files.count == 2)
+        #expect(entry.files.contains { $0.sourceURL.path == "/Users/me/Papers/linked.pdf" })
+        #expect(entry.files.contains { $0.originalName == "downloaded.pdf" })
     }
 
     @Test func standaloneAttachmentBecomesStandaloneEntry() throws {

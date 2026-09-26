@@ -69,7 +69,8 @@ enum ZoteroRawLoader {
 
         for row in try Row.fetchAll(db, sql: """
             SELECT ia.itemID as itemID, i.key as key, ia.parentItemID as parentItemID,
-                   ia.linkMode as linkMode, ia.path as path, i.dateAdded as dateAdded, i.dateModified as dateModified
+                   ia.linkMode as linkMode, ia.path as path, ia.contentType as contentType,
+                   i.dateAdded as dateAdded, i.dateModified as dateModified
             FROM itemAttachments ia
             JOIN items i ON i.itemID = ia.itemID
             WHERE i.libraryID = ?
@@ -80,6 +81,7 @@ enum ZoteroRawLoader {
                 parentItemID: row["parentItemID"],
                 linkMode: (row["linkMode"] as Int?) ?? 0,
                 path: row["path"],
+                contentType: row["contentType"],
                 dateAdded: ZoteroDate.parseTimestamp(row["dateAdded"]),
                 dateModified: ZoteroDate.parseTimestamp(row["dateModified"])
             )

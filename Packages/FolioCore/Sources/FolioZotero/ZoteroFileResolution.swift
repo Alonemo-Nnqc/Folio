@@ -4,8 +4,9 @@ import FolioCore
 /// Zotero's fixed `itemAttachments.linkMode` values (not stored anywhere as a lookup table).
 enum ZoteroLinkMode {
     static let importedFile = 0
-    /// "Web snapshot" (saved/downloaded from a URL) — skipped per ZOT-03, regardless of
-    /// its actual content type.
+    /// Downloaded via a URL — this covers both actual web snapshots (`text/html`) *and*
+    /// PDFs/other files the browser connector grabbed automatically. Only the HTML ones are
+    /// "web snapshots" to skip per ZOT-03; see `ZoteroAttachmentResolver.isHTMLSnapshot`.
     static let importedURL = 1
     static let linkedFile = 2
     /// Linked URL (no local file) — skipped per ZOT-03.
@@ -33,6 +34,21 @@ enum ZoteroAttachmentResolver {
             return URL(fileURLWithPath: relative)
         }
         return URL(fileURLWithPath: path)
+    }
+
+    /// True when a `linkMode == importedURL` (1) attachment is an actual web snapshot to skip
+    /// per ZOT-03: `text/html` content, or (as a fallback, when `contentType` is missing) an
+    /// `.html`/`.htm` file name. Any other content — PDFs, EPUBs, etc. the connector downloaded
+    /// the same way — is kept exactly like an imported file (linkMode 0).
+    static func isHTMLSnapshot(contentType: String?, path: String?) -> Bool {
+        if let contentType, !contentType.isEmpty {
+            return contentType.lowercased() == "text/html"
+        }
+        if let path {
+            let lower = path.lowercased()
+            return lower.hasSuffix(".html") || lower.hasSuffix(".htm")
+        }
+        return false
     }
 
     /// True when `name` looks like a bilingual translation-plugin PDF (`*.compare.pdf`) —

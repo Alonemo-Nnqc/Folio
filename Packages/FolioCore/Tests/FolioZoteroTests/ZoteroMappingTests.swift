@@ -170,4 +170,16 @@ import FolioCore
         let ordered = ZoteroAttachmentResolver.order([later, earlier])
         #expect(ordered.first?.originalName == "a.pdf")
     }
+
+    @Test func htmlSnapshotDetectionUsesContentTypeFirst() {
+        #expect(ZoteroAttachmentResolver.isHTMLSnapshot(contentType: "text/html", path: "storage:page.pdf"))
+        #expect(!ZoteroAttachmentResolver.isHTMLSnapshot(contentType: "application/pdf", path: "storage:page.html"))
+    }
+
+    @Test func htmlSnapshotDetectionFallsBackToExtensionWhenContentTypeMissing() {
+        #expect(ZoteroAttachmentResolver.isHTMLSnapshot(contentType: nil, path: "storage:page.html"))
+        #expect(ZoteroAttachmentResolver.isHTMLSnapshot(contentType: "", path: "storage:page.htm"))
+        #expect(!ZoteroAttachmentResolver.isHTMLSnapshot(contentType: nil, path: "storage:paper.pdf"))
+        #expect(!ZoteroAttachmentResolver.isHTMLSnapshot(contentType: nil, path: nil))
+    }
 }
