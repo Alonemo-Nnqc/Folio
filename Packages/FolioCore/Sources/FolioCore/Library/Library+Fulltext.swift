@@ -13,6 +13,22 @@ extension Library {
         }
     }
 
+    /// Stores several results in one transaction (nil text = no text layer), so indexing a large
+    /// library triggers a handful of snapshot refreshes instead of one per file.
+    public func setFulltext(_ results: [(fileId: String, text: String?)]) throws {
+        guard !results.isEmpty else { return }
+        try writer.write { db in
+            try Self.deleteFulltext(fileIds: results.map(\.fileId), db)
+            for (fileId, text) in results {
+                if let text {
+                    try db.execute(sql: "INSERT INTO fulltext (fileId, content) VALUES (?, ?)", arguments: [fileId, text])
+                }
+                let state = text == nil ? FulltextState.notApplicable : .indexed
+                try db.execute(sql: "UPDATE file SET fulltextState = ? WHERE id = ?", arguments: [state.rawValue, fileId])
+            }
+        }
+    }
+
     public func markFulltextNotApplicable(fileId: String) throws {
         try writer.write {
             try $0.execute(sql: "UPDATE file SET fulltextState = ? WHERE id = ?",

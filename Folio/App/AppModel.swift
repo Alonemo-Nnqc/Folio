@@ -133,6 +133,12 @@ final class AppModel {
         if firstLoad {
             importer.libraryDidLoad()
             PreviewHooks.apply(to: self)
+            // Performance runs pass -FolioPerfLog <file> to record when the first data is on screen.
+            if let log = UserDefaults.standard.string(forKey: "FolioPerfLog") {
+                DispatchQueue.main.async {
+                    try? "\(Date().timeIntervalSince1970) \(self.rows.count)\n".write(toFile: log, atomically: true, encoding: .utf8)
+                }
+            }
         }
     }
 

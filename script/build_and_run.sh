@@ -25,7 +25,8 @@ FOLIO_ARGS=()
 [[ -n "${FOLIO_LIBRARY:-}" ]] && FOLIO_ARGS=(-FolioLibraryPath "$FOLIO_LIBRARY")
 
 case "$MODE" in
-  run|--release) open_app ;;
+  run) open_app ;;
+  --release|release) echo "$APP_BUNDLE" ;;
   --build-only|build) echo "$APP_BUNDLE" ;;
   --debug|debug) lldb -- "$APP_BUNDLE/Contents/MacOS/$APP_NAME" ;;
   --logs|logs) open_app; /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\"" ;;

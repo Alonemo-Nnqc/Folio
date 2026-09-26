@@ -265,14 +265,17 @@ final class ImportCoordinator {
         Task {
             await Task.detached(priority: .utility) {
                 let files = (try? library.filesNeedingFulltext()) ?? []
+                var batch: [(fileId: String, text: String?)] = []
                 for file in files {
-                    let url = library.fileURL(for: file)
-                    if let text = PDFTextExtractor.fullText(of: url) {
-                        try? library.setFulltext(fileId: file.id, text: text)
-                    } else {
-                        try? library.markFulltextNotApplicable(fileId: file.id)
+                    // PDFKit autoreleases heavily; drain per file so memory is returned right away.
+                    let text = autoreleasepool { PDFTextExtractor.fullText(of: library.fileURL(for: file)) }
+                    batch.append((file.id, text))
+                    if batch.count == 25 {
+                        try? library.setFulltext(batch)
+                        batch.removeAll()
                     }
                 }
+                try? library.setFulltext(batch)
             }.value
             indexing = false
             if !((try? library.filesNeedingFulltext()) ?? []).isEmpty { indexFulltext() }

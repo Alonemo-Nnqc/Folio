@@ -8,7 +8,7 @@ extension MetadataEngine {
     /// immediately; otherwise the best accepted search candidate is taken once every source has
     /// answered, or `searchGrace` after the first acceptable one arrived.
     public func resolve(pdfAt url: URL) async -> ResolveResult {
-        guard let facts = PDFFacts.extract(from: url) else { return .notFound }
+        guard let facts = autoreleasepool(invoking: { PDFFacts.extract(from: url) }) else { return .notFound }
         let plan = LookupPlan(found: IdentifierExtractor.extract(from: facts))
         let guesses = TitleGuesser.guesses(from: facts)
         guard !plan.identifiers.isEmpty || !guesses.isEmpty else { return .notFound }
