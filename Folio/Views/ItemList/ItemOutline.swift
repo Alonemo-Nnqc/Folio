@@ -13,6 +13,7 @@ struct ItemOutline: NSViewRepresentable {
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.documentView = context.coordinator.outline
+        model.itemListController = context.coordinator
         return scroll
     }
 

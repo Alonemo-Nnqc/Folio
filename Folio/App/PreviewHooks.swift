@@ -47,9 +47,12 @@ enum PreviewHooks {
         default: break
         }
         let drop = defaults.integer(forKey: "FolioPreviewDrop")
-        if drop > 0 { model.previewDropCount = drop }
+        if drop > 0 { model.externalDropCount = drop }
         if let toast = defaults.string(forKey: "FolioPreviewToast") { model.toasts.show(toast, systemImage: "folder.badge.plus") }
         if defaults.bool(forKey: "FolioPreviewExpandGroups") { model.previewExpandAllGroups = true }
         if defaults.bool(forKey: "FolioPreviewSettings") { model.previewOpenSettings = true }
+        if let path = defaults.string(forKey: "FolioPreviewSimulateDrop") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { SimulatedDrop.run(path: path, model: model) }
+        }
     }
 }

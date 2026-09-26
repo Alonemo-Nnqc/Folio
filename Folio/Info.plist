@@ -28,6 +28,19 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Folio</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.nnqc.folio.item</string>
+			<key>UTTypeDescription</key>
+			<string>Folio 条目</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

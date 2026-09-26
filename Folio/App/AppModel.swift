@@ -53,7 +53,8 @@ final class AppModel {
     // Screenshot hooks (see PreviewHooks).
     var previewExpandRequest: String?
     var previewInspectorTab: String?
-    var previewDropCount = 0
+    /// Files currently dragged over the list from Finder; > 0 shows the drop overlay (DND-01).
+    var externalDropCount = 0
     var previewExpandAllGroups = false
     var previewOpenSettings = false
 
@@ -62,6 +63,8 @@ final class AppModel {
     @ObservationIgnored private var fulltextTask: Task<Void, Never>?
     @ObservationIgnored lazy var importer = ImportCoordinator(model: self)
     @ObservationIgnored let citations = CitationService()
+    /// The live list controller, for the simulated-drop check (see SimulatedDrop).
+    @ObservationIgnored weak var itemListController: ItemListController?
 
     enum ActiveSheet: Identifiable {
         case identifierAdd

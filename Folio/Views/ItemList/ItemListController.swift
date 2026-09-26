@@ -31,6 +31,17 @@ final class ItemOutlineView: NSOutlineView {
         }
     }
 
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        super.draggingExited(sender)
+        controller?.model?.externalDropCount = 0
+    }
+
+    override func draggingEnded(_ sender: any NSDraggingInfo) {
+        super.draggingEnded(sender)
+        controller?.model?.externalDropCount = 0
+        draggingDestinationFeedbackStyle = .gap
+    }
+
     nonisolated override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
 
     nonisolated override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
@@ -116,7 +127,9 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
 
         outline.target = self
         outline.doubleAction = #selector(doubleClicked)
-        outline.registerForDraggedTypes([.folioItem])
+        // File URLs are accepted here directly (not via SwiftUI's onDrop): the outline sits on top of the
+        // hosting view, so AppKit delivers Finder drags to it.
+        outline.registerForDraggedTypes([.folioItem, .fileURL])
         outline.setDraggingSourceOperationMask([.copy, .link, .move, .delete], forLocal: true)
         outline.setDraggingSourceOperationMask(.copy, forLocal: false)
         outline.draggingDestinationFeedbackStyle = .gap
@@ -446,12 +459,33 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         }
     }
 
-    // MARK: Drop target: reordering within the list (DND-04)
+    // MARK: Drop target: reordering (DND-04) and files from Finder (DND-01)
+
+    private func dropDecision(_ info: any NSDraggingInfo) -> ListDropDecision {
+        guard let model else { return .reject }
+        return ListDropRules.decide(hasFolioItems: !ItemPasteboard.draggedItems(info.draggingPasteboard).isEmpty,
+                                    fromThisList: info.draggingSource as? NSOutlineView === outline,
+                                    fileCount: ItemPasteboard.fileURLs(info.draggingPasteboard).count,
+                                    isSearching: model.search.isActive, scope: model.sidebarSelection)
+    }
 
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?,
                      proposedChildIndex index: Int) -> NSDragOperation {
-        guard let model, info.draggingSource as? NSOutlineView === outline, !model.search.isActive,
-              model.sidebarSelection != .trash, !ItemPasteboard.draggedItems(info.draggingPasteboard).isEmpty else { return [] }
+        guard let model else { return [] }
+        switch dropDecision(info) {
+        case .reject:
+            model.externalDropCount = 0
+            return []
+        case .importFiles:
+            // The whole list is the target; the glass overlay replaces the table's own highlight.
+            outlineView.draggingDestinationFeedbackStyle = .none
+            outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
+            let count = ItemPasteboard.fileURLs(info.draggingPasteboard).count
+            if model.externalDropCount != count { model.externalDropCount = count }
+            return .copy
+        case .reorder:
+            outlineView.draggingDestinationFeedbackStyle = .gap
+        }
         var target = index
         if let node = item as? ItemNode {
             // Dropping on or inside an item: retarget to the gap above it.
@@ -467,6 +501,11 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
 
     func outlineView(_ outlineView: NSOutlineView, acceptDrop info: any NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
         guard let model else { return false }
+        if dropDecision(info) == .importFiles {
+            model.externalDropCount = 0
+            model.importer.importFiles(ItemPasteboard.fileURLs(info.draggingPasteboard), toGroup: model.sidebarSelection.groupId)
+            return true
+        }
         let ids = ItemPasteboard.draggedItems(info.draggingPasteboard).map(\.itemId)
         guard !ids.isEmpty else { return false }
         model.moveItems(ids, toIndex: index < 0 ? rows.count : index)
