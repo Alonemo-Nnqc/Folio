@@ -107,60 +107,75 @@ def cmd_version():
     return 0
 
 
-def cmd_warmup():
+def cmd_warmup(attempts=4, parallel=6):
     import asyncio
+    import time
 
     import babeldoc.assets.assets as assets
+    from babeldoc.const import CACHE_FOLDER
     from babeldoc.const import get_cache_file_path
 
     _setup_logging()
     files = assets.generate_all_assets_file_list()
-    missing = []
-    for file_type, descs in files.items():
-        for desc in descs:
-            if not assets.verify_file(get_cache_file_path(desc["name"], file_type), desc["sha3_256"]):
-                missing.append(desc["name"])
-    total = len(missing)
-    state = {"done": 0}
-    emit({"type": "warmup_start", "total": total})
+
+    def missing_files():
+        result = []
+        for file_type, descs in files.items():
+            for desc in descs:
+                if not assets.verify_file(get_cache_file_path(desc["name"], file_type), desc["sha3_256"]):
+                    result.append(desc["name"])
+        return result
+
+    state = {"done": 0, "total": len(missing_files()), "semaphore": None}
+    emit({"type": "warmup_start", "total": state["total"]})
 
     original_download = assets.download_file
 
-    async def counting_download(*args, **kwargs):
-        result = await original_download(*args, **kwargs)
+    async def limited_counting_download(*args, **kwargs):
+        # BabelDOC starts ~180 downloads at once (5 s connect timeout each), which
+        # times out on slow links; limit the concurrency.
+        if state["semaphore"] is None:
+            state["semaphore"] = asyncio.Semaphore(parallel)
+        async with state["semaphore"]:
+            result = await original_download(*args, **kwargs)
         state["done"] += 1
         path = kwargs.get("path") if "path" in kwargs else (args[2] if len(args) > 2 else None)
         emit({
             "type": "warmup_progress",
             "done": state["done"],
-            "total": max(total, state["done"]),
+            "total": max(state["total"], state["done"]),
             "file": os.path.basename(str(path)) if path else None,
         })
         return result
 
-    assets.download_file = counting_download
-    try:
-        assets.warmup()
-    except SystemExit as e:  # babeldoc calls exit(1) when no upstream is reachable
-        emit({"type": "error", "error": "Failed to download assets (no reachable upstream)", "error_type": "AssetDownloadError", "details": str(e)})
-        return 1
-    except Exception as e:  # noqa: BLE001
-        import traceback
+    assets.download_file = limited_counting_download
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        state["semaphore"] = None  # each warmup() runs its own event loop
+        try:
+            assets.warmup()
+            last_error = None
+        except SystemExit as e:  # babeldoc calls exit(1) when no upstream is reachable
+            last_error = ("Failed to download assets (no reachable upstream)", "AssetDownloadError", str(e))
+        except Exception as e:  # noqa: BLE001
+            import traceback
 
-        emit({"type": "error", "error": str(e), "error_type": e.__class__.__name__, "details": _clip(traceback.format_exc())})
-        return 1
+            last_error = (str(e), e.__class__.__name__, _clip(traceback.format_exc()))
+        remaining = missing_files()
+        if not remaining:
+            break
+        state["total"] = state["done"] + len(remaining)
+        if attempt < attempts:
+            emit({"type": "warmup_retry", "attempt": attempt, "remaining": len(remaining),
+                  "error": last_error[0] if last_error else None})
+            time.sleep(3 * attempt)
 
-    # Verify everything is in place now.
-    still_missing = []
-    for file_type, descs in files.items():
-        for desc in descs:
-            if not assets.verify_file(get_cache_file_path(desc["name"], file_type), desc["sha3_256"]):
-                still_missing.append(desc["name"])
-    if still_missing:
-        emit({"type": "error", "error": "Assets missing after warmup: " + ", ".join(still_missing[:10]), "error_type": "AssetDownloadError", "details": ""})
+    remaining = missing_files()
+    if remaining:
+        message, error_type, details = last_error or ("Assets missing after warmup", "AssetDownloadError", "")
+        emit({"type": "error", "error": message, "error_type": error_type,
+              "details": "missing: " + ", ".join(remaining[:10]) + "\n" + details})
         return 1
-    from babeldoc.const import CACHE_FOLDER
-
     emit({"type": "warmup_finish", "downloaded": state["done"], "cache_folder": str(CACHE_FOLDER)})
     return 0
 

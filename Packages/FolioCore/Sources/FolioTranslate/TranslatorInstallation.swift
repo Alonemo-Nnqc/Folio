@@ -176,8 +176,14 @@ public struct TranslatorInstallation: Sendable {
         let logURL = layout.logsDirectory.appending(path: "install-\(TranslationJob.timestamp()).log")
         let log = LogWriter(url: logURL, redacting: [])
         defer { log.close() }
+        let highWater = LockedValue(0.0)
         @Sendable func report(_ phase: TranslatorInstallPhase, _ fraction: Double, _ detail: String? = nil) {
-            progress(TranslatorInstallProgress(phase: phase, fractionCompleted: min(max(fraction, 0), 1), detail: detail))
+            // Never move the bar backwards (e.g. when a download is retried).
+            let value = highWater.mutate { mark -> Double in
+                mark = max(mark, min(max(fraction, 0), 1))
+                return mark
+            }
+            progress(TranslatorInstallProgress(phase: phase, fractionCompleted: value, detail: detail))
         }
         func checkCancelled() throws { if Task.isCancelled { throw TranslatorInstallError.cancelled } }
 
@@ -242,6 +248,8 @@ public struct TranslatorInstallation: Sendable {
             case .warmupProgress(let done, let total, let file):
                 report(.downloadingAssets, 0.61 + 0.34 * Double(done) / Double(max(total, 1)),
                        "已下载 \(done)/\(total)" + (file.map { "：\($0)" } ?? ""))
+            case .warmupRetry(_, let remaining):
+                report(.downloadingAssets, 0, "网络不稳定，正在重试剩余 \(remaining) 个文件")
             default: break
             }
         }

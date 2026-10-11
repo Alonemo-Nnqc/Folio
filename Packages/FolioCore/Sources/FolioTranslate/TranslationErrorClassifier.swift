@@ -23,12 +23,19 @@ public struct TranslationFailure: Sendable, Hashable {
 
 /// Maps raw pdf2zh_next / BabelDOC / HTTP errors to clear Chinese messages.
 public enum TranslationErrorClassifier {
+    /// HTTP status codes only count in an HTTP context: log timestamps (`11:41:50,429`)
+    /// and traceback line numbers (`line 401`) must not match.
+    private static func http(_ code: Int) -> [String] {
+        [#"error code: "# + "\(code)", #"status(_code)?["']?[=: ]+"# + "\(code)", #"\b"# + "\(code)" + #" client error"#,
+         "http \(code)", "http/1.1 \(code)"]
+    }
+
     private static let rules: [(TranslationFailureReason, [String])] = [
         (.appleTranslationUnavailable, [#"FOLIO_APPLE_TRANSLATE:"#]),
-        (.quota, [#"\b429\b"#, "too many requests", "rate.?limit", "quota", "insufficient.?balance", "余额不足",
-                  #"\b402\b"#, "payment required", "exceeded your current"]),
-        (.authentication, [#"\b401\b"#, "unauthori[sz]ed", "invalid.?api.?key", "incorrect api key", "authenticationerror",
-                           "api key not valid", "invalid.?auth", #"\b403\b"#, "forbidden", "permissiondenied"]),
+        (.quota, http(429) + http(402) + ["too many requests", "rate[ -]limit", "ratelimiterror", "rate_limit_exceeded",
+                                          "quota", "insufficient.?balance", "余额不足", "payment required", "exceeded your current"]),
+        (.authentication, http(401) + http(403) + ["unauthori[sz]ed", "invalid.?api.?key", "incorrect api key", "authenticationerror",
+                                                   "api key not valid", "invalid.?auth", "forbidden", "permissiondenied"]),
         (.engineBroken, ["modulenotfounderror", "no module named", "cannot import name", "importerror", "bad interpreter",
                          #"dyld\["#, "library not loaded"]),
         (.configuration, ["is required", "invalid clitranslator", "not found at", "command '.*' not found", "invalid arguments"]),

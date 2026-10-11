@@ -72,6 +72,9 @@ public final class TranslationJob: Sendable {
 
     public var isCancelled: Bool { state.withLock { $0.cancelled } }
 
+    /// PID (= process group ID) of the engine process while it runs.
+    public var processIdentifier: pid_t? { state.withLock { $0.process?.pid } }
+
     // MARK: - Running
 
     private func run(_ continuation: AsyncStream<TranslationEvent>.Continuation) async {
@@ -141,7 +144,7 @@ public final class TranslationJob: Sendable {
                 }
             } else {
                 tail.append(line.text)
-                if tail.count > 60 { tail.removeFirst(tail.count - 60) }
+                if tail.count > 400 { tail.removeFirst(tail.count - 400) }
             }
         }
         let termination = await process.waitUntilExit()

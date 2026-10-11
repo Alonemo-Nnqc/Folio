@@ -21,6 +21,7 @@ struct DriverEvent: Sendable, Hashable {
         case version(String)
         case warmupStart(total: Int)
         case warmupProgress(done: Int, total: Int, file: String?)
+        case warmupRetry(attempt: Int, remaining: Int)
         case warmupFinish
         case other(String)
     }
@@ -57,6 +58,8 @@ struct DriverEvent: Sendable, Hashable {
             return DriverEvent(kind: .warmupStart(total: int("total") ?? 0))
         case "warmup_progress":
             return DriverEvent(kind: .warmupProgress(done: int("done") ?? 0, total: int("total") ?? 0, file: string("file")))
+        case "warmup_retry":
+            return DriverEvent(kind: .warmupRetry(attempt: int("attempt") ?? 0, remaining: int("remaining") ?? 0))
         case "warmup_finish":
             return DriverEvent(kind: .warmupFinish)
         default:
@@ -70,7 +73,7 @@ public enum TranslationStageNames {
     static let names: [String: String] = [
         "starting": "正在启动翻译引擎",
         "checking_assets": "检查版面模型和字体",
-        "translating": "准备翻译",
+        "translating": "连接翻译服务",
         "Parse PDF and Create Intermediate Representation": "解析 PDF",
         "DetectScannedFile": "检测扫描件",
         "Parse Page Layout": "分析页面版面",
