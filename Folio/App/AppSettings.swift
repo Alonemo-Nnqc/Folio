@@ -1,3 +1,4 @@
+import FolioTranslate
 import Foundation
 import Observation
 
@@ -54,24 +55,46 @@ final class AppSettings {
         static let reopenReaderTabs = "reopenReaderTabs"
         static let highlightColor = "highlightColor"
         static let useZoteroRecognizer = "useZoteroRecognizer"
+        static let translationService = "translationService"
+        static let translationFields = "translationFields"
+        static let translationOptions = "translationOptions"
+        static let translatorCustomPath = "translatorCustomPath"
     }
 
     private let defaults: UserDefaults
 
-    var openWith: OpenWith { didSet { defaults.set(openWith.rawValue, forKey: Key.openWith) } }
-    var openWithAppPath: String { didSet { defaults.set(openWithAppPath, forKey: Key.openWithAppPath) } }
-    var includeSubgroupItems: Bool { didSet { defaults.set(includeSubgroupItems, forKey: Key.includeSubgroupItems) } }
-    var autoRenameFiles: Bool { didSet { defaults.set(autoRenameFiles, forKey: Key.autoRenameFiles) } }
-    var autoPurgeTrash: Bool { didSet { defaults.set(autoPurgeTrash, forKey: Key.autoPurgeTrash) } }
-    var crossrefMailto: String { didSet { defaults.set(crossrefMailto, forKey: Key.crossrefMailto) } }
-    var openAlexAPIKey: String { didSet { defaults.set(openAlexAPIKey, forKey: Key.openAlexAPIKey) } }
-    var libraryPath: String { didSet { defaults.set(libraryPath, forKey: Key.libraryPath) } }
-    var readerZoom: ReaderZoom { didSet { defaults.set(readerZoom.rawValue, forKey: Key.readerZoom) } }
-    var readerLayout: ReaderLayout { didSet { defaults.set(readerLayout.rawValue, forKey: Key.readerLayout) } }
-    var reopenReaderTabs: Bool { didSet { defaults.set(reopenReaderTabs, forKey: Key.reopenReaderTabs) } }
+    /// UI tests and screenshot runs (`-FolioUITesting YES`) change settings in memory only, so they
+    /// never touch the user's real preferences.
+    private func save(_ value: Any?, _ key: String) {
+        guard !defaults.bool(forKey: "FolioUITesting") else { return }
+        defaults.set(value, forKey: key)
+    }
+
+    var openWith: OpenWith { didSet { save(openWith.rawValue, Key.openWith) } }
+    var openWithAppPath: String { didSet { save(openWithAppPath, Key.openWithAppPath) } }
+    var includeSubgroupItems: Bool { didSet { save(includeSubgroupItems, Key.includeSubgroupItems) } }
+    var autoRenameFiles: Bool { didSet { save(autoRenameFiles, Key.autoRenameFiles) } }
+    var autoPurgeTrash: Bool { didSet { save(autoPurgeTrash, Key.autoPurgeTrash) } }
+    var crossrefMailto: String { didSet { save(crossrefMailto, Key.crossrefMailto) } }
+    var openAlexAPIKey: String { didSet { save(openAlexAPIKey, Key.openAlexAPIKey) } }
+    var libraryPath: String { didSet { save(libraryPath, Key.libraryPath) } }
+    var readerZoom: ReaderZoom { didSet { save(readerZoom.rawValue, Key.readerZoom) } }
+    var readerLayout: ReaderLayout { didSet { save(readerLayout.rawValue, Key.readerLayout) } }
+    var reopenReaderTabs: Bool { didSet { save(reopenReaderTabs, Key.reopenReaderTabs) } }
     /// Name of the default highlight colour (see AnnotationColor).
-    var highlightColor: String { didSet { defaults.set(highlightColor, forKey: Key.highlightColor) } }
-    var useZoteroRecognizer: Bool { didSet { defaults.set(useZoteroRecognizer, forKey: Key.useZoteroRecognizer) } }
+    var highlightColor: String { didSet { save(highlightColor, Key.highlightColor) } }
+    var useZoteroRecognizer: Bool { didSet { save(useZoteroRecognizer, Key.useZoteroRecognizer) } }
+    /// Translation service id from `TranslationServiceCatalog` (TRANS-03).
+    var translationService: String { didSet { save(translationService, Key.translationService) } }
+    /// Non-secret field values per service: service id → CLI option → value. Secrets live in the Keychain.
+    var translationFields: [String: [String: String]] {
+        didSet { save(translationFields, Key.translationFields) }
+    }
+    var translationOptions: TranslationOptions {
+        didSet { save(try? JSONEncoder().encode(translationOptions), Key.translationOptions) }
+    }
+    /// A user-installed `pdf2zh_next`; empty = the copy Folio manages (TRANS-02).
+    var translatorCustomPath: String { didSet { save(translatorCustomPath, Key.translatorCustomPath) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -99,6 +122,11 @@ final class AppSettings {
         reopenReaderTabs = defaults.bool(forKey: Key.reopenReaderTabs)
         highlightColor = defaults.string(forKey: Key.highlightColor) ?? "yellow"
         useZoteroRecognizer = defaults.bool(forKey: Key.useZoteroRecognizer)
+        translationService = defaults.string(forKey: Key.translationService) ?? TranslationServiceCatalog.defaultServiceID
+        translationFields = defaults.dictionary(forKey: Key.translationFields) as? [String: [String: String]] ?? [:]
+        translationOptions = defaults.data(forKey: Key.translationOptions)
+            .flatMap { try? JSONDecoder().decode(TranslationOptions.self, from: $0) } ?? TranslationOptions()
+        translatorCustomPath = defaults.string(forKey: Key.translatorCustomPath) ?? ""
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String
             ?? defaults.string(forKey: Key.libraryPath)!

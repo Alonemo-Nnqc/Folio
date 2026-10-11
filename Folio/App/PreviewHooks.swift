@@ -14,6 +14,8 @@ import Foundation
 ///   -FolioPreviewDrop    <file count>            shows the Finder drop overlay
 ///   -FolioPreviewToast   <text>
 ///   -FolioPreviewOpenReader <title prefix>      opens that item's PDF in a reader tab
+///   -FolioTranslateSelfTest <log>               with Select: translate page 1 via the real coordinator
+///   -FolioPreviewParallel YES                   with OpenReader: turn on 对照阅读
 ///   -FolioReaderSelfTest <log>                  with OpenReader: scripted annotation/save/position checks
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
 ///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
@@ -38,6 +40,9 @@ enum PreviewHooks {
            let id = model.rows.first(where: { s.items[$0]?.title.hasPrefix(prefix) ?? false }) {
             model.selectedItemIDs = [id]
             if defaults.bool(forKey: "FolioPreviewExpand") { model.previewExpandRequest = id }
+            if let log = defaults.string(forKey: "FolioTranslateSelfTest") {
+                TranslationSelfTest.run(model: model, itemId: id, log: log)
+            }
         }
         if let tab = defaults.string(forKey: "FolioPreviewTab").flatMap(InspectorTab.init(rawValue:)) { model.inspectorTab = tab }
         switch defaults.string(forKey: "FolioPreviewSheet") {
@@ -60,6 +65,15 @@ enum PreviewHooks {
            let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 model.open(fileId: file.id, mode: .reader)
+                if defaults.bool(forKey: "FolioPreviewParallel") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        guard let reader = model.readers.reader(for: file.id) else { return }
+                        reader.toggleParallelReading(nil)
+                        if let log = defaults.string(forKey: "FolioParallelLog") {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { reader.logParallelState(to: log) }
+                        }
+                    }
+                }
                 if let log = defaults.string(forKey: "FolioReaderSelfTest") {
                     ReaderSelfTest.run(model: model, fileId: file.id, log: log)
                 }

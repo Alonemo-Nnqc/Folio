@@ -26,6 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     /// Unsaved annotations are written before quitting (READER-05).
+    func applicationWillTerminate(_ notification: Notification) {
+        model.translations.cancelAll()
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard model.readers.saveAll() else {
             let alert = NSAlert()

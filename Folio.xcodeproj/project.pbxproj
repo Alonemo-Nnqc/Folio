@@ -34,6 +34,7 @@
 		5046C263990C9F8BBB7495CB /* SidebarDragRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E077F23D80ED8250C4C5833E /* SidebarDragRulesTests.swift */; };
 		5579159634BED3151391DEB1 /* ReaderMenus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11256ABE6563F8F62C97E2C7 /* ReaderMenus.swift */; };
 		5959ECCEE3E580316219E2D1 /* FolioCitation in Frameworks */ = {isa = PBXBuildFile; productRef = 466D319429D05994CC631E43 /* FolioCitation */; };
+		59E94768858488FE296241BA /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A75704D580B039B00AB4ACF4 /* main.swift */; };
 		5B2156080492A6DCCFD7D442 /* ListDropRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90648DD7FFBB057C0036F89 /* ListDropRules.swift */; };
 		5BCA4C0023D1FD6E0EAA406C /* ManualMatchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */; };
 		5D66D20231FB94CF147E9066 /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = B6A8CA359CE44514A50D825D /* FolioCore */; };
@@ -42,7 +43,9 @@
 		656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */; };
 		67CCE0A5B8A3B6D30755169C /* FolioMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 34BF6DC9FEBBB9959304E9DE /* FolioMetadata */; };
 		68332145078BB8725DD352A9 /* SheetDismiss.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66BA89FC5B00A03E80FC5CFB /* SheetDismiss.swift */; };
+		68CCC60425474E1FED695CDC /* FolioTranslate in Frameworks */ = {isa = PBXBuildFile; productRef = 1C1AB323D27A3DAE9B51DBA3 /* FolioTranslate */; };
 		6B1F28583E7C5542B2D06D70 /* TagPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98AAA2320C6674271F19228 /* TagPalette.swift */; };
+		747FD8BF1EBF14F3B78CD8D3 /* folio-apple-translate in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = 72A9176F30D97BB563BA8B9E /* folio-apple-translate */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		7622528FDD18D475E60DE8EA /* Folio.icon in Resources */ = {isa = PBXBuildFile; fileRef = 5437B0A45443DA1FFBC67DAB /* Folio.icon */; };
 		769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7932EDA311090181F8A01857 /* MetadataResolving.swift */; };
 		76B60A3A04FB3326B0F61A3A /* AppModel+Citations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */; };
@@ -50,6 +53,7 @@
 		7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2196364CD8371363D279F008 /* AppModel.swift */; };
 		84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9205ABEB146D8780222EF2F7 /* CitationService.swift */; };
 		8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF15B612B7CD351CEF0B6188 /* ItemCells.swift */; };
+		8E1A15EA32BD6A5B682A2C59 /* FolioTranslate in Frameworks */ = {isa = PBXBuildFile; productRef = 1F89A3360258BDE81035A9E2 /* FolioTranslate */; };
 		932DE5E81407DCC5929400E3 /* ObservationLoop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F5402BBEE720CF3D9328C5 /* ObservationLoop.swift */; };
 		947CC943F1DD46C3A2F548DC /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
 		95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4908084420120AA90A895B /* MetadataInspector.swift */; };
@@ -74,6 +78,7 @@
 		C7872D907B14D5E1A5F16D3D /* ItemMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */; };
 		C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */; };
 		CB244C50F001D689892AB530 /* ReaderSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C515588B5798D262DBE05D /* ReaderSidebarView.swift */; };
+		CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */; };
 		CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */; };
 		CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */; };
 		CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */; };
@@ -97,6 +102,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		2D9510AAF8387991C4762602 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 383A8F7C70F35B855AA13D98 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1E3527B5E267CA9B1075E0E4;
+			remoteInfo = "folio-apple-translate";
+		};
 		63B0B2D4ABAE04C4EF58A330 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 383A8F7C70F35B855AA13D98 /* Project object */;
@@ -105,6 +117,20 @@
 			remoteInfo = Folio;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2F4ED40B361549B8DB80F514 /* Embed Dependencies */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				747FD8BF1EBF14F3B78CD8D3 /* folio-apple-translate in Embed Dependencies */,
+			);
+			name = "Embed Dependencies";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		029EAFA7C40470957052F41F /* FolioLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioLaunchTests.swift; sourceTree = "<group>"; };
@@ -143,6 +169,7 @@
 		6BB51A125EC50A54621232F6 /* FolioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineResolver.swift; sourceTree = "<group>"; };
 		6F4908084420120AA90A895B /* MetadataInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataInspector.swift; sourceTree = "<group>"; };
+		72A9176F30D97BB563BA8B9E /* folio-apple-translate */ = {isa = PBXFileReference; includeInIndex = 0; path = "folio-apple-translate"; sourceTree = BUILT_PRODUCTS_DIR; };
 		750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoteroImportSheet.swift; sourceTree = "<group>"; };
 		75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorView.swift; sourceTree = "<group>"; };
 		7932EDA311090181F8A01857 /* MetadataResolving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataResolving.swift; sourceTree = "<group>"; };
@@ -160,6 +187,7 @@
 		994B0A178FE965CE3141A613 /* DuplicatePrompter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicatePrompter.swift; sourceTree = "<group>"; };
 		9CEC680A68AB0D3810F2F61D /* FolioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A70249B1A04E6A957FCB8B5C /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
+		A75704D580B039B00AB4ACF4 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		B07F2BA805E990C1A9EDAF86 /* ReaderSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSelfTest.swift; sourceTree = "<group>"; };
 		B0BD0343C1727C1E7A7F3450 /* ReaderCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderCoordinator.swift; sourceTree = "<group>"; };
 		B2665EEEE580536C3E363B20 /* AnnotationsInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationsInspector.swift; sourceTree = "<group>"; };
@@ -172,6 +200,7 @@
 		C769320D1CD58259274445D7 /* SidebarViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewController.swift; sourceTree = "<group>"; };
 		C98AAA2320C6674271F19228 /* TagPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPalette.swift; sourceTree = "<group>"; };
 		CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorsEditor.swift; sourceTree = "<group>"; };
+		D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSelfTest.swift; sourceTree = "<group>"; };
 		D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSettingsPane.swift; sourceTree = "<group>"; };
 		DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastOverlay.swift; sourceTree = "<group>"; };
 		DE9A3A14381E23F57A15FDAA /* FolioWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioWindowController.swift; sourceTree = "<group>"; };
@@ -198,6 +227,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		68B86A12DF74A43940E2DD73 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				68CCC60425474E1FED695CDC /* FolioTranslate in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9DDB037244D0F79104ADBCB6 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -206,6 +243,7 @@
 				67CCE0A5B8A3B6D30755169C /* FolioMetadata in Frameworks */,
 				B589D7C031675E6E6AAF8D65 /* FolioCitation in Frameworks */,
 				262F73093B1C8E9406AF514E /* FolioZotero in Frameworks */,
+				8E1A15EA32BD6A5B682A2C59 /* FolioTranslate in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -360,6 +398,7 @@
 			isa = PBXGroup;
 			children = (
 				FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */,
+				D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */,
 				D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */,
 			);
 			path = Translation;
@@ -379,6 +418,7 @@
 		62523BE78BDC40FAA03B8BBD /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				72A9176F30D97BB563BA8B9E /* folio-apple-translate */,
 				5B8BAAD0990BFEBF5AC22207 /* Folio.app */,
 				6BB51A125EC50A54621232F6 /* FolioTests.xctest */,
 				9CEC680A68AB0D3810F2F61D /* FolioUITests.xctest */,
@@ -390,8 +430,17 @@
 			isa = PBXGroup;
 			children = (
 				88E736E10A3E272DD912AF5C /* FolioCore */,
+				70472202E8E96B2EED2CB7F7 /* FolioCore */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		70472202E8E96B2EED2CB7F7 /* FolioCore */ = {
+			isa = PBXGroup;
+			children = (
+				FD6A9C2EE1ECFE8A73FDB705 /* Sources */,
+			);
+			path = FolioCore;
 			sourceTree = "<group>";
 		};
 		728B6EBBC7B0CE293D141CC8 /* Notes */ = {
@@ -419,6 +468,14 @@
 				750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */,
 			);
 			path = Sheets;
+			sourceTree = "<group>";
+		};
+		CA57D0320D951606D387F3D2 /* FolioAppleTranslate */ = {
+			isa = PBXGroup;
+			children = (
+				A75704D580B039B00AB4ACF4 /* main.swift */,
+			);
+			path = FolioAppleTranslate;
 			sourceTree = "<group>";
 		};
 		D43EB5CE0E77CD5592721DA7 /* Folio */ = {
@@ -475,6 +532,14 @@
 			path = Sidebar;
 			sourceTree = "<group>";
 		};
+		FD6A9C2EE1ECFE8A73FDB705 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				CA57D0320D951606D387F3D2 /* FolioAppleTranslate */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -485,10 +550,12 @@
 				3859F542EDB723E250691952 /* Sources */,
 				8AF20F2D7ED0809F38E8AD11 /* Resources */,
 				9DDB037244D0F79104ADBCB6 /* Frameworks */,
+				2F4ED40B361549B8DB80F514 /* Embed Dependencies */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				97395BD493E1148761784603 /* PBXTargetDependency */,
 			);
 			name = Folio;
 			packageProductDependencies = (
@@ -496,6 +563,7 @@
 				34BF6DC9FEBBB9959304E9DE /* FolioMetadata */,
 				1CC1347A7F8DE0904600241B /* FolioCitation */,
 				4838D9DEB8300120A13D43FC /* FolioZotero */,
+				1F89A3360258BDE81035A9E2 /* FolioTranslate */,
 			);
 			productName = Folio;
 			productReference = 5B8BAAD0990BFEBF5AC22207 /* Folio.app */;
@@ -520,6 +588,25 @@
 			productName = FolioTests;
 			productReference = 6BB51A125EC50A54621232F6 /* FolioTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		1E3527B5E267CA9B1075E0E4 /* folio-apple-translate */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 32F7A49504963EF2EDF13BF0 /* Build configuration list for PBXNativeTarget "folio-apple-translate" */;
+			buildPhases = (
+				265D410EE4AD80B2DA8988A4 /* Sources */,
+				68B86A12DF74A43940E2DD73 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "folio-apple-translate";
+			packageProductDependencies = (
+				1C1AB323D27A3DAE9B51DBA3 /* FolioTranslate */,
+			);
+			productName = "folio-apple-translate";
+			productReference = 72A9176F30D97BB563BA8B9E /* folio-apple-translate */;
+			productType = "com.apple.product-type.tool";
 		};
 		E9A949E9A6596932E120989F /* FolioUITests */ = {
 			isa = PBXNativeTarget;
@@ -558,6 +645,10 @@
 						DevelopmentTeam = 2WJC7GTSV4;
 						ProvisioningStyle = Automatic;
 					};
+					1E3527B5E267CA9B1075E0E4 = {
+						DevelopmentTeam = 2WJC7GTSV4;
+						ProvisioningStyle = Automatic;
+					};
 					E9A949E9A6596932E120989F = {
 						DevelopmentTeam = 2WJC7GTSV4;
 						ProvisioningStyle = Automatic;
@@ -583,6 +674,7 @@
 			projectRoot = "";
 			targets = (
 				0C56AF64BE26DB444D566E60 /* Folio */,
+				1E3527B5E267CA9B1075E0E4 /* folio-apple-translate */,
 				1CD6F615502B2F1F3198986F /* FolioTests */,
 				E9A949E9A6596932E120989F /* FolioUITests */,
 			);
@@ -601,6 +693,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		265D410EE4AD80B2DA8988A4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				59E94768858488FE296241BA /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		2DB195A7169B335485DDE5AE /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -684,6 +784,7 @@
 				1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */,
 				229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */,
 				0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */,
+				CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */,
 				BBC7EE9E2DA263FFDD2F7D60 /* TranslationSettingsPane.swift in Sources */,
 				CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */,
 				10CEAA29ED2842A7238C8B93 /* main.swift in Sources */,
@@ -709,9 +810,29 @@
 			target = 0C56AF64BE26DB444D566E60 /* Folio */;
 			targetProxy = 63B0B2D4ABAE04C4EF58A330 /* PBXContainerItemProxy */;
 		};
+		97395BD493E1148761784603 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1E3527B5E267CA9B1075E0E4 /* folio-apple-translate */;
+			targetProxy = 2D9510AAF8387991C4762602 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		113762C57DA4DACADCA219B4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.nnqc.Folio.apple-translate";
+				PRODUCT_NAME = "folio-apple-translate";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
 		1497480850E4E24E9946DCEA /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -765,6 +886,21 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.nnqc.FolioUITests;
 				SDKROOT = macosx;
 				TEST_TARGET_NAME = Folio;
+			};
+			name = Release;
+		};
+		50C3FE990C92749AF9723500 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.nnqc.Folio.apple-translate";
+				PRODUCT_NAME = "folio-apple-translate";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 			};
 			name = Release;
 		};
@@ -967,6 +1103,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		32F7A49504963EF2EDF13BF0 /* Build configuration list for PBXNativeTarget "folio-apple-translate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				113762C57DA4DACADCA219B4 /* Debug */,
+				50C3FE990C92749AF9723500 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		337CB635EA8B81A92F1BCDDC /* Build configuration list for PBXProject "Folio" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1004,9 +1149,17 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1C1AB323D27A3DAE9B51DBA3 /* FolioTranslate */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FolioTranslate;
+		};
 		1CC1347A7F8DE0904600241B /* FolioCitation */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FolioCitation;
+		};
+		1F89A3360258BDE81035A9E2 /* FolioTranslate */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FolioTranslate;
 		};
 		34BF6DC9FEBBB9959304E9DE /* FolioMetadata */ = {
 			isa = XCSwiftPackageProductDependency;

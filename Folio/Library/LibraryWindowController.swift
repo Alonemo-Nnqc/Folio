@@ -139,6 +139,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         case .zoteroImport: AnyView(ZoteroImportSheet(model: model))
         case let .tagEditor(tagId, applyTo, initialName):
             AnyView(TagEditorSheet(model: model, tagId: tagId, applyTo: applyTo, initialName: initialName))
+        case .translate(let fileId): AnyView(TranslateSheet(model: model, fileId: fileId))
         }
         let host = NSHostingController(rootView: content.environment(\.sheetDismiss, dismiss))
         host.sizingOptions = [.preferredContentSize]

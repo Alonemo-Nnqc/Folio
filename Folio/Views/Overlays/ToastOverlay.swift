@@ -8,9 +8,19 @@ struct ToastOverlay: View {
     var body: some View {
         ZStack {
             if let toast = center.current {
-                Label(toast.message, systemImage: toast.systemImage)
+                HStack(spacing: 12) {
+                    Label(toast.message, systemImage: toast.systemImage)
+                        .lineLimit(2)
+                    if let title = toast.actionTitle, let action = toast.action {
+                        Button(title) {
+                            center.dismiss()
+                            action()
+                        }
+                        .buttonStyle(.glassProminent)
+                        .controlSize(.small)
+                    }
+                }
                     .font(.callout)
-                    .lineLimit(2)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .glassEffect(.regular, in: Capsule())

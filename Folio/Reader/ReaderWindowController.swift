@@ -584,6 +584,17 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         content.syncParallel(from: pdfView)
     }
 
+    /// Screenshot-free check of 对照阅读: both panes visible and on the same page after paging.
+    func logParallelState(to log: String) {
+        let views = content.view.subviews.compactMap { $0 as? PDFView }
+        var lines = ["panes: \(views.map { Int($0.frame.width) })"]
+        pdfView.go(to: pdfView.document!.page(at: 0)!)
+        pdfView.goToNextPage(nil)
+        let pages = views.map { $0.currentPage.flatMap { $0.document?.index(for: $0) } ?? -1 }
+        lines.append("pages after next: \(pages)")
+        SimulatedDrop.append(lines.joined(separator: "\n") + "\n", to: log)
+    }
+
     /// The translation to read side by side: a mono translation of this file, else a dual one.
     private var translationFile: FileRecord? {
         let files = model.snapshot.files.values.filter { $0.translationOf == fileId }
@@ -854,7 +865,9 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
         view.displaysPageBreaks = true
         view.setAccessibilityIdentifier("parallelPDFView")
         splitView.addArrangedSubview(view)
-        splitView.adjustSubviews()
+        // A view added later starts with zero width: split the space evenly.
+        splitView.layoutSubtreeIfNeeded()
+        splitView.setPosition(splitView.bounds.width / 2, ofDividerAt: 0)
         parallelView = view
         NotificationCenter.default.addObserver(self, selector: #selector(parallelPageChanged(_:)), name: .PDFViewPageChanged, object: view)
     }

@@ -35,6 +35,12 @@ public struct TranslatorInstallProgress: Sendable, Hashable {
     public var fractionCompleted: Double
     /// Short Chinese detail, e.g. "下载 onnxruntime".
     public var detail: String?
+
+    public init(phase: TranslatorInstallPhase, fractionCompleted: Double, detail: String? = nil) {
+        self.phase = phase
+        self.fractionCompleted = fractionCompleted
+        self.detail = detail
+    }
 }
 
 public enum TranslatorInstallError: Error, LocalizedError, Sendable, Equatable {

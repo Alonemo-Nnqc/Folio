@@ -38,6 +38,14 @@ targets:
         product: FolioCitation
       - package: FolioCore
         product: FolioZotero
+      - package: FolioCore
+        product: FolioTranslate
+      # Apple offline translation helper, started by pdf2zh_next once per text segment.
+      - target: folio-apple-translate
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio
@@ -50,6 +58,19 @@ targets:
         SWIFT_APPROACHABLE_CONCURRENCY: YES
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: Folio
+  folio-apple-translate:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Packages/FolioCore/Sources/FolioAppleTranslate
+    dependencies:
+      - package: FolioCore
+        product: FolioTranslate
+    settings:
+      base:
+        PRODUCT_NAME: folio-apple-translate
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio.apple-translate
+        SKIP_INSTALL: YES
   FolioTests:
     type: bundle.unit-test
     platform: macOS

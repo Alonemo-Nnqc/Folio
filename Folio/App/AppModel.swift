@@ -90,6 +90,7 @@ final class AppModel {
         case manualMatch(itemId: String)
         case zoteroImport
         case tagEditor(tagId: String?, applyTo: [String], initialName: String = "")
+        case translate(fileId: String)
 
         var id: String {
             switch self {
@@ -97,6 +98,7 @@ final class AppModel {
             case .manualMatch(let id): "match-\(id)"
             case .zoteroImport: "zotero"
             case .tagEditor(let id, _, _): "tag-\(id ?? "new")"
+            case .translate(let id): "translate-\(id)"
             }
         }
     }
