@@ -94,7 +94,7 @@ struct RecognizerPayload: Sendable, Equatable {
         while location < string.length {
             let range = string.rangeOfComposedCharacterSequence(at: location)
             location = range.location + range.length
-            let character = string.substring(with: range)
+            guard let character = Self.character(in: string, range: range) else { continue }
             if character.unicodeScalars.contains(where: CharacterSet.newlines.contains) {
                 flushLine()
                 continue
@@ -119,6 +119,15 @@ struct RecognizerPayload: Sendable, Equatable {
         }
         flushLine()
         return result
+    }
+
+    /// The character at `range` as valid Unicode; nil for glyphs PDFKit could not map to text
+    /// (lone UTF-16 surrogates, U+FFFD), which would also make the JSON body unencodable.
+    static func character(in string: NSString, range: NSRange) -> String? {
+        var units = [unichar](repeating: 0, count: range.length)
+        string.getCharacters(&units, range: range)
+        let repaired = String(decoding: units, as: UTF16.self)
+        return repaired.unicodeScalars.contains("\u{FFFD}") ? nil : repaired
     }
 
     private static func makeWord(text: String, rect: CGRect, font: NSFont, spaceAfter: Bool, box: CGRect,

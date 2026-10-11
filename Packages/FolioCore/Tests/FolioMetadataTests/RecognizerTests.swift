@@ -118,6 +118,16 @@ import Testing
         #expect(words.last?[5] as? Int == 0)
     }
 
+    @Test func unmappableGlyphsAreSkipped() {
+        // PDFKit reports some glyphs as lone surrogates; JSONSerialization cannot encode those.
+        let text = NSString(characters: [0x0041, 0xD800, 0x0042, 0xFFFD], length: 4)
+        #expect(RecognizerPayload.character(in: text, range: NSRange(location: 0, length: 1)) == "A")
+        #expect(RecognizerPayload.character(in: text, range: NSRange(location: 1, length: 1)) == nil)
+        #expect(RecognizerPayload.character(in: text, range: NSRange(location: 3, length: 1)) == nil)
+        let emoji = "👍" as NSString
+        #expect(RecognizerPayload.character(in: emoji, range: NSRange(location: 0, length: 2)) == "👍")
+    }
+
     @Test func atMostFivePages() throws {
         let payload = try #require(RecognizerPayload.extract(from: Self.pdf(Self.sample, pages: 7)))
         #expect(payload.totalPages == 7)
