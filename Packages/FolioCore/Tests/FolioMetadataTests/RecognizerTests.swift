@@ -298,6 +298,25 @@ import Testing
         #expect(await MetadataEngine.testing(http).resolve(pdfAt: pdf) == .notFound)
     }
 
+    @Test func authorLineReturnedAsTitleIsRejected() async throws {
+        // Seen live: the recognizer answered a CVPR paper with its author line as the title.
+        // That text is on the page, so the page check alone would accept it.
+        let authorLine = "Qi Bi1,3, Jingjun Yi2, Huimin Huang2, Hao Zheng2, Haolan Zhan4"
+        let pdf = try Fixtures.pdf(lines: Self.rvsLines.prefix(2) + [authorLine, "Abstract"], titleLines: 2)
+        let answer = #"{"title":"\#(authorLine)","authors":[{"firstName":"Qi","lastName":"Bi"}]}"#
+        let http = MockHTTPClient(handler: { _ in (Data(), 404) }, postHandler: { _, _ in (Data(answer.utf8), 200) })
+        let result = await MetadataEngine.testing(http).resolve(pdfAt: pdf)
+        #expect(result == .notFound)
+
+        let scorer = CandidateScorer(pageText: (Self.rvsLines.prefix(2) + [authorLine]).joined(separator: "\n"),
+                                     guesses: [EngineTests.rvsTitle])
+        var fields = Metadata(title: authorLine)
+        fields.authors = [Author(family: "Bi", given: "Qi")]
+        #expect(scorer.evaluate(fields).isAccepted)          // what a search record would get
+        #expect(!scorer.acceptsRecognizedFields(fields))
+        #expect(scorer.acceptsRecognizedFields(Metadata(title: EngineTests.rvsTitle)))
+    }
+
     @Test func recognizerDOIOfAnotherWorkIsRejected() async throws {
         let pdf = try Fixtures.pdf(lines: Self.rvsLines, titleLines: 2)
         let cited = try Fixtures.data("crossref_work_abstract.json")

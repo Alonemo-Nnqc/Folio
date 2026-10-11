@@ -210,7 +210,7 @@ extension MetadataEngine {
                     // Failures are deliberately not tallied: the service is optional.
                     guard case .success(let response?) = result else { break }
                     recognizer.response = response
-                    if let fields = response.metadata, scorer.evaluate(fields).isAccepted {
+                    if let fields = response.metadata, scorer.acceptsRecognizedFields(fields) {
                         recognizer.fields = fields
                     }
                     let planned = plan?.identifiers.map(\.identifier) ?? []
