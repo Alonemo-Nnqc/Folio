@@ -31,7 +31,8 @@ enum FieldNormalizer {
     static func cleanAbstract(_ raw: String?) -> String? {
         guard var text = cleanText(raw) else { return nil }
         for heading in ["Abstract", "ABSTRACT", "Summary", "SUMMARY"] where text.hasPrefix(heading) {
-            text = String(text.dropFirst(heading.count)).trimmingCharacters(in: CharacterSet(charactersIn: " :.—-"))
+            // Only the separator after the heading goes; the abstract's final period stays.
+            text = String(text.dropFirst(heading.count).drop { " :.—-".contains($0) })
             break
         }
         return text.isEmpty ? nil : text
