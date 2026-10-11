@@ -19,6 +19,10 @@ final class ReaderCoordinator {
 
     func open(fileId: String, inBackground: Bool = false) {
         guard let model else { return }
+        // UI tests record every open, wherever it goes.
+        if UserDefaults.standard.string(forKey: "FolioOpenLog") != nil, let file = model.snapshot.files[fileId] {
+            FileOpener.logOpen(model.fileURL(file))
+        }
         if let existing = readers[fileId] {
             if !inBackground { existing.window?.makeKeyAndOrderFront(nil) }
             return
