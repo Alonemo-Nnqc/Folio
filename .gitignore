@@ -7,3 +7,4 @@ build/
 .swiftpm/
 .worktrees/
 dist/
+.claude/worktrees/
