@@ -33,10 +33,9 @@ enum ReaderMenus {
                         String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)), [.command, .option]))
         go.addItem(item("下一页", #selector(ReaderWindowController.goToNextPage(_:)),
                         String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)), [.command, .option]))
-        go.addItem(item("第一页", #selector(ReaderWindowController.goToFirstPage(_:)),
-                        String(Character(UnicodeScalar(NSHomeFunctionKey)!)), []))
-        go.addItem(item("最后一页", #selector(ReaderWindowController.goToLastPage(_:)),
-                        String(Character(UnicodeScalar(NSEndFunctionKey)!)), []))
+        // Home / End are left to the focused view (PDFView pages, text fields scroll).
+        go.addItem(item("第一页", #selector(ReaderWindowController.goToFirstPage(_:)), "", .command))
+        go.addItem(item("最后一页", #selector(ReaderWindowController.goToLastPage(_:)), "", .command))
         go.addItem(.separator())
         go.addItem(item("后退", #selector(ReaderWindowController.goBack(_:)), "[", .command))
         go.addItem(item("前进", #selector(ReaderWindowController.goForward(_:)), "]", .command))

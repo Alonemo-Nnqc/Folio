@@ -103,8 +103,11 @@ extension AppModel {
     }
 
     func restoreItems(_ ids: [String]) {
-        perform("无法恢复") { try library.restoreItems(ids) }
-        toasts.show(ids.count == 1 ? "已恢复" : "已恢复 \(ids.count) 项", systemImage: "arrow.uturn.backward")
+        guard !ids.isEmpty else { return }
+        perform("无法恢复") {
+            try library.restoreItems(ids)
+            toasts.show(ids.count == 1 ? "已恢复" : "已恢复 \(ids.count) 项", systemImage: "arrow.uturn.backward")
+        }
     }
 
     func confirmPurge(_ ids: [String]) {

@@ -150,6 +150,10 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         return validateMenuItem(NSMenuItem(title: "", action: action, keyEquivalent: ""))
     }
 
+    /// True while the user types in a text field or the note editor. Menu shortcuts are matched before
+    /// key events reach the field, so shortcuts that are also text-editing keys (⌘⌫, ⌘↓) must step aside.
+    var isEditingText: Bool { window?.firstResponder is NSText }
+
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         let context = menuContext()
         let items = context.itemIds.compactMap { model.snapshot.items[$0] }
@@ -157,7 +161,9 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         let file = context.fileId.flatMap { model.snapshot.files[$0] } ?? single.flatMap { model.defaultFile(of: $0.id) }
         let inTrash = model.sidebarSelection == .trash && context.fileId == nil
         switch menuItem.action {
-        case #selector(openSelection(_:)), #selector(revealInFinder(_:)):
+        case #selector(openSelection(_:)):
+            return (!items.isEmpty || file != nil) && !isEditingText
+        case #selector(revealInFinder(_:)):
             return !items.isEmpty || file != nil
         case #selector(openInReader(_:)), #selector(openWithPreview(_:)):
             return file?.isPDF ?? false

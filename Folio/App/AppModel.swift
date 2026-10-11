@@ -132,6 +132,9 @@ final class AppModel {
         guard !FileManager.default.fileExists(atPath: destination.path) else {
             throw LibraryError.invalidOperation("目标位置已存在同名文件夹")
         }
+        // Open papers hold paths inside the library: save and close them first.
+        readers.saveAll()
+        readers.closeAll()
         observationTask?.cancel()
         try library.close()
         do {

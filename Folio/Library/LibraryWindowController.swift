@@ -296,8 +296,10 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         let items = ids.compactMap { model.snapshot.items[$0] }
         let inTrash = model.sidebarSelection == .trash
         switch menuItem.action {
-        case #selector(moveToTrash(_:)), #selector(delete(_:)):
-            return (!ids.isEmpty || !model.selectedFileIDs.isEmpty)
+        case #selector(moveToTrash(_:)):
+            return (!ids.isEmpty || !model.selectedFileIDs.isEmpty) && !isEditingText
+        case #selector(delete(_:)):
+            return !ids.isEmpty || !model.selectedFileIDs.isEmpty
         case #selector(removeFromGroup(_:)):
             return model.isUserGroupSelected && !ids.isEmpty
         case #selector(restoreFromTrash(_:)), #selector(deletePermanently(_:)):

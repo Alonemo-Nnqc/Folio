@@ -61,6 +61,11 @@ final class ReaderCoordinator {
         return ok
     }
 
+    func closeAll() {
+        for reader in Array(readers.values) { reader.window?.close() }
+        isTerminating = false
+    }
+
     /// Reopens the papers that were open when Folio last quit.
     func restoreTabs() {
         guard let model, model.settings.reopenReaderTabs, !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
