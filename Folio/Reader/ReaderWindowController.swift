@@ -121,6 +121,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                 self.itemId = file.itemId
                 self.notesHost.rootView = ReaderNotesPanel(model: self.model, itemId: file.itemId, focusRequest: self.notesFocusRequest)
             }
+            _ = self.model.translations.jobs[file.itemId]
             let url = self.model.fileURL(file)
             if url != self.fileURL {
                 self.fileURL = url
@@ -325,7 +326,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         if let page = pdfView.currentPage, let index = pdfView.document?.index(for: page) {
             state.pageIndex = index
             let label = page.label.flatMap { $0 == String(index + 1) ? nil : "（\($0)）" } ?? ""
-            window.subtitle = "第 \(index + 1) / \(state.pageCount) 页\(label)"
+            var subtitle = "第 \(index + 1) / \(state.pageCount) 页\(label)"
+            // Translation progress of this paper (TRANS-04).
+            if let job = model.translations.jobs[itemId] {
+                subtitle += " · \(job.stage)" + (job.fraction.map { " \(Int($0 * 100))%" } ?? "")
+            }
+            window.subtitle = subtitle
         }
         let short = item.map { $0.authors.first.map { "\($0.family) \(item?.year.map(String.init) ?? "")" } ?? $0.title } ?? fileURL.lastPathComponent
         window.tab.title = short.trimmingCharacters(in: .whitespaces)
