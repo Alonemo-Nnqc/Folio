@@ -18,7 +18,7 @@ struct AnnotationsInspector: View {
                 ProgressView().frame(maxHeight: .infinity)
             } else if filtered.allSatisfy({ $0.annotations.isEmpty }) {
                 ContentUnavailableView(query.isEmpty ? "没有标注" : "没有匹配的标注", systemImage: "highlighter",
-                                       description: Text(query.isEmpty ? "在预览等阅读器中添加的高亮和注释会显示在这里" : ""))
+                                       description: Text(query.isEmpty ? "在 Folio 阅读器或\"预览\"中添加的高亮和批注会显示在这里" : ""))
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -67,7 +67,7 @@ struct AnnotationsInspector: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Button("打开 PDF") { model.open(fileId: file.id) }
+                Button("阅读") { model.open(fileId: file.id, mode: file.isPDF ? .reader : .setting) }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
             }
@@ -94,6 +94,9 @@ struct AnnotationsInspector: View {
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { model.readers.open(fileId: file.id, page: annotation.page - 1) }
+                .help("双击在阅读器中打开这一页")
             }
         }
     }

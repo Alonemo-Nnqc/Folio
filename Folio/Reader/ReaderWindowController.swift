@@ -30,6 +30,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private var knownModificationDate: Date?
     private var restoredPosition = false
     private var findHits: [PDFSelection] = []
+    /// A page requested before the view was ready; it wins over the remembered position.
+    private var pendingPageIndex: Int?
 
     init?(model: AppModel, fileId: String) {
         guard let file = model.snapshot.files[fileId] else { return nil }
@@ -176,7 +178,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                 pdfView.scaleFactor = saved.scale
             }
             pdfView.layoutDocumentView()
-            pdfView.go(to: PDFDestination(page: page, at: NSPoint(x: saved.pointX, y: saved.pointY)))
+            if pendingPageIndex == nil {
+                pdfView.go(to: PDFDestination(page: page, at: NSPoint(x: saved.pointX, y: saved.pointY)))
+            }
         } else {
             pdfView.displayMode = settings.readerLayout == .twoUp ? .twoUpContinuous : .singlePageContinuous
             if settings.readerZoom == .actualSize {
@@ -186,7 +190,20 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                 pdfView.autoScales = true
             }
         }
+        if let index = pendingPageIndex, let page = document.page(at: index) {
+            pendingPageIndex = nil
+            pdfView.layoutDocumentView()
+            pdfView.go(to: page)
+        }
         updateTitle()
+    }
+
+    func show(pageIndex: Int) {
+        guard restoredPosition else {
+            pendingPageIndex = pageIndex
+            return
+        }
+        if let page = pdfView.document?.page(at: pageIndex) { pdfView.go(to: page) }
     }
 
     private func unlockDocument() {

@@ -17,6 +17,12 @@ final class ReaderCoordinator {
 
     func reader(for fileId: String) -> ReaderWindowController? { readers[fileId] }
 
+    /// Opens the paper and shows a given page (0-based), e.g. from the inspector's annotation list.
+    func open(fileId: String, page: Int) {
+        open(fileId: fileId)
+        readers[fileId]?.show(pageIndex: page)
+    }
+
     func open(fileId: String, inBackground: Bool = false) {
         guard let model else { return }
         // UI tests record every open, wherever it goes.
