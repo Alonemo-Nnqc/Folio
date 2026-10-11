@@ -1,6 +1,14 @@
 import Foundation
 import GRDB
 
+/// What a translated file contains (TRANS-05).
+public enum TranslationKind: Int, Codable, Sendable {
+    /// Target language only.
+    case mono = 0
+    /// Original and translation together.
+    case dual = 1
+}
+
 public enum FulltextState: Int, Codable, Sendable {
     case pending = 0, indexed = 1, notApplicable = 2
 }
@@ -22,6 +30,9 @@ public struct FileRecord: Codable, Sendable, Hashable, Identifiable, FetchableRe
     public var modifiedAt: Date
     public var dateAdded: Date
     public var fulltextState: FulltextState
+    /// For a translation produced by Folio: the file it was translated from.
+    public var translationOf: String?
+    public var translationKind: TranslationKind?
 
     public init(id: String = UUID().uuidString, itemId: String, relativePath: String, originalName: String,
                 size: Int64, sha256: String, modifiedAt: Date, dateAdded: Date = Date(),

@@ -44,5 +44,20 @@ enum Migrations {
             CREATE VIRTUAL TABLE fulltext USING fts5(fileId UNINDEXED, content, tokenize = 'unicode61 remove_diacritics 2');
             """)
         }
+        // v2.0: item notes, per-file reading positions, translated files linked to their source.
+        migrator.registerMigration("v2") { db in
+            try db.execute(sql: """
+            CREATE TABLE note (
+              itemId TEXT PRIMARY KEY REFERENCES item(id) ON DELETE CASCADE,
+              content TEXT NOT NULL, dateModified DATETIME NOT NULL);
+            CREATE TABLE readingState (
+              fileId TEXT PRIMARY KEY REFERENCES file(id) ON DELETE CASCADE,
+              pageIndex INTEGER NOT NULL, pointX DOUBLE NOT NULL, pointY DOUBLE NOT NULL,
+              scale DOUBLE NOT NULL, autoScale BOOLEAN NOT NULL, displayMode INTEGER NOT NULL,
+              dateModified DATETIME NOT NULL);
+            ALTER TABLE file ADD COLUMN translationOf TEXT;
+            ALTER TABLE file ADD COLUMN translationKind INTEGER;
+            """)
+        }
     }
 }

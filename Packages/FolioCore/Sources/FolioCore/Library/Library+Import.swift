@@ -141,6 +141,13 @@ extension Library {
                 """, arguments: [targetId, itemId])
             try db.execute(sql: "INSERT OR IGNORE INTO itemTag (itemId, tagId) SELECT ?, tagId FROM itemTag WHERE itemId = ?",
                            arguments: [targetId, itemId])
+            // A note written on the standalone file is appended to the target's note (NOTE-05).
+            if let note = try Note.fetchOne(db, key: itemId) {
+                var merged = try Note.fetchOne(db, key: targetId) ?? Note(itemId: targetId, content: "")
+                merged.content = merged.content.isEmpty ? note.content : merged.content + "\n\n" + note.content
+                merged.dateModified = Date()
+                try merged.save(db)
+            }
             if target.defaultFileId == nil { target.defaultFileId = moved.first?.id }
             target.dateModified = Date()
             try target.update(db)

@@ -24,6 +24,8 @@ public struct LibrarySnapshot: Sendable, Equatable {
     /// Custom order positions: scope key → item id → position.
     public var orders: [String: [String: Double]] = [:]
     public var sorts: [String: SortState] = [:]
+    /// Items that have a note (NOTE-03).
+    public var notedItems: Set<String> = []
     /// Lowercased text each item is searched against.
     public var searchText: [String: String] = [:]
 
@@ -87,8 +89,14 @@ public struct LibrarySnapshot: Sendable, Equatable {
         for sort in try ViewSortRecord.fetchAll(db) {
             s.sorts[sort.scope] = SortState(column: sort.sortColumn, ascending: sort.ascending)
         }
+        var notes: [String: String] = [:]
+        for note in try Note.fetchAll(db) {
+            notes[note.itemId] = note.content
+            s.notedItems.insert(note.itemId)
+        }
         for item in s.items.values {
-            s.searchText[item.id] = SearchMatcher.haystack(for: item, tags: s.tags(of: item.id), files: s.files(of: item.id))
+            s.searchText[item.id] = SearchMatcher.haystack(for: item, tags: s.tags(of: item.id), files: s.files(of: item.id),
+                                                           note: notes[item.id])
         }
         return s
     }
