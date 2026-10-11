@@ -11,6 +11,8 @@ let package = Package(
         .library(name: "FolioCitation", targets: ["FolioCitation"]),
         .library(name: "FolioZotero", targets: ["FolioZotero"]),
         .executable(name: "folio-seed", targets: ["FolioSeed"]),
+        .library(name: "FolioTranslate", targets: ["FolioTranslate"]),
+        .executable(name: "folio-apple-translate", targets: ["FolioAppleTranslate"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1"),
@@ -26,5 +28,10 @@ let package = Package(
         .testTarget(name: "FolioMetadataTests", dependencies: ["FolioMetadata"], resources: [.copy("Fixtures")]),
         .testTarget(name: "FolioCitationTests", dependencies: ["FolioCitation"]),
         .testTarget(name: "FolioZoteroTests", dependencies: ["FolioZotero"]),
+        // Layout-preserving PDF translation (pdf2zh_next / BabelDOC engine management).
+        .target(name: "FolioTranslate"),
+        // `--clitranslator` helper that translates stdin with Apple's offline Translation framework.
+        .executableTarget(name: "FolioAppleTranslate", dependencies: ["FolioTranslate"]),
+        .testTarget(name: "FolioTranslateTests", dependencies: ["FolioTranslate"], resources: [.copy("Fixtures")]),
     ]
 )
