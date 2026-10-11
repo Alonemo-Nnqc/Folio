@@ -77,14 +77,14 @@ final class SidebarUITests: FolioUITestCase {
         waitFor(menuItem("创建分组"))
         XCTAssertTrue(menuItem("搜索文献").exists)
         menuItem("搜索文献").click()
-        waitFor(app.searchFields["sidebarSearchField"])
+        waitFor(app.searchFields["searchField"])
     }
 
-    /// SEARCH-01/02/03: the sidebar search filters the list; scope can widen to the whole library.
+    /// SEARCH-01/02/03: the toolbar search filters the list; the scope bar can widen it to the whole library.
     func testSearchFiltersList() throws {
         launch()
-        app.buttons["searchButton"].click()
-        let field = app.searchFields["sidebarSearchField"]
+        app.typeKey("f", modifierFlags: .command)
+        let field = app.searchFields["searchField"]
         waitFor(field)
         field.typeText("unet nested")
         waitFor(itemRow("UNet++"))
@@ -92,7 +92,7 @@ final class SidebarUITests: FolioUITestCase {
 
         sidebarRow("夜间场景").click()
         waitUntilGone(itemRow("UNet++"))
-        app.radioButtons["全部文献"].click()
+        app.checkBoxes["全部文献"].firstMatch.click()
         waitFor(itemRow("UNet++"))
     }
 }
