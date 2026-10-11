@@ -1,0 +1,794 @@
+usage: pdf2zh_next [-h] [--config-file CONFIG_FILE]
+                   [--report-interval REPORT_INTERVAL] [--debug] [--gui]
+                   [--warmup]
+                   [--generate-offline-assets GENERATE_OFFLINE_ASSETS]
+                   [--restore-offline-assets RESTORE_OFFLINE_ASSETS]
+                   [--version] [--min-text-length MIN_TEXT_LENGTH]
+                   [--rpc-doclayout RPC_DOCLAYOUT] [--lang-in LANG_IN]
+                   [--lang-out LANG_OUT] [--output OUTPUT] [--qps QPS]
+                   [--ignore-cache]
+                   [--custom-system-prompt CUSTOM_SYSTEM_PROMPT]
+                   [--glossaries GLOSSARIES] [--save-auto-extracted-glossary]
+                   [--pool-max-workers POOL_MAX_WORKERS] [--term-qps TERM_QPS]
+                   [--term-pool-max-workers TERM_POOL_MAX_WORKERS]
+                   [--no-auto-extract-glossary]
+                   [--primary-font-family PRIMARY_FONT_FAMILY] [--pages PAGES]
+                   [--no-dual] [--no-mono]
+                   [--formular-font-pattern FORMULAR_FONT_PATTERN]
+                   [--formular-char-pattern FORMULAR_CHAR_PATTERN]
+                   [--split-short-lines]
+                   [--short-line-split-factor SHORT_LINE_SPLIT_FACTOR]
+                   [--skip-clean] [--dual-translate-first]
+                   [--disable-rich-text-translate] [--enhance-compatibility]
+                   [--use-alternating-pages-dual]
+                   [--watermark-output-mode WATERMARK_OUTPUT_MODE]
+                   [--max-pages-per-part MAX_PAGES_PER_PART]
+                   [--translate-table-text] [--skip-scanned-detection]
+                   [--ocr-workaround] [--auto-enable-ocr-workaround]
+                   [--only-include-translated-page]
+                   [--no-merge-alternating-line-numbers]
+                   [--no-remove-non-formula-lines]
+                   [--non-formula-line-iou-threshold NON_FORMULA_LINE_IOU_THRESHOLD]
+                   [--figure-table-protection-threshold FIGURE_TABLE_PROTECTION_THRESHOLD]
+                   [--skip-formula-offset-calculation] [--share]
+                   [--auth-file AUTH_FILE] [--welcome-page WELCOME_PAGE]
+                   [--enabled-services ENABLED_SERVICES]
+                   [--disable-gui-sensitive-input]
+                   [--disable-config-auto-save] [--server-port SERVER_PORT]
+                   [--ui-lang UI_LANG] [--siliconflowfree] [--openai]
+                   [--aliyundashscope] [--google] [--bing] [--deepl]
+                   [--deepseek] [--ollama] [--xinference] [--azureopenai]
+                   [--modelscope] [--zhipu] [--siliconflow]
+                   [--tencentmechinetranslation] [--gemini] [--azure]
+                   [--anythingllm] [--dify] [--grok] [--groq] [--qwenmt]
+                   [--openaicompatible] [--claudecode] [--clitranslator]
+                   [--siliconflow-free-enable-json-mode]
+                   [--openai-model OPENAI_MODEL]
+                   [--openai-base-url OPENAI_BASE_URL]
+                   [--openai-api-key OPENAI_API_KEY]
+                   [--openai-timeout OPENAI_TIMEOUT]
+                   [--openai-temperature OPENAI_TEMPERATURE]
+                   [--openai-reasoning-effort OPENAI_REASONING_EFFORT]
+                   [--openai-enable-json-mode] [--openai-send-temprature]
+                   [--openai-send-reasoning-effort]
+                   [--aliyun-dashscope-model ALIYUN_DASHSCOPE_MODEL]
+                   [--aliyun-dashscope-base-url ALIYUN_DASHSCOPE_BASE_URL]
+                   [--aliyun-dashscope-api-key ALIYUN_DASHSCOPE_API_KEY]
+                   [--aliyun-dashscope-timeout ALIYUN_DASHSCOPE_TIMEOUT]
+                   [--aliyun-dashscope-temperature ALIYUN_DASHSCOPE_TEMPERATURE]
+                   [--aliyun-dashscope-send-temperature]
+                   [--aliyun-dashscope-enable-json-mode]
+                   [--deepl-auth-key DEEPL_AUTH_KEY]
+                   [--deepseek-model DEEPSEEK_MODEL]
+                   [--deepseek-api-key DEEPSEEK_API_KEY]
+                   [--deepseek-enable-json-mode]
+                   [--deepseek-thinking-mode DEEPSEEK_THINKING_MODE]
+                   [--deepseek-reasoning-effort DEEPSEEK_REASONING_EFFORT]
+                   [--ollama-model OLLAMA_MODEL] [--ollama-host OLLAMA_HOST]
+                   [--num-predict NUM_PREDICT]
+                   [--xinference-model XINFERENCE_MODEL]
+                   [--xinference-host XINFERENCE_HOST]
+                   [--azure-openai-model AZURE_OPENAI_MODEL]
+                   [--azure-openai-base-url AZURE_OPENAI_BASE_URL]
+                   [--azure-openai-api-key AZURE_OPENAI_API_KEY]
+                   [--azure-openai-api-version AZURE_OPENAI_API_VERSION]
+                   [--modelscope-model MODELSCOPE_MODEL]
+                   [--modelscope-api-key MODELSCOPE_API_KEY]
+                   [--modelscope-enable-json-mode] [--zhipu-model ZHIPU_MODEL]
+                   [--zhipu-api-key ZHIPU_API_KEY] [--zhipu-enable-json-mode]
+                   [--siliconflow-base-url SILICONFLOW_BASE_URL]
+                   [--siliconflow-model SILICONFLOW_MODEL]
+                   [--siliconflow-api-key SILICONFLOW_API_KEY]
+                   [--siliconflow-enable-thinking]
+                   [--siliconflow-send-enable-thinking-param]
+                   [--siliconflow-enable-json-mode]
+                   [--tencentcloud-secret-id TENCENTCLOUD_SECRET_ID]
+                   [--tencentcloud-secret-key TENCENTCLOUD_SECRET_KEY]
+                   [--gemini-model GEMINI_MODEL]
+                   [--gemini-api-key GEMINI_API_KEY]
+                   [--gemini-enable-json-mode]
+                   [--azure-endpoint AZURE_ENDPOINT]
+                   [--azure-api-key AZURE_API_KEY]
+                   [--anythingllm-url ANYTHINGLLM_URL]
+                   [--anythingllm-apikey ANYTHINGLLM_APIKEY]
+                   [--dify-url DIFY_URL] [--dify-apikey DIFY_APIKEY]
+                   [--grok-model GROK_MODEL] [--grok-api-key GROK_API_KEY]
+                   [--grok-enable-json-mode] [--groq-model GROQ_MODEL]
+                   [--groq-api-key GROQ_API_KEY] [--groq-enable-json-mode]
+                   [--qwenmt-model QWENMT_MODEL]
+                   [--qwenmt-base-url QWENMT_BASE_URL]
+                   [--qwenmt-api-key QWENMT_API_KEY]
+                   [--ali-domains ALI_DOMAINS]
+                   [--openai-compatible-model OPENAI_COMPATIBLE_MODEL]
+                   [--openai-compatible-base-url OPENAI_COMPATIBLE_BASE_URL]
+                   [--openai-compatible-api-key OPENAI_COMPATIBLE_API_KEY]
+                   [--openai-compatible-timeout OPENAI_COMPATIBLE_TIMEOUT]
+                   [--openai-compatible-temperature OPENAI_COMPATIBLE_TEMPERATURE]
+                   [--openai-compatible-reasoning-effort OPENAI_COMPATIBLE_REASONING_EFFORT]
+                   [--openai-compatible-send-temperature]
+                   [--openai-compatible-send-reasoning-effort]
+                   [--openai-compatible-enable-json-mode]
+                   [--claude-code-path CLAUDE_CODE_PATH]
+                   [--claude-code-model CLAUDE_CODE_MODEL]
+                   [--clitranslator-command CLITRANSLATOR_COMMAND]
+                   [--clitranslator-timeout CLITRANSLATOR_TIMEOUT]
+                   [--clitranslator-postprocess-command CLITRANSLATOR_POSTPROCESS_COMMAND]
+                   [--term-siliconflowfree] [--term-openai]
+                   [--term-aliyundashscope] [--term-deepseek] [--term-ollama]
+                   [--term-xinference] [--term-azureopenai]
+                   [--term-modelscope] [--term-zhipu] [--term-siliconflow]
+                   [--term-gemini] [--term-grok] [--term-groq]
+                   [--term-openaicompatible]
+                   [--term-siliconflow-free-enable-json-mode]
+                   [--term-openai-model TERM_OPENAI_MODEL]
+                   [--term-openai-base-url TERM_OPENAI_BASE_URL]
+                   [--term-openai-api-key TERM_OPENAI_API_KEY]
+                   [--term-openai-timeout TERM_OPENAI_TIMEOUT]
+                   [--term-openai-temperature TERM_OPENAI_TEMPERATURE]
+                   [--term-openai-reasoning-effort TERM_OPENAI_REASONING_EFFORT]
+                   [--term-openai-enable-json-mode]
+                   [--term-openai-send-temprature]
+                   [--term-openai-send-reasoning-effort]
+                   [--term-aliyun-dashscope-model TERM_ALIYUN_DASHSCOPE_MODEL]
+                   [--term-aliyun-dashscope-base-url TERM_ALIYUN_DASHSCOPE_BASE_URL]
+                   [--term-aliyun-dashscope-api-key TERM_ALIYUN_DASHSCOPE_API_KEY]
+                   [--term-aliyun-dashscope-timeout TERM_ALIYUN_DASHSCOPE_TIMEOUT]
+                   [--term-aliyun-dashscope-temperature TERM_ALIYUN_DASHSCOPE_TEMPERATURE]
+                   [--term-aliyun-dashscope-send-temperature]
+                   [--term-aliyun-dashscope-enable-json-mode]
+                   [--term-deepseek-model TERM_DEEPSEEK_MODEL]
+                   [--term-deepseek-api-key TERM_DEEPSEEK_API_KEY]
+                   [--term-deepseek-enable-json-mode]
+                   [--term-deepseek-thinking-mode TERM_DEEPSEEK_THINKING_MODE]
+                   [--term-deepseek-reasoning-effort TERM_DEEPSEEK_REASONING_EFFORT]
+                   [--term-ollama-model TERM_OLLAMA_MODEL]
+                   [--term-ollama-host TERM_OLLAMA_HOST]
+                   [--term-num-predict TERM_NUM_PREDICT]
+                   [--term-xinference-model TERM_XINFERENCE_MODEL]
+                   [--term-xinference-host TERM_XINFERENCE_HOST]
+                   [--term-azure-openai-model TERM_AZURE_OPENAI_MODEL]
+                   [--term-azure-openai-base-url TERM_AZURE_OPENAI_BASE_URL]
+                   [--term-azure-openai-api-key TERM_AZURE_OPENAI_API_KEY]
+                   [--term-azure-openai-api-version TERM_AZURE_OPENAI_API_VERSION]
+                   [--term-modelscope-model TERM_MODELSCOPE_MODEL]
+                   [--term-modelscope-api-key TERM_MODELSCOPE_API_KEY]
+                   [--term-modelscope-enable-json-mode]
+                   [--term-zhipu-model TERM_ZHIPU_MODEL]
+                   [--term-zhipu-api-key TERM_ZHIPU_API_KEY]
+                   [--term-zhipu-enable-json-mode]
+                   [--term-siliconflow-base-url TERM_SILICONFLOW_BASE_URL]
+                   [--term-siliconflow-model TERM_SILICONFLOW_MODEL]
+                   [--term-siliconflow-api-key TERM_SILICONFLOW_API_KEY]
+                   [--term-siliconflow-enable-thinking]
+                   [--term-siliconflow-send-enable-thinking-param]
+                   [--term-siliconflow-enable-json-mode]
+                   [--term-gemini-model TERM_GEMINI_MODEL]
+                   [--term-gemini-api-key TERM_GEMINI_API_KEY]
+                   [--term-gemini-enable-json-mode]
+                   [--term-grok-model TERM_GROK_MODEL]
+                   [--term-grok-api-key TERM_GROK_API_KEY]
+                   [--term-grok-enable-json-mode]
+                   [--term-groq-model TERM_GROQ_MODEL]
+                   [--term-groq-api-key TERM_GROQ_API_KEY]
+                   [--term-groq-enable-json-mode]
+                   [--term-openai-compatible-model TERM_OPENAI_COMPATIBLE_MODEL]
+                   [--term-openai-compatible-base-url TERM_OPENAI_COMPATIBLE_BASE_URL]
+                   [--term-openai-compatible-api-key TERM_OPENAI_COMPATIBLE_API_KEY]
+                   [--term-openai-compatible-timeout TERM_OPENAI_COMPATIBLE_TIMEOUT]
+                   [--term-openai-compatible-temperature TERM_OPENAI_COMPATIBLE_TEMPERATURE]
+                   [--term-openai-compatible-reasoning-effort TERM_OPENAI_COMPATIBLE_REASONING_EFFORT]
+                   [--term-openai-compatible-send-temperature]
+                   [--term-openai-compatible-send-reasoning-effort]
+                   [--term-openai-compatible-enable-json-mode]
+                   [input-files ...]
+
+options:
+  -h, --help            show this help message and exit
+  --config-file CONFIG_FILE
+                        Path to the configuration file
+  --report-interval REPORT_INTERVAL
+                        Progress report interval in seconds
+  --siliconflowfree     Use SiliconFlowFree for translation
+  --openai              Use OpenAI for translation
+  --aliyundashscope     Use AliyunDashScope for translation
+  --google              Use Google for translation
+  --bing                Use Bing for translation
+  --deepl               Use DeepL for translation
+  --deepseek            Use DeepSeek for translation
+  --ollama              Use Ollama for translation
+  --xinference          Use Xinference for translation
+  --azureopenai         Use AzureOpenAI for translation
+  --modelscope          Use ModelScope for translation
+  --zhipu               Use Zhipu for translation
+  --siliconflow         Use SiliconFlow for translation
+  --tencentmechinetranslation
+                        Use TencentMechineTranslation for translation
+  --gemini              Use Gemini for translation
+  --azure               Use Azure for translation
+  --anythingllm         Use AnythingLLM for translation
+  --dify                Use Dify for translation
+  --grok                Use Grok for translation
+  --groq                Use Groq for translation
+  --qwenmt              Use QwenMt for translation
+  --openaicompatible    Use OpenAICompatible for translation
+  --claudecode          Use ClaudeCode for translation
+  --clitranslator       Use CLITranslator for translation
+  --term-siliconflowfree
+                        Use SiliconFlowFree for term extraction
+  --term-openai         Use OpenAI for term extraction
+  --term-aliyundashscope
+                        Use AliyunDashScope for term extraction
+  --term-deepseek       Use DeepSeek for term extraction
+  --term-ollama         Use Ollama for term extraction
+  --term-xinference     Use Xinference for term extraction
+  --term-azureopenai    Use AzureOpenAI for term extraction
+  --term-modelscope     Use ModelScope for term extraction
+  --term-zhipu          Use Zhipu for term extraction
+  --term-siliconflow    Use SiliconFlow for term extraction
+  --term-gemini         Use Gemini for term extraction
+  --term-grok           Use Grok for term extraction
+  --term-groq           Use Groq for term extraction
+  --term-openaicompatible
+                        Use OpenAICompatible for term extraction
+
+BasicSettings:
+  Basic application settings
+
+  input-files           Input PDF files to process
+  --debug               Enable debug mode
+  --gui                 Enable GUI mode
+  --warmup              Only download and verify required assets then exit
+  --generate-offline-assets GENERATE_OFFLINE_ASSETS
+                        Generate offline assets package in the specified
+                        directory
+  --restore-offline-assets RESTORE_OFFLINE_ASSETS
+                        Restore offline assets package from the specified file
+  --version             Show version then exit
+
+TranslationSettings:
+  Translation related settings
+
+  --min-text-length MIN_TEXT_LENGTH
+                        Minimum text length to translate
+  --rpc-doclayout RPC_DOCLAYOUT
+                        RPC service host address for document layout analysis
+  --lang-in LANG_IN     Source language code
+  --lang-out LANG_OUT   Target language code
+  --output OUTPUT       Output directory for translated files
+  --qps QPS             QPS limit for translation service
+  --ignore-cache        Ignore translation cache
+  --custom-system-prompt CUSTOM_SYSTEM_PROMPT
+                        Custom system prompt for translation. It is mainly
+                        used to add the `/no_think` instruction of Qwen 3 in
+                        the prompt. e.g. --custom-system-prompt "/no_think You
+                        are a professional, authentic machine translation
+                        engine."
+  --glossaries GLOSSARIES
+                        Glossary file list.
+  --save-auto-extracted-glossary
+                        save automatically extracted glossary
+  --pool-max-workers POOL_MAX_WORKERS
+                        Maximum number of workers for translation pool. If not
+                        set, will use qps as the number of workers
+  --term-qps TERM_QPS   QPS limit for term extraction translation service. If
+                        not set, will follow qps.
+  --term-pool-max-workers TERM_POOL_MAX_WORKERS
+                        Maximum number of workers for term extraction
+                        translation pool. If not set or 0, will follow
+                        pool_max_workers.
+  --no-auto-extract-glossary
+                        Disable auto extract glossary
+  --primary-font-family PRIMARY_FONT_FAMILY
+                        Override primary font family for translated text.
+                        Choices: 'serif' for serif fonts, 'sans-serif' for
+                        sans-serif fonts, 'script' for script/italic fonts. If
+                        not specified, uses automatic font selection based on
+                        original text properties.
+
+PDFSettings:
+  PDF processing settings
+
+  --pages PAGES         Pages to translate (e.g. '1,2,1-,-3,3-5')
+  --no-dual             Do not output bilingual PDF files
+  --no-mono             Do not output monolingual PDF files
+  --formular-font-pattern FORMULAR_FONT_PATTERN
+                        Font pattern to identify formula text
+  --formular-char-pattern FORMULAR_CHAR_PATTERN
+                        Character pattern to identify formula text
+  --split-short-lines   Force split short lines into different paragraphs
+  --short-line-split-factor SHORT_LINE_SPLIT_FACTOR
+                        Split threshold factor for short lines
+  --skip-clean          Skip PDF cleaning step
+  --dual-translate-first
+                        Put translated pages first in dual PDF mode
+  --disable-rich-text-translate
+                        Disable rich text translation
+  --enhance-compatibility
+                        Enable all compatibility enhancement options
+  --use-alternating-pages-dual
+                        Use alternating pages mode for dual PDF
+  --watermark-output-mode WATERMARK_OUTPUT_MODE
+                        Watermark output mode for PDF files (watermarked,
+                        no_watermark, or both)
+  --max-pages-per-part MAX_PAGES_PER_PART
+                        Maximum pages per part for split translation
+  --translate-table-text
+                        Translate table text (experimental)
+  --skip-scanned-detection
+                        Skip scanned detection
+  --ocr-workaround      Force translated text to be black and add white
+                        background
+  --auto-enable-ocr-workaround
+                        Enable automatic OCR workaround. If a document is
+                        detected as heavily scanned, this will attempt to
+                        enable OCR processing and skip further scan detection.
+                        See documentation for details. (default: False)
+  --only-include-translated-page
+                        Only include translated pages in the output PDF.
+                        Effective only when --pages is used.
+  --no-merge-alternating-line-numbers
+                        Handle alternating line numbers and text paragraphs in
+                        documents with line numbers
+  --no-remove-non-formula-lines
+                        Remove non-formula lines within paragraph areas
+  --non-formula-line-iou-threshold NON_FORMULA_LINE_IOU_THRESHOLD
+                        IoU threshold for identifying non-formula lines
+  --figure-table-protection-threshold FIGURE_TABLE_PROTECTION_THRESHOLD
+                        Protection threshold for figures and tables (lines
+                        within figures/tables will not be processed)
+  --skip-formula-offset-calculation
+                        Skip formula offset calculation during processing
+
+GUISettings:
+  GUI related settings
+
+  --share               Enable sharing mode
+  --auth-file AUTH_FILE
+                        Path to the authentication file
+  --welcome-page WELCOME_PAGE
+                        Path to the welcome page html file
+  --enabled-services ENABLED_SERVICES
+                        Enabled services
+  --disable-gui-sensitive-input
+                        Disable GUI sensitive input
+  --disable-config-auto-save
+                        Disable automatic saving of configuration
+  --server-port SERVER_PORT
+                        WebUI port
+  --ui-lang UI_LANG     UI language
+
+SiliconFlowFreeSettings:
+  SiliconFlow Free API settings
+
+  --siliconflow-free-enable-json-mode
+                        Enable JSON mode for SiliconFlow Free service
+
+OpenAISettings:
+  OpenAI API settings
+
+  --openai-model OPENAI_MODEL
+                        OpenAI model to use
+  --openai-base-url OPENAI_BASE_URL
+                        Base URL for OpenAI API
+  --openai-api-key OPENAI_API_KEY
+                        API key for OpenAI service
+  --openai-timeout OPENAI_TIMEOUT
+                        Timeout (seconds) for OpenAI service
+  --openai-temperature OPENAI_TEMPERATURE
+                        Temperature for OpenAI service
+  --openai-reasoning-effort OPENAI_REASONING_EFFORT
+                        Reasoning effort for OpenAI service
+                        (minimal/low/medium/high)
+  --openai-enable-json-mode
+                        Enable JSON mode for OpenAI service
+  --openai-send-temprature
+                        Send temprature to OpenAI service
+  --openai-send-reasoning-effort
+                        Send reasoning effort to OpenAI service
+
+AliyunDashScopeSettings:
+  Aliyun DashScope settings
+
+  --aliyun-dashscope-model ALIYUN_DASHSCOPE_MODEL
+                        Aliyun DashScope model to use
+  --aliyun-dashscope-base-url ALIYUN_DASHSCOPE_BASE_URL
+                        Base URL for Aliyun DashScope API
+  --aliyun-dashscope-api-key ALIYUN_DASHSCOPE_API_KEY
+                        API key for Aliyun DashScope service
+  --aliyun-dashscope-timeout ALIYUN_DASHSCOPE_TIMEOUT
+                        Timeout (seconds) for Aliyun DashScope service
+  --aliyun-dashscope-temperature ALIYUN_DASHSCOPE_TEMPERATURE
+                        Temperature for Aliyun DashScope service
+  --aliyun-dashscope-send-temperature
+                        Send temperature to Aliyun DashScope service
+  --aliyun-dashscope-enable-json-mode
+                        Enable JSON mode for Aliyun DashScope service
+
+DeepLSettings:
+  Bing Translation settings
+
+  --deepl-auth-key DEEPL_AUTH_KEY
+                        DeepL auth key
+
+DeepSeekSettings:
+  DeepSeek settings
+
+  --deepseek-model DEEPSEEK_MODEL
+                        DeepSeek model to use
+  --deepseek-api-key DEEPSEEK_API_KEY
+                        API key for DeepSeek service
+  --deepseek-enable-json-mode
+                        Enable JSON mode for DeepSeek service
+  --deepseek-thinking-mode DEEPSEEK_THINKING_MODE
+                        Thinking mode for DeepSeek v4 models
+                        (enabled/disabled)
+  --deepseek-reasoning-effort DEEPSEEK_REASONING_EFFORT
+                        Reasoning effort for DeepSeek thinking mode (high/max)
+
+OllamaSettings:
+  Ollama API settings
+
+  --ollama-model OLLAMA_MODEL
+                        Ollama model to use
+  --ollama-host OLLAMA_HOST
+                        Ollama host
+  --num-predict NUM_PREDICT
+                        The max number of token to predict.
+
+XinferenceSettings:
+  Xinference API settings
+
+  --xinference-model XINFERENCE_MODEL
+                        Xinference model to use
+  --xinference-host XINFERENCE_HOST
+                        Xinference host
+
+AzureOpenAISettings:
+  AzureOpenAI API settings
+
+  --azure-openai-model AZURE_OPENAI_MODEL
+                        AzureOpenAI model to use
+  --azure-openai-base-url AZURE_OPENAI_BASE_URL
+                        Base URL for AzureOpenAI API
+  --azure-openai-api-key AZURE_OPENAI_API_KEY
+                        API key for AzureOpenAI service
+  --azure-openai-api-version AZURE_OPENAI_API_VERSION
+                        API version for AzureOpenAI service
+
+ModelScopeSettings:
+  ModelScope API settings
+
+  --modelscope-model MODELSCOPE_MODEL
+                        ModelScope model to use
+  --modelscope-api-key MODELSCOPE_API_KEY
+                        API key for ModelScope service
+  --modelscope-enable-json-mode
+                        Enable JSON mode for ModelScope service
+
+ZhipuSettings:
+  Zhipu API settings
+
+  --zhipu-model ZHIPU_MODEL
+                        Zhipu model to use
+  --zhipu-api-key ZHIPU_API_KEY
+                        API key for Zhipu service
+  --zhipu-enable-json-mode
+                        Enable JSON mode for Zhipu service
+
+SiliconFlowSettings:
+  SiliconFlow API settings
+
+  --siliconflow-base-url SILICONFLOW_BASE_URL
+                        Base URL for SiliconFlow API
+  --siliconflow-model SILICONFLOW_MODEL
+                        SiliconFlow model to use
+  --siliconflow-api-key SILICONFLOW_API_KEY
+                        API key for SiliconFlow service
+  --siliconflow-enable-thinking
+                        Enable thinking for SiliconFlow service
+  --siliconflow-send-enable-thinking-param
+                        Send enable thinking param to SiliconFlow service
+  --siliconflow-enable-json-mode
+                        Enable JSON mode for SiliconFlow service
+
+TencentSettings:
+  Tencent Mechine Translation settings
+
+  --tencentcloud-secret-id TENCENTCLOUD_SECRET_ID
+                        Tencent Mechine Translation secret ID
+  --tencentcloud-secret-key TENCENTCLOUD_SECRET_KEY
+                        Tencent Mechine Translation secret Key
+
+GeminiSettings:
+  Gemini API settings
+
+  --gemini-model GEMINI_MODEL
+                        Gemini model to use
+  --gemini-api-key GEMINI_API_KEY
+                        API key for Gemini service
+  --gemini-enable-json-mode
+                        Enable JSON mode for Gemini service
+
+AzureSettings:
+  Azure Translation settings
+
+  --azure-endpoint AZURE_ENDPOINT
+                        Azure endpoint
+  --azure-api-key AZURE_API_KEY
+                        Azure API Key
+
+AnythingLLMSettings:
+  AnythingLLM settings
+
+  --anythingllm-url ANYTHINGLLM_URL
+                        AnythingLLM url
+  --anythingllm-apikey ANYTHINGLLM_APIKEY
+                        AnythingLLM API Key
+
+DifySettings:
+  Dify settings
+
+  --dify-url DIFY_URL   Dify url
+  --dify-apikey DIFY_APIKEY
+                        Dify API Key
+
+GrokSettings:
+  Grok API settings
+
+  --grok-model GROK_MODEL
+                        Grok model to use
+  --grok-api-key GROK_API_KEY
+                        API key for Grok service
+  --grok-enable-json-mode
+                        Enable JSON mode for Grok service
+
+GroqSettings:
+  Groq API settings
+
+  --groq-model GROQ_MODEL
+                        Groq model to use
+  --groq-api-key GROQ_API_KEY
+                        API key for Groq service
+  --groq-enable-json-mode
+                        Enable JSON mode for Groq service
+
+QwenMtSettings:
+  QwenMt API settings
+
+  --qwenmt-model QWENMT_MODEL
+                        QwenMt model to use
+  --qwenmt-base-url QWENMT_BASE_URL
+                        Base URL for QwenMt API
+  --qwenmt-api-key QWENMT_API_KEY
+                        API key for QwenMt service
+  --ali-domains ALI_DOMAINS
+                        the target domain to guide translation style for
+                        QwenMt service
+
+OpenAICompatibleSettings:
+  OpenAICompatible settings
+
+  --openai-compatible-model OPENAI_COMPATIBLE_MODEL
+                        OpenAI Compatible model to use
+  --openai-compatible-base-url OPENAI_COMPATIBLE_BASE_URL
+                        Base URL for OpenAI Compatible service
+  --openai-compatible-api-key OPENAI_COMPATIBLE_API_KEY
+                        API key for OpenAI Compatible service
+  --openai-compatible-timeout OPENAI_COMPATIBLE_TIMEOUT
+                        Timeout (seconds) for OpenAI Compatible service
+  --openai-compatible-temperature OPENAI_COMPATIBLE_TEMPERATURE
+                        Temperature for OpenAI Compatible service
+  --openai-compatible-reasoning-effort OPENAI_COMPATIBLE_REASONING_EFFORT
+                        Reasoning effort for OpenAI Compatible service
+                        (minimal/low/medium/high)
+  --openai-compatible-send-temperature
+                        Send temperature to OpenAI Compatible service
+  --openai-compatible-send-reasoning-effort
+                        Send reasoning effort to OpenAI Compatible service
+  --openai-compatible-enable-json-mode
+                        Enable JSON mode for OpenAI Compatible service
+
+ClaudeCodeSettings:
+  Claude Code settings
+
+  --claude-code-path CLAUDE_CODE_PATH
+                        Path to Claude Code CLI
+  --claude-code-model CLAUDE_CODE_MODEL
+                        Claude Code model to use
+
+CLISettings:
+  CLI translator settings This allows you to use any external CLI
+  translation tool. Input text is always passed via stdin. Example (stdin,
+  default): - clitranslator_command: "your-translator-command --flag value"
+
+  --clitranslator-command CLITRANSLATOR_COMMAND
+                        CLI command to execute. May include arguments and will
+                        be split like a shell command (e.g., 'your-translator-
+                        command --flag value').
+  --clitranslator-timeout CLITRANSLATOR_TIMEOUT
+                        Command timeout in seconds
+  --clitranslator-postprocess-command CLITRANSLATOR_POSTPROCESS_COMMAND
+                        Optional postprocess command to run on CLI output
+                        (reads from stdin). Example: 'jq -r
+                        .result.translation'
+
+TermSiliconFlowFreeSettings:
+  Term settings based on: SiliconFlow Free API settings
+
+  --term-siliconflow-free-enable-json-mode
+                        Enable JSON mode for SiliconFlow Free service
+
+TermOpenAISettings:
+  Term settings based on: OpenAI API settings
+
+  --term-openai-model TERM_OPENAI_MODEL
+                        OpenAI model to use
+  --term-openai-base-url TERM_OPENAI_BASE_URL
+                        Base URL for OpenAI API
+  --term-openai-api-key TERM_OPENAI_API_KEY
+                        API key for OpenAI service
+  --term-openai-timeout TERM_OPENAI_TIMEOUT
+                        Timeout (seconds) for OpenAI service
+  --term-openai-temperature TERM_OPENAI_TEMPERATURE
+                        Temperature for OpenAI service
+  --term-openai-reasoning-effort TERM_OPENAI_REASONING_EFFORT
+                        Reasoning effort for OpenAI service
+                        (minimal/low/medium/high)
+  --term-openai-enable-json-mode
+                        Enable JSON mode for OpenAI service
+  --term-openai-send-temprature
+                        Send temprature to OpenAI service
+  --term-openai-send-reasoning-effort
+                        Send reasoning effort to OpenAI service
+
+TermAliyunDashScopeSettings:
+  Term settings based on: Aliyun DashScope settings
+
+  --term-aliyun-dashscope-model TERM_ALIYUN_DASHSCOPE_MODEL
+                        Aliyun DashScope model to use
+  --term-aliyun-dashscope-base-url TERM_ALIYUN_DASHSCOPE_BASE_URL
+                        Base URL for Aliyun DashScope API
+  --term-aliyun-dashscope-api-key TERM_ALIYUN_DASHSCOPE_API_KEY
+                        API key for Aliyun DashScope service
+  --term-aliyun-dashscope-timeout TERM_ALIYUN_DASHSCOPE_TIMEOUT
+                        Timeout (seconds) for Aliyun DashScope service
+  --term-aliyun-dashscope-temperature TERM_ALIYUN_DASHSCOPE_TEMPERATURE
+                        Temperature for Aliyun DashScope service
+  --term-aliyun-dashscope-send-temperature
+                        Send temperature to Aliyun DashScope service
+  --term-aliyun-dashscope-enable-json-mode
+                        Enable JSON mode for Aliyun DashScope service
+
+TermDeepSeekSettings:
+  Term settings based on: DeepSeek settings
+
+  --term-deepseek-model TERM_DEEPSEEK_MODEL
+                        DeepSeek model to use
+  --term-deepseek-api-key TERM_DEEPSEEK_API_KEY
+                        API key for DeepSeek service
+  --term-deepseek-enable-json-mode
+                        Enable JSON mode for DeepSeek service
+  --term-deepseek-thinking-mode TERM_DEEPSEEK_THINKING_MODE
+                        Thinking mode for DeepSeek v4 models
+                        (enabled/disabled)
+  --term-deepseek-reasoning-effort TERM_DEEPSEEK_REASONING_EFFORT
+                        Reasoning effort for DeepSeek thinking mode (high/max)
+
+TermOllamaSettings:
+  Term settings based on: Ollama API settings
+
+  --term-ollama-model TERM_OLLAMA_MODEL
+                        Ollama model to use
+  --term-ollama-host TERM_OLLAMA_HOST
+                        Ollama host
+  --term-num-predict TERM_NUM_PREDICT
+                        The max number of token to predict.
+
+TermXinferenceSettings:
+  Term settings based on: Xinference API settings
+
+  --term-xinference-model TERM_XINFERENCE_MODEL
+                        Xinference model to use
+  --term-xinference-host TERM_XINFERENCE_HOST
+                        Xinference host
+
+TermAzureOpenAISettings:
+  Term settings based on: AzureOpenAI API settings
+
+  --term-azure-openai-model TERM_AZURE_OPENAI_MODEL
+                        AzureOpenAI model to use
+  --term-azure-openai-base-url TERM_AZURE_OPENAI_BASE_URL
+                        Base URL for AzureOpenAI API
+  --term-azure-openai-api-key TERM_AZURE_OPENAI_API_KEY
+                        API key for AzureOpenAI service
+  --term-azure-openai-api-version TERM_AZURE_OPENAI_API_VERSION
+                        API version for AzureOpenAI service
+
+TermModelScopeSettings:
+  Term settings based on: ModelScope API settings
+
+  --term-modelscope-model TERM_MODELSCOPE_MODEL
+                        ModelScope model to use
+  --term-modelscope-api-key TERM_MODELSCOPE_API_KEY
+                        API key for ModelScope service
+  --term-modelscope-enable-json-mode
+                        Enable JSON mode for ModelScope service
+
+TermZhipuSettings:
+  Term settings based on: Zhipu API settings
+
+  --term-zhipu-model TERM_ZHIPU_MODEL
+                        Zhipu model to use
+  --term-zhipu-api-key TERM_ZHIPU_API_KEY
+                        API key for Zhipu service
+  --term-zhipu-enable-json-mode
+                        Enable JSON mode for Zhipu service
+
+TermSiliconFlowSettings:
+  Term settings based on: SiliconFlow API settings
+
+  --term-siliconflow-base-url TERM_SILICONFLOW_BASE_URL
+                        Base URL for SiliconFlow API
+  --term-siliconflow-model TERM_SILICONFLOW_MODEL
+                        SiliconFlow model to use
+  --term-siliconflow-api-key TERM_SILICONFLOW_API_KEY
+                        API key for SiliconFlow service
+  --term-siliconflow-enable-thinking
+                        Enable thinking for SiliconFlow service
+  --term-siliconflow-send-enable-thinking-param
+                        Send enable thinking param to SiliconFlow service
+  --term-siliconflow-enable-json-mode
+                        Enable JSON mode for SiliconFlow service
+
+TermGeminiSettings:
+  Term settings based on: Gemini API settings
+
+  --term-gemini-model TERM_GEMINI_MODEL
+                        Gemini model to use
+  --term-gemini-api-key TERM_GEMINI_API_KEY
+                        API key for Gemini service
+  --term-gemini-enable-json-mode
+                        Enable JSON mode for Gemini service
+
+TermGrokSettings:
+  Term settings based on: Grok API settings
+
+  --term-grok-model TERM_GROK_MODEL
+                        Grok model to use
+  --term-grok-api-key TERM_GROK_API_KEY
+                        API key for Grok service
+  --term-grok-enable-json-mode
+                        Enable JSON mode for Grok service
+
+TermGroqSettings:
+  Term settings based on: Groq API settings
+
+  --term-groq-model TERM_GROQ_MODEL
+                        Groq model to use
+  --term-groq-api-key TERM_GROQ_API_KEY
+                        API key for Groq service
+  --term-groq-enable-json-mode
+                        Enable JSON mode for Groq service
+
+TermOpenAICompatibleSettings:
+  Term settings based on: OpenAICompatible settings
+
+  --term-openai-compatible-model TERM_OPENAI_COMPATIBLE_MODEL
+                        OpenAI Compatible model to use
+  --term-openai-compatible-base-url TERM_OPENAI_COMPATIBLE_BASE_URL
+                        Base URL for OpenAI Compatible service
+  --term-openai-compatible-api-key TERM_OPENAI_COMPATIBLE_API_KEY
+                        API key for OpenAI Compatible service
+  --term-openai-compatible-timeout TERM_OPENAI_COMPATIBLE_TIMEOUT
+                        Timeout (seconds) for OpenAI Compatible service
+  --term-openai-compatible-temperature TERM_OPENAI_COMPATIBLE_TEMPERATURE
+                        Temperature for OpenAI Compatible service
+  --term-openai-compatible-reasoning-effort TERM_OPENAI_COMPATIBLE_REASONING_EFFORT
+                        Reasoning effort for OpenAI Compatible service
+                        (minimal/low/medium/high)
+  --term-openai-compatible-send-temperature
+                        Send temperature to OpenAI Compatible service
+  --term-openai-compatible-send-reasoning-effort
+                        Send reasoning effort to OpenAI Compatible service
+  --term-openai-compatible-enable-json-mode
+                        Enable JSON mode for OpenAI Compatible service
