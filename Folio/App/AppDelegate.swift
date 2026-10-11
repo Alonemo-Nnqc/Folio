@@ -68,8 +68,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     // MARK: Actions
 
     @objc func showLibrary(_ sender: Any?) {
+        guard let library = libraryWindowController.window else { return }
+        // A closed library tab comes back into the tab group of the open papers, as the first tab.
+        if !library.isVisible, let paper = NSApp.windows.first(where: {
+            $0.isVisible && $0 !== library && $0.tabbingIdentifier == library.tabbingIdentifier
+        }) {
+            let first = paper.tabGroup?.windows.first ?? paper
+            first.addTabbedWindow(library, ordered: .below)
+        }
         libraryWindowController.showWindow(nil)
-        libraryWindowController.window?.makeKeyAndOrderFront(nil)
+        library.makeKeyAndOrderFront(nil)
     }
 
     var settingsWindow: SettingsWindowController? { settingsWindowController }
