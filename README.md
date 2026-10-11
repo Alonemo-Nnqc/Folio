@@ -67,6 +67,13 @@ FOLIO_LIVE=1 FOLIO_ZOTERO_DIR=<Zotero 数据目录副本> swift test --filter Zo
 swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo
 script/preview.sh /tmp/shot.png /tmp/folio-demo -FolioPreviewSelect "Spectral" -FolioPreviewExpand YES
 
+# 阅读器与翻译自测（不操作鼠标键盘）
+script/preview.sh /tmp/r.png <文献库> -FolioPreviewOpenReader "<标题开头>" -FolioReaderSelfTest /tmp/reader.log
+open -g -n build/DerivedData/Build/Products/Debug/Folio.app --args -FolioLibraryPath <文献库> -FolioUITesting YES \
+  -FolioTranslatorDirectory <已安装的翻译组件目录> -FolioPreviewSelect "<标题开头>" -FolioTranslateSelfTest /tmp/trans.log
+FOLIO_LIVE=1 swift test --package-path Packages/FolioCore --filter ZoteroCorpusEvaluation   # 检索引擎新旧对比
+FOLIO_LIVE=1 swift test --package-path Packages/FolioCore --filter FolioTranslateTests.LiveTests  # 翻译组件真实安装与翻译
+
 # 性能测试
 swift run --package-path Packages/FolioCore folio-seed bulk /tmp/folio-bulk 1000
 script/build_and_run.sh --release && script/perf.sh /tmp/folio-bulk
@@ -81,6 +88,8 @@ script/drag-tests.sh
 ## 第三方组件
 
 - [GRDB.swift](https://github.com/groue/GRDB.swift)：MIT 许可
+- [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next)：AGPL-3.0，不随 App 打包，首次使用整篇翻译时按需下载到 `~/Library/Application Support/Folio/Translator`
+- Zotero 识别服务（`services.zotero.org/recognizer`）：PDF 识别时调用，可在设置中关闭
 - [citeproc-js](https://github.com/Juris-M/citeproc-js)：CPAL-1.0 / AGPL-1.0 许可
 - [CSL 样式与 locale 文件](https://citationstyles.org)：CC BY-SA 3.0 许可
 
