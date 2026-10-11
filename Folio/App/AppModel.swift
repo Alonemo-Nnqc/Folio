@@ -175,6 +175,7 @@ final class AppModel {
         recompute()
         if firstLoad {
             importer.libraryDidLoad()
+            readers.restoreTabs()
             PreviewHooks.apply(to: self)
             // Performance runs pass -FolioPerfLog <file> to record when the first data is on screen.
             if let log = UserDefaults.standard.string(forKey: "FolioPerfLog") {

@@ -25,6 +25,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         flushPendingOpens()
     }
 
+    /// Unsaved annotations are written before quitting (READER-05).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.readers.saveAll() else {
+            let alert = NSAlert()
+            alert.messageText = "部分批注无法保存"
+            alert.informativeText = "仍要退出吗？未保存的批注会丢失。"
+            alert.addButton(withTitle: "取消")
+            alert.addButton(withTitle: "退出")
+            return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+        }
+        return .terminateNow
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     /// Clicking the Dock icon with no window open brings the library back.
@@ -61,6 +74,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if settingsWindowController == nil { settingsWindowController = SettingsWindowController(model: model) }
         settingsWindowController?.showWindow(nil)
     }
+
+    // Library commands that also work while a paper tab is in front: bring the library forward first.
+    @objc func addFiles(_ sender: Any?) { showLibrary(nil); model.chooseFilesToImport() }
+    @objc func addByIdentifier(_ sender: Any?) { showLibrary(nil); model.activeSheet = .identifierAdd }
+    @objc func newGroup(_ sender: Any?) { showLibrary(nil); model.createGroup() }
+    @objc func newTag(_ sender: Any?) { model.activeSheet = .tagEditor(tagId: nil, applyTo: []) }
+    @objc func importFromZotero(_ sender: Any?) { showLibrary(nil); model.activeSheet = .zoteroImport }
 
     @objc func revealLibraryInFinder(_ sender: Any?) {
         NSWorkspace.shared.activateFileViewerSelecting([model.library.root])

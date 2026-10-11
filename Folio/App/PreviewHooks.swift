@@ -13,6 +13,8 @@ import Foundation
 ///   -FolioPreviewSheet   tagEditor | tagEdit | zotero | identifier | manualMatch
 ///   -FolioPreviewDrop    <file count>            shows the Finder drop overlay
 ///   -FolioPreviewToast   <text>
+///   -FolioPreviewOpenReader <title prefix>      opens that item's PDF in a reader tab
+///   -FolioReaderSelfTest <log>                  with OpenReader: scripted annotation/save/position checks
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
 ///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
 enum PreviewHooks {
@@ -53,6 +55,15 @@ enum PreviewHooks {
         if let pane = defaults.string(forKey: "FolioPreviewSettings") {
             AppDelegate.shared.showSettings(nil)
             AppDelegate.shared.settingsWindow?.select(pane: pane)
+        }
+        if let prefix = defaults.string(forKey: "FolioPreviewOpenReader"),
+           let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                model.open(fileId: file.id, mode: .reader)
+                if let log = defaults.string(forKey: "FolioReaderSelfTest") {
+                    ReaderSelfTest.run(model: model, fileId: file.id, log: log)
+                }
+            }
         }
         if let paths = defaults.string(forKey: "FolioPreviewSimulateDrop") {
             // "a.pdf|b.pdf": one drop per file, two seconds apart, to exercise repeated drops.
