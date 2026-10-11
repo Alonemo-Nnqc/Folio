@@ -2,14 +2,26 @@ import AppKit
 import FolioCore
 import Observation
 
-/// Search state behind the sidebar search field (SEARCH-01…05).
+/// Search state behind the toolbar search field and the scope bar (SEARCH-01…05).
 struct SearchState: Equatable {
-    var isVisible = false
     var text = ""
     var wholeLibrary = false
     var includeFulltext = false
 
-    var isActive: Bool { isVisible && !text.trimmingCharacters(in: .whitespaces).isEmpty }
+    var isActive: Bool { !text.trimmingCharacters(in: .whitespaces).isEmpty }
+}
+
+/// Pages of the library inspector (INSP-02/03, NOTE-01).
+enum InspectorTab: String, CaseIterable {
+    case metadata, annotations, notes
+
+    var title: String {
+        switch self {
+        case .metadata: "信息"
+        case .annotations: "标注"
+        case .notes: "笔记"
+        }
+    }
 }
 
 /// Root state of the main window. Views read from it; every mutation goes through `Library`.
@@ -44,19 +56,19 @@ final class AppModel {
             recompute()
         }
     }
-    var showInspector = true
+    var inspectorTab = InspectorTab.metadata
     /// Set by the sidebar to start inline renaming of a newly created group.
     var groupPendingRename: String?
-    /// Bumped to ask the sidebar search field to take focus.
+    /// Bumped to ask the toolbar search field to take focus.
     var searchFocusRequest = 0
+    /// Bumped to put the keyboard focus into the inspector's note editor.
+    var noteFocusRequest = 0
     var activeSheet: ActiveSheet?
     // Screenshot hooks (see PreviewHooks).
     var previewExpandRequest: String?
-    var previewInspectorTab: String?
     /// Files currently dragged over the list from Finder; > 0 shows the drop overlay (DND-01).
     var externalDropCount = 0
     var previewExpandAllGroups = false
-    var previewOpenSettings = false
 
     @ObservationIgnored private var fulltextMatches: Set<String>?
     /// Set once the first snapshot arrives. (Comparing with `.empty` misfires for an empty library.)
@@ -65,9 +77,13 @@ final class AppModel {
     @ObservationIgnored private var fulltextTask: Task<Void, Never>?
     @ObservationIgnored lazy var importer = ImportCoordinator(model: self)
     @ObservationIgnored let citations = CitationService()
+    @ObservationIgnored lazy var readers = ReaderCoordinator(model: self)
+    @ObservationIgnored lazy var translations = TranslationCoordinator(model: self)
     /// The live list controller, for the simulated-drop check (see SimulatedDrop).
     @ObservationIgnored weak var itemListController: ItemListController?
     @ObservationIgnored weak var sidebarController: SidebarController?
+    /// The library window, for sheets and alerts that belong to it.
+    @ObservationIgnored weak var libraryWindow: NSWindow?
 
     enum ActiveSheet: Identifiable {
         case identifierAdd
@@ -203,6 +219,11 @@ final class AppModel {
     var title: String {
         if search.isActive { return "「\(search.text.trimmingCharacters(in: .whitespaces))」的搜索结果" }
         return title(for: sidebarSelection)
+    }
+
+    /// Window subtitle: how many rows the list shows.
+    var subtitle: String {
+        rows.isEmpty ? "" : "\(rows.count) 项"
     }
 
     func title(for scope: ViewScope) -> String {

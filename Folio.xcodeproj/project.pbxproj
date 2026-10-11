@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		0A3F072E7983DCCA9A328BF4 /* ItemMenuBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2A27867558A6BA5A3F7C39 /* ItemMenuBuilderTests.swift */; };
+		0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */; };
+		10CEAA29ED2842A7238C8B93 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299E291F200CFD09619544A /* main.swift */; };
 		115FA95DA4AB73ADE12ED00B /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
 		179802828504A543D5DF8A24 /* ItemColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E1F116DA3A1C23CF222150 /* ItemColumn.swift */; };
 		17983CD1B463FAE5A41B8DE5 /* PreviewHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */; };
@@ -20,11 +22,11 @@
 		280950BC061520D7ADCE73EC /* ListDropRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90648DD7FFBB057C0036F89 /* ListDropRules.swift */; };
 		296B30BFD850FA76A75ED9BD /* CitationStyleOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */; };
 		2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */; };
+		2BD81D0FE604564A4EE0838D /* LibrarySplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8CF17144941A2E4DB2BAB2D /* LibrarySplitViewController.swift */; };
 		2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */; };
-		3624365AEB367D46C2802000 /* ItemListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C29581C2726A31CD4224B6 /* ItemListView.swift */; };
 		36CA89AF28F8E5E6772D24B5 /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6F8E5765AAB4BA57B5EA366C /* FolioCore */; };
 		3FF47E02AA57991DB804FA5D /* FolioLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029EAFA7C40470957052F41F /* FolioLaunchTests.swift */; };
-		4BC2A1948DCAB52C765B3842 /* SidebarSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */; };
+		40086A9165E003B733D83974 /* LibraryWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0485AEFD783CE58C20AD2F5B /* LibraryWindowController.swift */; };
 		4FF862D239D685675C901BD2 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2CFA125AFED333B13901F8 /* AppSettings.swift */; };
 		5046C263990C9F8BBB7495CB /* SidebarDragRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E077F23D80ED8250C4C5833E /* SidebarDragRulesTests.swift */; };
 		5959ECCEE3E580316219E2D1 /* FolioCitation in Frameworks */ = {isa = PBXBuildFile; productRef = 466D319429D05994CC631E43 /* FolioCitation */; };
@@ -34,8 +36,8 @@
 		5FE983BB873A9BFF4D41C44A /* AppKitExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */; };
 		6072439EB16E2AF204EE4430 /* FolioUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */; };
 		656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E8C890A36F8A43A6335EFEE /* ImportCoordinator.swift */; };
-		66E27378BA905196D0308E5C /* SidebarOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10666DC9FC84148371857AB2 /* SidebarOutline.swift */; };
 		67CCE0A5B8A3B6D30755169C /* FolioMetadata in Frameworks */ = {isa = PBXBuildFile; productRef = 34BF6DC9FEBBB9959304E9DE /* FolioMetadata */; };
+		68332145078BB8725DD352A9 /* SheetDismiss.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66BA89FC5B00A03E80FC5CFB /* SheetDismiss.swift */; };
 		6B1F28583E7C5542B2D06D70 /* TagPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C98AAA2320C6674271F19228 /* TagPalette.swift */; };
 		7622528FDD18D475E60DE8EA /* Folio.icon in Resources */ = {isa = PBXBuildFile; fileRef = 5437B0A45443DA1FFBC67DAB /* Folio.icon */; };
 		769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7932EDA311090181F8A01857 /* MetadataResolving.swift */; };
@@ -44,23 +46,28 @@
 		7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2196364CD8371363D279F008 /* AppModel.swift */; };
 		84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9205ABEB146D8780222EF2F7 /* CitationService.swift */; };
 		8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF15B612B7CD351CEF0B6188 /* ItemCells.swift */; };
+		932DE5E81407DCC5929400E3 /* ObservationLoop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F5402BBEE720CF3D9328C5 /* ObservationLoop.swift */; };
 		947CC943F1DD46C3A2F548DC /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
 		95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4908084420120AA90A895B /* MetadataInspector.swift */; };
 		96F11EE8F8CE2FAE18FB240D /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96ADA176DF592F87294FF5E4 /* FolioCore */; };
 		97CF6EEC520A880BCAE68556 /* TagChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E97D45E0A435766ED8C239 /* TagChipsView.swift */; };
 		A5588AAA10F73CC9344282E1 /* TagEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */; };
+		A7D10032977CAC194FE9EA85 /* SidebarViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C769320D1CD58259274445D7 /* SidebarViewController.swift */; };
+		A80EB2520B9EC67BD5C37EA8 /* MainMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBB3B29B9916F6408C9A5F28 /* MainMenu.swift */; };
 		A889AF7C74556047D6DB2181 /* SidebarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F1DF7E040C9F5D52316FBA /* SidebarController.swift */; };
 		A8EDB4BC7962192EE8463BAF /* ItemListUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F5E735BAE9E27102CE97FD /* ItemListUITests.swift */; };
 		A9779657A8C5513D3DEBB246 /* ItemMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */; };
 		B210957E96EDEA3B77CD1BB2 /* AppModel+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA65511EB946A0A4443109A /* AppModel+Actions.swift */; };
+		B276990702FE10835E8F1F4F /* FolioWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE9A3A14381E23F57A15FDAA /* FolioWindowController.swift */; };
 		B2E8FD7BE7D85C42C5D206B1 /* AnnotationsInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2665EEEE580536C3E363B20 /* AnnotationsInspector.swift */; };
 		B589D7C031675E6E6AAF8D65 /* FolioCitation in Frameworks */ = {isa = PBXBuildFile; productRef = 1CC1347A7F8DE0904600241B /* FolioCitation */; };
-		B6ADB5796E64EF2F629B917F /* FolioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4556A712E7A2B56DE80CBD /* FolioApp.swift */; };
+		BBC7EE9E2DA263FFDD2F7D60 /* TranslationSettingsPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */; };
 		BBED3A3CE0EED3D1B26D8D74 /* ItemListController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF4ADEF94FCB91031CE5894A /* ItemListController.swift */; };
+		BE190418B16DE0183960C867 /* AnnotationColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEC74199B40FD11246FCDF50 /* AnnotationColor.swift */; };
+		C47CB8B8D146ECE418E9A9CD /* ItemListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B94876CD8070170F80510F8 /* ItemListViewController.swift */; };
 		C48037879CB4E088FD6C45FC /* AppKitExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */; };
 		C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD3544693B93059CC5B0428 /* SettingsView.swift */; };
 		C7872D907B14D5E1A5F16D3D /* ItemMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */; };
-		C97FD1887524C189537B0BFB /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 472CC312BD78A83D303A6C60 /* SidebarView.swift */; };
 		C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */; };
 		CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */; };
 		CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */; };
@@ -71,13 +78,12 @@
 		D7AEEF4E6167A1046372E74E /* TagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = E88490FC0D6D0D20CD3A4860 /* TagChip.swift */; };
 		DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28A6B25C2466839A4E87F5AA /* DropOverlay.swift */; };
 		DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75F6C463B4D0D5E3AFC75229 /* InspectorView.swift */; };
-		E218836AD24B41E87754962A /* FolioCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */; };
 		EA507E20AE5FB65994BC2193 /* SimulatedDrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B51AD2DA729F49CD7F9721 /* SimulatedDrop.swift */; };
 		EDF3F8A2FB9F7FAAD1566577 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4262FBCFBF74F063C7B2307A /* AppDelegate.swift */; };
+		EF869D23839BCDFEC0DFFDBA /* ReaderWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268B655678B1E6C751B8F393 /* ReaderWindowController.swift */; };
 		F0C54F2368DDFD4986BAD8B6 /* CitationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9205ABEB146D8780222EF2F7 /* CitationService.swift */; };
 		F108F71D328BE0544A7E874A /* SidebarCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817AFCCB14872930FD292CAD /* SidebarCells.swift */; };
-		F1F44CC82CD26BB6095683E6 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43B0042A3248AE904583DC0 /* RootView.swift */; };
-		F41912C8FCEEAFF0C0C89154 /* ItemOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEDBE8A588DC57A16209351D /* ItemOutline.swift */; };
+		F7E9F8AF311490A732605B35 /* NoteEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09FF9143FA80C0A7EE63515F /* NoteEditor.swift */; };
 		FCADCFAF105CF550A7F82477 /* StandaloneFileInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FB30C7AC3422C1A7BBE75E0 /* StandaloneFileInspector.swift */; };
 		FE0E9B582AA7521356256C94 /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CC934F2839FEC9900FD8D2A /* RatingControl.swift */; };
 		FED85B9905E600BBC82747AA /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70249B1A04E6A957FCB8B5C /* NetworkMonitor.swift */; };
@@ -95,23 +101,25 @@
 
 /* Begin PBXFileReference section */
 		029EAFA7C40470957052F41F /* FolioLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioLaunchTests.swift; sourceTree = "<group>"; };
+		0485AEFD783CE58C20AD2F5B /* LibraryWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWindowController.swift; sourceTree = "<group>"; };
 		04F5E735BAE9E27102CE97FD /* ItemListUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListUITests.swift; sourceTree = "<group>"; };
 		08B51AD2DA729F49CD7F9721 /* SimulatedDrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatedDrop.swift; sourceTree = "<group>"; };
+		09FF9143FA80C0A7EE63515F /* NoteEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteEditor.swift; sourceTree = "<group>"; };
 		0A38FE3A131A9C4668478500 /* FileOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileOpener.swift; sourceTree = "<group>"; };
-		10666DC9FC84148371857AB2 /* SidebarOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarOutline.swift; sourceTree = "<group>"; };
+		0B94876CD8070170F80510F8 /* ItemListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListViewController.swift; sourceTree = "<group>"; };
 		1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemPasteboard.swift; sourceTree = "<group>"; };
 		2196364CD8371363D279F008 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationStyleOption.swift; sourceTree = "<group>"; };
 		24F1DF7E040C9F5D52316FBA /* SidebarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarController.swift; sourceTree = "<group>"; };
+		25F5402BBEE720CF3D9328C5 /* ObservationLoop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservationLoop.swift; sourceTree = "<group>"; };
+		268B655678B1E6C751B8F393 /* ReaderWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderWindowController.swift; sourceTree = "<group>"; };
 		27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualMatchSheet.swift; sourceTree = "<group>"; };
 		28A6B25C2466839A4E87F5AA /* DropOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropOverlay.swift; sourceTree = "<group>"; };
 		2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemMenuBuilder.swift; sourceTree = "<group>"; };
 		385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPickerPopover.swift; sourceTree = "<group>"; };
 		3CC934F2839FEC9900FD8D2A /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
-		3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSearchField.swift; sourceTree = "<group>"; };
 		4262FBCFBF74F063C7B2307A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarUITests.swift; sourceTree = "<group>"; };
-		472CC312BD78A83D303A6C60 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationServiceTests.swift; sourceTree = "<group>"; };
 		4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioUITestCase.swift; sourceTree = "<group>"; };
 		5437B0A45443DA1FFBC67DAB /* Folio.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Folio.icon; sourceTree = "<group>"; };
@@ -120,6 +128,7 @@
 		5B8BAAD0990BFEBF5AC22207 /* Folio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Folio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitExtensions.swift; sourceTree = "<group>"; };
 		5DA65511EB946A0A4443109A /* AppModel+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Actions.swift"; sourceTree = "<group>"; };
+		66BA89FC5B00A03E80FC5CFB /* SheetDismiss.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetDismiss.swift; sourceTree = "<group>"; };
 		6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentifierAddSheet.swift; sourceTree = "<group>"; };
 		6B2A27867558A6BA5A3F7C39 /* ItemMenuBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemMenuBuilderTests.swift; sourceTree = "<group>"; };
 		6BB51A125EC50A54621232F6 /* FolioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -143,24 +152,27 @@
 		9CEC680A68AB0D3810F2F61D /* FolioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A70249B1A04E6A957FCB8B5C /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		B2665EEEE580536C3E363B20 /* AnnotationsInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationsInspector.swift; sourceTree = "<group>"; };
+		B299E291F200CFD09619544A /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		B90648DD7FFBB057C0036F89 /* ListDropRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListDropRules.swift; sourceTree = "<group>"; };
+		BBB3B29B9916F6408C9A5F28 /* MainMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenu.swift; sourceTree = "<group>"; };
 		C4E97D45E0A435766ED8C239 /* TagChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChipsView.swift; sourceTree = "<group>"; };
+		C769320D1CD58259274445D7 /* SidebarViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewController.swift; sourceTree = "<group>"; };
 		C98AAA2320C6674271F19228 /* TagPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPalette.swift; sourceTree = "<group>"; };
 		CE68F3ED6413851632E4E300 /* AuthorsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorsEditor.swift; sourceTree = "<group>"; };
+		D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSettingsPane.swift; sourceTree = "<group>"; };
 		DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastOverlay.swift; sourceTree = "<group>"; };
-		DEDBE8A588DC57A16209351D /* ItemOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemOutline.swift; sourceTree = "<group>"; };
+		DE9A3A14381E23F57A15FDAA /* FolioWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioWindowController.swift; sourceTree = "<group>"; };
 		E077F23D80ED8250C4C5833E /* SidebarDragRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarDragRulesTests.swift; sourceTree = "<group>"; };
 		E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Citations.swift"; sourceTree = "<group>"; };
-		E2C29581C2726A31CD4224B6 /* ItemListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListView.swift; sourceTree = "<group>"; };
-		E43B0042A3248AE904583DC0 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastCenter.swift; sourceTree = "<group>"; };
 		E88490FC0D6D0D20CD3A4860 /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
-		ED4556A712E7A2B56DE80CBD /* FolioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioApp.swift; sourceTree = "<group>"; };
 		EF15B612B7CD351CEF0B6188 /* ItemCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCells.swift; sourceTree = "<group>"; };
 		EF4ADEF94FCB91031CE5894A /* ItemListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListController.swift; sourceTree = "<group>"; };
-		EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioCommands.swift; sourceTree = "<group>"; };
 		F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewHooks.swift; sourceTree = "<group>"; };
+		F8CF17144941A2E4DB2BAB2D /* LibrarySplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySplitViewController.swift; sourceTree = "<group>"; };
 		FAD3544693B93059CC5B0428 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationCoordinator.swift; sourceTree = "<group>"; };
+		FEC74199B40FD11246FCDF50 /* AnnotationColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationColor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -215,12 +227,34 @@
 				E18A3FD6D2502CF6F758FDF2 /* AppModel+Citations.swift */,
 				7C2CFA125AFED333B13901F8 /* AppSettings.swift */,
 				21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */,
-				ED4556A712E7A2B56DE80CBD /* FolioApp.swift */,
-				EFDC8CB74A75B018F73B2E96 /* FolioCommands.swift */,
+				B299E291F200CFD09619544A /* main.swift */,
+				BBB3B29B9916F6408C9A5F28 /* MainMenu.swift */,
+				25F5402BBEE720CF3D9328C5 /* ObservationLoop.swift */,
 				F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */,
 				08B51AD2DA729F49CD7F9721 /* SimulatedDrop.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		2609325A3589EE150323D3CF /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				DE9A3A14381E23F57A15FDAA /* FolioWindowController.swift */,
+				0B94876CD8070170F80510F8 /* ItemListViewController.swift */,
+				F8CF17144941A2E4DB2BAB2D /* LibrarySplitViewController.swift */,
+				0485AEFD783CE58C20AD2F5B /* LibraryWindowController.swift */,
+				C769320D1CD58259274445D7 /* SidebarViewController.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		2B2BC031A6EDF8E405B7D216 /* Reader */ = {
+			isa = PBXGroup;
+			children = (
+				FEC74199B40FD11246FCDF50 /* AnnotationColor.swift */,
+				268B655678B1E6C751B8F393 /* ReaderWindowController.swift */,
+			);
+			path = Reader;
 			sourceTree = "<group>";
 		};
 		360934E47C7F5273A0F37E7B /* FolioTests */ = {
@@ -237,7 +271,6 @@
 		39941FBBE2E1B98D3B4893C0 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				E43B0042A3248AE904583DC0 /* RootView.swift */,
 				3CDE13E47C9A1ACC37838A10 /* Inspector */,
 				5A0BDF2B586650B8CF686F45 /* ItemList */,
 				E269DC8824BA97149E186E6E /* Overlays */,
@@ -294,14 +327,21 @@
 				EF15B612B7CD351CEF0B6188 /* ItemCells.swift */,
 				98E1F116DA3A1C23CF222150 /* ItemColumn.swift */,
 				EF4ADEF94FCB91031CE5894A /* ItemListController.swift */,
-				E2C29581C2726A31CD4224B6 /* ItemListView.swift */,
 				2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */,
-				DEDBE8A588DC57A16209351D /* ItemOutline.swift */,
 				1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */,
 				B90648DD7FFBB057C0036F89 /* ListDropRules.swift */,
 				C4E97D45E0A435766ED8C239 /* TagChipsView.swift */,
 			);
 			path = ItemList;
+			sourceTree = "<group>";
+		};
+		60B76810F0DBACD83EA35B11 /* Translation */ = {
+			isa = PBXGroup;
+			children = (
+				FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */,
+				D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */,
+			);
+			path = Translation;
 			sourceTree = "<group>";
 		};
 		622445697A6A1393E6CDE54D /* Tags */ = {
@@ -333,6 +373,14 @@
 			path = Packages;
 			sourceTree = "<group>";
 		};
+		728B6EBBC7B0CE293D141CC8 /* Notes */ = {
+			isa = PBXGroup;
+			children = (
+				09FF9143FA80C0A7EE63515F /* NoteEditor.swift */,
+			);
+			path = Notes;
+			sourceTree = "<group>";
+		};
 		7764F009465AF58943DC6E43 /* Support */ = {
 			isa = PBXGroup;
 			children = (
@@ -346,6 +394,7 @@
 			children = (
 				6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */,
 				27ECC89D03A98EA30437B2C5 /* ManualMatchSheet.swift */,
+				66BA89FC5B00A03E80FC5CFB /* SheetDismiss.swift */,
 				750CD42FCC0C1C194D2E739F /* ZoteroImportSheet.swift */,
 			);
 			path = Sheets;
@@ -357,9 +406,13 @@
 				87D83803635133CE2F717E30 /* Folio.entitlements */,
 				8B4EA41EDA75780003D86348 /* Info.plist */,
 				218D0BBA62C139CC9BAFEE74 /* App */,
+				2609325A3589EE150323D3CF /* Library */,
+				728B6EBBC7B0CE293D141CC8 /* Notes */,
+				2B2BC031A6EDF8E405B7D216 /* Reader */,
 				D4FB9A636E6175FE47B5C7BF /* Resources */,
 				3C1337645959FC89A220EA0F /* Services */,
 				7764F009465AF58943DC6E43 /* Support */,
+				60B76810F0DBACD83EA35B11 /* Translation */,
 				39941FBBE2E1B98D3B4893C0 /* Views */,
 			);
 			path = Folio;
@@ -397,9 +450,6 @@
 				24F1DF7E040C9F5D52316FBA /* SidebarController.swift */,
 				5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */,
 				7F56119AC33A554616DDE332 /* SidebarNode.swift */,
-				10666DC9FC84148371857AB2 /* SidebarOutline.swift */,
-				3DC9C9AFCACA8D615FD09FE5 /* SidebarSearchField.swift */,
-				472CC312BD78A83D303A6C60 /* SidebarView.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -551,6 +601,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BE190418B16DE0183960C867 /* AnnotationColor.swift in Sources */,
 				B2E8FD7BE7D85C42C5D206B1 /* AnnotationsInspector.swift in Sources */,
 				EDF3F8A2FB9F7FAAD1566577 /* AppDelegate.swift in Sources */,
 				5FE983BB873A9BFF4D41C44A /* AppKitExtensions.swift in Sources */,
@@ -565,34 +616,36 @@
 				D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */,
 				2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */,
 				D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */,
-				B6ADB5796E64EF2F629B917F /* FolioApp.swift in Sources */,
-				E218836AD24B41E87754962A /* FolioCommands.swift in Sources */,
+				B276990702FE10835E8F1F4F /* FolioWindowController.swift in Sources */,
 				1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */,
 				656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */,
 				DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */,
 				8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */,
 				179802828504A543D5DF8A24 /* ItemColumn.swift in Sources */,
 				BBED3A3CE0EED3D1B26D8D74 /* ItemListController.swift in Sources */,
-				3624365AEB367D46C2802000 /* ItemListView.swift in Sources */,
+				C47CB8B8D146ECE418E9A9CD /* ItemListViewController.swift in Sources */,
 				A9779657A8C5513D3DEBB246 /* ItemMenuBuilder.swift in Sources */,
-				F41912C8FCEEAFF0C0C89154 /* ItemOutline.swift in Sources */,
 				2732748DFC335EE44FFA6CE6 /* ItemPasteboard.swift in Sources */,
+				2BD81D0FE604564A4EE0838D /* LibrarySplitViewController.swift in Sources */,
+				40086A9165E003B733D83974 /* LibraryWindowController.swift in Sources */,
 				280950BC061520D7ADCE73EC /* ListDropRules.swift in Sources */,
+				A80EB2520B9EC67BD5C37EA8 /* MainMenu.swift in Sources */,
 				5BCA4C0023D1FD6E0EAA406C /* ManualMatchSheet.swift in Sources */,
 				95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */,
 				769F08D70C3937E18A069B13 /* MetadataResolving.swift in Sources */,
 				FED85B9905E600BBC82747AA /* NetworkMonitor.swift in Sources */,
+				F7E9F8AF311490A732605B35 /* NoteEditor.swift in Sources */,
+				932DE5E81407DCC5929400E3 /* ObservationLoop.swift in Sources */,
 				17983CD1B463FAE5A41B8DE5 /* PreviewHooks.swift in Sources */,
 				FE0E9B582AA7521356256C94 /* RatingControl.swift in Sources */,
-				F1F44CC82CD26BB6095683E6 /* RootView.swift in Sources */,
+				EF869D23839BCDFEC0DFFDBA /* ReaderWindowController.swift in Sources */,
 				C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */,
+				68332145078BB8725DD352A9 /* SheetDismiss.swift in Sources */,
 				F108F71D328BE0544A7E874A /* SidebarCells.swift in Sources */,
 				A889AF7C74556047D6DB2181 /* SidebarController.swift in Sources */,
 				115FA95DA4AB73ADE12ED00B /* SidebarDragRules.swift in Sources */,
 				233BD9CB989E0FD7C545E321 /* SidebarNode.swift in Sources */,
-				66E27378BA905196D0308E5C /* SidebarOutline.swift in Sources */,
-				4BC2A1948DCAB52C765B3842 /* SidebarSearchField.swift in Sources */,
-				C97FD1887524C189537B0BFB /* SidebarView.swift in Sources */,
+				A7D10032977CAC194FE9EA85 /* SidebarViewController.swift in Sources */,
 				EA507E20AE5FB65994BC2193 /* SimulatedDrop.swift in Sources */,
 				FCADCFAF105CF550A7F82477 /* StandaloneFileInspector.swift in Sources */,
 				D7AEEF4E6167A1046372E74E /* TagChip.swift in Sources */,
@@ -602,7 +655,10 @@
 				2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */,
 				1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */,
 				229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */,
+				0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */,
+				BBC7EE9E2DA263FFDD2F7D60 /* TranslationSettingsPane.swift in Sources */,
 				CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */,
+				10CEAA29ED2842A7238C8B93 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

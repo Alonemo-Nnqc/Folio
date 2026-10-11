@@ -5,7 +5,7 @@ import SwiftUI
 struct ManualMatchSheet: View {
     let model: AppModel
     let itemId: String
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.sheetDismiss) private var dismiss
     @State private var query = ""
     @State private var results: [Metadata] = []
     @State private var selection: Int?

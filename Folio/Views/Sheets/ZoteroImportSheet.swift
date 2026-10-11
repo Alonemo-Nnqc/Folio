@@ -6,7 +6,7 @@ import SwiftUI
 /// "从 Zotero 导入…" (ZOT-01…06): probe → options → import with progress → summary.
 struct ZoteroImportSheet: View {
     let model: AppModel
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.sheetDismiss) private var dismiss
     @State private var directory = ZoteroLocator.defaultDataDirectory()
     @State private var report: ZoteroReadReport?
     @State private var includeAutomaticTags = false

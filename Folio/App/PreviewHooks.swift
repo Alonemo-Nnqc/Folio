@@ -9,12 +9,12 @@ import Foundation
 ///   -FolioPreviewSelect  <title prefix>          selects the first matching item
 ///   -FolioPreviewExpand  YES                     expands the selected item
 ///   -FolioPreviewSearch  <text>                  opens the search field with text
-///   -FolioPreviewTab     annotations             inspector tab
+///   -FolioPreviewTab     metadata | annotations | notes   inspector tab
 ///   -FolioPreviewSheet   tagEditor | tagEdit | zotero | identifier | manualMatch
 ///   -FolioPreviewDrop    <file count>            shows the Finder drop overlay
 ///   -FolioPreviewToast   <text>
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
-///   -FolioPreviewSettings YES                   opens the Settings window
+///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -30,14 +30,14 @@ enum PreviewHooks {
             }
         }
         if let text = defaults.string(forKey: "FolioPreviewSearch") {
-            model.search = SearchState(isVisible: true, text: text)
+            model.search = SearchState(text: text)
         }
         if let prefix = defaults.string(forKey: "FolioPreviewSelect"),
            let id = model.rows.first(where: { s.items[$0]?.title.hasPrefix(prefix) ?? false }) {
             model.selectedItemIDs = [id]
             if defaults.bool(forKey: "FolioPreviewExpand") { model.previewExpandRequest = id }
         }
-        if defaults.string(forKey: "FolioPreviewTab") == "annotations" { model.previewInspectorTab = "annotations" }
+        if let tab = defaults.string(forKey: "FolioPreviewTab").flatMap(InspectorTab.init(rawValue:)) { model.inspectorTab = tab }
         switch defaults.string(forKey: "FolioPreviewSheet") {
         case "tagEditor": model.activeSheet = .tagEditor(tagId: nil, applyTo: [], initialName: "新论文方向")
         case "tagEdit": model.activeSheet = .tagEditor(tagId: s.tags.first?.id, applyTo: [])
@@ -50,7 +50,10 @@ enum PreviewHooks {
         if drop > 0 { model.externalDropCount = drop }
         if let toast = defaults.string(forKey: "FolioPreviewToast") { model.toasts.show(toast, systemImage: "folder.badge.plus") }
         if defaults.bool(forKey: "FolioPreviewExpandGroups") { model.previewExpandAllGroups = true }
-        if defaults.bool(forKey: "FolioPreviewSettings") { model.previewOpenSettings = true }
+        if let pane = defaults.string(forKey: "FolioPreviewSettings") {
+            AppDelegate.shared.showSettings(nil)
+            AppDelegate.shared.settingsWindow?.select(pane: pane)
+        }
         if let paths = defaults.string(forKey: "FolioPreviewSimulateDrop") {
             // "a.pdf|b.pdf": one drop per file, two seconds apart, to exercise repeated drops.
             for (index, path) in paths.split(separator: "|").map(String.init).enumerated() {

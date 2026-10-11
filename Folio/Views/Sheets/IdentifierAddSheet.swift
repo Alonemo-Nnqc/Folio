@@ -4,7 +4,7 @@ import SwiftUI
 /// "通过标识符添加…": DOI / arXiv ID / ISBN → a new item without files (META-09, DUP-04).
 struct IdentifierAddSheet: View {
     let model: AppModel
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.sheetDismiss) private var dismiss
     @State private var identifier = ""
     @State private var working = false
     @State private var message: String?

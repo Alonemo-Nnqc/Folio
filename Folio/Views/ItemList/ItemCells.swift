@@ -58,8 +58,19 @@ final class TitleCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
-    /// `origin` is the title of the item a trashed file was deleted from (TRASH-03).
-    func configureItem(_ item: Item, fileURL: URL?, origin: String? = nil) {
+    // Layer colours don't follow appearance changes on their own (dark mode, accent colour).
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        let isDefault = badge.stringValue == "默认"
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            badge.layer?.backgroundColor = (isDefault ? NSColor.controlAccentColor : NSColor.systemTeal).cgColor
+        }
+    }
+
+    /// `origin` is the title of the item a trashed file was deleted from (TRASH-03); `translation` is the
+    /// progress line of a running translation (TRANS-04).
+    func configureItem(_ item: Item, fileURL: URL?, origin: String? = nil, hasNote: Bool = false,
+                       translation: String? = nil) {
         // Set the base font before any attributed text so the smaller secondary run survives.
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         let retrieving = item.kind == .standalone && item.metadataState == .pending
@@ -79,12 +90,16 @@ final class TitleCell: NSTableCellView {
             }
             if let origin {
                 label.attributedStringValue = Self.title(item.title, secondary: "来自：\(origin)")
+            } else if let translation {
+                label.attributedStringValue = Self.title(item.title, secondary: translation)
+            } else if hasNote {
+                label.attributedStringValue = Self.title(item.title, symbol: "note.text", label: "有笔记")
             } else {
                 label.stringValue = item.title
             }
         }
         badge.isHidden = true
-        setAccessibilityLabel(item.title)
+        setAccessibilityLabel(item.title + (hasNote ? "（有笔记）" : ""))
     }
 
     func configureFile(_ file: FileRecord, url: URL, isDefault: Bool) {
@@ -94,8 +109,30 @@ final class TitleCell: NSTableCellView {
         icon.contentTintColor = nil
         label.stringValue = file.fileName
         label.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
-        badge.isHidden = !isDefault
-        setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : ""))
+        let isTranslation = file.translationOf != nil
+        badge.stringValue = isDefault ? "默认" : "译文"
+        badge.layer?.backgroundColor = (isDefault ? NSColor.controlAccentColor : NSColor.systemTeal).cgColor
+        badge.isHidden = !(isDefault || isTranslation)
+        badge.setAccessibilityIdentifier(isDefault ? "defaultFileBadge" : "translationBadge")
+        setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : isTranslation ? "（译文）" : ""))
+    }
+
+    /// Title followed by a small symbol (e.g. the note indicator, NOTE-03).
+    static func title(_ title: String, symbol: String, label: String) -> NSAttributedString {
+        let text = NSMutableAttributedString(string: title + "  ", attributes: [
+            .foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
+        let configuration = NSImage.SymbolConfiguration(pointSize: NSFont.smallSystemFontSize, weight: .regular)
+            .applying(.init(hierarchicalColor: .secondaryLabelColor))
+        if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?.withSymbolConfiguration(configuration) {
+            let attachment = NSTextAttachment()
+            attachment.image = image
+            attachment.bounds = CGRect(x: 0, y: -1, width: image.size.width, height: image.size.height)
+            text.append(NSAttributedString(attachment: attachment))
+        }
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        text.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: text.length))
+        return text
     }
 
     /// Title plus a smaller grey note, kept on one line and truncated at the tail.

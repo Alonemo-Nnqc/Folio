@@ -161,23 +161,45 @@ extension AppModel {
         perform { try library.setDefaultFile(fileId) }
     }
 
+    /// How a file is opened: as chosen in Settings, or explicitly from "打开方式 ▸" (OPEN-01/04).
+    enum OpenMode: Equatable {
+        case setting, reader, preview, app(URL)
+    }
+
     /// Opens the default file of an item (LIST-08, OPEN-03), or its web page when it has no file.
-    func open(itemId: String) {
+    func open(itemId: String, mode: OpenMode = .setting) {
         guard let item = snapshot.items[itemId] else { return }
         if let file = defaultFile(of: itemId) {
-            FileOpener.open(fileURL(file), settings: settings)
-            if item.kind == .regular && item.readStatus == .unread {
-                perform { try library.updateItem(itemId) { $0.readStatus = .reading } }
-            }
+            open(fileId: file.id, mode: mode)
         } else if let url = webURL(for: item) {
             FileOpener.open(web: url)
         }
     }
 
-    func open(fileId: String) {
+    func open(fileId: String, mode: OpenMode = .setting, inBackground: Bool = false) {
         guard let file = snapshot.files[fileId] else { return }
-        FileOpener.open(fileURL(file), settings: settings)
-        if let item = snapshot.items[file.itemId], item.kind == .regular, item.readStatus == .unread {
+        let url = fileURL(file)
+        var resolved = mode
+        if resolved == .setting {
+            switch settings.openWith {
+            case .folio: resolved = file.isPDF ? .reader : .setting
+            case .preview: resolved = file.isPDF ? .preview : .setting
+            case .custom where !settings.openWithAppPath.isEmpty: resolved = .app(URL(filePath: settings.openWithAppPath))
+            case .system, .custom: break
+            }
+        }
+        switch resolved {
+        case .reader: readers.open(fileId: fileId, inBackground: inBackground)
+        case .preview: FileOpener.open(url, withApp: FileOpener.previewApp)
+        case .app(let app): FileOpener.open(url, withApp: app)
+        case .setting: FileOpener.open(url)
+        }
+        markReading(itemId: file.itemId)
+    }
+
+    /// Opening an unread item marks it as being read (OPEN-03).
+    func markReading(itemId: String) {
+        if let item = snapshot.items[itemId], item.kind == .regular, item.readStatus == .unread {
             perform { try library.updateItem(item.id) { $0.readStatus = .reading } }
         }
     }
@@ -202,8 +224,8 @@ extension AppModel {
         panel.canChooseDirectories = true
         panel.prompt = "添加"
         panel.message = "选择要添加到 Folio 的文献"
-        guard panel.runModal() == .OK else { return }
-        importer.importFiles(panel.urls, toGroup: sidebarSelection.groupId)
+        let group = sidebarSelection.groupId
+        present(panel) { [weak self] in self?.importer.importFiles(panel.urls, toGroup: group) }
     }
 
     func chooseFilesToAttach(to itemId: String) {
@@ -211,8 +233,7 @@ extension AppModel {
         panel.allowsMultipleSelection = true
         panel.prompt = "添加"
         panel.message = "选择要添加到该条目的文件"
-        guard panel.runModal() == .OK else { return }
-        importer.attachFiles(panel.urls, to: itemId)
+        present(panel) { [weak self] in self?.importer.attachFiles(panel.urls, to: itemId) }
     }
 
     // MARK: Tags, rating, read status
@@ -266,17 +287,46 @@ extension AppModel {
         perform { try library.setSort(sort, forScope: sidebarSelection) }
     }
 
+    // MARK: Notes
+
+    /// Saves an item's note as a Markdown file (NOTE-05).
+    func exportNote(itemId: String) {
+        guard let item = snapshot.items[itemId], let text = try? library.note(for: itemId), !text.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        panel.nameFieldStringValue = FileNamer.sanitize(item.title) + ".md"
+        panel.message = "导出「\(item.title)」的笔记"
+        let save = { [weak self] (response: NSApplication.ModalResponse) in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+                self?.toasts.show("已导出笔记", systemImage: "checkmark.circle")
+            } catch {
+                self?.toasts.show("导出失败：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            }
+        }
+        if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: save) } else { save(panel.runModal()) }
+    }
+
     // MARK: Search
 
     func showSearch() {
-        search.isVisible = true
         searchFocusRequest += 1
     }
 
-    // MARK: Alerts
+    // MARK: Alerts and panels
+
+    /// Runs an open panel as a sheet on the front window; `onOK` runs when the user confirms.
+    func present(_ panel: NSOpenPanel, onOK: @escaping () -> Void) {
+        if let window = NSApp.keyWindow ?? libraryWindow {
+            panel.beginSheetModal(for: window) { if $0 == .OK { onOK() } }
+        } else if panel.runModal() == .OK {
+            onOK()
+        }
+    }
 
     func runAlert(_ alert: NSAlert, completion: @escaping (NSApplication.ModalResponse) -> Void) {
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+        if let window = libraryWindow ?? NSApp.keyWindow ?? NSApp.mainWindow {
             alert.beginSheetModal(for: window, completionHandler: completion)
         } else {
             completion(alert.runModal())

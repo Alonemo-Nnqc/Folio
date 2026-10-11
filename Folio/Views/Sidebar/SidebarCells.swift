@@ -79,42 +79,48 @@ final class SidebarCell: NSTableCellView {
     @objc private func toggle() { onToggle?() }
 }
 
-/// The hairline between built-in and user groups (SIDE-03).
-final class SidebarDividerView: NSTableCellView {
-    static let identifier = NSUserInterfaceItemIdentifier("SidebarDivider")
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        identifier = Self.identifier
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
-
-    override func draw(_ dirtyRect: NSRect) {
-        NSColor.separatorColor.setFill()
-        let scale = window?.backingScaleFactor ?? 2
-        NSRect(x: 10, y: bounds.midY, width: bounds.width - 20, height: 1 / scale).fill()
-    }
-}
-
-/// "标签" section header.
+/// Section header ("分组", "标签") with a + button that creates an entry of that section.
+/// The 分组 header also separates the built-in views from user groups (SIDE-03).
 final class SidebarHeaderCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("SidebarHeader")
+    let label = NSTextField(labelWithString: "")
+    let add = NSButton()
+    private var addTrailing: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         identifier = Self.identifier
-        let label = NSTextField(labelWithString: "标签")
         label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
         label.textColor = .secondaryLabelColor
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
         textField = label
+        add.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        add.symbolConfiguration = .init(pointSize: 11, weight: .medium)
+        add.isBordered = false
+        add.bezelStyle = .accessoryBarAction
+        add.contentTintColor = .secondaryLabelColor
+        add.target = nil
+        for view in [label, add] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 2),
+            add.centerYAnchor.constraint(equalTo: label.centerYAnchor),
         ])
+        addTrailing = add.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4)
+        addTrailing.isActive = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
+
+    /// `collapsible` headers leave room for the Show/Hide chevron AppKit adds to group rows.
+    func configure(title: String, addTitle: String, action: Selector, identifier: String, collapsible: Bool = false) {
+        addTrailing.constant = collapsible ? -26 : -4
+        label.stringValue = title
+        add.action = action
+        add.toolTip = addTitle
+        add.setAccessibilityLabel(addTitle)
+        add.setAccessibilityIdentifier(identifier)
+    }
 }

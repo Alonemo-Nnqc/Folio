@@ -272,7 +272,10 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         case .title:
             let cell = make(TitleCell.self, TitleCell.identifier)
             let origin = entry.originItemId.flatMap { snapshot.items[$0]?.title }
-            cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin)
+            let job = model.translations.jobs[entry.id]
+            let translation = job.map { job in job.fraction.map { "\(job.stage) \(Int($0 * 100))%" } ?? job.stage }
+            cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin,
+                               hasNote: snapshot.notedItems.contains(entry.id), translation: translation)
             return cell
         case .tags:
             let cell = make(TagsCell.self, TagsCell.identifier)
@@ -335,17 +338,24 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
 
     @objc private func doubleClicked() {
         guard outline.clickedRow >= 0 else { return }
-        open(row: outline.clickedRow)
+        // ⌥ double-click opens the paper in a background tab (READER-01).
+        open(row: outline.clickedRow, inBackground: NSEvent.modifierFlags.contains(.option))
     }
 
     func openSelection() {
-        for row in outline.selectedRowIndexes { open(row: row) }
+        for row in outline.selectedRowIndexes { open(row: row, inBackground: false) }
     }
 
-    private func open(row: Int) {
+    private func open(row: Int, inBackground: Bool) {
+        guard let model else { return }
         switch outline.item(atRow: row) {
-        case let node as ItemNode: model?.open(itemId: node.id)
-        case let node as FileNode: model?.open(fileId: node.id)
+        case let node as ItemNode:
+            if let file = model.defaultFile(of: node.id) {
+                model.open(fileId: file.id, inBackground: inBackground)
+            } else {
+                model.open(itemId: node.id)
+            }
+        case let node as FileNode: model.open(fileId: node.id, inBackground: inBackground)
         default: break
         }
     }
@@ -403,9 +413,14 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         } else {
             context.itemIds = outline.selectedRowIndexes.compactMap { (outline.item(atRow: $0) as? ItemNode)?.id }
         }
+        let fileId = context.fileId ?? (context.itemIds.count == 1 ? model.defaultFile(of: context.itemIds[0])?.id : nil)
+        if let fileId, let file = model.snapshot.files[fileId] {
+            context.openWithApps = FolioWindowController.apps(toOpen: model.fileURL(file))
+        }
+        context.translatingItemIds = model.translations.activeItemIds
         let entries = ItemMenuBuilder.entries(for: context, snapshot: model.snapshot, groups: model.groupsForMenus)
         ItemMenuBuilder.populate(menu, with: entries, snapshot: model.snapshot) { [weak self] command in
-            self?.perform(command, context: context)
+            (self?.outline.window?.windowController as? FolioWindowController)?.perform(command, context: context)
         }
     }
 
@@ -417,32 +432,6 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             }
             item.state = tableColumn.isHidden ? .off : .on
             menu.addItem(item)
-        }
-    }
-
-    private func perform(_ command: ItemMenuCommand, context: ItemMenuContext) {
-        guard let model else { return }
-        let ids = context.itemIds
-        switch command {
-        case .open:
-            if let fileId = context.fileId { model.open(fileId: fileId) } else { ids.forEach(model.open(itemId:)) }
-        case .quickLook: toggleQuickLook()
-        case .revealInFinder: model.revealInFinder(itemIds: ids, fileIds: context.fileId.map { [$0] } ?? [])
-        case .addToGroup(let groupId): model.addItems(ids, toGroup: groupId)
-        case .toggleTag(let tagId): model.toggleTag(tagId, on: ids)
-        case .newTag: model.activeSheet = .tagEditor(tagId: nil, applyTo: ids)
-        case .setReadStatus(let status): model.setReadStatus(status, on: ids)
-        case .setRating(let value): model.setRating(value, on: ids)
-        case .copyCitation(let style): model.copyCitations(style: style, itemIds: ids)
-        case .addFiles: if let id = ids.first { model.chooseFilesToAttach(to: id) }
-        case .retrieve: ids.forEach(model.importer.retrieve(itemId:))
-        case .manualMatch: if let id = ids.first { model.activeSheet = .manualMatch(itemId: id) }
-        case .removeFromGroup: model.removeFromCurrentGroup(ids)
-        case .trash: model.trashItems(ids)
-        case .restore: model.restoreItems(ids)
-        case .purge: model.confirmPurge(ids)
-        case .setDefaultFile(let fileId): model.setDefaultFile(fileId)
-        case .trashFile: if let fileId = context.fileId { model.trashFiles([fileId]) }
         }
     }
 

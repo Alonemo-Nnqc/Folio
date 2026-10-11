@@ -104,4 +104,40 @@ import Testing
         #expect(tags.contains(.action(title: "必读", symbol: nil, command: .toggleTag(snapshot.tags[0].id), checked: true)))
         #expect(titles(tags).last == "新建标签…")
     }
+
+    @Test func pdfItemsOfferReaderPreviewNotesAndTranslation() {
+        let apps = [(name: "Skim", url: URL(filePath: "/Applications/Skim.app")),
+                    (name: "预览", url: URL(filePath: "/System/Applications/Preview.app"))]
+        var context = ItemMenuContext(scope: .all, itemIds: [regular.id])
+        context.openWithApps = apps
+        let entries = ItemMenuBuilder.entries(for: context, snapshot: snapshot, groups: groups)
+        let names = titles(entries)
+        #expect(names.contains("打开方式"))
+        #expect(names.contains("编辑笔记"))
+        #expect(!names.contains("导出笔记…"), "nothing to export without a note")
+        #expect(names.contains("翻译全文…"))
+        let openWith = titles(submenu("打开方式", in: entries))
+        #expect(openWith == ["在 Folio 中阅读", "预览", "Skim", "其他应用…"], "Preview is listed once")
+
+        context.translatingItemIds = [regular.id]
+        let busy = titles(ItemMenuBuilder.entries(for: context, snapshot: snapshot, groups: groups))
+        #expect(busy.contains("取消翻译") && !busy.contains("翻译全文…"))
+    }
+
+    @Test func notedItemsCanExportTheirNote() {
+        var noted = snapshot
+        noted.notedItems = [regular.id]
+        let names = titles(ItemMenuBuilder.entries(for: ItemMenuContext(scope: .all, itemIds: [regular.id]), snapshot: noted, groups: groups))
+        #expect(names.contains("导出笔记…"))
+    }
+
+    @Test func translationsAreNotTranslatedAgain() {
+        var s = snapshot
+        var translated = fileB
+        translated.translationOf = fileA.id
+        s.files[fileB.id] = translated
+        let names = titles(ItemMenuBuilder.entries(for: ItemMenuContext(scope: .all, itemIds: [], fileId: fileB.id), snapshot: s, groups: groups))
+        #expect(!names.contains("翻译全文…"))
+        #expect(names.contains("打开方式"))
+    }
 }

@@ -169,8 +169,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         switch (item as? SidebarNode)?.kind {
-        case .divider: 13
-        case .tagsHeader: 26
+        case .divider: 30
+        case .tagsHeader: 30
         default: outlineView.rowHeight
         }
     }
@@ -179,9 +179,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard let node = item as? SidebarNode, let model else { return nil }
         switch node.kind {
         case .divider:
-            return outlineView.makeView(withIdentifier: SidebarDividerView.identifier, owner: nil) ?? SidebarDividerView()
+            let cell = outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell
+                ?? SidebarHeaderCell()
+            cell.configure(title: "分组", addTitle: "新建分组", action: #selector(LibraryWindowController.newGroup(_:)),
+                           identifier: "sidebar.addGroup")
+            return cell
         case .tagsHeader:
-            return outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) ?? SidebarHeaderCell()
+            let cell = outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell
+                ?? SidebarHeaderCell()
+            cell.configure(title: "标签", addTitle: "新建标签", action: #selector(LibraryWindowController.newTag(_:)),
+                           identifier: "sidebar.addTag", collapsible: true)
+            return cell
         case .builtin(let scope):
             let cell = makeCell()
             let symbol = switch scope {

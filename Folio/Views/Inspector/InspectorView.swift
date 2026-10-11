@@ -1,35 +1,29 @@
 import FolioCore
 import SwiftUI
 
-/// Right column: metadata or annotations of the selected item (INSP-01…05).
+/// Right column: information, annotations or the note of the selected item (INSP-01…05, NOTE-01).
 struct InspectorView: View {
-    let model: AppModel
-    @State private var tab = Tab.metadata
-
-    enum Tab: String, CaseIterable {
-        case metadata = "元数据"
-        case annotations = "标注"
-    }
+    @Bindable var model: AppModel
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("检查器", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            Picker("检查器", selection: $model.inspectorTab) {
+                ForEach(InspectorTab.allCases, id: \.self) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .accessibilityIdentifier("inspectorTabs")
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onChange(of: model.previewInspectorTab) { _, value in if value == "annotations" { tab = .annotations } }
     }
 
     @ViewBuilder
     private var content: some View {
         if let item = model.inspectedItem {
-            switch tab {
+            switch model.inspectorTab {
             case .metadata:
                 if item.kind == .standalone {
                     StandaloneFileInspector(model: model, item: item)
@@ -40,6 +34,9 @@ struct InspectorView: View {
             case .annotations:
                 AnnotationsInspector(model: model, item: item)
                     .id(item.id)
+            case .notes:
+                NoteEditor(model: model, itemId: item.id, focusRequest: model.noteFocusRequest)
+                    .padding(.horizontal, 8)
             }
         } else if model.selectionCount > 1 {
             ContentUnavailableView("已选择 \(model.selectionCount) 项", systemImage: "square.stack.3d.up",

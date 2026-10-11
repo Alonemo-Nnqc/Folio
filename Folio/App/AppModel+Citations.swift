@@ -47,12 +47,15 @@ extension AppModel {
         panel.allowedContentTypes = [UTType(filenameExtension: "bib") ?? .plainText]
         panel.nameFieldStringValue = "\(title(for: sidebarSelection)).bib"
         panel.message = "导出 \(entries.count) 个条目的 BibTeX"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try BibTeXWriter.document(entries).write(to: url, atomically: true, encoding: .utf8)
-            toasts.show("已导出 \(entries.count) 个条目", systemImage: "checkmark.circle")
-        } catch {
-            toasts.show("导出失败：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+        let write = { [weak self] (response: NSApplication.ModalResponse) in
+            guard response == .OK, let url = panel.url else { return }
+            do {
+                try BibTeXWriter.document(entries).write(to: url, atomically: true, encoding: .utf8)
+                self?.toasts.show("已导出 \(entries.count) 个条目", systemImage: "checkmark.circle")
+            } catch {
+                self?.toasts.show("导出失败：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            }
         }
+        if let window = NSApp.keyWindow ?? libraryWindow { panel.beginSheetModal(for: window, completionHandler: write) } else { write(panel.runModal()) }
     }
 }

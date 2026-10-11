@@ -3,6 +3,9 @@ import FolioCore
 
 enum ItemMenuCommand: Hashable {
     case open, quickLook, revealInFinder
+    case openInReader, openWithPreview, openWithApp(URL), openWithOtherApp
+    case translate, cancelTranslation
+    case editNote, exportNote
     case addToGroup(String)
     case toggleTag(String), newTag
     case setReadStatus(ReadStatus), setRating(Int)
@@ -32,6 +35,10 @@ struct ItemMenuContext {
     var itemIds: [String]
     /// A single child-file row, when that is what was clicked.
     var fileId: String?
+    /// Other apps that can open the target file ("打开方式 ▸"), name and bundle URL.
+    var openWithApps: [(name: String, url: URL)] = []
+    /// Items whose translation is queued or running (TRANS-04).
+    var translatingItemIds: Set<String> = []
 }
 
 /// Builds the item-list context menu as data (LIST-11/12, FILE-04, META-07/08, TRASH-02/04).
@@ -44,16 +51,23 @@ enum ItemMenuBuilder {
         }
         if let fileId = context.fileId, let file = snapshot.files[fileId] {
             let isDefault = snapshot.items[file.itemId]?.defaultFileId == fileId
-            return [
+            var entries: [ItemMenuEntry] = [
                 .action(title: "打开", symbol: "arrow.up.forward.app", command: .open),
+                openWithEntry(isPDF: file.isPDF, apps: context.openWithApps),
                 .action(title: "快速查看", symbol: "eye", command: .quickLook),
                 .separator,
                 .action(title: "设为默认打开文件", symbol: "star", command: .setDefaultFile(fileId),
                         enabled: !isDefault, checked: isDefault),
+            ]
+            if file.isPDF && file.translationOf == nil {
+                entries.append(translateEntry(translating: context.translatingItemIds.contains(file.itemId)))
+            }
+            entries += [
                 .action(title: "在 Finder 中显示", symbol: "folder", command: .revealInFinder),
                 .separator,
                 .action(title: "删除", symbol: "trash", command: .trashFile),
             ]
+            return entries
         }
 
         let items = context.itemIds.compactMap { snapshot.items[$0] }
@@ -63,6 +77,11 @@ enum ItemMenuBuilder {
 
         var entries: [ItemMenuEntry] = [
             .action(title: "打开", symbol: "arrow.up.forward.app", command: .open),
+        ]
+        if let single, let file = defaultFile(of: single, snapshot) {
+            entries.append(openWithEntry(isPDF: file.isPDF, apps: context.openWithApps))
+        }
+        entries += [
             .action(title: "快速查看", symbol: "eye", command: .quickLook),
             .separator,
             .submenu(title: "添加到", symbol: "folder.badge.plus",
@@ -84,6 +103,14 @@ enum ItemMenuBuilder {
         }
         entries.append(.separator)
         if let single {
+            entries.append(.action(title: "编辑笔记", symbol: "note.text", command: .editNote))
+            if snapshot.notedItems.contains(single.id) {
+                entries.append(.action(title: "导出笔记…", symbol: "square.and.arrow.up", command: .exportNote))
+            }
+            if let file = defaultFile(of: single, snapshot), file.isPDF {
+                entries.append(translateEntry(translating: context.translatingItemIds.contains(single.id)))
+            }
+            entries.append(.separator)
             if single.kind == .regular {
                 entries.append(.action(title: "添加文件…", symbol: "paperclip", command: .addFiles))
                 entries.append(.action(title: "重新检索元数据", symbol: "arrow.clockwise", command: .retrieve))
@@ -129,6 +156,33 @@ enum ItemMenuBuilder {
         snapshot.files(of: item.id).first?.isPDF ?? false
     }
 
+    private static func defaultFile(of item: Item, _ snapshot: LibrarySnapshot) -> FileRecord? {
+        item.defaultFileId.flatMap { snapshot.files[$0] } ?? snapshot.files(of: item.id).first
+    }
+
+    /// "打开方式 ▸": Folio's reader and Preview for PDFs, then the other apps that open the file (OPEN-04).
+    private static func openWithEntry(isPDF: Bool, apps: [(name: String, url: URL)]) -> ItemMenuEntry {
+        var children: [ItemMenuEntry] = []
+        if isPDF {
+            children.append(.action(title: "在 Folio 中阅读", symbol: "book.pages", command: .openInReader))
+            children.append(.action(title: "预览", symbol: nil, command: .openWithPreview))
+        }
+        let others = apps.filter { !(isPDF && $0.url.lastPathComponent == "Preview.app") }
+        if !others.isEmpty {
+            if !children.isEmpty { children.append(.separator) }
+            children += others.map { .action(title: $0.name, symbol: nil, command: .openWithApp($0.url)) }
+        }
+        children.append(.separator)
+        children.append(.action(title: "其他应用…", symbol: nil, command: .openWithOtherApp))
+        return .submenu(title: "打开方式", symbol: "arrow.up.right.square", entries: children)
+    }
+
+    private static func translateEntry(translating: Bool) -> ItemMenuEntry {
+        translating
+            ? .action(title: "取消翻译", symbol: "xmark.circle", command: .cancelTranslation)
+            : .action(title: "翻译全文…", symbol: "character.book.closed", command: .translate)
+    }
+
     // MARK: NSMenu conversion
 
     static func populate(_ menu: NSMenu, with entries: [ItemMenuEntry], snapshot: LibrarySnapshot,
@@ -140,6 +194,11 @@ enum ItemMenuBuilder {
             case let .action(title, symbol, command, enabled, checked, indent):
                 let item = NSMenuItem.closure(title) { perform(command) }
                 if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
+                if case .openWithApp(let url) = command {
+                    let icon = NSWorkspace.shared.icon(forFile: url.path)
+                    icon.size = NSSize(width: 16, height: 16)
+                    item.image = icon
+                }
                 if case .toggleTag(let id) = command, let tag = snapshot.tagsById[id] {
                     item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
                         .withSymbolConfiguration(.init(paletteColors: [NSColor(hex: tag.colorHex)]))

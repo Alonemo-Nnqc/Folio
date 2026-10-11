@@ -7,7 +7,7 @@ struct TagEditorSheet: View {
     let tagId: String?
     let applyTo: [String]
     var initialName = ""
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.sheetDismiss) private var dismiss
     @State private var name = ""
     @State private var colorHex = TagPalette.presets[6].hex
     @State private var error: String?
