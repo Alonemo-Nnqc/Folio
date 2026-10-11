@@ -22,6 +22,22 @@ import Testing
         #expect(throws: ProcessLaunchError.self) { try ChildProcess.launch(spec) }
     }
 
+    @Test func strayWorkerIsClearedAfterLeaderExits() async throws {
+        let temp = TemporaryDirectory()
+        let pidFile = temp.url.appending(path: "stray.pid")
+        // The leader exits at once; its worker keeps stdout open.
+        let spec = ProcessSpec(executable: URL(fileURLWithPath: "/bin/sh"),
+                               arguments: ["-c", "\(termIgnoringWorker(pidFile: pidFile)); echo leader-done"],
+                               environment: ["PATH": "/usr/bin:/bin"], currentDirectory: temp.url)
+        let start = Date()
+        let result = try await ChildProcess.run(spec)
+        #expect(result.termination == .exited(0))
+        #expect(result.lines.map(\.text) == ["leader-done"])
+        #expect(Date().timeIntervalSince(start) < 10)
+        let worker = try #require(pid_t(String(contentsOf: pidFile, encoding: .utf8)))
+        #expect(!isAlive(worker))
+    }
+
     @Test func terminateGroupKillsGrandchildren() async throws {
         let temp = TemporaryDirectory()
         let pidFile = temp.url.appending(path: "child.pid")

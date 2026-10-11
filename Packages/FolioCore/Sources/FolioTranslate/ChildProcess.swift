@@ -51,7 +51,6 @@ public final class ChildProcess: Sendable {
     /// Every line written to stdout / stderr. Finishes when both pipes close.
     public let output: AsyncStream<ProcessOutputLine>
     private let exitTask: Task<ProcessTermination, Never>
-    private let exited = Atomic<Bool>(false)
 
     private init(pid: pid_t, output: AsyncStream<ProcessOutputLine>, exitTask: Task<ProcessTermination, Never>) {
         self.pid = pid
@@ -136,20 +135,20 @@ public final class ChildProcess: Sendable {
                 }
             }
         }
-        let process = ChildProcess(pid: pid, output: stream, exitTask: exitTask)
-        Task.detached { [process] in
-            _ = await process.exitTask.value
-            process.exited.store(true, ordering: .sequentiallyConsistent)
+        // A stray worker that outlives the leader would keep the pipes open and the
+        // output stream unfinished; clear the group shortly after the leader exits.
+        Task.detached {
+            _ = await exitTask.value
+            try? await Task.sleep(for: .seconds(2))
+            kill(-childPID, SIGKILL)
         }
-        return process
+        return ChildProcess(pid: pid, output: stream, exitTask: exitTask)
     }
 
     /// Waits for the main process to exit (and reaps it).
     public func waitUntilExit() async -> ProcessTermination {
         await exitTask.value
     }
-
-    public var hasExited: Bool { exited.load(ordering: .sequentiallyConsistent) }
 
     /// Sends SIGTERM to the whole process group, then SIGKILL after `grace`
     /// seconds to whatever is left of the group.

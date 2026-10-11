@@ -11,7 +11,8 @@ import Testing
 /// FOLIO_UV_CACHE=/path/to/uv-cache \            # optional: reuse a uv cache to save downloads
 /// swift test --filter LiveTests
 /// ```
-/// Set `FOLIO_LIVE_REINSTALL=1` to force a fresh install into an existing `FOLIO_LIVE_DIR`.
+/// Set `FOLIO_LIVE_REINSTALL=1` to force a fresh install into an existing `FOLIO_LIVE_DIR`,
+/// `FOLIO_LIVE_NO_SYSTEM_UV=1` to exercise the uv download path.
 @Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["FOLIO_LIVE"] == "1"))
 struct LiveTests {
     static let environment = ProcessInfo.processInfo.environment
@@ -20,8 +21,11 @@ struct LiveTests {
         return FileManager.default.temporaryDirectory.appending(path: "FolioTranslatorLive-\(UUID().uuidString)")
     }()
 
+    /// `FOLIO_LIVE_NO_SYSTEM_UV=1` ignores any uv on this Mac and downloads the official release.
     static var installation: TranslatorInstallation {
-        TranslatorInstallation(baseDirectory: baseDirectory, externalUVCache: environment["FOLIO_UV_CACHE"].map { URL(fileURLWithPath: $0) })
+        TranslatorInstallation(baseDirectory: baseDirectory,
+                               externalUVCache: environment["FOLIO_UV_CACHE"].map { URL(fileURLWithPath: $0) },
+                               uvCandidates: environment["FOLIO_LIVE_NO_SYSTEM_UV"] == "1" ? [] : UVToolchain.defaultCandidates)
     }
 
     static func log(_ text: String) { print("LIVE: \(text)") }
