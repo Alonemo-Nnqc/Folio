@@ -74,6 +74,16 @@ import Testing
         #expect(TranslationErrorClassifier.classify(message: "Error code: 402 - Insufficient Balance").reason == .quota)
     }
 
+    @Test func timestampsLineNumbersAndParameterNamesAreNotErrors() {
+        let failure = TranslationErrorClassifier.classify(
+            message: "Translation subprocess initialization error: RetryError[<Future raised CalledProcessError>]",
+            logTail: ["2026-10-11 11:41:50,429 ERROR something", "  File \"x.py\", line 401, in do_translate",
+                      "    translation = self.do_translate(text, rate_limit_params)", "returned non-zero exit status 3."])
+        #expect(failure.reason == .unknown)
+        #expect(TranslationErrorClassifier.classify(message: "openai.RateLimitError: Error code: 429").reason == .quota)
+        #expect(TranslationErrorClassifier.classify(message: "HTTPError: 403 Client Error: Forbidden for url").reason == .authentication)
+    }
+
     @Test func hexAddressesAreNotStatusCodes() {
         let failure = TranslationErrorClassifier.classify(message: "RetryError[<Future at 0x1429ab state=finished raised ValueError>]")
         #expect(failure.reason == .unknown)
