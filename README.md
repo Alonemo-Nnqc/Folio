@@ -1,13 +1,16 @@
 # Folio
 
-轻量、原生的 macOS 文献管理软件，用 SwiftUI 和 AppKit 开发，界面采用系统 Liquid Glass 风格。
+轻量、原生的 macOS 文献管理软件。AppKit 搭建窗口、工具栏、菜单和标签页，SwiftUI 承载检查器、设置和弹窗，界面采用系统 Liquid Glass 风格。
 
-- 拖入 PDF 后几秒内自动识别元数据并创建条目（Crossref / arXiv / DBLP / OpenAlex）
+- 拖入 PDF 后几秒内自动识别元数据并创建条目：Zotero 识别服务 + Crossref / arXiv / OpenAlex / DBLP / CVF 开放获取
+- 内置阅读器（与"预览"同一引擎 PDFKit）：论文以原生标签页打开；高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，与"预览"互通；记住每篇论文的阅读位置
+- 保留排版的整篇翻译（pdf2zh_next / BabelDOC），支持 20 多种翻译服务，译文与原文可对照阅读
+- 每个条目一篇 Markdown 笔记，可以在阅读时把选中的文字一键加入笔记
 - 两级分组、彩色标签、回收站、全文搜索、阅读状态与星级评分
-- 每个条目可以挂多个文件，并可指定默认打开的文件；PDF 用"预览"或你指定的阅读器打开，App 内汇总显示 PDF 中的高亮和批注
+- 每个条目可以挂多个文件，并可指定默认打开的文件；也可以随时用"预览"或其他应用打开
 - 支持复制 BibTeX / GB/T 7714-2015 / APA 引用，导出 `.bib`
 - 可以一键从 Zotero 导入（只读取数据库副本，不会修改 Zotero）
-- 1000 个条目时冷启动约 0.5 s，内存约 120 MB
+- 1000 个条目时冷启动约 0.35 s，内存约 110–130 MB
 
 需求、开发计划、测试报告和问题记录都在 [`doc/`](doc/) 目录下。
 
@@ -35,7 +38,12 @@ FOLIO_LIBRARY=/tmp/my-test-library script/build_and_run.sh
 
 | 路径 | 内容 |
 | --- | --- |
-| `Folio/` | App：窗口、侧栏、条目列表（NSOutlineView）、检查器、弹窗、设置、导入与检索调度 |
+| `Folio/App` | 入口、AppDelegate、菜单栏、AppModel（状态与操作）、设置项 |
+| `Folio/Library` | 文献库窗口：分栏、工具栏、侧栏、条目列表、搜索范围栏 |
+| `Folio/Reader` | 内置阅读器：标签页、批注工具、保存、阅读位置、侧栏、对照阅读 |
+| `Folio/Notes` | Markdown 笔记编辑器 |
+| `Folio/Translation` | 整篇翻译的队列、设置页 |
+| `Folio/Views` | 检查器、弹窗、标签、设置、列表单元格等 SwiftUI / AppKit 视图 |
 | `Packages/FolioCore/Sources/FolioCore` | 数据层：模型、SQLite（GRDB）、导入去重、分组、回收站、标签、快照、视图计算、全文索引 |
 | `Packages/FolioCore/Sources/FolioMetadata` | 元数据检索引擎：PDF 信息提取、标识符识别、标题猜测、多数据源并行检索与打分 |
 | `Packages/FolioCore/Sources/FolioCitation` | BibTeX 生成；借助 citeproc-js 生成 GB/T 7714 / APA 格式 |
