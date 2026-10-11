@@ -6,8 +6,9 @@ import Foundation
 struct EngineResolver: MetadataResolving {
     let engine: MetadataEngine
 
-    init(mailto: String, openAlexAPIKey: String) {
+    init(mailto: String, openAlexAPIKey: String, useZoteroRecognizer: Bool = true) {
         var configuration = MetadataEngineConfiguration()
+        configuration.useZoteroRecognizer = useZoteroRecognizer
         configuration.mailto = mailto.isEmpty ? nil : mailto
         configuration.openAlexAPIKey = openAlexAPIKey.isEmpty ? nil : openAlexAPIKey
         engine = MetadataEngine(configuration: configuration)

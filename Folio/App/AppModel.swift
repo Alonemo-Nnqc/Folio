@@ -122,7 +122,8 @@ final class AppModel {
 
     /// Rebuilds the metadata engine after retrieval settings change.
     func refreshResolver() {
-        importer.resolver = EngineResolver(mailto: settings.crossrefMailto, openAlexAPIKey: settings.openAlexAPIKey)
+        importer.resolver = EngineResolver(mailto: settings.crossrefMailto, openAlexAPIKey: settings.openAlexAPIKey,
+                                           useZoteroRecognizer: settings.useZoteroRecognizer)
     }
 
     /// Moves the whole library folder into `parent` and reopens it there (STORE-01). The database is

@@ -8,7 +8,7 @@ final class ImportCoordinator {
     var resolver: any MetadataResolving = UnavailableResolver()
 
     /// Bump when the metadata engine learns new sources: files that failed before get one more try.
-    static let engineRevision = 2   // 2: CVF open access (CVPR / ICCV / WACV)
+    static let engineRevision = 3   // 2: CVF open access (CVPR / ICCV / WACV); 3: Zotero recognizer
     private let maxConcurrent = 4
     private let maxNetworkRetries = 3
     private var queue: [String] = []

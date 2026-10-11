@@ -195,7 +195,7 @@ struct RetrievalSettings: View {
             Section {
                 Toggle(isOn: $settings.useZoteroRecognizer) {
                     Text("使用 Zotero 识别服务")
-                    Text("把 PDF 前几页的文字版面发送给 Zotero 的公开识别服务（不需要账号，Zotero 声明不记录内容），识别率明显更高。关闭后只使用下面的开放数据源。")
+                    Text("把 PDF 前 5 页的文字和版面（每篇约 0.5 MB）发送给 Zotero 的识别服务，不需要账号，Zotero 声明不记录内容。开放数据源检索不畅时仍能识别。关闭后只使用开放数据源。")
                 }
             }
             Section {
