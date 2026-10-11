@@ -13,6 +13,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     private weak var searchItem: NSSearchToolbarItem?
     private var lastSearchFocusRequest = 0
     private var presentedSheet: NSViewController?
+    private var shownLoadError: String?
 
     init(model: AppModel) {
         splitViewController = LibrarySplitViewController(model: model)
@@ -71,6 +72,25 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             self.syncSheet(self.model.activeSheet)
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self, let message = self.model.loadError, message != self.shownLoadError else { return }
+            self.shownLoadError = message
+            let alert = NSAlert()
+            alert.alertStyle = .critical
+            alert.messageText = "无法打开文献库"
+            alert.informativeText = message + "\n\n可以在 设置 ▸ 文献库 中查看或更改文献库位置。"
+            alert.addButton(withTitle: "好")
+            alert.addButton(withTitle: "打开设置…")
+            DispatchQueue.main.async {
+                guard let window = self.window else { return }
+                alert.beginSheetModal(for: window) { response in
+                    if response == .alertSecondButtonReturn {
+                        AppDelegate.shared.showSettings(nil)
+                        AppDelegate.shared.settingsWindow?.select(pane: "文献库")
+                    }
+                }
+            }
         })
     }
 
