@@ -24,6 +24,20 @@ public struct URLSessionHTTPClient: HTTPClient {
         for (field, value) in headers {
             request.setValue(value, forHTTPHeaderField: field)
         }
+        return try await send(request)
+    }
+
+    public func post(_ url: URL, body: Data, headers: [String: String]) async throws -> (Data, Int) {
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = body
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+        return try await send(request)
+    }
+
+    private func send(_ request: URLRequest) async throws -> (Data, Int) {
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         return (data, status)

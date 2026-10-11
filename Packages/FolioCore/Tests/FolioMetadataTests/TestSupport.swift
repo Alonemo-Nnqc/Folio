@@ -31,19 +31,33 @@ enum Fixtures {
 }
 
 /// Routes requests to canned responses; unknown URLs get 404.
+/// POSTs (the Zotero recognizer) go to `postHandler`, or to `handler` when there is none.
 struct MockHTTPClient: HTTPClient {
-    let handler: @Sendable (URL) throws -> (Data, Int)
+    let handler: @Sendable (URL) async throws -> (Data, Int)
+    var postHandler: (@Sendable (URL, Data) async throws -> (Data, Int))? = nil
 
     func get(_ url: URL, headers: [String: String]) async throws -> (Data, Int) {
-        try handler(url)
+        try await handler(url)
+    }
+
+    func post(_ url: URL, body: Data, headers: [String: String]) async throws -> (Data, Int) {
+        if let postHandler { return try await postHandler(url, body) }
+        return try await handler(url)
     }
 }
 
 extension MetadataEngine {
     static func testing(_ handler: @escaping @Sendable (URL) throws -> (Data, Int)) -> MetadataEngine {
+        testing(MockHTTPClient(handler: handler))
+    }
+
+    static func testing(_ http: MockHTTPClient, useZoteroRecognizer: Bool = true,
+                        recognizerTimeout: Duration = .seconds(2)) -> MetadataEngine {
         var configuration = MetadataEngineConfiguration()
         configuration.overallTimeout = 5
-        return MetadataEngine(configuration: configuration, http: MockHTTPClient(handler: handler),
-                              throttle: HostThrottle(minimumIntervals: [:]), searchGrace: .milliseconds(50))
+        configuration.useZoteroRecognizer = useZoteroRecognizer
+        return MetadataEngine(configuration: configuration, http: http,
+                              throttle: HostThrottle(minimumIntervals: [:]), searchGrace: .milliseconds(50),
+                              recognizerTimeout: recognizerTimeout, recognizerLookupTimeout: .seconds(2))
     }
 }

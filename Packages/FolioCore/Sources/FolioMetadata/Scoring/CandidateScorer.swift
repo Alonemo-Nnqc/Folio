@@ -64,6 +64,16 @@ struct CandidateScorer: Sendable {
         return selfDescribing && evaluation.authorsFound
     }
 
+    /// Fields Zotero's recognizer read off the page trivially "appear on the page" — it has been seen
+    /// to hand back the author line as the title — so they must also agree with the engine's own
+    /// best title guess. (Lower-ranked guesses can themselves be author lines.)
+    func acceptsRecognizedFields(_ metadata: Metadata) -> Bool {
+        guard let best = guesses.first, TitleNormalizer.similarity(best, metadata.title) >= Self.acceptWithAuthors else {
+            return false
+        }
+        return evaluate(metadata).isAccepted
+    }
+
     /// True when one of the first three authors' family names occurs on page one.
     func authorsAppear(_ authors: [Author]) -> Bool {
         for author in authors.prefix(3) {

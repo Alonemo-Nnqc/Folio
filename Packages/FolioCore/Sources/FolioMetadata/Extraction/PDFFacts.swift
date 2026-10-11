@@ -121,7 +121,7 @@ struct PDFFacts: Sendable, Equatable {
         var name: String
     }
 
-    private static func baseFontName(_ name: String) -> String {
+    static func baseFontName(_ name: String) -> String {
         // Subset fonts are named "ABCDEF+RealName".
         if let plus = name.firstIndex(of: "+"), name.distance(from: name.startIndex, to: plus) == 6 {
             return String(name[name.index(after: plus)...])

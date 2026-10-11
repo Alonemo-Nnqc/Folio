@@ -4,9 +4,11 @@ import Foundation
 extension MetadataEngine {
     /// Identifies the paper in a PDF (META-02).
     ///
-    /// Identifier lookups and title searches start together. A verified identifier result wins
-    /// immediately; otherwise the best accepted search candidate is taken once every source has
-    /// answered, or `searchGrace` after the first acceptable one arrived.
+    /// Identifier lookups, title searches and (optionally) Zotero's recognizer start together.
+    /// A verified lookup of an identifier the PDF names wins immediately; identifiers the recognizer
+    /// named come next, then the recognizer's own verified fields, then the best accepted search
+    /// candidate. Search candidates are taken once every source has answered, or `searchGrace`
+    /// after the first acceptable result arrived.
     public func resolve(pdfAt url: URL) async -> ResolveResult {
         guard let facts = autoreleasepool(invoking: { PDFFacts.extract(from: url) }) else { return .notFound }
         let plan = LookupPlan(found: IdentifierExtractor.extract(from: facts))
@@ -14,9 +16,12 @@ extension MetadataEngine {
         guard !plan.identifiers.isEmpty || !guesses.isEmpty else { return .notFound }
         let scorer = CandidateScorer(pageText: facts.firstPageText + "\n" + facts.secondPageText, guesses: guesses)
         let cvfLookup = CVFLookup.detect(facts, guesses: guesses)
+        // A scanned page recognised with OCR has no text layer to describe to the service.
+        let recognizerPDF = configuration.useZoteroRecognizer && !facts.usedOCR ? url : nil
         let started = ContinuousClock.now
         let outcome = await Deadline.run(overallTimeout) {
-            await self.identify(plan: plan, guesses: guesses, cvf: cvfLookup, scorer: scorer, started: started)
+            await self.identify(plan: plan, guesses: guesses, cvf: cvfLookup, recognizerPDF: recognizerPDF,
+                                scorer: scorer, started: started)
         }
         return outcome ?? .networkError
     }
@@ -27,6 +32,10 @@ extension MetadataEngine {
         case identifier(FoundIdentifier, Result<Metadata?, SourceError>)
         case search(SourceKind, Result<[Metadata], SourceError>)
         case cvf(Result<Metadata?, SourceError>)
+        /// Zotero's recognizer answered (or failed, or ran out of time).
+        case recognizer(Result<RecognizerResponse?, SourceError>)
+        /// Lookup of an identifier the recognizer named.
+        case recognizerLookup(Identifier, Result<Metadata?, SourceError>)
         case graceElapsed
 
         var traceDescription: String {
@@ -34,6 +43,10 @@ extension MetadataEngine {
             case let .identifier(found, result): "id \(found.identifier) → \(result.map { $0?.title.prefix(40) ?? "nil" })"
             case let .search(source, result): "search \(source) → \(result.map { "\($0.count) records" })"
             case let .cvf(result): "cvf → \(result.map { $0?.title.prefix(40) ?? "nil" })"
+            case let .recognizer(result):
+                "recognizer → \(result.map { "\($0?.identifiers ?? []) \($0?.title?.prefix(40) ?? "nil")" })"
+            case let .recognizerLookup(identifier, result):
+                "recognizer id \(identifier) → \(result.map { $0?.title.prefix(40) ?? "nil" })"
             case .graceElapsed: "grace elapsed"
             }
         }
@@ -61,10 +74,11 @@ extension MetadataEngine {
         }
     }
 
-    private func identify(plan: LookupPlan, guesses: [String], cvf: CVFLookup?, scorer: CandidateScorer,
-                          started: ContinuousClock.Instant) async -> ResolveResult {
+    private func identify(plan: LookupPlan, guesses: [String], cvf: CVFLookup?, recognizerPDF: URL?,
+                          scorer: CandidateScorer, started: ContinuousClock.Instant) async -> ResolveResult {
         var tally = Tally()
         var accepted: [(candidate: Candidate, evaluation: CandidateScorer.Evaluation)] = []
+        var recognizer = RecognizerState()
         let rounds = min(guesses.count, Self.maxSearchRounds)
 
         for round in 0..<max(rounds, 1) {
@@ -72,30 +86,44 @@ extension MetadataEngine {
                 let elapsed = ContinuousClock.now - started
                 guard accepted.isEmpty, overallTimeout - elapsed >= Self.minimumTimeForRound else { break }
             }
-            let includeIdentifiers = round == 0
+            let firstRound = round == 0
             let guess = guesses.indices.contains(round) ? guesses[round] : nil
-            let result = await runRound(plan: includeIdentifiers ? plan : nil, guess: guess,
-                                        cvf: includeIdentifiers ? cvf : nil,
-                                        searchArxiv: !plan.pdfHasArxivID, scorer: scorer,
-                                        tally: &tally, accepted: &accepted)
+            let result = await runRound(plan: firstRound ? plan : nil, guess: guess, cvf: firstRound ? cvf : nil,
+                                        recognizerPDF: firstRound ? recognizerPDF : nil,
+                                        pdfHasArxivID: plan.pdfHasArxivID, scorer: scorer,
+                                        tally: &tally, accepted: &accepted, recognizer: &recognizer)
+            if case .found(let metadata)? = result { return .found(recognizer.enriched(metadata)) }
             if let result { return result }
-            if !accepted.isEmpty { break }
+            if !accepted.isEmpty || recognizer.hasResult { break }
         }
-        guard let best = CandidateRanking.best(accepted, pdfHasArxivID: plan.pdfHasArxivID) else {
+        if let metadata = recognizer.bestVerified { return .found(recognizer.enriched(metadata)) }
+        let best = CandidateRanking.best(accepted, pdfHasArxivID: plan.pdfHasArxivID)
+        if let fields = recognizer.fields {
+            // A search record of the same work usually carries more (DOI, venue details); a
+            // different work is outranked by the recognizer.
+            if let best, RecognizerState.isSameWork(best.candidate.metadata, as: fields) {
+                return .found(recognizer.enriched(await enriched(best.candidate)))
+            }
+            return .found(fields)
+        }
+        guard let best else {
             // A CVF paper that no source knows yet (new, or a workshop paper): its own verified
             // title/author fields are still a trustworthy record.
             if let fallback = cvf?.fallback { return .found(fallback) }
             return tally.outcomeWithoutMatch
         }
-        return .found(await enriched(best.candidate))
+        return .found(recognizer.enriched(await enriched(best.candidate)))
     }
 
-    /// One round: optional identifier lookups plus the four title searches for `guess`.
-    /// Returns a result when an identifier lookup was verified; otherwise fills `accepted`.
-    /// `searchArxiv` is false when the PDF carries an arXiv ID: its lookup already covers arXiv, and
-    /// arXiv's one-request-per-second limit makes a second request there the slowest part of a batch.
-    private func runRound(plan: LookupPlan?, guess: String?, cvf: CVFLookup?, searchArxiv: Bool, scorer: CandidateScorer, tally: inout Tally,
-                          accepted: inout [(candidate: Candidate, evaluation: CandidateScorer.Evaluation)]) async -> ResolveResult? {
+    /// One round: optional identifier lookups and recognizer query plus the four title searches
+    /// for `guess`. Returns a result when an identifier lookup was verified; otherwise fills
+    /// `accepted` and `recognizer`.
+    /// arXiv is not title-searched when the PDF carries an arXiv ID: its lookup already covers arXiv,
+    /// and arXiv's one-request-per-second limit makes a second request there the slowest part of a batch.
+    private func runRound(plan: LookupPlan?, guess: String?, cvf: CVFLookup?, recognizerPDF: URL?, pdfHasArxivID: Bool,
+                          scorer: CandidateScorer, tally: inout Tally,
+                          accepted: inout [(candidate: Candidate, evaluation: CandidateScorer.Evaluation)],
+                          recognizer: inout RecognizerState) async -> ResolveResult? {
         await withTaskGroup(of: Event.self) { group in
             var pending = 0
             // Lookups the PDF itself points to (arXiv stamp, its own DOI, its CVF page) beat title-search
@@ -114,8 +142,20 @@ extension MetadataEngine {
                     catch { return .cvf(.failure(error)) }
                 }
             }
+            if let recognizerPDF {
+                pending += 1
+                let budget = recognizerTimeout
+                group.addTask {
+                    let answer = await Deadline.run(budget) { () async -> Result<RecognizerResponse?, SourceError> in
+                        guard let payload = RecognizerPayload.extract(from: recognizerPDF) else { return .success(nil) }
+                        do throws(SourceError) { return .success(try await self.recognizer.recognize(payload)) }
+                        catch { return .failure(error) }
+                    }
+                    return .recognizer(answer ?? .failure(.network))
+                }
+            }
             if let guess {
-                let sources: [SourceKind] = searchArxiv ? [.crossref, .openAlex, .dblp, .arxiv] : [.crossref, .openAlex, .dblp]
+                let sources: [SourceKind] = pdfHasArxivID ? [.crossref, .openAlex, .dblp] : [.crossref, .openAlex, .dblp, .arxiv]
                 for source in sources {
                     pending += 1
                     group.addTask { .search(source, await self.titleSearch(source, title: guess)) }
@@ -127,8 +167,13 @@ extension MetadataEngine {
                 Trace.log(roundStart, event: event)
                 switch event {
                 case .graceElapsed:
-                    group.cancelAll()
-                    return nil
+                    // Identifiers the recognizer named outrank search candidates: let their lookups finish.
+                    if recognizer.pendingLookups > 0 {
+                        graceStarted = false
+                    } else {
+                        group.cancelAll()
+                        return nil
+                    }
                 case let .identifier(found, result):
                     pending -= 1
                     if found.isSelfDescribing { pendingAuthoritative -= 1 }
@@ -160,6 +205,33 @@ extension MetadataEngine {
                     case .failure(let error):
                         tally.record(error, identifier: true)
                     }
+                case let .recognizer(result):
+                    pending -= 1
+                    // Failures are deliberately not tallied: the service is optional.
+                    guard case .success(let response?) = result else { break }
+                    recognizer.response = response
+                    if let fields = response.metadata, scorer.acceptsRecognizedFields(fields) {
+                        recognizer.fields = fields
+                    }
+                    let planned = plan?.identifiers.map(\.identifier) ?? []
+                    let budget = recognizerLookupTimeout
+                    for identifier in RecognizerState.lookups(for: response, excluding: planned) {
+                        pending += 1
+                        recognizer.pendingLookups += 1
+                        group.addTask {
+                            let result = await Deadline.run(budget) { await self.lookup(identifier) }
+                            return .recognizerLookup(identifier, result ?? .failure(.network))
+                        }
+                    }
+                case let .recognizerLookup(identifier, result):
+                    pending -= 1
+                    recognizer.pendingLookups -= 1
+                    // Same check as for identifiers found in the text: the title must be on the page.
+                    if case .success(let metadata?) = result,
+                       scorer.verifiesIdentifierResult(metadata, selfDescribing: false) {
+                        recognizer.verified.append((RecognizerState.rank(of: identifier, pdfHasArxivID: pdfHasArxivID),
+                                                    metadata))
+                    }
                 case let .search(source, result):
                     pending -= 1
                     switch result {
@@ -176,7 +248,13 @@ extension MetadataEngine {
                         tally.record(error, identifier: false)
                     }
                 }
-                if !accepted.isEmpty && !graceStarted && pending > 0 && pendingAuthoritative == 0 {
+                let higherPending = pendingAuthoritative + recognizer.pendingLookups
+                // A verified recognizer identifier wins once the PDF's own identifiers have had their say.
+                if higherPending == 0, let metadata = recognizer.bestVerified {
+                    group.cancelAll()
+                    return .found(metadata)
+                }
+                if !accepted.isEmpty || recognizer.fields != nil, !graceStarted, pending > 0, higherPending == 0 {
                     graceStarted = true
                     let grace = searchGrace
                     group.addTask {
@@ -189,6 +267,7 @@ extension MetadataEngine {
             return nil
         }
     }
+
 
     /// DBLP and OpenAlex records carrying a DOI are completed from Crossref (volume, pages,
     /// abstract…), keeping fields Crossref lacks.

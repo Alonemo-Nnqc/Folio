@@ -1,6 +1,6 @@
 import Foundation
 
-/// Sends GET requests for the source clients: adds headers, honours per-host throttling and
+/// Sends requests for the source clients: adds headers, honours per-host throttling and
 /// maps every failure to a `SourceError`.
 struct Transport: Sendable {
     let http: any HTTPClient
@@ -27,9 +27,26 @@ struct Transport: Sendable {
                 throw .cancelled
             }
         }
+        return try await perform {
+            try await http.get(url, headers: ["User-Agent": userAgent, "Accept": accept])
+        }
+    }
+
+    /// POSTs a JSON body; same status handling as `get`.
+    func post(_ url: URL, json body: Data, accept: String = "application/json") async throws(SourceError) -> Data? {
+        if Task.isCancelled { throw .cancelled }
+        return try await perform {
+            try await http.post(url, body: body, headers: [
+                "User-Agent": userAgent, "Accept": accept, "Content-Type": "application/json",
+            ])
+        }
+    }
+
+    /// Runs one request and maps transport failures and statuses to `SourceError`.
+    private func perform(_ request: () async throws -> (Data, Int)) async throws(SourceError) -> Data? {
         let response: (Data, Int)
         do {
-            response = try await http.get(url, headers: ["User-Agent": userAgent, "Accept": accept])
+            response = try await request()
         } catch let error as URLError {
             throw error.code == .cancelled ? .cancelled : .network
         } catch is CancellationError {

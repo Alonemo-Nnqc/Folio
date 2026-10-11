@@ -15,8 +15,13 @@ public final class MetadataEngine: Sendable {
     let dblp: DBLPClient
     let openLibrary: OpenLibraryClient
     let cvf: CVFClient
+    let recognizer: ZoteroRecognizerClient
     /// How long to keep waiting for a better-ranked source once an acceptable match is in hand.
     let searchGrace: Duration
+    /// Budget for building the recognizer payload and getting the service's answer.
+    let recognizerTimeout: Duration
+    /// Budget for each lookup of an identifier the recognizer named.
+    let recognizerLookupTimeout: Duration
 
     /// Search rounds with successive title guesses when the first guess finds nothing.
     static let maxSearchRounds = 2
@@ -32,7 +37,8 @@ public final class MetadataEngine: Sendable {
     }
 
     init(configuration: MetadataEngineConfiguration, http: any HTTPClient, cvfHTTP: (any HTTPClient)? = nil,
-         throttle: HostThrottle, searchGrace: Duration = .milliseconds(800)) {
+         throttle: HostThrottle, searchGrace: Duration = .milliseconds(800),
+         recognizerTimeout: Duration = .seconds(4), recognizerLookupTimeout: Duration = .seconds(5)) {
         self.configuration = configuration
         let transport = Transport(http: http, throttle: throttle, mailto: configuration.mailto)
         crossref = CrossrefClient(transport: transport, mailto: FieldNormalizer.nonEmpty(configuration.mailto))
@@ -43,7 +49,11 @@ public final class MetadataEngine: Sendable {
         dblp = DBLPClient(transport: transport)
         openLibrary = OpenLibraryClient(transport: transport)
         cvf = CVFClient(transport: Transport(http: cvfHTTP ?? http, throttle: throttle, mailto: configuration.mailto))
+        // No contact address for Zotero: the mailto is meant for the Crossref / OpenAlex polite pools.
+        recognizer = ZoteroRecognizerClient(transport: Transport(http: http, throttle: throttle, mailto: nil))
         self.searchGrace = searchGrace
+        self.recognizerTimeout = recognizerTimeout
+        self.recognizerLookupTimeout = recognizerLookupTimeout
     }
 
     var overallTimeout: Duration {
