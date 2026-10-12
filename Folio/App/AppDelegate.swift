@@ -25,6 +25,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         didFinishLaunching = true
         flushPendingOpens()
         AIIntegration.repairAfterLaunch()
+        if model.settings.browserConnectorEnabled { model.connector.start() }
+        BrowserExtensions.refreshInstalledCopy()
     }
 
     /// Unsaved annotations are written before quitting (READER-05).
@@ -68,6 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let files = urls.filter(\.isFileURL)
         if !files.isEmpty { model.importer.importFiles(files, toGroup: model.sidebarSelection.groupId) }
         for link in urls where link.scheme == "folio" { handle(link) }
+    }
+
+    func open(folioLink: String) {
+        if let url = URL(string: folioLink) { handle(url) }
     }
 
     /// `folio://open?item=<id>&page=<n>` and `folio://select?item=<id>`.

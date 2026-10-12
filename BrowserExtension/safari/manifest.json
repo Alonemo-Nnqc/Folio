@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Folio 文献保存",
+  "short_name": "Folio",
+  "version": "1.0.0",
+  "description": "一键把网页上的论文保存到 Mac 上的 Folio 文献库，并选择放入的分组。",
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "96": "icon-96.png",
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "保存到 Folio",
+    "default_icon": {
+      "16": "icon-16.png",
+      "19": "icon-19.png",
+      "32": "icon-32.png",
+      "38": "icon-38.png"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:23120/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "connector.js",
+      "background.js"
+    ],
+    "persistent": false
+  }
+}

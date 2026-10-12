@@ -44,7 +44,7 @@ final class SettingsWindowController: NSWindowController {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, reading, library, retrieval, translation, ai
+    case general, reading, library, retrieval, translation, browser, ai
 
     var id: String { rawValue }
 
@@ -55,6 +55,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .library: "文献库"
         case .retrieval: "检索"
         case .translation: "翻译"
+        case .browser: "浏览器"
         case .ai: "AI"
         }
     }
@@ -67,6 +68,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .library: "books.vertical"
         case .retrieval: "magnifyingglass"
         case .translation: "character.book.closed"
+        case .browser: "safari"
         case .ai: "sparkles"
         }
     }
@@ -105,6 +107,7 @@ struct SettingsRootView: View {
         case .library: LibrarySettings(model: model)
         case .retrieval: RetrievalSettings(settings: model.settings, model: model)
         case .translation: TranslationSettingsPane(model: model)
+        case .browser: BrowserSettingsPane(model: model)
         case .ai: AISettingsPane(settings: model.settings)
         }
     }

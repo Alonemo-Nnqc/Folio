@@ -79,6 +79,7 @@ final class AppModel {
     @ObservationIgnored let citations = CitationService()
     @ObservationIgnored lazy var readers = ReaderCoordinator(model: self)
     @ObservationIgnored lazy var translations = TranslationCoordinator(model: self)
+    @ObservationIgnored lazy var connector = ConnectorServer(model: self)
     /// The live list controller, for the simulated-drop check (see SimulatedDrop).
     @ObservationIgnored weak var itemListController: ItemListController?
     @ObservationIgnored weak var sidebarController: SidebarController?

@@ -87,6 +87,7 @@ final class AppSettings {
         static let annotationAuthor = "annotationAuthor"
         static let autoRetrieveOnImport = "autoRetrieveOnImport"
         static let aiAllowWrites = "aiAllowWrites"
+        static let browserConnectorEnabled = "browserConnectorEnabled"
     }
 
     private let defaults: UserDefaults
@@ -136,6 +137,8 @@ final class AppSettings {
     var autoRetrieveOnImport: Bool { didSet { save(autoRetrieveOnImport, Key.autoRetrieveOnImport) } }
     /// 设置 ▸ AI: AI agents may change the library (folio-cli reads the same key).
     var aiAllowWrites: Bool { didSet { save(aiAllowWrites, Key.aiAllowWrites) } }
+    /// 设置 ▸ 浏览器: the local service the browser extension saves through (WEB-01).
+    var browserConnectorEnabled: Bool { didSet { save(browserConnectorEnabled, Key.browserConnectorEnabled) } }
     /// A user-installed `pdf2zh_next`; empty = the copy Folio manages (TRANS-02).
     var translatorCustomPath: String { didSet { save(translatorCustomPath, Key.translatorCustomPath) } }
 
@@ -157,6 +160,7 @@ final class AppSettings {
             Key.annotationAuthor: NSFullUserName(),
             Key.autoRetrieveOnImport: true,
             Key.aiAllowWrites: true,
+            Key.browserConnectorEnabled: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -180,6 +184,7 @@ final class AppSettings {
         annotationAuthor = defaults.string(forKey: Key.annotationAuthor) ?? NSFullUserName()
         autoRetrieveOnImport = defaults.bool(forKey: Key.autoRetrieveOnImport)
         aiAllowWrites = defaults.bool(forKey: Key.aiAllowWrites)
+        browserConnectorEnabled = defaults.bool(forKey: Key.browserConnectorEnabled)
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String

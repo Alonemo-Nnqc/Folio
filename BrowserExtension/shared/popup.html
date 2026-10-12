@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="color-scheme" content="light dark">
+  <title>保存到 Folio</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icon-32.png" alt="" width="20" height="20">
+    <h1>保存到 Folio</h1>
+    <span id="connection" class="connection" hidden></span>
+  </header>
+
+  <main id="loading" class="state">
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="secondary">正在读取页面…</p>
+  </main>
+
+  <main id="offline" class="state" hidden>
+    <div class="symbol">⚠︎</div>
+    <h2>无法连接 Folio</h2>
+    <p class="secondary">请先打开 Folio，并在 Folio ▸ 设置 ▸ 浏览器 中确认"允许浏览器插件保存文献"已打开。</p>
+    <div class="buttons centered">
+      <button id="retry" type="button">重试</button>
+      <button id="launch" type="button" class="primary">打开 Folio</button>
+    </div>
+  </main>
+
+  <main id="form" hidden>
+    <section class="card" aria-label="识别到的文献">
+      <div class="kind" id="kind"></div>
+      <div class="title" id="title"></div>
+      <div class="meta secondary" id="meta"></div>
+      <div class="note" id="note" hidden></div>
+    </section>
+
+    <label class="field">
+      <span>分组</span>
+      <select id="group"></select>
+    </label>
+
+    <label class="field">
+      <span>标签</span>
+      <input id="tags" type="text" placeholder="可选，多个标签用逗号分隔" list="tag-list" autocomplete="off">
+      <datalist id="tag-list"></datalist>
+    </label>
+
+    <label class="check" id="pdf-row" hidden>
+      <input id="pdf" type="checkbox" checked>
+      <span>同时保存 PDF</span>
+    </label>
+
+    <div class="buttons">
+      <button id="cancel" type="button">取消</button>
+      <button id="save" type="button" class="primary">保存</button>
+    </div>
+  </main>
+
+  <main id="done" class="state" hidden>
+    <div class="symbol success" id="done-symbol">✓</div>
+    <h2 id="done-title">已保存</h2>
+    <p class="secondary" id="done-detail"></p>
+    <div class="buttons centered">
+      <button id="reveal" type="button">在 Folio 中显示</button>
+      <button id="close" type="button" class="primary">完成</button>
+    </div>
+  </main>
+
+  <script src="connector.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
