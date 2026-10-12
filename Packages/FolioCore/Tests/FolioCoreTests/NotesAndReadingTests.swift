@@ -105,3 +105,21 @@ import Testing
         #expect(throws: LibraryError.self) { try library.setGroupColor("missing", colorHex: "#000000") }
     }
 }
+
+@Suite struct ReferenceImportTests {
+    @Test func importsKeepsKeysAndSkipsDuplicates() throws {
+        let library = try Library.temporary()
+        let group = try library.createGroup(name: "综述")
+        var a = Metadata(title: "A Survey of Things")
+        a.authors = [Author(family: "Li", given: "Wei")]
+        a.year = 2024
+        a.doi = "10.1/abc"
+        let first = try library.importReferences([(a, "li2024survey")], toGroup: group.id)
+        #expect(first.created.count == 1)
+        #expect(try library.item(first.created[0])?.citationKey == "li2024survey")
+        let again = try library.importReferences([(a, "li2024survey")])
+        #expect(again.created.isEmpty)
+        #expect(again.duplicates == first.created)
+        #expect(try library.rows(.group(group.id)) == first.created)
+    }
+}

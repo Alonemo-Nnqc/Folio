@@ -13,6 +13,8 @@ let package = Package(
         .executable(name: "folio-seed", targets: ["FolioSeed"]),
         .library(name: "FolioTranslate", targets: ["FolioTranslate"]),
         .executable(name: "folio-apple-translate", targets: ["FolioAppleTranslate"]),
+        .library(name: "FolioAgent", targets: ["FolioAgent"]),
+        .executable(name: "folio-cli", targets: ["FolioCLI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1"),
@@ -33,5 +35,9 @@ let package = Package(
         // `--clitranslator` helper that translates stdin with Apple's offline Translation framework.
         .executableTarget(name: "FolioAppleTranslate", dependencies: ["FolioTranslate"]),
         .testTarget(name: "FolioTranslateTests", dependencies: ["FolioTranslate"], resources: [.copy("Fixtures")]),
+        // AI integration (MCP server, folio-cli, skill, agent configuration).
+        .target(name: "FolioAgent", dependencies: ["FolioCore", "FolioMetadata", "FolioCitation"]),
+        .executableTarget(name: "FolioCLI", dependencies: ["FolioAgent"]),
+        .testTarget(name: "FolioAgentTests", dependencies: ["FolioAgent"]),
     ]
 )

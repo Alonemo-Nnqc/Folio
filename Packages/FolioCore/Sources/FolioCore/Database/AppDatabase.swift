@@ -13,6 +13,9 @@ public final class AppDatabase: Sendable {
     public static func open(at url: URL) throws -> AppDatabase {
         var config = Configuration()
         config.foreignKeysEnabled = true
+        // Folio and its helper (folio-cli, used by AI agents) can write at the same time: wait for
+        // the other side's transaction instead of failing with "database is locked".
+        config.busyMode = .timeout(10)
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA synchronous = NORMAL")
         }
