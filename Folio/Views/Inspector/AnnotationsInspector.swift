@@ -19,6 +19,7 @@ struct AnnotationsInspector: View {
             } else if filtered.allSatisfy({ $0.annotations.isEmpty }) {
                 ContentUnavailableView(query.isEmpty ? "没有标注" : "没有匹配的标注", systemImage: "highlighter",
                                        description: Text(query.isEmpty ? "在 Folio 阅读器或\"预览\"中添加的高亮和批注会显示在这里" : ""))
+                    .frame(maxHeight: .infinity)
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
@@ -31,6 +32,8 @@ struct AnnotationsInspector: View {
                 }
             }
         }
+        // The search field stays at the top whether or not there is anything below it.
+        .frame(maxHeight: .infinity, alignment: .top)
         .task(id: fingerprint) { await load() }
     }
 

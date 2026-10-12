@@ -256,8 +256,20 @@ private struct FieldRow: View {
             case .toggle:
                 Toggle(title, isOn: Binding(get: { value == "true" }, set: { setValue($0 ? "true" : "") }))
             default:
-                TextField(title, text: Binding(get: { value }, set: setValue),
-                          prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
+                if ModelListFetcher.supports(serviceID: serviceID, modelOption: field.option) {
+                    LabeledContent(title) {
+                        HStack(spacing: 6) {
+                            TextField(title, text: Binding(get: { value }, set: setValue),
+                                      prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
+                                .labelsHidden()
+                                .multilineTextAlignment(.trailing)
+                            ModelListButton(model: model, serviceID: serviceID) { setValue($0) }
+                        }
+                    }
+                } else {
+                    TextField(title, text: Binding(get: { value }, set: setValue),
+                              prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
+                }
             }
         }
         .onAppear(perform: load)
@@ -349,5 +361,93 @@ private struct OptionsSection: View {
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.message = "选择术语表 CSV（两列：原文, 译文）"
         if panel.runModal() == .OK { settings.translationOptions.glossaryFile = panel.url }
+    }
+}
+
+/// "获取模型列表": fetches the service's models with the key and address entered above and lets the
+/// user pick one from a searchable list.
+private struct ModelListButton: View {
+    let model: AppModel
+    let serviceID: String
+    let onPick: (String) -> Void
+    @State private var showing = false
+    @State private var loading = false
+    @State private var models: [String] = []
+    @State private var error: String?
+    @State private var filter = ""
+
+    var body: some View {
+        Button {
+            showing = true
+            Task { await load() }
+        } label: {
+            if loading {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "list.bullet")
+            }
+        }
+        .help("获取模型列表")
+        .accessibilityLabel("获取模型列表")
+        .popover(isPresented: $showing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("选择模型").font(.headline)
+                    Spacer()
+                    Button {
+                        Task { await load() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("重新获取")
+                    .disabled(loading)
+                }
+                if loading && models.isEmpty {
+                    ProgressView("正在获取…").frame(maxWidth: .infinity, minHeight: 120)
+                } else if let error {
+                    ContentUnavailableView("无法获取模型列表", systemImage: "exclamationmark.triangle", description: Text(error))
+                        .frame(minHeight: 160)
+                } else {
+                    TextField("搜索模型", text: $filter)
+                        .textFieldStyle(.roundedBorder)
+                    List(filtered, id: \.self) { name in
+                        Button {
+                            onPick(name)
+                            showing = false
+                        } label: {
+                            Text(name).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listStyle(.plain)
+                    .frame(height: 260)
+                    Text("\(models.count) 个模型").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding(12)
+            .frame(width: 320)
+        }
+    }
+
+    private var filtered: [String] {
+        let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
+        return q.isEmpty ? models : models.filter { $0.lowercased().contains(q) }
+    }
+
+    private func load() async {
+        guard let service = TranslationServiceCatalog.service(id: serviceID) else { return }
+        loading = true
+        error = nil
+        defer { loading = false }
+        do {
+            let secrets = (try? model.translations.secrets.secrets(for: service)) ?? [:]
+            models = try await ModelListFetcher.fetch(serviceID: serviceID,
+                                                      fieldValues: model.settings.translationFields[serviceID] ?? [:],
+                                                      secrets: secrets)
+        } catch {
+            models = []
+            self.error = error.localizedDescription
+        }
     }
 }

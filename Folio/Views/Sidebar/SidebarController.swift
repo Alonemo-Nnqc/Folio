@@ -350,10 +350,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return item
     }
 
-    static func dot(_ color: NSColor) -> NSImage? {
-        NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(paletteColors: [color]))
-    }
+    static func dot(_ color: NSColor) -> NSImage? { .colorDot(color) }
 
     private func item(_ title: String, _ symbol: String, action: @escaping () -> Void) -> NSMenuItem {
         let menuItem = NSMenuItem.closure(title, action)

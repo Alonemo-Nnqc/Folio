@@ -5,14 +5,18 @@ import SwiftUI
 /// same size for a custom colour that opens the system colour panel. The chosen swatch gets a ring.
 struct ColorSwatchRow: View {
     @Binding var hex: String?
+    /// The colours offered (name, "#RRGGBB"); the tag palette unless told otherwise.
+    var presets: [(name: String, hex: String)] = TagPalette.presets
     /// Offer a "none" swatch first (groups: back to the accent colour).
     var allowsNone = false
+    /// Offer the custom-colour swatch (system colour panel).
+    var allowsCustom = true
     var diameter: CGFloat = 18
     @State private var panel = ColorPanelBridge()
 
     private var isCustom: Bool {
         guard let hex else { return false }
-        return !TagPalette.presets.contains { $0.hex.caseInsensitiveCompare(hex) == .orderedSame }
+        return !presets.contains { $0.hex.caseInsensitiveCompare(hex) == .orderedSame }
     }
 
     var body: some View {
@@ -23,23 +27,27 @@ struct ColorSwatchRow: View {
                         .overlay(Image(systemName: "folder.fill").font(.system(size: diameter * 0.42)).foregroundStyle(.white))
                 } action: { hex = nil }
             }
-            ForEach(TagPalette.presets, id: \.hex) { preset in
+            ForEach(presets, id: \.hex) { preset in
                 swatch(selected: hex?.caseInsensitiveCompare(preset.hex) == .orderedSame, help: preset.name) {
                     Circle().fill(Color(hex: preset.hex))
                 } action: { hex = preset.hex }
             }
-            swatch(selected: isCustom, help: "自定义颜色…") {
-                if isCustom, let hex {
-                    Circle().fill(Color(hex: hex))
-                } else {
-                    Circle().fill(AngularGradient(colors: [.red, .orange, .yellow, .green, .mint, .blue, .indigo, .purple, .pink, .red],
-                                                  center: .center))
-                }
-            } action: {
-                panel.show(initial: hex.map(NSColor.init(hex:)) ?? .systemBlue) { color in hex = color.hexString }
-            }
+            if allowsCustom { customSwatch }
         }
         .onDisappear { panel.close() }
+    }
+
+    private var customSwatch: some View {
+        swatch(selected: isCustom, help: "自定义颜色…") {
+            if isCustom, let hex {
+                Circle().fill(Color(hex: hex))
+            } else {
+                Circle().fill(AngularGradient(colors: [.red, .orange, .yellow, .green, .mint, .blue, .indigo, .purple, .pink, .red],
+                                              center: .center))
+            }
+        } action: {
+            panel.show(initial: hex.map(NSColor.init(hex:)) ?? .systemBlue) { color in hex = color.hexString }
+        }
     }
 
     private func swatch<Fill: View>(selected: Bool, help: String, @ViewBuilder fill: () -> Fill,

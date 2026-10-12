@@ -825,8 +825,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     static func colorSwatch(_ color: AnnotationColor) -> NSImage {
-        NSImage(systemSymbolName: "circle.fill", accessibilityDescription: color.title)!
-            .withSymbolConfiguration(.init(paletteColors: [color.nsColor]))!
+        .colorDot(color.nsColor, diameter: 14)
     }
 }
 

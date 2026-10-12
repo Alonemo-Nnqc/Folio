@@ -232,8 +232,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         let current = AnnotationColor.nearest(to: annotation.color.withAlphaComponent(1))
         for preset in AnnotationColor.allCases {
             let item = NSMenuItem.closure(preset.title) { [weak self] in self?.setColor(annotation, preset) }
-            item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(paletteColors: [preset.nsColor]))
+            item.image = .colorDot(preset.nsColor)
             item.state = preset == current ? .on : .off
             menu.addItem(item)
         }

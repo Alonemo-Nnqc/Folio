@@ -36,3 +36,35 @@ extension NSColor {
                       Int(round(rgb.blueComponent * 255)))
     }
 }
+
+extension NSImage {
+    /// A filled colour dot for menus. Drawn as a bitmap that is not a template, because menus render
+    /// SF Symbols as monochrome templates and would drop the colour.
+    static func colorDot(_ color: NSColor, diameter: CGFloat = 12) -> NSImage {
+        let image = NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            let path = NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5))
+            color.setFill()
+            path.fill()
+            NSColor.black.withAlphaComponent(0.15).setStroke()
+            path.lineWidth = 0.5
+            path.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    /// An SF Symbol filled with a colour, kept in colour inside menus (e.g. a group's coloured folder).
+    static func coloredSymbol(_ name: String, _ color: NSColor, pointSize: CGFloat = 13) -> NSImage? {
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: pointSize, weight: .regular)) else { return nil }
+        let image = NSImage(size: symbol.size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+}

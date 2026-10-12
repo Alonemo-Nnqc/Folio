@@ -200,12 +200,10 @@ enum ItemMenuBuilder {
                     item.image = icon
                 }
                 if case .addToGroup(let id) = command, let hex = snapshot.groupsById[id]?.colorHex {
-                    item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)?
-                        .withSymbolConfiguration(.init(paletteColors: [NSColor(hex: hex)]))
+                    item.image = .coloredSymbol("folder", NSColor(hex: hex))
                 }
                 if case .toggleTag(let id) = command, let tag = snapshot.tagsById[id] {
-                    item.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
-                        .withSymbolConfiguration(.init(paletteColors: [NSColor(hex: tag.colorHex)]))
+                    item.image = .colorDot(NSColor(hex: tag.colorHex))
                 }
                 item.isEnabled = enabled
                 item.state = checked ? .on : .off

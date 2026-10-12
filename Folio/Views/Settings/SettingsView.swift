@@ -241,15 +241,15 @@ struct ReadingSettings: View {
                 Text("再次打开读过的论文时，会回到上次的页码、位置和缩放。新设置在下次打开论文时生效。")
             }
             Section {
-                Picker("默认高亮颜色", selection: $settings.highlightColor) {
-                    ForEach(AnnotationColor.allCases) { color in
-                        Label {
-                            Text(color.title)
-                        } icon: {
-                            Image(systemName: "circle.fill").foregroundStyle(Color(nsColor: color.nsColor))
-                        }
-                        .tag(color.rawValue)
-                    }
+                LabeledContent("默认高亮颜色") {
+                    ColorSwatchRow(hex: Binding(
+                        get: { AnnotationColor(rawValue: settings.highlightColor)?.nsColor.hexString },
+                        set: { hex in
+                            if let match = AnnotationColor.allCases.first(where: { $0.nsColor.hexString == hex }) {
+                                settings.highlightColor = match.rawValue
+                            }
+                        }),
+                        presets: AnnotationColor.allCases.map { ($0.title, $0.nsColor.hexString) }, allowsCustom: false)
                 }
                 TextField("批注作者", text: $settings.annotationAuthor, prompt: Text(NSFullUserName()))
             } header: {
