@@ -22,10 +22,10 @@ final class LibrarySplitViewController: NSSplitViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
-        sidebarItem.minimumThickness = 190
-        sidebarItem.maximumThickness = 380
+        sidebarItem.minimumThickness = 210
+        sidebarItem.maximumThickness = 400
         sidebarItem.canCollapse = true
-        sidebarItem.preferredThicknessFraction = 0.17
+        sidebarItem.preferredThicknessFraction = 0.2
 
         let content = NSSplitViewItem(viewController: itemList)
         content.minimumThickness = 420
@@ -41,7 +41,7 @@ final class LibrarySplitViewController: NSSplitViewController {
         addSplitViewItem(inspectorItem)
         // Widths and collapsed states are remembered (SIDE-11, INSP-01); UI tests start fresh.
         if !UserDefaults.standard.bool(forKey: "FolioUITesting") {
-            splitView.autosaveName = "FolioLibrarySplit"
+            splitView.autosaveName = "FolioLibrarySplit2"
         }
     }
 

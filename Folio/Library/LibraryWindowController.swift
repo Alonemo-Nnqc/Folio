@@ -31,7 +31,8 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         window.setAccessibilityIdentifier("libraryWindow")
         super.init(model: model, window: window)
 
-        let toolbar = NSToolbar(identifier: "LibraryToolbar")
+        // "2": the layout changed (sidebar button at the sidebar's edge); old saved layouts are not reused.
+        let toolbar = NSToolbar(identifier: "LibraryToolbar2")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = true
@@ -152,6 +153,15 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
 
     // MARK: NSWindowDelegate
 
+    /// The library is the anchor tab: while papers are open next to it, it stays (UI-09).
+    /// Alone, it closes like any main window and comes back from the Dock or 窗口 ▸ 文献库.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard (sender.tabGroup?.windows.count ?? 1) > 1 else { return true }
+        NSSound.beep()
+        model.toasts.show("文献库标签不能关闭，可以关闭论文标签", systemImage: "books.vertical")
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) {
         // Quick Look follows the list; it should not outlive the window.
         if QLPreviewPanel.sharedPreviewPanelExists(), QLPreviewPanel.shared().isVisible {
@@ -190,8 +200,10 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     // MARK: Toolbar
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .folioAdd, .space, .folioRead, .folioTranslate,
-         .folioExport, .space, .folioSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
+        // The flexible space before the sidebar button pins it to the sidebar's trailing edge; when the
+        // sidebar collapses, AppKit moves it next to the window controls.
+        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .folioAdd, .space, .folioRead,
+         .folioTranslate, .folioExport, .space, .folioSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -231,6 +243,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             }
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
+            item.showsIndicator = false
             return configure(item, label: "导出", symbol: "square.and.arrow.up", tip: "导出 BibTeX 或拷贝引用")
         case .folioSearch:
             let item = NSSearchToolbarItem(itemIdentifier: id)
@@ -240,7 +253,9 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             item.searchField.delegate = self
             item.searchField.sendsSearchStringImmediately = true
             item.searchField.setAccessibilityIdentifier("searchField")
-            item.preferredWidthForSearchField = 240
+            item.preferredWidthForSearchField = 180
+            // The field would otherwise stretch over all free toolbar space.
+            item.searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
             searchItem = item
             return item
         case .folioNote:

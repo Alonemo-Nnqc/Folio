@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Full Screen is in our own View menu; don't let AppKit add a second one.
         UserDefaults.standard.set(false, forKey: "NSFullScreenMenuItemEverywhere")
         model = AppModel()
+        NSApp.appearance = model.settings.appearance.nsAppearance
         MainMenu.install()
     }
 

@@ -23,7 +23,7 @@ final class SidebarUITests: FolioUITestCase {
     /// SIDE-08, SIDE-06: create, rename inline; subgroups have no "新建子分组".
     func testCreateRenameAndSubgroupMenu() throws {
         launch()
-        app.buttons["newGroupButton"].click()
+        app.typeKey("n", modifierFlags: [.command, .shift])
         let editor = sidebar.textFields.firstMatch
         waitFor(editor)
         replaceText(in: editor, with: "论文辅导")

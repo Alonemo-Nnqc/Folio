@@ -1,3 +1,4 @@
+import AppKit
 import FolioTranslate
 import Foundation
 import Observation
@@ -41,6 +42,27 @@ final class AppSettings {
         }
     }
 
+    /// 设置 ▸ 外观: follow the system, or force light / dark.
+    enum Appearance: String, CaseIterable, Identifiable {
+        case system, light, dark
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .system: "自动"
+            case .light: "浅色"
+            case .dark: "深色"
+            }
+        }
+
+        var nsAppearance: NSAppearance? {
+            switch self {
+            case .system: nil
+            case .light: NSAppearance(named: .aqua)
+            case .dark: NSAppearance(named: .darkAqua)
+            }
+        }
+    }
+
     private enum Key {
         static let openWith = "openWithMode"
         static let openWithAppPath = "openWithAppPath"
@@ -59,6 +81,7 @@ final class AppSettings {
         static let translationFields = "translationFields"
         static let translationOptions = "translationOptions"
         static let translatorCustomPath = "translatorCustomPath"
+        static let appearance = "appearance"
     }
 
     private let defaults: UserDefaults
@@ -92,6 +115,12 @@ final class AppSettings {
     }
     var translationOptions: TranslationOptions {
         didSet { save(try? JSONEncoder().encode(translationOptions), Key.translationOptions) }
+    }
+    var appearance: Appearance {
+        didSet {
+            save(appearance.rawValue, Key.appearance)
+            NSApp.appearance = appearance.nsAppearance
+        }
     }
     /// A user-installed `pdf2zh_next`; empty = the copy Folio manages (TRANS-02).
     var translatorCustomPath: String { didSet { save(translatorCustomPath, Key.translatorCustomPath) } }
@@ -127,6 +156,7 @@ final class AppSettings {
         translationOptions = defaults.data(forKey: Key.translationOptions)
             .flatMap { try? JSONDecoder().decode(TranslationOptions.self, from: $0) } ?? TranslationOptions()
         translatorCustomPath = defaults.string(forKey: Key.translatorCustomPath) ?? ""
+        appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String
             ?? defaults.string(forKey: Key.libraryPath)!

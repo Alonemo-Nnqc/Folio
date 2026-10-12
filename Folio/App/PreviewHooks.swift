@@ -18,6 +18,7 @@ import Foundation
 ///   -FolioPreviewParallel YES                   with OpenReader: turn on 对照阅读
 ///   -FolioReaderSelfTest <log>                  with OpenReader: scripted annotation/save/position checks
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
+///   -FolioPreviewCollapseSidebar YES            hides the sidebar
 ///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
@@ -57,6 +58,9 @@ enum PreviewHooks {
         if drop > 0 { model.externalDropCount = drop }
         if let toast = defaults.string(forKey: "FolioPreviewToast") { model.toasts.show(toast, systemImage: "folder.badge.plus") }
         if defaults.bool(forKey: "FolioPreviewExpandGroups") { model.previewExpandAllGroups = true }
+        if defaults.bool(forKey: "FolioPreviewCollapseSidebar") {
+            AppDelegate.shared.libraryWindowController.splitViewController.toggleSidebar(nil)
+        }
         if let pane = defaults.string(forKey: "FolioPreviewSettings") {
             AppDelegate.shared.showSettings(nil)
             AppDelegate.shared.settingsWindow?.select(pane: pane)

@@ -1,36 +1,21 @@
 import AppKit
 import FolioCore
 
-/// NSOutlineView subclass: hides the built-in disclosure triangle (groups use a trailing chevron)
-/// and handles Return / Delete for groups.
-final class SidebarOutlineView: NSOutlineView {
-    var onRename: ((Int) -> Void)?
-    var onDelete: ((Int) -> Void)?
-
-    override func frameOfOutlineCell(atRow row: Int) -> NSRect { .zero }
-
-    override func keyDown(with event: NSEvent) {
-        let isReturn = event.keyCode == 36 || event.keyCode == 76
-        let isDelete = event.keyCode == 51 || event.keyCode == 117
-        if selectedRow >= 0 && isReturn {
-            onRename?(selectedRow)
-        } else if selectedRow >= 0 && isDelete {
-            onDelete?(selectedRow)
-        } else {
-            super.keyDown(with: event)
-        }
-    }
-}
-
-/// Data source, delegate, menus and drag-and-drop for the sidebar (SIDE-*).
+/// The sidebar source list (SIDE-*): sections 文献库 / 分组 / 标签 as collapsible group rows, user
+/// groups with the system disclosure triangle, and every drag-and-drop rule.
+///
+/// Like Finder's sidebar it never takes keyboard focus, so the selection is the quiet, translucent
+/// sidebar highlight rather than the accent-coloured one of a focused list; keyboard commands go to
+/// the item list. Groups are renamed by double-clicking or from the context menu.
 final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
-    let outline = SidebarOutlineView()
+    let outline = NSOutlineView()
     private let tree = SidebarTree()
     private weak var model: AppModel?
     private var isSyncingSelection = false
+    private var isRestoringExpansion = false
     private var renamingGroupId: String?
     private static let expandedKey = "sidebarExpandedGroups"
-    private static let tagsCollapsedKey = "sidebarTagsCollapsed"
+    private static let collapsedSectionsKey = "sidebarCollapsedSections"
 
     init(model: AppModel) {
         self.model = model
@@ -45,25 +30,25 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.outlineTableColumn = column
         outline.headerView = nil
         outline.style = .sourceList
-        outline.backgroundColor = .clear
-        outline.rowHeight = 28
-        outline.indentationPerLevel = 16
+        // Row height, font and icon size follow 系统设置 ▸ 外观 ▸ 边栏图标大小.
+        outline.rowSizeStyle = .default
         outline.floatsGroupRows = false
         outline.autoresizesOutlineColumn = false
         outline.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        outline.refusesFirstResponder = true
+        outline.allowsEmptySelection = false
         outline.dataSource = self
         outline.delegate = self
+        outline.target = self
+        outline.doubleAction = #selector(doubleClicked)
         outline.registerForDraggedTypes([.folioItem, .folioGroup, .fileURL])
         outline.setDraggingSourceOperationMask(.move, forLocal: true)
         outline.draggingDestinationFeedbackStyle = .sourceList
         outline.setAccessibilityIdentifier("sidebar")
+        outline.setAccessibilityLabel("边栏")
         let menu = NSMenu()
         menu.delegate = self
         outline.menu = menu
-        outline.onRename = { [weak self] row in self?.beginRenaming(row: row) }
-        outline.onDelete = { [weak self] row in
-            if let id = (self?.outline.item(atRow: row) as? SidebarNode)?.groupId { self?.model?.confirmDeleteGroup(id) }
-        }
     }
 
     // MARK: Updates from the model
@@ -71,10 +56,13 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func update() {
         // Reloading rows would reconfigure the cell being edited and end the rename.
         guard let model, renamingGroupId == nil else { return }
-        let structureChanged = tree.rebuild(from: model.snapshot)
-        if structureChanged {
+        if tree.rebuild(from: model.snapshot) {
+            // Reloading drops the selection and AppKit selects the first row on its own; that must not
+            // reach the model, or the view would jump to 所有文献. syncSelection() restores it below.
+            isSyncingSelection = true
             outline.reloadData()
             restoreExpansion()
+            isSyncingSelection = false
         } else {
             let visible = outline.rows(in: outline.visibleRect)
             outline.reloadData(forRowIndexes: IndexSet(integersIn: visible.location..<visible.location + visible.length),
@@ -82,7 +70,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         }
         if model.previewExpandAllGroups {
             model.previewExpandAllGroups = false
-            for root in tree.roots where !root.children.isEmpty { outline.expandItem(root) }
+            isSyncingSelection = true
+            outline.expandItem(nil, expandChildren: true)
+            isSyncingSelection = false
         }
         syncSelection()
         if let pending = model.groupPendingRename, let node = tree.node(for: .group(pending)) {
@@ -90,6 +80,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             expandAncestors(of: node)
             let row = outline.row(forItem: node)
             if row >= 0 {
+                outline.scrollRowToVisible(row)
                 DispatchQueue.main.async { self.beginRenaming(row: row) }
             }
         }
@@ -111,36 +102,56 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         isSyncingSelection = false
     }
 
-    /// Expands the node's parent. `NSOutlineView.parent(forItem:)` is nil for children of collapsed
-    /// items (they are not loaded yet), so the parent comes from the snapshot instead.
+    /// Expands the section and parent group of a node. `NSOutlineView.parent(forItem:)` is nil for
+    /// children of collapsed items (they are not loaded yet), so parents come from the snapshot.
     private func expandAncestors(of node: SidebarNode) {
-        let parentKind: SidebarNode.Kind? = switch node.kind {
-        case .group(let id): model?.snapshot.groupsById[id]?.parentId.map { .group($0) }
-        case .tag: .tagsHeader
-        default: nil
+        var chain: [SidebarNode.Kind] = []
+        switch node.kind {
+        case .builtin: chain = [.libraryHeader]
+        case .tag: chain = [.tagsHeader]
+        case .group(let id):
+            chain = [.groupsHeader]
+            if let parent = model?.snapshot.groupsById[id]?.parentId { chain.append(.group(parent)) }
+        default: break
         }
-        if let parentKind, let parent = tree.node(for: parentKind), !outline.isItemExpanded(parent) {
-            outline.expandItem(parent)
+        let wasSyncing = isSyncingSelection
+        isSyncingSelection = true
+        for kind in chain {
+            if let parent = tree.node(for: kind), !outline.isItemExpanded(parent) { outline.expandItem(parent) }
         }
+        isSyncingSelection = wasSyncing
     }
 
     private func restoreExpansion() {
-        let expanded = Set(UserDefaults.standard.stringArray(forKey: Self.expandedKey) ?? [])
-        for root in tree.roots {
-            switch root.kind {
-            case .group(let id) where expanded.contains(id) && !root.children.isEmpty:
-                outline.expandItem(root)
-            case .tagsHeader where !UserDefaults.standard.bool(forKey: Self.tagsCollapsedKey):
-                outline.expandItem(root)
-            default: break
+        isRestoringExpansion = true
+        defer { isRestoringExpansion = false }
+        let collapsedSections = Set(UserDefaults.standard.stringArray(forKey: Self.collapsedSectionsKey) ?? [])
+        let expandedGroups = Set(UserDefaults.standard.stringArray(forKey: Self.expandedKey) ?? [])
+        for section in tree.roots where !collapsedSections.contains(Self.key(section.kind)) {
+            outline.expandItem(section)
+        }
+        if let groups = tree.node(for: .groupsHeader) {
+            for group in groups.children where expandedGroups.contains(group.groupId ?? "") && !group.children.isEmpty {
+                outline.expandItem(group)
             }
         }
     }
 
     private func persistExpansion() {
-        guard !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
-        let ids = tree.roots.filter { outline.isItemExpanded($0) }.compactMap(\.groupId)
-        UserDefaults.standard.set(ids, forKey: Self.expandedKey)
+        guard !isRestoringExpansion, !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
+        let collapsed = tree.roots.filter { !outline.isItemExpanded($0) }.map { Self.key($0.kind) }
+        UserDefaults.standard.set(collapsed, forKey: Self.collapsedSectionsKey)
+        let expanded = (tree.node(for: .groupsHeader)?.children ?? []).filter { outline.isItemExpanded($0) }.compactMap(\.groupId)
+        UserDefaults.standard.set(expanded, forKey: Self.expandedKey)
+    }
+
+    private static func key(_ kind: SidebarNode.Kind) -> String {
+        switch kind {
+        case .libraryHeader: "library"
+        case .groupsHeader: "groups"
+        case .tagsHeader: "tags"
+        default: ""
+        }
     }
 
     // MARK: Data source
@@ -154,42 +165,32 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        !((item as? SidebarNode)?.children.isEmpty ?? true)
+        guard let node = item as? SidebarNode else { return false }
+        // Sections stay collapsible even when empty, so their + is always there.
+        return node.isHeader || !node.children.isEmpty
     }
 
     // MARK: Delegate
 
     func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
-        (item as? SidebarNode)?.kind == .tagsHeader
+        (item as? SidebarNode)?.isHeader ?? false
     }
 
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         (item as? SidebarNode)?.canSelect ?? false
     }
 
-    func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
-        switch (item as? SidebarNode)?.kind {
-        case .divider: 30
-        case .tagsHeader: 30
-        default: outlineView.rowHeight
-        }
-    }
-
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let node = item as? SidebarNode, let model else { return nil }
         switch node.kind {
-        case .divider:
-            let cell = outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell
-                ?? SidebarHeaderCell()
-            cell.configure(title: "分组", addTitle: "新建分组", action: #selector(LibraryWindowController.newGroup(_:)),
-                           identifier: "sidebar.addGroup")
-            return cell
+        case .libraryHeader:
+            return header(title: "文献库", addTitle: nil, action: nil, identifier: nil)
+        case .groupsHeader:
+            return header(title: "分组", addTitle: "新建分组", action: #selector(LibraryWindowController.newGroup(_:)),
+                          identifier: "sidebar.addGroup")
         case .tagsHeader:
-            let cell = outlineView.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell
-                ?? SidebarHeaderCell()
-            cell.configure(title: "标签", addTitle: "新建标签", action: #selector(LibraryWindowController.newTag(_:)),
-                           identifier: "sidebar.addTag", collapsible: true)
-            return cell
+            return header(title: "标签", addTitle: "新建标签", action: #selector(LibraryWindowController.newTag(_:)),
+                          identifier: "sidebar.addTag")
         case .builtin(let scope):
             let cell = makeCell()
             let symbol = switch scope {
@@ -197,38 +198,35 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             case .unfiled: "tray"
             default: "trash"
             }
-            cell.configure(symbol: symbol, tint: nil, title: model.title(for: scope), count: model.counts[scope],
-                           expandable: false, isExpanded: false)
+            cell.configure(symbol: symbol, tint: nil, title: model.title(for: scope), count: model.counts[scope])
             cell.setAccessibilityIdentifier("sidebar.\(scope.key)")
             return cell
         case .group(let id):
             let cell = makeCell()
-            let expandable = !node.children.isEmpty
-            cell.configure(symbol: "folder", tint: nil, title: model.snapshot.groupsById[id]?.name ?? "",
-                           count: model.counts[.group(id)], expandable: expandable,
-                           isExpanded: outlineView.isItemExpanded(node))
-            cell.onToggle = { [weak self, weak node] in
-                guard let self, let node else { return }
-                if self.outline.isItemExpanded(node) { self.outline.animator().collapseItem(node) }
-                else { self.outline.animator().expandItem(node) }
-            }
+            let name = model.snapshot.groupsById[id]?.name ?? ""
+            cell.configure(symbol: "folder", tint: nil, title: name, count: model.counts[.group(id)])
             cell.name.delegate = self
-            cell.setAccessibilityIdentifier("sidebar.group.\(model.snapshot.groupsById[id]?.name ?? id)")
+            cell.setAccessibilityIdentifier("sidebar.group.\(name)")
             return cell
         case .tag(let id):
             let cell = makeCell()
             let tag = model.snapshot.tagsById[id]
             cell.configure(symbol: "circle.fill", tint: NSColor(hex: tag?.colorHex ?? "#8E8E93"), title: tag?.name ?? "",
-                           count: model.counts[.tag(id)], expandable: false, isExpanded: false)
+                           count: model.counts[.tag(id)])
             cell.setAccessibilityIdentifier("sidebar.tag.\(tag?.name ?? id)")
             return cell
         }
     }
 
-    private func makeCell() -> SidebarCell {
-        let cell = outline.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell ?? SidebarCell()
-        cell.onToggle = nil
+    private func header(title: String, addTitle: String?, action: Selector?, identifier: String?) -> NSView {
+        let cell = outline.makeView(withIdentifier: SidebarHeaderCell.identifier, owner: nil) as? SidebarHeaderCell
+            ?? SidebarHeaderCell()
+        cell.configure(title: title, addTitle: addTitle, action: action, identifier: identifier)
         return cell
+    }
+
+    private func makeCell() -> SidebarCell {
+        outline.makeView(withIdentifier: SidebarCell.identifier, owner: nil) as? SidebarCell ?? SidebarCell()
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
@@ -237,21 +235,20 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         model?.sidebarSelection = scope
     }
 
-    func outlineViewItemDidExpand(_ notification: Notification) { expansionChanged(notification, expanded: true) }
-    func outlineViewItemDidCollapse(_ notification: Notification) { expansionChanged(notification, expanded: false) }
-
-    private func expansionChanged(_ notification: Notification, expanded: Bool) {
-        guard let node = notification.userInfo?["NSObject"] as? SidebarNode else { return }
-        if node.kind == .tagsHeader {
-            UserDefaults.standard.set(!expanded, forKey: Self.tagsCollapsedKey)
-        } else {
-            persistExpansion()
-            let row = outline.row(forItem: node)
-            (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCell)?.setExpanded(expanded, animated: true)
-        }
-    }
+    func outlineViewItemDidExpand(_ notification: Notification) { persistExpansion() }
+    func outlineViewItemDidCollapse(_ notification: Notification) { persistExpansion() }
 
     // MARK: Renaming (SIDE-06/08)
+
+    @objc private func doubleClicked() {
+        let row = outline.clickedRow
+        guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode else { return }
+        if node.groupId != nil {
+            beginRenaming(row: row)
+        } else if node.isHeader {
+            outline.isItemExpanded(node) ? outline.animator().collapseItem(node) : outline.animator().expandItem(node)
+        }
+    }
 
     func beginRenaming(row: Int) {
         guard let node = outline.item(atRow: row) as? SidebarNode, let groupId = node.groupId,
@@ -277,7 +274,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         guard selector == #selector(NSResponder.cancelOperation(_:)), let groupId = renamingGroupId else { return false }
         (control as? NSTextField)?.stringValue = model?.snapshot.groupsById[groupId]?.name ?? ""
-        outline.window?.makeFirstResponder(outline)
+        control.window?.makeFirstResponder(nil)
         return true
     }
 
@@ -288,11 +285,11 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard let model else { return }
         let node = outline.clickedRow >= 0 ? outline.item(atRow: outline.clickedRow) as? SidebarNode : nil
         switch node?.kind {
-        case .none, .divider:
+        case .none, .libraryHeader, .groupsHeader:
             menu.addItem(item("创建分组", "folder.badge.plus") { model.createGroup() })
             menu.addItem(item("搜索文献", "magnifyingglass") { model.showSearch() })
         case .builtin(.trash):
-            let empty = item("清空回收站", "trash.slash") { model.confirmEmptyTrash() }
+            let empty = item("清空回收站…", "trash.slash") { model.confirmEmptyTrash() }
             empty.isEnabled = (model.counts[.trash] ?? 0) > 0
             menu.addItem(empty)
         case .builtin:
@@ -304,12 +301,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             }
             menu.addItem(item("重命名", "pencil") { [weak self] in self?.beginRenaming(row: row) })
             menu.addItem(.separator())
-            menu.addItem(item("删除分组", "trash") { model.confirmDeleteGroup(id) })
+            menu.addItem(item("删除分组…", "trash") { model.confirmDeleteGroup(id) })
         case .tagsHeader:
             menu.addItem(item("新建标签…", "tag") { model.activeSheet = .tagEditor(tagId: nil, applyTo: []) })
         case .tag(let id):
             menu.addItem(item("编辑标签…", "pencil") { model.activeSheet = .tagEditor(tagId: id, applyTo: []) })
-            menu.addItem(item("删除标签", "trash") { model.confirmDeleteTag(id) })
+            menu.addItem(item("删除标签…", "trash") { model.confirmDeleteTag(id) })
         }
     }
 
@@ -339,13 +336,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?,
                      proposedChildIndex index: Int) -> NSDragOperation {
         guard let source = dragSource(info) else { return [] }
-        var target = dropTarget(item: item as? SidebarNode, childIndex: index)
-        // Keep groups below the built-ins: clamp a drop above the divider to the first group slot.
-        if case .group = source, item == nil, index >= 0, index < tree.firstGroupIndex {
-            outlineView.setDropItem(nil, dropChildIndex: tree.firstGroupIndex)
-            target = .topLevelGap(index: 0)
-        }
-        switch SidebarDragRules.decide(source, target) {
+        switch SidebarDragRules.decide(source, dropTarget(item: item as? SidebarNode, childIndex: index)) {
         case .reject: return []
         case .moveGroup, .nestGroup: return .move
         case .trashItems: return .delete
@@ -397,23 +388,23 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return urls.isEmpty ? nil : .files(urls)
     }
 
+    /// Maps the outline's proposal onto the sidebar's drop vocabulary. Top-level groups are the
+    /// children of the 分组 section, so their gaps are child indexes of that header.
     private func dropTarget(item: SidebarNode?, childIndex index: Int) -> SidebarDropTarget {
-        guard let item else {
-            if index >= tree.firstGroupIndex && index <= tree.groupsEndIndex {
-                return .topLevelGap(index: index - tree.firstGroupIndex)
-            }
-            return .elsewhere
-        }
+        guard let item else { return .elsewhere }
+        let onItem = index == NSOutlineViewDropOnItemIndex
         switch item.kind {
+        case .groupsHeader:
+            return .topLevelGap(index: onItem ? item.children.count : index)
         case .builtin(let scope):
-            return index == NSOutlineViewDropOnItemIndex ? .builtin(scope) : .elsewhere
+            return onItem ? .builtin(scope) : .elsewhere
         case .group(let id):
             let isTopLevel = model?.snapshot.groupsById[id]?.parentId == nil
-            if index == NSOutlineViewDropOnItemIndex { return .group(id: id, isTopLevel: isTopLevel) }
+            if onItem { return .group(id: id, isTopLevel: isTopLevel) }
             return isTopLevel ? .childGap(parentId: id, index: index) : .elsewhere
         case .tag(let id):
-            return index == NSOutlineViewDropOnItemIndex ? .tag(id) : .elsewhere
-        case .divider, .tagsHeader:
+            return onItem ? .tag(id) : .elsewhere
+        case .libraryHeader, .tagsHeader:
             return .elsewhere
         }
     }

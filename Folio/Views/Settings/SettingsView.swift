@@ -1,57 +1,221 @@
 import AppKit
 import SwiftUI
 
-/// Settings window (4.16): AppKit toolbar tabs like System Settings' older panes, each pane a grouped
-/// SwiftUI form. Changes apply immediately; there is no Save button.
+/// Settings window (4.16), laid out like System Settings: panes listed in a sidebar on the left,
+/// the selected pane's grouped form on the right. Changes apply immediately; there is no Save button.
 final class SettingsWindowController: NSWindowController {
+    private let navigation = SettingsNavigation()
+
     init(model: AppModel) {
-        let tabs = NSTabViewController()
-        tabs.tabStyle = .toolbar
-        tabs.canPropagateSelectedChildViewControllerTitle = true
-        let panes: [(String, String, AnyView)] = [
-            ("通用", "gearshape", AnyView(GeneralSettings(settings: model.settings, model: model))),
-            ("阅读", "book.pages", AnyView(ReadingSettings(settings: model.settings))),
-            ("文献库", "books.vertical", AnyView(LibrarySettings(model: model))),
-            ("检索", "magnifyingglass", AnyView(RetrievalSettings(settings: model.settings, model: model))),
-            ("翻译", "character.book.closed", AnyView(TranslationSettingsPane(model: model))),
-            ("导入", "square.and.arrow.down", AnyView(ImportSettings(model: model))),
-        ]
-        for (title, symbol, view) in panes {
-            let host = NSHostingController(rootView: view.frame(width: 560).fixedSize(horizontal: false, vertical: true))
-            host.sizingOptions = [.preferredContentSize]
-            host.title = title
-            let item = NSTabViewItem(viewController: host)
-            item.label = title
-            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
-            tabs.addTabViewItem(item)
-        }
-        let window = NSWindow(contentViewController: tabs)
-        window.styleMask = [.titled, .closable]
-        window.toolbarStyle = .preference
-        window.setFrameAutosaveName("FolioSettingsWindow")
+        let host = NSHostingController(rootView: SettingsRootView(model: model, navigation: navigation))
+        // The pane title becomes the window title, as in System Settings.
+        host.sceneBridgingOptions = [.title, .toolbars]
+        let window = NSWindow(contentViewController: host)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.toolbarStyle = .unified
+        window.setContentSize(NSSize(width: 760, height: 560))
+        window.minSize = NSSize(width: 640, height: 420)
+        window.setFrameAutosaveName("FolioSettingsWindow2")
         window.setAccessibilityIdentifier("settingsWindow")
         super.init(window: window)
-        let remembered = UserDefaults.standard.integer(forKey: "settingsPane")
-        if tabs.tabViewItems.indices.contains(remembered) { tabs.selectedTabViewItemIndex = remembered }
-        selection = tabs.observe(\.selectedTabViewItemIndex) { tabs, _ in
-            MainActor.assumeIsolated { UserDefaults.standard.set(tabs.selectedTabViewItemIndex, forKey: "settingsPane") }
-        }
     }
-
-    private var selection: NSKeyValueObservation?
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
     override func showWindow(_ sender: Any?) {
-        if window?.isVisible == false { window?.center() }
+        if window?.isVisible == false, !(window?.setFrameUsingName("FolioSettingsWindow2") ?? false) { window?.center() }
         super.showWindow(sender)
     }
 
-    /// Opens a given pane by title (preview hooks, "翻译设置…" buttons).
+    /// Opens a given pane by title (preview hooks, "打开设置" buttons).
     func select(pane title: String) {
-        guard let tabs = window?.contentViewController as? NSTabViewController,
-              let index = tabs.tabViewItems.firstIndex(where: { $0.label == title }) else { return }
-        tabs.selectedTabViewItemIndex = index
+        if let pane = SettingsPane.allCases.first(where: { $0.title == title }) { navigation.pane = pane }
+    }
+}
+
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, appearance, reading, library, retrieval, translation, importing
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "通用"
+        case .appearance: "外观"
+        case .reading: "阅读"
+        case .library: "文献库"
+        case .retrieval: "检索"
+        case .translation: "翻译"
+        case .importing: "导入"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .appearance: "circle.lefthalf.filled"
+        case .reading: "book.pages.fill"
+        case .library: "books.vertical.fill"
+        case .retrieval: "magnifyingglass"
+        case .translation: "character.book.closed.fill"
+        case .importing: "square.and.arrow.down.fill"
+        }
+    }
+
+    /// Icon tile colour, System Settings style.
+    var tint: Color {
+        switch self {
+        case .general: .gray
+        case .appearance: Color(white: 0.15)
+        case .reading: .orange
+        case .library: .brown
+        case .retrieval: .blue
+        case .translation: .green
+        case .importing: .purple
+        }
+    }
+}
+
+@Observable
+final class SettingsNavigation {
+    var pane: SettingsPane = SettingsPane(rawValue: UserDefaults.standard.string(forKey: "settingsPane") ?? "") ?? .general {
+        didSet { UserDefaults.standard.set(pane.rawValue, forKey: "settingsPane") }
+    }
+}
+
+struct SettingsRootView: View {
+    let model: AppModel
+    @Bindable var navigation: SettingsNavigation
+
+    var body: some View {
+        NavigationSplitView {
+            List(SettingsPane.allCases, selection: Binding(get: { navigation.pane }, set: { if let pane = $0 { navigation.pane = pane } })) { pane in
+                Label {
+                    Text(pane.title)
+                } icon: {
+                    SettingsIcon(symbol: pane.symbol, tint: pane.tint)
+                }
+                .tag(pane)
+            }
+            .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 240)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            detail
+                .navigationTitle(navigation.pane.title)
+        }
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        switch navigation.pane {
+        case .general: GeneralSettings(settings: model.settings, model: model)
+        case .appearance: AppearanceSettings(settings: model.settings)
+        case .reading: ReadingSettings(settings: model.settings)
+        case .library: LibrarySettings(model: model)
+        case .retrieval: RetrievalSettings(settings: model.settings, model: model)
+        case .translation: TranslationSettingsPane(model: model)
+        case .importing: ImportSettings(model: model)
+        }
+    }
+}
+
+/// White symbol on a coloured rounded square, like the icons in System Settings.
+struct SettingsIcon: View {
+    let symbol: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 20, height: 20)
+            .background(tint.gradient, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+}
+
+/// 外观: 自动 / 浅色 / 深色, with System Settings-style previews.
+struct AppearanceSettings: View {
+    @Bindable var settings: AppSettings
+
+    var body: some View {
+        Form {
+            Section {
+                HStack(spacing: 22) {
+                    Spacer(minLength: 0)
+                    ForEach(AppSettings.Appearance.allCases) { option in
+                        Button {
+                            settings.appearance = option
+                        } label: {
+                            VStack(spacing: 6) {
+                                AppearancePreview(option: option)
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                            .strokeBorder(settings.appearance == option ? Color.accentColor : .clear, lineWidth: 3)
+                                            .padding(-3)
+                                    }
+                                Text(option.title)
+                                    .font(.callout)
+                                    .foregroundStyle(settings.appearance == option ? .primary : .secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("外观：\(option.title)")
+                        .accessibilityAddTraits(settings.appearance == option ? .isSelected : [])
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 6)
+            } header: {
+                Text("外观")
+            } footer: {
+                Text("\"自动\"会跟随系统在浅色和深色之间切换。阅读器中的 PDF 页面始终按原样显示。")
+            }
+            Section {
+                LabeledContent("边栏图标大小") {
+                    Button("在系统设置中更改…") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!)
+                    }
+                }
+            } footer: {
+                Text("边栏的行高和字号跟随系统设置 ▸ 外观 ▸ 边栏图标大小。")
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct AppearancePreview: View {
+    let option: AppSettings.Appearance
+
+    var body: some View {
+        ZStack {
+            switch option {
+            case .light: window(dark: false)
+            case .dark: window(dark: true)
+            case .system:
+                window(dark: false)
+                    .overlay(alignment: .trailing) {
+                        window(dark: true).mask(Rectangle().frame(width: 40).frame(maxWidth: .infinity, alignment: .trailing))
+                    }
+            }
+        }
+        .frame(width: 80, height: 54)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func window(dark: Bool) -> some View {
+        ZStack(alignment: .topLeading) {
+            LinearGradient(colors: dark ? [Color(white: 0.25), Color(white: 0.12)] : [Color(red: 0.62, green: 0.78, blue: 0.95), Color(red: 0.85, green: 0.9, blue: 0.98)],
+                           startPoint: .top, endPoint: .bottom)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(dark ? Color(white: 0.18) : .white)
+                .frame(width: 56, height: 34)
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(dark ? Color(white: 0.28) : Color(white: 0.9)).frame(width: 16)
+                }
+                .padding(.leading, 12)
+                .padding(.top, 10)
+        }
     }
 }
 

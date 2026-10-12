@@ -719,7 +719,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     // MARK: Toolbar
 
     func configureToolbar() {
-        let toolbar = NSToolbar(identifier: "ReaderToolbar")
+        let toolbar = NSToolbar(identifier: "ReaderToolbar2")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = true
@@ -728,7 +728,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .readerZoom, .space, .readerTools, .readerColor,
+        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .readerZoom, .space, .readerTools, .readerColor,
          .space, .readerTranslate, .readerSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
     }
 
@@ -772,6 +772,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             }
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
+            item.showsIndicator = false
             item.label = "颜色"
             item.paletteLabel = "批注颜色"
             item.toolTip = "批注颜色"
@@ -785,6 +786,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             menu.addItem(withTitle: "取消翻译", action: #selector(cancelTranslation(_:)), keyEquivalent: "")
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
+            item.showsIndicator = false
             item.label = "翻译"
             item.paletteLabel = "翻译"
             item.toolTip = "保留排版翻译全文、对照阅读"
@@ -797,7 +799,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             item.searchField.placeholderString = "在文档中查找"
             item.searchField.delegate = self
             item.searchField.sendsSearchStringImmediately = false
-            item.preferredWidthForSearchField = 200
+            item.preferredWidthForSearchField = 160
+            // The field would otherwise stretch over all free toolbar space.
+            item.searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 200).isActive = true
             searchItem = item
             return item
         case .readerPrint:
