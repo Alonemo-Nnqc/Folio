@@ -82,6 +82,10 @@ final class AppSettings {
         static let translationOptions = "translationOptions"
         static let translatorCustomPath = "translatorCustomPath"
         static let appearance = "appearance"
+        static let markReadingOnOpen = "markReadingOnOpen"
+        static let readerPageShadows = "readerPageShadows"
+        static let annotationAuthor = "annotationAuthor"
+        static let autoRetrieveOnImport = "autoRetrieveOnImport"
     }
 
     private let defaults: UserDefaults
@@ -122,6 +126,13 @@ final class AppSettings {
             NSApp.appearance = appearance.nsAppearance
         }
     }
+    /// Opening an unread paper marks it as being read (OPEN-03).
+    var markReadingOnOpen: Bool { didSet { save(markReadingOnOpen, Key.markReadingOnOpen) } }
+    var readerPageShadows: Bool { didSet { save(readerPageShadows, Key.readerPageShadows) } }
+    /// Author written into new annotations (Preview shows it in its annotation list).
+    var annotationAuthor: String { didSet { save(annotationAuthor, Key.annotationAuthor) } }
+    /// Look up metadata as soon as a PDF is added (META-01); off = only on request.
+    var autoRetrieveOnImport: Bool { didSet { save(autoRetrieveOnImport, Key.autoRetrieveOnImport) } }
     /// A user-installed `pdf2zh_next`; empty = the copy Folio manages (TRANS-02).
     var translatorCustomPath: String { didSet { save(translatorCustomPath, Key.translatorCustomPath) } }
 
@@ -138,6 +149,10 @@ final class AppSettings {
             Key.reopenReaderTabs: true,
             Key.highlightColor: "yellow",
             Key.useZoteroRecognizer: true,
+            Key.markReadingOnOpen: true,
+            Key.readerPageShadows: true,
+            Key.annotationAuthor: NSFullUserName(),
+            Key.autoRetrieveOnImport: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -156,6 +171,10 @@ final class AppSettings {
         translationOptions = defaults.data(forKey: Key.translationOptions)
             .flatMap { try? JSONDecoder().decode(TranslationOptions.self, from: $0) } ?? TranslationOptions()
         translatorCustomPath = defaults.string(forKey: Key.translatorCustomPath) ?? ""
+        markReadingOnOpen = defaults.bool(forKey: Key.markReadingOnOpen)
+        readerPageShadows = defaults.bool(forKey: Key.readerPageShadows)
+        annotationAuthor = defaults.string(forKey: Key.annotationAuthor) ?? NSFullUserName()
+        autoRetrieveOnImport = defaults.bool(forKey: Key.autoRetrieveOnImport)
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String

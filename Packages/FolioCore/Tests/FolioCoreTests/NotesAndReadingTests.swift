@@ -92,3 +92,16 @@ import Testing
         #expect(snapshot.groupItems[group.id]?.contains(file.itemId) == true)
     }
 }
+
+@Suite struct GroupColorTests {
+    @Test func groupColourIsStoredAndCleared() throws {
+        let library = try Library.temporary()
+        let group = try library.createGroup(name: "夜间场景")
+        #expect(group.colorHex == nil)
+        try library.setGroupColor(group.id, colorHex: "#34C759")
+        #expect(try library.snapshot().groupsById[group.id]?.colorHex == "#34C759")
+        try library.setGroupColor(group.id, colorHex: nil)
+        #expect(try library.snapshot().groupsById[group.id]?.colorHex == nil)
+        #expect(throws: LibraryError.self) { try library.setGroupColor("missing", colorHex: "#000000") }
+    }
+}

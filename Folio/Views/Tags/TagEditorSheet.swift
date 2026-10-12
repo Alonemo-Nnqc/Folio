@@ -31,31 +31,7 @@ struct TagEditorSheet: View {
                 Text("颜色")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 8) {
-                    ForEach(TagPalette.presets, id: \.hex) { preset in
-                        Button {
-                            colorHex = preset.hex
-                        } label: {
-                            Circle()
-                                .fill(Color(hex: preset.hex))
-                                .frame(width: 20, height: 20)
-                                .overlay {
-                                    if preset.hex == colorHex {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                        .help(preset.name)
-                        .accessibilityLabel(preset.name)
-                    }
-                    ColorPicker("自定义颜色", selection: customColor, supportsOpacity: false)
-                        .labelsHidden()
-                        .frame(width: 28)
-                        .help("自定义颜色")
-                }
+                ColorSwatchRow(hex: Binding(get: { colorHex }, set: { colorHex = $0 ?? colorHex }))
             }
             if !name.isEmpty {
                 HStack {
@@ -85,10 +61,6 @@ struct TagEditorSheet: View {
                 name = initialName
             }
         }
-    }
-
-    private var customColor: Binding<Color> {
-        Binding(get: { Color(hex: colorHex) }, set: { colorHex = NSColor($0).hexString })
     }
 
     private func save() {

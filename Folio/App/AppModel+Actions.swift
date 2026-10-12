@@ -64,6 +64,11 @@ extension AppModel {
         }
     }
 
+    /// Group icon colour (nil = accent colour).
+    func setGroupColor(_ id: String, colorHex: String?) {
+        perform("无法设置颜色") { try library.setGroupColor(id, colorHex: colorHex) }
+    }
+
     func moveGroup(_ id: String, toParent parentId: String?, index: Int) {
         perform("无法移动分组") { try library.moveGroup(id, toParent: parentId, index: index) }
     }
@@ -202,6 +207,7 @@ extension AppModel {
 
     /// Opening an unread item marks it as being read (OPEN-03).
     func markReading(itemId: String) {
+        guard settings.markReadingOnOpen else { return }
         if let item = snapshot.items[itemId], item.kind == .regular, item.readStatus == .unread {
             perform { try library.updateItem(item.id) { $0.readStatus = .reading } }
         }

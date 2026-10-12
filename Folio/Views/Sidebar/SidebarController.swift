@@ -14,6 +14,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private var isSyncingSelection = false
     private var isRestoringExpansion = false
     private var renamingGroupId: String?
+    private let colorPanel = ColorPanelBridge()
     private static let expandedKey = "sidebarExpandedGroups"
     private static let collapsedSectionsKey = "sidebarCollapsedSections"
 
@@ -203,8 +204,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             return cell
         case .group(let id):
             let cell = makeCell()
-            let name = model.snapshot.groupsById[id]?.name ?? ""
-            cell.configure(symbol: "folder", tint: nil, title: name, count: model.counts[.group(id)])
+            let group = model.snapshot.groupsById[id]
+            let name = group?.name ?? ""
+            cell.configure(symbol: "folder", tint: group?.colorHex.map(NSColor.init(hex:)), title: name,
+                           count: model.counts[.group(id)])
             cell.name.delegate = self
             cell.setAccessibilityIdentifier("sidebar.group.\(name)")
             return cell
@@ -300,6 +303,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
                 menu.addItem(item("新建子分组", "folder.badge.plus") { model.createGroup(parentId: id) })
             }
             menu.addItem(item("重命名", "pencil") { [weak self] in self?.beginRenaming(row: row) })
+            menu.addItem(colorMenu(for: id))
             menu.addItem(.separator())
             menu.addItem(item("删除分组…", "trash") { model.confirmDeleteGroup(id) })
         case .tagsHeader:
@@ -308,6 +312,47 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             menu.addItem(item("编辑标签…", "pencil") { model.activeSheet = .tagEditor(tagId: id, applyTo: []) })
             menu.addItem(item("删除标签…", "trash") { model.confirmDeleteTag(id) })
         }
+    }
+
+    /// "颜色 ▸": default (accent), the tag palette, or any colour from the system colour panel.
+    private func colorMenu(for groupId: String) -> NSMenuItem {
+        let current = model?.snapshot.groupsById[groupId]?.colorHex
+        let submenu = NSMenu(title: "颜色")
+        let none = NSMenuItem.closure("默认") { [weak self] in self?.model?.setGroupColor(groupId, colorHex: nil) }
+        none.image = Self.dot(.controlAccentColor)
+        none.state = current == nil ? .on : .off
+        submenu.addItem(none)
+        submenu.addItem(.separator())
+        var matched = current == nil
+        for preset in TagPalette.presets {
+            let entry = NSMenuItem.closure(preset.name) { [weak self] in self?.model?.setGroupColor(groupId, colorHex: preset.hex) }
+            entry.image = Self.dot(NSColor(hex: preset.hex))
+            if let current, current.caseInsensitiveCompare(preset.hex) == .orderedSame {
+                entry.state = .on
+                matched = true
+            }
+            submenu.addItem(entry)
+        }
+        submenu.addItem(.separator())
+        let custom = NSMenuItem.closure("自定义…") { [weak self] in
+            self?.colorPanel.show(initial: current.map(NSColor.init(hex:)) ?? .controlAccentColor) { color in
+                self?.model?.setGroupColor(groupId, colorHex: color.hexString)
+            }
+        }
+        if !matched, let current {
+            custom.image = Self.dot(NSColor(hex: current))
+            custom.state = .on
+        }
+        submenu.addItem(custom)
+        let item = NSMenuItem(title: "颜色", action: nil, keyEquivalent: "")
+        item.image = NSImage(systemSymbolName: "paintpalette", accessibilityDescription: nil)
+        item.submenu = submenu
+        return item
+    }
+
+    static func dot(_ color: NSColor) -> NSImage? {
+        NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(paletteColors: [color]))
     }
 
     private func item(_ title: String, _ symbol: String, action: @escaping () -> Void) -> NSMenuItem {

@@ -59,5 +59,9 @@ enum Migrations {
             ALTER TABLE file ADD COLUMN translationKind INTEGER;
             """)
         }
+        // v2.2: per-group icon colour.
+        migrator.registerMigration("v3") { db in
+            try db.execute(sql: "ALTER TABLE libraryGroup ADD COLUMN colorHex TEXT")
+        }
     }
 }

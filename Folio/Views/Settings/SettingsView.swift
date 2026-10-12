@@ -27,51 +27,38 @@ final class SettingsWindowController: NSWindowController {
         super.showWindow(sender)
     }
 
-    /// Opens a given pane by title (preview hooks, "打开设置" buttons).
+    /// Opens a given pane by title (preview hooks, "打开设置" buttons). Old pane names map to where
+    /// their settings live now.
     func select(pane title: String) {
-        if let pane = SettingsPane.allCases.first(where: { $0.title == title }) { navigation.pane = pane }
+        let moved = ["外观": "通用", "导入": "文献库"]
+        let target = moved[title] ?? title
+        if let pane = SettingsPane.allCases.first(where: { $0.title == target }) { navigation.pane = pane }
     }
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, appearance, reading, library, retrieval, translation, importing
+    case general, reading, library, retrieval, translation
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: "通用"
-        case .appearance: "外观"
         case .reading: "阅读"
         case .library: "文献库"
         case .retrieval: "检索"
         case .translation: "翻译"
-        case .importing: "导入"
         }
     }
 
+    /// Plain SF Symbols, tinted by the sidebar like any source list.
     var symbol: String {
         switch self {
-        case .general: "gearshape.fill"
-        case .appearance: "circle.lefthalf.filled"
-        case .reading: "book.pages.fill"
-        case .library: "books.vertical.fill"
+        case .general: "gearshape"
+        case .reading: "book"
+        case .library: "books.vertical"
         case .retrieval: "magnifyingglass"
-        case .translation: "character.book.closed.fill"
-        case .importing: "square.and.arrow.down.fill"
-        }
-    }
-
-    /// Icon tile colour, System Settings style.
-    var tint: Color {
-        switch self {
-        case .general: .gray
-        case .appearance: Color(white: 0.15)
-        case .reading: .orange
-        case .library: .brown
-        case .retrieval: .blue
-        case .translation: .green
-        case .importing: .purple
+        case .translation: "character.book.closed"
         }
     }
 }
@@ -90,12 +77,8 @@ struct SettingsRootView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsPane.allCases, selection: Binding(get: { navigation.pane }, set: { if let pane = $0 { navigation.pane = pane } })) { pane in
-                Label {
-                    Text(pane.title)
-                } icon: {
-                    SettingsIcon(symbol: pane.symbol, tint: pane.tint)
-                }
-                .tag(pane)
+                Label(pane.title, systemImage: pane.symbol)
+                    .tag(pane)
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 240)
             .toolbar(removing: .sidebarToggle)
@@ -109,78 +92,44 @@ struct SettingsRootView: View {
     private var detail: some View {
         switch navigation.pane {
         case .general: GeneralSettings(settings: model.settings, model: model)
-        case .appearance: AppearanceSettings(settings: model.settings)
         case .reading: ReadingSettings(settings: model.settings)
         case .library: LibrarySettings(model: model)
         case .retrieval: RetrievalSettings(settings: model.settings, model: model)
         case .translation: TranslationSettingsPane(model: model)
-        case .importing: ImportSettings(model: model)
         }
     }
 }
 
-/// White symbol on a coloured rounded square, like the icons in System Settings.
-struct SettingsIcon: View {
-    let symbol: String
-    let tint: Color
-
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 20, height: 20)
-            .background(tint.gradient, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-    }
-}
-
-/// 外观: 自动 / 浅色 / 深色, with System Settings-style previews.
-struct AppearanceSettings: View {
+/// 外观: 自动 / 浅色 / 深色 with System Settings-style previews.
+struct AppearancePicker: View {
     @Bindable var settings: AppSettings
 
     var body: some View {
-        Form {
-            Section {
-                HStack(spacing: 22) {
-                    Spacer(minLength: 0)
-                    ForEach(AppSettings.Appearance.allCases) { option in
-                        Button {
-                            settings.appearance = option
-                        } label: {
-                            VStack(spacing: 6) {
-                                AppearancePreview(option: option)
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                            .strokeBorder(settings.appearance == option ? Color.accentColor : .clear, lineWidth: 3)
-                                            .padding(-3)
-                                    }
-                                Text(option.title)
-                                    .font(.callout)
-                                    .foregroundStyle(settings.appearance == option ? .primary : .secondary)
+        HStack(spacing: 22) {
+            Spacer(minLength: 0)
+            ForEach(AppSettings.Appearance.allCases) { option in
+                Button {
+                    settings.appearance = option
+                } label: {
+                    VStack(spacing: 6) {
+                        AppearancePreview(option: option)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .strokeBorder(settings.appearance == option ? Color.accentColor : .clear, lineWidth: 3)
+                                    .padding(-3)
                             }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("外观：\(option.title)")
-                        .accessibilityAddTraits(settings.appearance == option ? .isSelected : [])
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, 6)
-            } header: {
-                Text("外观")
-            } footer: {
-                Text("\"自动\"会跟随系统在浅色和深色之间切换。阅读器中的 PDF 页面始终按原样显示。")
-            }
-            Section {
-                LabeledContent("边栏图标大小") {
-                    Button("在系统设置中更改…") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!)
+                        Text(option.title)
+                            .font(.callout)
+                            .foregroundStyle(settings.appearance == option ? .primary : .secondary)
                     }
                 }
-            } footer: {
-                Text("边栏的行高和字号跟随系统设置 ▸ 外观 ▸ 边栏图标大小。")
+                .buttonStyle(.plain)
+                .accessibilityLabel("外观：\(option.title)")
+                .accessibilityAddTraits(settings.appearance == option ? .isSelected : [])
             }
+            Spacer(minLength: 0)
         }
-        .formStyle(.grouped)
+        .padding(.vertical, 6)
     }
 }
 
@@ -226,6 +175,18 @@ struct GeneralSettings: View {
     var body: some View {
         Form {
             Section {
+                AppearancePicker(settings: settings)
+                LabeledContent("边栏图标大小") {
+                    Button("在系统设置中更改…") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!)
+                    }
+                }
+            } header: {
+                Text("外观")
+            } footer: {
+                Text("\"自动\"跟随系统切换浅色和深色。侧栏的行高和字号跟随系统的边栏图标大小。")
+            }
+            Section("打开") {
                 Picker("打开 PDF 时使用", selection: $settings.openWith) {
                     ForEach(AppSettings.OpenWith.allCases) { Text($0.title).tag($0) }
                 }
@@ -239,12 +200,15 @@ struct GeneralSettings: View {
                         }
                     }
                 }
-            } footer: {
-                Text("其他类型的文件总是用系统默认应用打开。在条目上右键选择\"打开方式\"可以临时换用其他应用。")
+                Toggle("打开未读的论文时，标为\"在读\"", isOn: $settings.markReadingOnOpen)
+                Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
             }
-            Section {
-                Toggle("父分组中显示子分组的条目", isOn: $settings.includeSubgroupItems)
-                    .onChange(of: settings.includeSubgroupItems) { model.recompute() }
+            Section("列表") {
+                Toggle(isOn: $settings.includeSubgroupItems) {
+                    Text("父分组中显示子分组的条目")
+                    Text("关闭后，父分组只显示直接放在其中的条目。")
+                }
+                .onChange(of: settings.includeSubgroupItems) { model.recompute() }
             }
         }
         .formStyle(.grouped)
@@ -270,8 +234,11 @@ struct ReadingSettings: View {
                 Picker("显示方式", selection: $settings.readerLayout) {
                     ForEach(AppSettings.ReaderLayout.allCases) { Text($0.title).tag($0) }
                 }
+                Toggle("显示页面阴影", isOn: $settings.readerPageShadows)
+            } header: {
+                Text("页面")
             } footer: {
-                Text("再次打开读过的论文时，会回到上次的页码、位置和缩放。")
+                Text("再次打开读过的论文时，会回到上次的页码、位置和缩放。新设置在下次打开论文时生效。")
             }
             Section {
                 Picker("默认高亮颜色", selection: $settings.highlightColor) {
@@ -284,7 +251,11 @@ struct ReadingSettings: View {
                         .tag(color.rawValue)
                     }
                 }
-                Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
+                TextField("批注作者", text: $settings.annotationAuthor, prompt: Text(NSFullUserName()))
+            } header: {
+                Text("批注")
+            } footer: {
+                Text("作者会写入新建的批注，在\"预览\"等阅读器的批注列表中显示。")
             }
         }
         .formStyle(.grouped)
@@ -319,9 +290,21 @@ struct LibrarySettings: View {
                     Text(error).foregroundStyle(.red).font(.caption)
                 }
             }
-            Section {
+            Section("文件") {
                 Toggle("检索到元数据后按「作者_年份_标题」重命名文件", isOn: $settings.autoRenameFiles)
                 Toggle("自动彻底删除回收站中超过 30 天的内容", isOn: $settings.autoPurgeTrash)
+            }
+            Section {
+                LabeledContent("Zotero") {
+                    Button("从 Zotero 导入…") {
+                        AppDelegate.shared.showLibrary(nil)
+                        model.activeSheet = .zoteroImport
+                    }
+                }
+            } header: {
+                Text("导入")
+            } footer: {
+                Text("读取 Zotero 数据库的副本，导入条目、PDF、分组和标签，不会修改 Zotero。")
             }
         }
         .formStyle(.grouped)
@@ -357,6 +340,10 @@ struct RetrievalSettings: View {
     var body: some View {
         Form {
             Section {
+                Toggle(isOn: $settings.autoRetrieveOnImport) {
+                    Text("添加 PDF 后自动检索元数据")
+                    Text("关闭后，新文件先保留为独立文件，可在右键菜单中\"重新检索元数据\"。")
+                }
                 Toggle(isOn: $settings.useZoteroRecognizer) {
                     Text("使用 Zotero 识别服务")
                     Text("把 PDF 前 5 页的文字和版面（每篇约 0.5 MB）发送给 Zotero 的识别服务，不需要账号，Zotero 声明不记录内容。开放数据源检索不畅时仍能识别。关闭后只使用开放数据源。")
@@ -377,25 +364,5 @@ struct RetrievalSettings: View {
         .onChange(of: settings.crossrefMailto) { model.refreshResolver() }
         .onChange(of: settings.openAlexAPIKey) { model.refreshResolver() }
         .onChange(of: settings.useZoteroRecognizer) { model.refreshResolver() }
-    }
-}
-
-struct ImportSettings: View {
-    let model: AppModel
-
-    var body: some View {
-        Form {
-            Section {
-                LabeledContent("Zotero") {
-                    Button("从 Zotero 导入…") {
-                        AppDelegate.shared.showLibrary(nil)
-                        model.activeSheet = .zoteroImport
-                    }
-                }
-            } footer: {
-                Text("读取 Zotero 数据库的副本，导入条目、PDF、分组和标签，不会修改 Zotero。")
-            }
-        }
-        .formStyle(.grouped)
     }
 }

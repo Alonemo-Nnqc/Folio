@@ -10,6 +10,8 @@ public struct LibraryGroup: Codable, Sendable, Hashable, Identifiable, Fetchable
     public var name: String
     public var position: Double
     public var dateCreated: Date
+    /// Sidebar icon colour ("#RRGGBB"); nil = the accent colour.
+    public var colorHex: String?
 
     public init(id: String = UUID().uuidString, parentId: String? = nil, name: String, position: Double,
                 dateCreated: Date = Date()) {

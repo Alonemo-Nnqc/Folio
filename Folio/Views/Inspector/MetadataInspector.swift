@@ -122,7 +122,7 @@ struct MetadataInspector: View {
             row("分组") {
                 FlowLayout(spacing: 6) {
                     ForEach(groups, id: \.id) { group in
-                        GroupChip(name: group.name) {
+                        GroupChip(name: group.name, colorHex: group.colorHex) {
                             model.perform { try model.library.removeItems([item.id], fromGroup: group.id, includeSubgroups: false) }
                         }
                     }
@@ -241,11 +241,13 @@ struct MetadataInspector: View {
 
 struct GroupChip: View {
     let name: String
+    var colorHex: String?
     let onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "folder")
+                .foregroundStyle(colorHex.map { Color(hex: $0) } ?? Color.accentColor)
             Text(name).lineLimit(1)
             Button(action: onRemove) {
                 Image(systemName: "xmark").font(.system(size: 8, weight: .bold))

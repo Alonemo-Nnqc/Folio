@@ -38,6 +38,15 @@ extension Library {
         }
     }
 
+    /// Sets the group's icon colour; nil restores the default (accent) colour.
+    public func setGroupColor(_ id: String, colorHex: String?) throws {
+        try writer.write { db in
+            guard var group = try LibraryGroup.fetchOne(db, key: id) else { throw LibraryError.notFound }
+            group.colorHex = colorHex
+            try group.update(db)
+        }
+    }
+
     /// Deletes the group and its subgroups. Items stay in the library unless `trashItems` is true.
     public func deleteGroup(_ id: String, trashItems: Bool) throws {
         try writer.write { db in

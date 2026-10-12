@@ -93,7 +93,12 @@ final class ImportCoordinator {
             switch outcome {
             case .imported(let id, let isPDF):
                 if isPDF {
-                    enqueue(id)
+                    // 设置 ▸ 检索 ▸ 添加 PDF 后自动检索元数据; when off the file waits for "重新检索元数据".
+                    if model.settings.autoRetrieveOnImport {
+                        enqueue(id)
+                    } else {
+                        try? library?.setMetadataState(.none, for: id)
+                    }
                     indexFulltext()
                 }
             case .duplicateFile(let existing, let addedToGroup):

@@ -68,7 +68,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         pdfView.editor = editor
         editor.pdfView = pdfView
         pdfView.displaysPageBreaks = true
-        pdfView.pageShadowsEnabled = true
+        pdfView.pageShadowsEnabled = model.settings.readerPageShadows
+        editor.author = model.settings.annotationAuthor
         pdfView.setAccessibilityIdentifier("readerPDFView")
         editor.onChange = { [weak self] in self?.documentChanged() }
         editor.onAddToNote = { [weak self] text, page in self?.addToNote(text, pageIndex: page) }

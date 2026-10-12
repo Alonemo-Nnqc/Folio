@@ -6,6 +6,8 @@ import PDFKit
 final class AnnotationEditor: NSObject, NSPopoverDelegate {
     weak var pdfView: ReaderPDFView?
     let state: ReaderState
+    /// Written into new annotations (设置 ▸ 阅读 ▸ 批注作者).
+    var author = NSFullUserName()
     /// Called after every change (schedules the save, refreshes the annotation list).
     var onChange: () -> Void = {}
     /// "添加到笔记" / "拷贝为引用" for a text selection (READER-08).
@@ -92,7 +94,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
     }
 
     private func stamp(_ annotation: PDFAnnotation) {
-        annotation.userName = NSFullUserName()
+        annotation.userName = author.isEmpty ? nil : author
         annotation.modificationDate = Date()
     }
 

@@ -16,6 +16,7 @@
 		17983CD1B463FAE5A41B8DE5 /* PreviewHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */; };
 		1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */; };
 		1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2A1E7ACC7249527D8AE41C /* IdentifierAddSheet.swift */; };
+		1A372ABA504E0E9692C890EE /* ColorSwatchRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B548F12622EAACEE853C8C7 /* ColorSwatchRow.swift */; };
 		1FD177D4812AFB418B109D54 /* ReaderState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20484C461230A82CA4056E35 /* ReaderState.swift */; };
 		229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */; };
 		233BD9CB989E0FD7C545E321 /* SidebarNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F56119AC33A554616DDE332 /* SidebarNode.swift */; };
@@ -156,6 +157,7 @@
 		4262FBCFBF74F063C7B2307A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarUITests.swift; sourceTree = "<group>"; };
 		4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationServiceTests.swift; sourceTree = "<group>"; };
+		4B548F12622EAACEE853C8C7 /* ColorSwatchRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorSwatchRow.swift; sourceTree = "<group>"; };
 		4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioUITestCase.swift; sourceTree = "<group>"; };
 		5437B0A45443DA1FFBC67DAB /* Folio.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Folio.icon; sourceTree = "<group>"; };
 		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
@@ -407,6 +409,7 @@
 		622445697A6A1393E6CDE54D /* Tags */ = {
 			isa = PBXGroup;
 			children = (
+				4B548F12622EAACEE853C8C7 /* ColorSwatchRow.swift */,
 				E88490FC0D6D0D20CD3A4860 /* TagChip.swift */,
 				556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */,
 				C98AAA2320C6674271F19228 /* TagPalette.swift */,
@@ -734,6 +737,7 @@
 				7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */,
 				84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */,
 				CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */,
+				1A372ABA504E0E9692C890EE /* ColorSwatchRow.swift in Sources */,
 				DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */,
 				D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */,
 				2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */,
