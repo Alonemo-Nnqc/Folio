@@ -134,8 +134,10 @@ public enum TranslationArgumentBuilder {
             args += ["--clitranslator-timeout", "120"]
         }
 
+        // Reasoning effort is stored as one choice; expand it into the options and "send" switches.
+        let fieldValues = ReasoningEffort.apply(serviceID: service.id, to: request.fieldValues)
         for field in service.fields {
-            let raw = field.isSecret ? request.secrets[field.option] : request.fieldValues[field.option]
+            let raw = field.isSecret ? request.secrets[field.option] : fieldValues[field.option]
             let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             switch field.kind {
             case .toggle:

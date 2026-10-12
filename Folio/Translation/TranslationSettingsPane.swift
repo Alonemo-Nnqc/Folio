@@ -186,9 +186,11 @@ private struct ServiceSection: View {
             }
             if let service {
                 ForEach(service.fields.filter { !$0.isAdvanced }) { FieldRow(model: model, serviceID: service.id, field: $0) }
-                if !compact, service.fields.contains(where: \.isAdvanced) {
+                ReasoningRow(settings: settings, serviceID: service.id)
+                let advanced = service.fields.filter { $0.isAdvanced && !ReasoningEffort.managedOptions.contains($0.option) }
+                if !compact, !advanced.isEmpty {
                     DisclosureGroup("高级", isExpanded: $showAdvanced) {
-                        ForEach(service.fields.filter(\.isAdvanced)) { FieldRow(model: model, serviceID: service.id, field: $0) }
+                        ForEach(advanced) { FieldRow(model: model, serviceID: service.id, field: $0) }
                     }
                 }
                 if service.id == TranslationServiceCatalog.appleServiceID { appleRow }
@@ -421,6 +423,9 @@ private struct ModelListButton: View {
                         .buttonStyle(.plain)
                     }
                     .listStyle(.plain)
+                    // Let the popover's own glass show through, like a native menu.
+                    .scrollContentBackground(.hidden)
+                    .background(.clear)
                     .frame(height: 260)
                     Text("\(models.count) 个模型").font(.caption).foregroundStyle(.secondary)
                 }
@@ -448,6 +453,36 @@ private struct ModelListButton: View {
         } catch {
             models = []
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// 推理强度: choices that depend on the service and the chosen model (TRANS-03).
+private struct ReasoningRow: View {
+    @Bindable var settings: AppSettings
+    let serviceID: String
+
+    var body: some View {
+        let fields = settings.translationFields[serviceID] ?? [:]
+        switch ReasoningEffort.support(serviceID: serviceID, fields: fields) {
+        case .none:
+            EmptyView()
+        case .unsupportedModel:
+            LabeledContent("推理强度") {
+                Text("当前模型不支持").foregroundStyle(.secondary)
+            }
+            .help("所选模型不是推理模型，不会发送推理强度参数。")
+        case let .choices(choices, _):
+            Picker("推理强度", selection: Binding(
+                get: { ReasoningEffort.current(serviceID: serviceID, fields: fields) ?? "" },
+                set: { value in
+                    var updated = settings.translationFields[serviceID] ?? [:]
+                    ReasoningEffort.set(value, serviceID: serviceID, fields: &updated)
+                    settings.translationFields[serviceID] = updated
+                })) {
+                ForEach(choices) { Text($0.title).tag($0.value) }
+            }
+            .pickerStyle(.segmented)
         }
     }
 }
