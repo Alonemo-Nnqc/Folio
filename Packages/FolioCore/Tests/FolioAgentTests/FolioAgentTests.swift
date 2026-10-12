@@ -77,6 +77,27 @@ private func seed(_ library: Library) throws -> [String] {
         #expect(try library.snapshot().notedItems.count == 1)
     }
 
+    @Test func tagsAndGroupsCanBeManaged() async throws {
+        let (toolbox, library) = try makeToolbox()
+        let ids = try seed(library)
+        _ = try await toolbox.call("set_tags", arguments: ["items": [.string(ids[0]), .string(ids[1])], "add": ["待读"]])
+        let created = try await toolbox.call("create_tag", arguments: ["name": "综述", "color": "purple"])
+        #expect(created["tag"]?["color"]?.stringValue == "#AF52DE")
+        let renamed = try await toolbox.call("update_tag", arguments: ["tag": "待读", "name": "精读", "color": "#34c759"])
+        #expect(renamed["tag"]?["name"]?.stringValue == "精读" && renamed["tag"]?["color"]?.stringValue == "#34C759")
+        await #expect(throws: ToolError.self) { try await toolbox.call("update_tag", arguments: ["tag": "精读", "color": "chartreuse"]) }
+        let deleted = try await toolbox.call("delete_tag", arguments: ["tag": "精读"])
+        #expect(deleted["removed_from_items"]?.intValue == 2)
+        #expect(try library.snapshot().tags.map(\.name) == ["综述"])
+
+        _ = try await toolbox.call("set_groups", arguments: ["items": [.string(ids[2])], "add": ["医学/血管"]])
+        let moved = try await toolbox.call("update_group", arguments: ["group": "医学/血管", "name": "血管分割", "color": "red", "parent": ""])
+        #expect(moved["parent"] == .null && moved["name"]?.stringValue == "血管分割" && moved["color"]?.stringValue == "#FF3B30")
+        let removed = try await toolbox.call("delete_group", arguments: ["group": "血管分割"])
+        #expect(removed["items_kept_in_library"]?.intValue == 1)
+        #expect(try library.item(ids[2])?.isTrashed == false)
+    }
+
     @Test func readOnlyModeHidesAndRefusesWrites() async throws {
         let (toolbox, library) = try makeToolbox(allowWrites: false)
         let ids = try seed(library)
@@ -229,5 +250,22 @@ private func seed(_ library: Library) throws -> [String] {
         #expect(integrator(home).refreshInstalledSkills() == 0)
         try FileManager.default.removeItem(at: other)
         #expect(integrator(home).refreshInstalledSkills() == 1, "orphaned skill follows the remaining copy")
+    }
+
+    @Test func antigravityUsesWhicheverFolderItsVersionHas() throws {
+        let home = try tempHome()
+        try FileManager.default.createDirectory(at: home.appending(path: ".gemini/config"), withIntermediateDirectories: true)
+        let agent = integrator(home)
+        try agent.setMCP(true, for: descriptor("antigravity"))
+        try agent.setSkill(true, for: descriptor("antigravity"))
+        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/mcp_config.json").path))
+        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".gemini/antigravity/mcp_config.json").path))
+        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/skills/folio-library/SKILL.md").path))
+        let status = agent.status(of: descriptor("antigravity"))
+        #expect(status.mcpInstalled && status.skillInstalled)
+        try agent.setMCP(false, for: descriptor("antigravity"))
+        try agent.setSkill(false, for: descriptor("antigravity"))
+        #expect(!agent.status(of: descriptor("antigravity")).mcpInstalled)
+        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/skills/folio-library").path))
     }
 }

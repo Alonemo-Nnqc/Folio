@@ -54,6 +54,7 @@ public enum ToolCatalog {
     }
 
     static let itemRef = "Item reference: the item's id, its DOI, or its citation key (as returned by search_library / get_item)."
+    static let colorHelp = "Colour: red, orange, yellow, green, mint, cyan, blue, indigo, purple, pink, gray, or a hex value like #34C759."
     static let collection = "Where to look: \"all\" (default), \"unfiled\", \"trash\", \"group:<name or id>\" (a parent group includes its subgroups), or \"tag:<name or id>\"."
 
     public static let all: [ToolDefinition] = [
@@ -216,6 +217,46 @@ public enum ToolCatalog {
                 "parent": string("Optional parent group (name or id)."),
             ], required: ["name"]),
             writes: true, destructive: false),
+        ToolDefinition(
+            name: "create_tag", title: "Create a tag",
+            description: "Create a tag (without applying it). To tag items use set_tags, which also creates missing tags.",
+            inputSchema: schema([
+                "name": string("Tag name."),
+                "color": string(colorHelp),
+            ], required: ["name"]),
+            writes: true, destructive: false),
+        ToolDefinition(
+            name: "update_tag", title: "Rename or recolour a tag",
+            description: "Rename a tag and/or change its colour. Items keep the tag.",
+            inputSchema: schema([
+                "tag": string("The tag (name or id)."),
+                "name": string("New name."),
+                "color": string(colorHelp),
+            ], required: ["tag"]),
+            writes: true, destructive: false),
+        ToolDefinition(
+            name: "delete_tag", title: "Delete a tag",
+            description: "Delete a tag: it disappears from every item that has it (the items themselves stay). Tell the user how many items use it and confirm first.",
+            inputSchema: schema(["tag": string("The tag (name or id).")], required: ["tag"]),
+            writes: true, destructive: true),
+        ToolDefinition(
+            name: "update_group", title: "Rename, recolour or move a group",
+            description: "Rename a group, change its folder colour, or move it under another top-level group (\"parent\": \"\" makes it top-level). Groups are at most two levels deep.",
+            inputSchema: schema([
+                "group": string("The group (name, \"Parent/Child\" or id)."),
+                "name": string("New name."),
+                "color": string(colorHelp + " \"default\" restores the accent colour."),
+                "parent": string("New parent group, or \"\" for top level."),
+            ], required: ["group"]),
+            writes: true, destructive: false),
+        ToolDefinition(
+            name: "delete_group", title: "Delete a group",
+            description: "Delete a group and its subgroups. Its items stay in the library unless trash_items is true (then they go to the trash). Confirm with the user first.",
+            inputSchema: schema([
+                "group": string("The group (name, \"Parent/Child\" or id)."),
+                "trash_items": boolean("Also move the group's items to the trash (default false)."),
+            ], required: ["group"]),
+            writes: true, destructive: true),
         ToolDefinition(
             name: "move_to_trash", title: "Move items to the trash",
             description: "Delete items by moving them to Folio's trash (with their files). They can be restored with restore_from_trash; Folio empties the trash after 30 days. Confirm with the user before using this.",

@@ -11,8 +11,7 @@ struct AnnotationsInspector: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            TextField("搜索标注", text: $query)
-                .textFieldStyle(.roundedBorder)
+            PopoverSearchField(prompt: "搜索标注", text: $query)
                 .padding(.horizontal, 16)
             if loading {
                 ProgressView().frame(maxHeight: .infinity)

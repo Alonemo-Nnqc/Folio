@@ -411,8 +411,7 @@ private struct ModelListButton: View {
                     ContentUnavailableView("无法获取模型列表", systemImage: "exclamationmark.triangle", description: Text(error))
                         .frame(minHeight: 160)
                 } else {
-                    TextField("搜索模型", text: $filter)
-                        .textFieldStyle(.roundedBorder)
+                    PopoverSearchField(prompt: "搜索模型", text: $filter)
                     List(filtered, id: \.self) { name in
                         Button {
                             onPick(name)

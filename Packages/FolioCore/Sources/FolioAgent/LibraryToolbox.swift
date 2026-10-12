@@ -6,6 +6,10 @@ import Foundation
 import PDFKit
 
 /// A tool failure explained for the AI (and, through it, the user).
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
 public struct ToolError: Error, LocalizedError, Sendable {
     public let message: String
     public init(_ message: String) { self.message = message }
@@ -63,6 +67,11 @@ public actor LibraryToolbox {
         case "set_tags": try setTags(args)
         case "set_groups": try setGroups(args)
         case "create_group": try createGroup(args)
+        case "create_tag": try createTag(args)
+        case "update_tag": try updateTag(args)
+        case "delete_tag": try deleteTag(args)
+        case "update_group": try updateGroup(args)
+        case "delete_group": try deleteGroup(args)
         case "move_to_trash": try trash(args)
         case "restore_from_trash": try restore(args)
         case "set_note": try setNote(args)
@@ -599,6 +608,123 @@ public actor LibraryToolbox {
         } catch LibraryError.duplicateGroupName {
             throw ToolError("A group named \"\(name)\" already exists there.")
         }
+    }
+
+    // MARK: Tags and groups
+
+    static let namedColors: [String: String] = [
+        "red": "#FF3B30", "orange": "#FF9500", "yellow": "#FFCC00", "green": "#34C759", "mint": "#00C7BE",
+        "cyan": "#32ADE6", "teal": "#32ADE6", "blue": "#007AFF", "indigo": "#5856D6", "purple": "#AF52DE",
+        "pink": "#FF2D55", "gray": "#8E8E93", "grey": "#8E8E93",
+        "红": "#FF3B30", "橙": "#FF9500", "黄": "#FFCC00", "绿": "#34C759", "青": "#32ADE6", "蓝": "#007AFF",
+        "靛": "#5856D6", "紫": "#AF52DE", "粉": "#FF2D55", "灰": "#8E8E93",
+    ]
+
+    /// A colour name or #RRGGBB → "#RRGGBB".
+    static func hexColor(_ value: String?) throws -> String? {
+        guard let raw = value?.trimmingCharacters(in: .whitespaces), !raw.isEmpty else { return nil }
+        if let named = namedColors[raw.lowercased()] ?? namedColors[raw] { return named }
+        let hex = raw.hasPrefix("#") ? String(raw.dropFirst()) : raw
+        guard hex.count == 6, hex.allSatisfy(\.isHexDigit) else {
+            throw ToolError("Unknown colour \"\(raw)\". Use a colour name (red, blue, …) or #RRGGBB.")
+        }
+        return "#" + hex.uppercased()
+    }
+
+    private func tagJSON(_ tag: Tag, in s: LibrarySnapshot) -> JSONValue {
+        ["id": .string(tag.id), "name": .string(tag.name), "color": .string(tag.colorHex),
+         "item_count": .from(s.tagItems[tag.id]?.count ?? 0)]
+    }
+
+    private func requireTag(_ args: JSONValue, in s: LibrarySnapshot) throws -> Tag {
+        guard let ref = args["tag"]?.stringValue, let tag = findTag(ref, in: s) else {
+            throw ToolError("No tag \"\(args["tag"]?.stringValue ?? "")\". Use list_collections.")
+        }
+        return tag
+    }
+
+    private func createTag(_ args: JSONValue) throws -> JSONValue {
+        guard let name = args["name"]?.stringValue?.trimmingCharacters(in: .whitespaces), !name.isEmpty else {
+            throw ToolError("Missing name.")
+        }
+        let s = try snapshot()
+        if let existing = findTag(name, in: s) { return ["status": "already exists", "tag": tagJSON(existing, in: s)] }
+        let id = try ensureTag(name)
+        if let color = try Self.hexColor(args["color"]?.stringValue) {
+            try library.updateTag(id, name: name, colorHex: color)
+        }
+        let after = try snapshot()
+        return ["status": "created", "tag": tagJSON(after.tagsById[id]!, in: after)]
+    }
+
+    private func updateTag(_ args: JSONValue) throws -> JSONValue {
+        let s = try snapshot()
+        let tag = try requireTag(args, in: s)
+        let name = args["name"]?.stringValue?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? tag.name
+        let color = try Self.hexColor(args["color"]?.stringValue) ?? tag.colorHex
+        do {
+            try library.updateTag(tag.id, name: name, colorHex: color)
+        } catch LibraryError.duplicateTagName {
+            throw ToolError("A tag named \"\(name)\" already exists. Use set_tags to move items to it, then delete_tag the old one.")
+        }
+        let after = try snapshot()
+        return ["tag": tagJSON(after.tagsById[tag.id]!, in: after)]
+    }
+
+    private func deleteTag(_ args: JSONValue) throws -> JSONValue {
+        let s = try snapshot()
+        let tag = try requireTag(args, in: s)
+        let count = s.tagItems[tag.id]?.count ?? 0
+        try library.deleteTag(tag.id)
+        return ["deleted_tag": .string(tag.name), "removed_from_items": .from(count)]
+    }
+
+    private func requireGroup(_ args: JSONValue, in s: LibrarySnapshot) throws -> LibraryGroup {
+        guard let ref = args["group"]?.stringValue, let group = findGroup(ref, in: s) else {
+            throw ToolError("No group \"\(args["group"]?.stringValue ?? "")\". Use list_collections.")
+        }
+        return group
+    }
+
+    private func updateGroup(_ args: JSONValue) throws -> JSONValue {
+        let s = try snapshot()
+        let group = try requireGroup(args, in: s)
+        if let name = args["name"]?.stringValue?.trimmingCharacters(in: .whitespaces), !name.isEmpty, name != group.name {
+            do { try library.renameGroup(group.id, to: name) } catch LibraryError.duplicateGroupName {
+                throw ToolError("A sibling group named \"\(name)\" already exists.")
+            }
+        }
+        if let color = args["color"]?.stringValue {
+            try library.setGroupColor(group.id, colorHex: color.lowercased() == "default" ? nil : try Self.hexColor(color))
+        }
+        if let parent = args["parent"]?.stringValue {
+            let parentId: String? = parent.trimmingCharacters(in: .whitespaces).isEmpty ? nil : try {
+                guard let target = findGroup(parent, in: s) else { throw ToolError("No group \"\(parent)\".") }
+                return target.id
+            }()
+            guard try library.canMoveGroup(group.id, toParent: parentId) else {
+                throw ToolError("Cannot move \"\(group.name)\" there: groups are at most two levels deep, and a group with subgroups cannot become a subgroup.")
+            }
+            let siblings = parentId.map { s.childGroups[$0] ?? [] } ?? s.topLevelGroups
+            try library.moveGroup(group.id, toParent: parentId, index: siblings.count)
+        }
+        let after = try snapshot()
+        let updated = after.groupsById[group.id]!
+        var result: [String: JSONValue] = ["id": .string(updated.id), "name": .string(updated.name),
+                                           "parent": .from(updated.parentId.flatMap { after.groupsById[$0]?.name })]
+        if let color = updated.colorHex { result["color"] = .string(color) }
+        return .object(result)
+    }
+
+    private func deleteGroup(_ args: JSONValue) throws -> JSONValue {
+        let s = try snapshot()
+        let group = try requireGroup(args, in: s)
+        let trashItems = args["trash_items"]?.boolValue ?? false
+        let members = ViewResolver.members(of: .group(group.id), in: s, includeSubgroupItems: true)
+        try library.deleteGroup(group.id, trashItems: trashItems)
+        return ["deleted_group": .string(group.name),
+                "subgroups_deleted": .from(s.childGroups[group.id]?.count ?? 0),
+                trashItems ? "items_moved_to_trash" : "items_kept_in_library": .from(members.count)]
     }
 
     private func trash(_ args: JSONValue) throws -> JSONValue {

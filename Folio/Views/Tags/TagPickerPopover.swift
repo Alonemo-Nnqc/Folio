@@ -19,9 +19,7 @@ struct TagPickerPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("搜索或新建标签", text: $query)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { if canCreate { create() } }
+            PopoverSearchField(prompt: "搜索或新建标签", text: $query) { if canCreate { create() } }
                 .accessibilityIdentifier("tagPickerField")
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {

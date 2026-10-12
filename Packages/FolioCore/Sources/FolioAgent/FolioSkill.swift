@@ -75,12 +75,19 @@ public enum FolioSkill {
 
         ## Organising
 
-        - Groups (two levels, `"Parent/Child"`): `set_groups` (add / remove, creates missing ones), `create_group`.
-        - Tags: `set_tags` (add / remove, creates missing ones).
+        - Groups (two levels, `"Parent/Child"`): `set_groups` puts items in / takes them out (creates missing groups),
+          `create_group`, `update_group` (rename, folder colour, move under another group or to the top level),
+          `delete_group` (items stay unless `trash_items`; ask first).
+        - Tags: `set_tags` adds / removes tags on items (creates missing ones), `create_tag`, `update_tag`
+          (rename, colour), `delete_tag` (removes it from every item; say how many items use it and ask first).
+        - Colours are names (red, orange, yellow, green, mint, cyan, blue, indigo, purple, pink, gray) or `#RRGGBB`.
+        - To merge two tags: `set_tags` to add the kept tag to the other tag's items, then `delete_tag` the other.
         - Details, reading status (`unread` / `reading` / `read`) and rating (0–5): `update_item`.
 
         ## Deleting — ask first
 
+        - Deleting a tag or a group never deletes papers (unless `delete_group` with `trash_items`), but it cannot be
+          undone from the AI side — confirm with the user before `delete_tag` / `delete_group`.
         - `move_to_trash` moves items to Folio's trash (restorable with `restore_from_trash` for 30 days).
           Always list exactly what will be trashed and get the user's confirmation first.
         - There is no permanent delete; tell the user to empty the trash in Folio if they want that.

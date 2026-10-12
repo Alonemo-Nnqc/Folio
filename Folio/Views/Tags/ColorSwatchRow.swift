@@ -97,3 +97,34 @@ final class ColorPanelBridge: NSObject {
         onChange?(sender.color)
     }
 }
+
+/// A search field for popovers: a translucent fill instead of the opaque bezel of
+/// `.roundedBorder`, so the popover's glass shows through like a native menu's search.
+struct PopoverSearchField: View {
+    let prompt: String
+    @Binding var text: String
+    var onSubmit: () -> Void = {}
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 12))
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .onSubmit(onSubmit)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}
