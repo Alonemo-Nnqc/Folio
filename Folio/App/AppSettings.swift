@@ -86,6 +86,7 @@ final class AppSettings {
         static let readerPageShadows = "readerPageShadows"
         static let annotationAuthor = "annotationAuthor"
         static let autoRetrieveOnImport = "autoRetrieveOnImport"
+        static let aiAllowWrites = "aiAllowWrites"
     }
 
     private let defaults: UserDefaults
@@ -133,6 +134,8 @@ final class AppSettings {
     var annotationAuthor: String { didSet { save(annotationAuthor, Key.annotationAuthor) } }
     /// Look up metadata as soon as a PDF is added (META-01); off = only on request.
     var autoRetrieveOnImport: Bool { didSet { save(autoRetrieveOnImport, Key.autoRetrieveOnImport) } }
+    /// 设置 ▸ AI: AI agents may change the library (folio-cli reads the same key).
+    var aiAllowWrites: Bool { didSet { save(aiAllowWrites, Key.aiAllowWrites) } }
     /// A user-installed `pdf2zh_next`; empty = the copy Folio manages (TRANS-02).
     var translatorCustomPath: String { didSet { save(translatorCustomPath, Key.translatorCustomPath) } }
 
@@ -153,6 +156,7 @@ final class AppSettings {
             Key.readerPageShadows: true,
             Key.annotationAuthor: NSFullUserName(),
             Key.autoRetrieveOnImport: true,
+            Key.aiAllowWrites: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -175,6 +179,7 @@ final class AppSettings {
         readerPageShadows = defaults.bool(forKey: Key.readerPageShadows)
         annotationAuthor = defaults.string(forKey: Key.annotationAuthor) ?? NSFullUserName()
         autoRetrieveOnImport = defaults.bool(forKey: Key.autoRetrieveOnImport)
+        aiAllowWrites = defaults.bool(forKey: Key.aiAllowWrites)
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String

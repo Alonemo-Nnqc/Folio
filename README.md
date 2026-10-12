@@ -6,13 +6,24 @@
 - 内置阅读器（与"预览"同一引擎 PDFKit）：论文以原生标签页打开；高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，与"预览"互通；记住每篇论文的阅读位置
 - 保留排版的整篇翻译（pdf2zh_next / BabelDOC），支持 20 多种翻译服务，译文与原文可对照阅读
 - 每个条目一篇 Markdown 笔记，可以在阅读时把选中的文字一键加入笔记
-- 两级分组、彩色标签、回收站、全文搜索、阅读状态与星级评分
+- AI 接入：内置 MCP 服务器和命令行工具 `folio-cli`，以及教 AI 使用 Folio 的技能；在 设置 ▸ AI 中一键为 Claude Code、Codex、Cursor、Gemini CLI 等智能体添加或移除
+- 两级分组（可自定义颜色）、彩色标签、回收站、全文搜索、阅读状态与星级评分
 - 每个条目可以挂多个文件，并可指定默认打开的文件；也可以随时用"预览"或其他应用打开
 - 支持复制 BibTeX / GB/T 7714-2015 / APA 引用，导出 `.bib`
 - 可以一键从 Zotero 导入（只读取数据库副本，不会修改 Zotero）
 - 1000 个条目时冷启动约 0.35 s，内存约 110–130 MB
 
 需求、开发计划、测试报告和问题记录都在 [`doc/`](doc/) 目录下。
+
+## AI 接入
+
+Folio.app 内附带 `folio-cli`（`Folio.app/Contents/MacOS/folio-cli`）：
+
+- `folio-cli mcp`：stdio 方式的 MCP 服务器，提供 20 个工具（搜索、读取全文与批注、APA / GB/T 7714 / BibTeX 引用、BibTeX / RIS / CSL JSON 导入导出、按 DOI / arXiv / PDF 添加、分组、标签、笔记、移到回收站）。
+- `folio-cli call <工具> '<JSON>'` 以及 `search`、`get`、`cite`、`export`、`add`、`open` 快捷命令，供只能运行命令的智能体使用。
+- Folio 技能（`folio-library/SKILL.md`）教智能体如何根据描述找到论文、如何准确引用、哪些操作需要先问用户。
+
+在 设置 ▸ AI 中，Folio 会检测本机的智能体，每个智能体有"MCP""技能"两个开关，打开即写入配置（Claude Code、Codex 使用它们自己的 `mcp add` 命令），关闭即移除；也可以关闭"允许 AI 修改文献库"，只让 AI 读取。AI 写入后，正在运行的 Folio 会立即刷新。
 
 ## 环境
 

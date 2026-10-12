@@ -40,6 +40,14 @@ targets:
         product: FolioZotero
       - package: FolioCore
         product: FolioTranslate
+      - package: FolioCore
+        product: FolioAgent
+      # folio-cli: MCP server and command line for AI agents (AI-01/02).
+      - target: folio-cli
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
       # Apple offline translation helper, started by pdf2zh_next once per text segment.
       - target: folio-apple-translate
         embed: true
@@ -70,6 +78,19 @@ targets:
       base:
         PRODUCT_NAME: folio-apple-translate
         PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio.apple-translate
+        SKIP_INSTALL: YES
+  folio-cli:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Packages/FolioCore/Sources/FolioCLI
+    dependencies:
+      - package: FolioCore
+        product: FolioAgent
+    settings:
+      base:
+        PRODUCT_NAME: folio-cli
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio.cli
         SKIP_INSTALL: YES
   FolioTests:
     type: bundle.unit-test

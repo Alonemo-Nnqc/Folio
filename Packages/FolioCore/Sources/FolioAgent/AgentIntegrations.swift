@@ -118,9 +118,12 @@ public struct AgentIntegrator: Sendable {
     public func status(of descriptor: AgentDescriptor) -> AgentStatus {
         let location = locate(descriptor)
         let entry = installedCommand(descriptor)
+        // Only a configured folio-cli that no longer exists needs re-pointing: another copy of Folio
+        // (e.g. a development build) must not take over the user's agents just by launching.
+        let stale = entry.map { $0 != cliPath && !FileManager.default.isExecutableFile(atPath: $0) } ?? false
         return AgentStatus(descriptor: descriptor, isDetected: location != nil, location: location,
                            mcpInstalled: entry != nil, skillInstalled: skillInstalled(descriptor),
-                           mcpNeedsUpdate: entry.map { $0 != cliPath } ?? false)
+                           mcpNeedsUpdate: stale)
     }
 
     private func locate(_ descriptor: AgentDescriptor) -> String? {
@@ -361,11 +364,17 @@ public struct AgentIntegrator: Sendable {
         return target
     }
 
-    /// Refreshes skills Folio installed earlier (new skill text, moved app).
+    /// Refreshes skills Folio installed earlier: new skill text for this copy of Folio, or a moved app
+    /// (the skill names a folio-cli that no longer exists). Skills of another existing copy are left alone.
     @discardableResult
     public func refreshInstalledSkills() -> Int {
         Self.catalog.filter(skillInstalled).reduce(0) { count, descriptor in
-            (try? setSkill(true, for: descriptor)) == nil ? count : count + 1
+            guard let file = skillFile(descriptor), let text = try? String(contentsOf: file, encoding: .utf8) else { return count }
+            let referenced = text.firstMatch(of: /(\/[^\s"`']*\/folio-cli)/).map { String($0.1) }
+            let ours = text.contains(cliPath)
+            let orphaned = referenced.map { !FileManager.default.isExecutableFile(atPath: $0) } ?? true
+            guard ours || orphaned, text != FolioSkill.markdown(cliPath: cliPath) else { return count }
+            return (try? setSkill(true, for: descriptor)) == nil ? count : count + 1
         }
     }
 }

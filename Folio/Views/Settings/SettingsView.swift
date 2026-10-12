@@ -8,8 +8,7 @@ final class SettingsWindowController: NSWindowController {
 
     init(model: AppModel) {
         let host = NSHostingController(rootView: SettingsRootView(model: model, navigation: navigation))
-        // The pane title becomes the window title, as in System Settings.
-        host.sceneBridgingOptions = [.title, .toolbars]
+        host.sceneBridgingOptions = [.toolbars]
         let window = NSWindow(contentViewController: host)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
@@ -18,7 +17,15 @@ final class SettingsWindowController: NSWindowController {
         window.setFrameAutosaveName("FolioSettingsWindow2")
         window.setAccessibilityIdentifier("settingsWindow")
         super.init(window: window)
+        // The pane title is the window title, as in System Settings. Set from AppKit: SwiftUI's title
+        // bridging sometimes leaves "未命名" when a pane updates itself while appearing.
+        titleObserver = ObservationLoop { [weak self] in
+            guard let self else { return }
+            self.window?.title = self.navigation.pane.title
+        }
     }
+
+    private var titleObserver: ObservationLoop?
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
@@ -37,7 +44,7 @@ final class SettingsWindowController: NSWindowController {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, reading, library, retrieval, translation
+    case general, reading, library, retrieval, translation, ai
 
     var id: String { rawValue }
 
@@ -48,6 +55,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .library: "文献库"
         case .retrieval: "检索"
         case .translation: "翻译"
+        case .ai: "AI"
         }
     }
 
@@ -59,6 +67,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .library: "books.vertical"
         case .retrieval: "magnifyingglass"
         case .translation: "character.book.closed"
+        case .ai: "sparkles"
         }
     }
 }
@@ -96,6 +105,7 @@ struct SettingsRootView: View {
         case .library: LibrarySettings(model: model)
         case .retrieval: RetrievalSettings(settings: model.settings, model: model)
         case .translation: TranslationSettingsPane(model: model)
+        case .ai: AISettingsPane(settings: model.settings)
         }
     }
 }

@@ -113,6 +113,7 @@ final class AppModel {
         }
         refreshResolver()
         startObserving()
+        listenForExternalChanges()
         let citations = self.citations
         Task.detached(priority: .background) {
             try? await Task.sleep(for: .seconds(2))
@@ -157,6 +158,24 @@ final class AppModel {
         snapshot = .empty
         sidebarSelection = .all
         startObserving()
+    }
+
+    /// folio-cli (AI agents) writes from another process; GRDB only observes this process's writes,
+    /// so the helper's signal triggers a fresh observation (AI-01).
+    private func listenForExternalChanges() {
+        DistributedNotificationCenter.default().addObserver(forName: LibraryChangeSignal.name, object: nil, queue: .main) { [weak self] note in
+            let path = note.object as? String
+            MainActor.assumeIsolated {
+                guard let self, path == self.library.root.standardizedFileURL.path else { return }
+                self.reloadFromDisk()
+            }
+        }
+    }
+
+    func reloadFromDisk() {
+        observationTask?.cancel()
+        startObserving()
+        importer.indexFulltext()
     }
 
     private func startObserving() {

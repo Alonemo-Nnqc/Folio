@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         libraryWindowController.showWindow(nil)
         didFinishLaunching = true
         flushPendingOpens()
+        AIIntegration.repairAfterLaunch()
     }
 
     /// Unsaved annotations are written before quitting (READER-05).
@@ -53,9 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
-    /// PDFs opened with Folio from Finder (or `open -a Folio x.pdf`) are imported.
+    /// PDFs opened with Folio from Finder (or `open -a Folio x.pdf`) are imported; `folio://` links
+    /// (from AI agents, notes …) open or select an item (AI-05).
     func application(_ application: NSApplication, open urls: [URL]) {
-        pendingOpens += urls.filter(\.isFileURL)
+        pendingOpens += urls
         flushPendingOpens()
     }
 
@@ -63,7 +65,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard didFinishLaunching, !pendingOpens.isEmpty else { return }
         let urls = pendingOpens
         pendingOpens = []
-        model.importer.importFiles(urls, toGroup: model.sidebarSelection.groupId)
+        let files = urls.filter(\.isFileURL)
+        if !files.isEmpty { model.importer.importFiles(files, toGroup: model.sidebarSelection.groupId) }
+        for link in urls where link.scheme == "folio" { handle(link) }
+    }
+
+    /// `folio://open?item=<id>&page=<n>` and `folio://select?item=<id>`.
+    private func handle(_ link: URL) {
+        let query = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        guard let itemId = query.first(where: { $0.name == "item" })?.value else { return }
+        // A brand-new item written by folio-cli may not be in the snapshot yet.
+        if model.snapshot.items[itemId] == nil { model.reloadFromDisk() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (model.snapshot.items[itemId] == nil ? 0.5 : 0)) { [self] in
+            guard let item = model.snapshot.items[itemId] else {
+                model.toasts.show("Folio 中没有这个条目", systemImage: "questionmark.circle")
+                return
+            }
+            NSApp.activate()
+            let page = query.first(where: { $0.name == "page" })?.value.flatMap(Int.init)
+            if link.host == "open", let file = model.defaultFile(of: item.id), file.isPDF {
+                if let page { model.readers.open(fileId: file.id, page: max(page - 1, 0)) } else { model.open(fileId: file.id, mode: .reader) }
+            } else {
+                showLibrary(nil)
+                if item.isTrashed { model.sidebarSelection = .trash }
+                else if !model.rows.contains(item.id) { model.sidebarSelection = .all }
+                model.search = SearchState()
+                model.selectedItemIDs = [item.id]
+                model.selectedFileIDs = []
+            }
+        }
     }
 
     // MARK: Actions
@@ -94,6 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func newGroup(_ sender: Any?) { showLibrary(nil); model.createGroup() }
     @objc func newTag(_ sender: Any?) { model.activeSheet = .tagEditor(tagId: nil, applyTo: []) }
     @objc func importFromZotero(_ sender: Any?) { showLibrary(nil); model.activeSheet = .zoteroImport }
+    @objc func importReferences(_ sender: Any?) { showLibrary(nil); model.chooseReferencesToImport() }
 
     @objc func revealLibraryInFinder(_ sender: Any?) {
         NSWorkspace.shared.activateFileViewerSelecting([model.library.root])

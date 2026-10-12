@@ -179,7 +179,7 @@ private func seed(_ library: Library) throws -> [String] {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "model = \"gpt-5\"\n\n[mcp_servers.other]\ncommand = \"x\"\n".write(to: file, atomically: true, encoding: .utf8)
         try integrator(home, cli: "/old/folio-cli").setMCP(true, for: descriptor("codex"))
-        #expect(integrator(home).status(of: descriptor("codex")).mcpNeedsUpdate)
+        #expect(integrator(home).status(of: descriptor("codex")).mcpNeedsUpdate, "/old/folio-cli does not exist")
         #expect(integrator(home).repairMovedPaths() == ["Codex"])
         var text = try String(contentsOf: file, encoding: .utf8)
         #expect(text.components(separatedBy: "[mcp_servers.folio]").count == 2, "one block, not two")
@@ -214,5 +214,20 @@ private func seed(_ library: Library) throws -> [String] {
         try "my own".write(to: skill, atomically: true, encoding: .utf8)
         #expect(throws: AgentIntegrationError.self) { try agent.setSkill(false, for: descriptor("claude-code")) }
         #expect(throws: AgentIntegrationError.self) { try agent.setSkill(true, for: descriptor("vscode")) }
+    }
+
+    @Test func anotherExistingCopyIsNotTakenOver() throws {
+        let home = try tempHome()
+        let other = home.appending(path: "Other/folio-cli")
+        try FileManager.default.createDirectory(at: other.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "#!/bin/sh\n".write(to: other, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: other.path)
+        try integrator(home, cli: other.path).setMCP(true, for: descriptor("cursor"))
+        try integrator(home, cli: other.path).setSkill(true, for: descriptor("claude-code"))
+        #expect(!integrator(home).status(of: descriptor("cursor")).mcpNeedsUpdate)
+        #expect(integrator(home).repairMovedPaths().isEmpty)
+        #expect(integrator(home).refreshInstalledSkills() == 0)
+        try FileManager.default.removeItem(at: other)
+        #expect(integrator(home).refreshInstalledSkills() == 1, "orphaned skill follows the remaining copy")
     }
 }

@@ -234,7 +234,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             return configure(item, label: "翻译", symbol: "character.book.closed", tip: "保留排版翻译全文")
         case .folioExport:
             let menu = NSMenu()
-            let export = menu.addItem(withTitle: "导出 BibTeX…", action: #selector(exportBibTeX(_:)), keyEquivalent: "")
+            let export = menu.addItem(withTitle: "导出参考文献…", action: #selector(exportBibTeX(_:)), keyEquivalent: "")
             export.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: nil)
             menu.addItem(.separator())
             for (index, style) in CitationStyleOption.allCases.enumerated() {
@@ -297,6 +297,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     }
     @objc func newTag(_ sender: Any?) { model.activeSheet = .tagEditor(tagId: nil, applyTo: targetItemIds) }
     @objc func importFromZotero(_ sender: Any?) { model.activeSheet = .zoteroImport }
+    @objc func importReferences(_ sender: Any?) { model.chooseReferencesToImport() }
     @objc func focusSearch(_ sender: Any?) { model.showSearch() }
     @objc func moveToTrash(_ sender: Any?) { model.deleteSelection(command: true) }
     @objc func removeFromGroup(_ sender: Any?) { model.removeFromCurrentGroup(targetItemIds) }

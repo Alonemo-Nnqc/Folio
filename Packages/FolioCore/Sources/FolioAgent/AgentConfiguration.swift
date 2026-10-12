@@ -27,7 +27,11 @@ public struct AgentConfiguration: Sendable {
     /// `--library <dir>` > `FOLIO_LIBRARY` > Folio's preference > `~/Folio`.
     public static func resolve(arguments: [String], environment: [String: String] = ProcessInfo.processInfo.environment)
         -> AgentConfiguration {
-        let defaults = UserDefaults(suiteName: appDefaultsDomain)
+        // Inside Folio.app, folio-cli shares the app's bundle identifier, so its standard defaults already
+        // are Folio's (and macOS refuses a suite named after one's own bundle). Elsewhere (swift run,
+        // tests) read Folio's domain as a suite.
+        let defaults = Bundle.main.bundleIdentifier == appDefaultsDomain ? UserDefaults.standard
+            : UserDefaults(suiteName: appDefaultsDomain)
         var path: String?
         if let index = arguments.firstIndex(of: "--library"), arguments.indices.contains(index + 1) {
             path = arguments[index + 1]
