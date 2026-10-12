@@ -1,5 +1,6 @@
 import AppKit
 import CoreText
+import FolioCore
 import Foundation
 import PDFKit
 
@@ -53,16 +54,18 @@ struct RecognizerPayload: Sendable, Equatable {
 
     /// Reads the first pages of the PDF at `url`; nil when it is unreadable or has no text layer.
     static func extract(from url: URL) -> RecognizerPayload? {
-        autoreleasepool {
-            guard let document = PDFDocument(url: url) else { return nil }
-            if document.isLocked, !document.unlock(withPassword: "") { return nil }
-            var payload = RecognizerPayload(metadata: infoStrings(of: document), totalPages: document.pageCount,
-                                            fileName: url.lastPathComponent, pages: [])
-            for index in 0..<min(maxPages, document.pageCount) {
-                guard let page = document.page(at: index) else { continue }
-                payload.pages.append(autoreleasepool { Self.page(page) })
+        PDFKitSerial.run {
+            autoreleasepool {
+                guard let document = PDFDocument(url: url) else { return nil }
+                if document.isLocked, !document.unlock(withPassword: "") { return nil }
+                var payload = RecognizerPayload(metadata: infoStrings(of: document), totalPages: document.pageCount,
+                                                fileName: url.lastPathComponent, pages: [])
+                for index in 0..<min(maxPages, document.pageCount) {
+                    guard let page = document.page(at: index) else { continue }
+                    payload.pages.append(autoreleasepool { Self.page(page) })
+                }
+                return payload.wordCount > 0 ? payload : nil
             }
-            return payload.wordCount > 0 ? payload : nil
         }
     }
 

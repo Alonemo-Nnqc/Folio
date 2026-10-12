@@ -1,4 +1,5 @@
 import AppKit
+import FolioCore
 import Foundation
 import PDFKit
 
@@ -39,35 +40,37 @@ struct PDFFacts: Sendable, Equatable {
 
     /// Reads the facts from a PDF on disk. Returns nil when the file is not a readable PDF.
     static func extract(from url: URL) -> PDFFacts? {
-        guard let document = PDFDocument(url: url) else { return nil }
-        if document.isLocked, !document.unlock(withPassword: "") { return nil }
+        PDFKitSerial.run {
+            guard let document = PDFDocument(url: url) else { return nil }
+            if document.isLocked, !document.unlock(withPassword: "") { return nil }
 
-        var facts = PDFFacts(fileName: url.lastPathComponent)
-        let attributes = document.documentAttributes ?? [:]
-        facts.embeddedTitle = stringAttribute(attributes[PDFDocumentAttribute.titleAttribute])
-        facts.embeddedAuthor = stringAttribute(attributes[PDFDocumentAttribute.authorAttribute])
-        facts.metadataText = [
-            stringAttribute(attributes[PDFDocumentAttribute.subjectAttribute]),
-            stringAttribute(attributes[PDFDocumentAttribute.keywordsAttribute]),
-            xmpPacket(of: document),
-        ].compactMap { $0 }.joined(separator: "\n")
+            var facts = PDFFacts(fileName: url.lastPathComponent)
+            let attributes = document.documentAttributes ?? [:]
+            facts.embeddedTitle = stringAttribute(attributes[PDFDocumentAttribute.titleAttribute])
+            facts.embeddedAuthor = stringAttribute(attributes[PDFDocumentAttribute.authorAttribute])
+            facts.metadataText = [
+                stringAttribute(attributes[PDFDocumentAttribute.subjectAttribute]),
+                stringAttribute(attributes[PDFDocumentAttribute.keywordsAttribute]),
+                xmpPacket(of: document),
+            ].compactMap { $0 }.joined(separator: "\n")
 
-        if let first = document.page(at: 0) {
-            facts.firstPageLines = lines(of: first)
-            facts.firstPageText = facts.firstPageLines.map(\.text).joined(separator: "\n")
-            if facts.firstPageText.filter(\.isLetter).count < 20 {
-                let recognised = PageOCR.recognizeLines(on: first)
-                if !recognised.isEmpty {
-                    facts.firstPageLines = recognised
-                    facts.firstPageText = recognised.map(\.text).joined(separator: "\n")
-                    facts.usedOCR = true
+            if let first = document.page(at: 0) {
+                facts.firstPageLines = lines(of: first)
+                facts.firstPageText = facts.firstPageLines.map(\.text).joined(separator: "\n")
+                if facts.firstPageText.filter(\.isLetter).count < 20 {
+                    let recognised = PageOCR.recognizeLines(on: first)
+                    if !recognised.isEmpty {
+                        facts.firstPageLines = recognised
+                        facts.firstPageText = recognised.map(\.text).joined(separator: "\n")
+                        facts.usedOCR = true
+                    }
                 }
             }
+            if document.pageCount > 1, let second = document.page(at: 1) {
+                facts.secondPageText = second.string ?? ""
+            }
+            return facts
         }
-        if document.pageCount > 1, let second = document.page(at: 1) {
-            facts.secondPageText = second.string ?? ""
-        }
-        return facts
     }
 
     // MARK: - Helpers

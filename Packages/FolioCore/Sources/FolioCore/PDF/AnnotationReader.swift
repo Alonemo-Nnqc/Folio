@@ -32,24 +32,26 @@ public struct PDFAnnotationInfo: Sendable, Hashable, Identifiable {
 
 public enum AnnotationReader {
     public static func annotations(in url: URL) -> [PDFAnnotationInfo] {
-        guard let document = PDFDocument(url: url) else { return [] }
-        var result: [PDFAnnotationInfo] = []
-        for index in 0..<document.pageCount {
-            guard let page = document.page(at: index) else { continue }
-            for (offset, annotation) in page.annotations.enumerated() {
-                guard let kind = kind(of: annotation) else { continue }
-                var quoted = ""
-                if kind == .highlight || kind == .underline || kind == .strikeOut {
-                    quoted = markedText(annotation, on: page)
+        PDFKitSerial.run {
+            guard let document = PDFDocument(url: url) else { return [] }
+            var result: [PDFAnnotationInfo] = []
+            for index in 0..<document.pageCount {
+                guard let page = document.page(at: index) else { continue }
+                for (offset, annotation) in page.annotations.enumerated() {
+                    guard let kind = kind(of: annotation) else { continue }
+                    var quoted = ""
+                    if kind == .highlight || kind == .underline || kind == .strikeOut {
+                        quoted = markedText(annotation, on: page)
+                    }
+                    let comment = (annotation.contents ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if quoted.isEmpty && comment.isEmpty { continue }
+                    result.append(PDFAnnotationInfo(
+                        id: "\(index)-\(offset)", kind: kind, page: index + 1, colorHex: hex(annotation.color),
+                        quotedText: quoted, comment: comment, modified: annotation.modificationDate))
                 }
-                let comment = (annotation.contents ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if quoted.isEmpty && comment.isEmpty { continue }
-                result.append(PDFAnnotationInfo(
-                    id: "\(index)-\(offset)", kind: kind, page: index + 1, colorHex: hex(annotation.color),
-                    quotedText: quoted, comment: comment, modified: annotation.modificationDate))
             }
+            return result
         }
-        return result
     }
 
     static func kind(of annotation: PDFAnnotation) -> PDFAnnotationInfo.Kind? {
