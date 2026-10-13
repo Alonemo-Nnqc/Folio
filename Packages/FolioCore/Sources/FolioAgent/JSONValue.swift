@@ -83,7 +83,40 @@ public enum JSONValue: Sendable, Hashable, Codable {
     }
 
     public static func decode(_ text: String) throws -> JSONValue {
-        try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+        try decode(Data(text.utf8))
+    }
+
+    public static func decode(_ data: Data) throws -> JSONValue {
+        try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    /// One line of JSON for a newline-delimited stream. U+2028 / U+2029 are legal inside JSON strings
+    /// but some readers treat them as line breaks, so they are escaped like any control character.
+    public var wireLine: String {
+        encoded().replacingOccurrences(of: "\u{2028}", with: "\\u2028").replacingOccurrences(of: "\u{2029}", with: "\\u2029")
+    }
+
+    /// The value without nulls and empty strings, and without empty arrays or objects below the top
+    /// level, so tool results spend the agent's context on information only.
+    public var pruned: JSONValue { prune(isTop: true) ?? .object([:]) }
+
+    private func prune(isTop: Bool) -> JSONValue? {
+        switch self {
+        case .null: return nil
+        case .string(let text): return text.isEmpty ? nil : self
+        case .array(let values):
+            let kept = values.compactMap { $0.prune(isTop: false) }
+            return kept.isEmpty && !isTop ? nil : .array(kept)
+        case .object(let object):
+            var kept: [String: JSONValue] = [:]
+            for (key, value) in object {
+                // Top-level lists stay even when empty ("results": [] answers the question).
+                if let value = value.prune(isTop: false) { kept[key] = value }
+                else if isTop, case .array = value { kept[key] = .array([]) }
+            }
+            return kept.isEmpty && !isTop ? nil : .object(kept)
+        default: return self
+        }
     }
 }
 

@@ -25,8 +25,12 @@ public struct AgentConfiguration: Sendable {
     }
 
     /// `--library <dir>` > `FOLIO_LIBRARY` > Folio's preference > `~/Folio`.
+    ///
+    /// Reads the preferences afresh each time (another process — Folio — writes them), so a running MCP
+    /// server follows 设置 ▸ AI and a changed library location without being restarted.
     public static func resolve(arguments: [String], environment: [String: String] = ProcessInfo.processInfo.environment)
         -> AgentConfiguration {
+        CFPreferencesAppSynchronize(appDefaultsDomain as CFString)
         // Inside Folio.app, folio-cli shares the app's bundle identifier, so its standard defaults already
         // are Folio's (and macOS refuses a suite named after one's own bundle). Elsewhere (swift run,
         // tests) read Folio's domain as a suite.

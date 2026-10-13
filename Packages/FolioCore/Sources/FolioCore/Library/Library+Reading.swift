@@ -26,6 +26,21 @@ extension Library {
         try writer.read { try ReadingState.fetchOne($0, key: fileId) }
     }
 
+    /// When each item was last read in Folio's reader (the newest reading position of its files).
+    public func lastReadDates() throws -> [String: Date] {
+        try writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT file.itemId AS itemId, MAX(readingState.dateModified) AS date
+                FROM readingState JOIN file ON file.id = readingState.fileId GROUP BY file.itemId
+                """)
+            var dates: [String: Date] = [:]
+            for row in rows {
+                if let id: String = row["itemId"], let date: Date = row["date"] { dates[id] = date }
+            }
+            return dates
+        }
+    }
+
     public func saveReadingState(_ state: ReadingState) throws {
         try writer.write { db in
             guard try FileRecord.exists(db, key: state.fileId) else { return }

@@ -56,6 +56,38 @@ extension Library {
         }
     }
 
+    /// A full-text hit: the item, how well it matched (lower is better, FTS5 bm25) and a short excerpt
+    /// with the matched words in «guillemets».
+    public struct FulltextHit: Sendable {
+        public let itemId: String
+        public let rank: Double
+        public let snippet: String
+    }
+
+    /// Items whose indexed PDF text contains any token of `query` (prefix match), best first, one hit
+    /// per item (its best file).
+    public func fulltextHits(matching query: String, limit: Int = 200) throws -> [FulltextHit] {
+        let tokens = SearchMatcher.tokens(query)
+        guard !tokens.isEmpty else { return [] }
+        let match = tokens.map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"*" }.joined(separator: " OR ")
+        return try writer.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT file.itemId AS itemId, bm25(fulltext) AS rank,
+                       snippet(fulltext, 1, '«', '»', '…', 24) AS snippet
+                FROM fulltext JOIN file ON file.id = fulltext.fileId
+                WHERE fulltext MATCH ? ORDER BY rank LIMIT ?
+                """, arguments: [match, limit * 2])
+            var seen: Set<String> = []
+            var hits: [FulltextHit] = []
+            for row in rows {
+                guard let itemId: String = row["itemId"], seen.insert(itemId).inserted else { continue }
+                let snippet = (row["snippet"] as String? ?? "").replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+                hits.append(FulltextHit(itemId: itemId, rank: row["rank"] ?? 0, snippet: snippet))
+            }
+            return Array(hits.prefix(limit))
+        }
+    }
+
     /// Detects files changed on disk (e.g. annotated in Preview): updates size, date and hash and
     /// queues them for re-indexing. Returns the ids of changed files.
     @discardableResult

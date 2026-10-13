@@ -12,10 +12,11 @@ public enum AgentCLI {
       folio-cli call <工具> ['<JSON 参数>']   调用任一工具，结果为 JSON
       folio-cli search <关键词…> [--fulltext] [--limit N]
       folio-cli get <条目 id | DOI | 引用键>
-      folio-cli cite <条目…> [--style apa|gbt7714|bibtex]
+      folio-cli cite <条目…> [--style apa|gbt7714|ieee|mla|chicago|harvard|vancouver|nature|bibtex] [--in-text]
       folio-cli export [--format bibtex|ris|csljson] [--collection <分组/标签>] [-o <文件>]
       folio-cli add <DOI | arXiv ID | ISBN | PDF 路径> [--group <分组>]
       folio-cli open <条目> [--page N]
+      folio-cli status                       文献库位置、条目数量、是否允许修改（排查连接问题）
 
     选项：--library <目录> 使用指定文献库；--read-only 只允许读取。
     """
@@ -39,6 +40,16 @@ public enum AgentCLI {
             print("folio-cli \(MCPServer.serverVersion)")
             return 0
         }
+        if command == "mcp" {
+            // The server always starts, so the agent can connect and hear why the library is unavailable
+            // (and recovers by itself once Folio has created it or the location is fixed).
+            let toolbox = LibraryToolbox(configurationSource: { AgentConfiguration.resolve(arguments: arguments) })
+            await MCPServer(toolbox: toolbox).run()
+            return 0
+        }
+        if command == "status" {
+            return status(configuration)
+        }
         let toolbox: LibraryToolbox
         do {
             toolbox = try LibraryToolbox(configuration: configuration)
@@ -47,9 +58,6 @@ public enum AgentCLI {
             return 2
         }
         switch command {
-        case "mcp":
-            await MCPServer(toolbox: toolbox).run()
-            return 0
         case "tools":
             let tools = await toolbox.tools
             if rest.contains("--json") {
@@ -83,8 +91,10 @@ public enum AgentCLI {
         case "cite":
             let style = value(of: "--style", in: rest) ?? "apa"
             let items = positional(rest, valueOptions: ["--style"])
-            return await run(toolbox, "format_citations", ["items": .array(items.map(JSONValue.string)), "style": .string(style)],
-                             textKey: "text")
+            let inText = rest.contains("--in-text")
+            return await run(toolbox, "format_citations", ["items": .array(items.map(JSONValue.string)), "style": .string(style),
+                                                           "mode": inText ? "both" : "bibliography"],
+                             textKey: inText ? nil : "text")
         case "export":
             var arguments: [String: JSONValue] = ["format": .string(value(of: "--format", in: rest) ?? "bibtex")]
             if let collection = value(of: "--collection", in: rest) { arguments["collection"] = .string(collection) }
@@ -118,6 +128,26 @@ public enum AgentCLI {
         }
     }
 
+    /// Where folio-cli looks and what it may do — the first thing to check when an agent cannot use Folio.
+    private static func status(_ configuration: AgentConfiguration) -> Int32 {
+        let root = configuration.libraryRoot.path
+        print("folio-cli \(MCPServer.serverVersion)（MCP 协议 \(MCPServer.supportedProtocolVersions.joined(separator: ", "))）")
+        print("可执行文件：\(Bundle.main.executablePath ?? CommandLine.arguments[0])")
+        print("文献库：\(root)")
+        do {
+            let library = try LibraryToolbox.open(configuration.libraryRoot)
+            let snapshot = try library.snapshot()
+            let active = snapshot.items.values.filter { !$0.isTrashed }.count
+            print("条目：\(active)（回收站 \(snapshot.items.count - active)），分组 \(snapshot.groupsById.count)，标签 \(snapshot.tags.count)")
+        } catch {
+            printError("无法打开文献库：\(error.localizedDescription)")
+            return 2
+        }
+        print("允许 AI 修改文献库：\(configuration.allowWrites ? "是" : "否（只读）")")
+        print("工具：\(ToolCatalog.available(allowWrites: configuration.allowWrites).count) 个")
+        return 0
+    }
+
     /// Prints the result as JSON (or one text field of it, for citations and exports).
     private static func run(_ toolbox: LibraryToolbox, _ name: String, _ arguments: JSONValue, textKey: String? = nil) async -> Int32 {
         do {
@@ -125,7 +155,7 @@ public enum AgentCLI {
             if let textKey, let text = result[textKey]?.stringValue {
                 print(text, terminator: text.hasSuffix("\n") ? "" : "\n")
             } else {
-                print(result.encoded(pretty: true))
+                print(result.pruned.encoded(pretty: true))
             }
             return 0
         } catch {

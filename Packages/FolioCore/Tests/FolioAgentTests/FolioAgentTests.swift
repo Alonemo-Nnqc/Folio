@@ -32,7 +32,7 @@ private func seed(_ library: Library) throws -> [String] {
         let result = try await toolbox.call("search_library", arguments: ["query": "mamba retinal vessel"])
         let results = result["results"]?.arrayValue ?? []
         #expect(results.first?["id"]?.stringValue == ids[0])
-        #expect(results.first?["matched"]?.intValue == 3)
+        #expect(results.first?["matched"]?.stringValue == "3/3 words")
         #expect(results.count == 2, "the survey matches 'vessel' only; night-time matches nothing")
     }
 
@@ -121,8 +121,13 @@ private func seed(_ library: Library) throws -> [String] {
         #expect(list["result"]?["tools"]?.arrayValue?.count == ToolCatalog.all.count)
         let call = try JSONValue.decode(await server.handle(line: #"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_library","arguments":{"query":"night"}}}"#)!)
         #expect(call["result"]?["isError"] == false)
-        #expect(call["result"]?["structuredContent"]?["total_matches"]?.intValue == 1)
+        let text = try #require(call["result"]?["content"]?.arrayValue?.first?["text"]?.stringValue)
+        #expect(try JSONValue.decode(text)["total_matches"]?.intValue == 1)
+        #expect(call["result"]?["structuredContent"] == nil, "the text is the only copy of the result")
+        #expect(!text.contains("null") && !text.contains("\n"), "compact, without empty fields")
         let failure = try JSONValue.decode(await server.handle(line: #"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_item","arguments":{"item":"x"}}}"#)!)
+        let unknownTool = try JSONValue.decode(await server.handle(line: #"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"nope","arguments":{}}}"#)!)
+        #expect(unknownTool["error"]?["code"]?.intValue == -32602)
         #expect(failure["result"]?["isError"] == true)
         let unknown = try JSONValue.decode(await server.handle(line: #"{"jsonrpc":"2.0","id":5,"method":"nope"}"#)!)
         #expect(unknown["error"]?["code"]?.intValue == -32601)
