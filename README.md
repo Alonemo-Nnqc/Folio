@@ -6,11 +6,11 @@
 - 内置阅读器（与"预览"同一引擎 PDFKit）：论文以原生标签页打开；高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，与"预览"互通；记住每篇论文的阅读位置
 - 保留排版的整篇翻译（pdf2zh_next / BabelDOC），支持 20 多种翻译服务，译文与原文可对照阅读
 - 每个条目一篇 Markdown 笔记，可以在阅读时把选中的文字一键加入笔记
-- AI 接入：内置 MCP 服务器和命令行工具 `folio-cli`，以及教 AI 使用 Folio 的技能；在 设置 ▸ AI 中一键为 Claude Code、Codex、Cursor、Gemini CLI、Antigravity 等智能体添加或移除
-- 浏览器插件（Safari、Chrome、Edge、Brave、Arc、Firefox 等）：在论文页面一键保存到 Folio，可选分组和标签，并可同时保存 PDF
+- AI 接入：内置 MCP 服务器和命令行工具 `folio-cli`，以及教 AI 使用 Folio 的技能；在 设置 ▸ AI 中按各智能体官方的方式一键为 Claude Code、Codex、Cursor、VS Code、Gemini CLI、Antigravity、Zed 等 15 种智能体添加或移除
+- 浏览器插件（Safari、Chrome、Edge、Brave、Arc、Firefox 等）：在论文页面一键保存到 Folio，可选分组和标签，并可同时保存 PDF；搜索结果、arXiv 列表等页面可批量保存
 - 两级分组（可自定义颜色）、彩色标签、回收站、全文搜索、阅读状态与星级评分
 - 每个条目可以挂多个文件，并可指定默认打开的文件；也可以随时用"预览"或其他应用打开
-- 支持复制 BibTeX / GB/T 7714-2015 / APA 引用，导出 `.bib`
+- 支持复制 BibTeX、GB/T 7714-2015、APA、IEEE、MLA、Chicago、Harvard、Vancouver、Nature 引用，导出 BibTeX / RIS / CSL JSON
 - 可以一键从 Zotero 导入（只读取数据库副本，不会修改 Zotero）
 - 1000 个条目时冷启动约 0.35 s，内存约 110–130 MB
 
@@ -20,27 +20,32 @@
 
 Folio.app 内附带 `folio-cli`（`Folio.app/Contents/MacOS/folio-cli`）：
 
-- `folio-cli mcp`：stdio 方式的 MCP 服务器，提供 25 个工具（搜索、读取全文与批注、APA / GB/T 7714 / BibTeX 引用、BibTeX / RIS / CSL JSON 导入导出、按 DOI / arXiv / PDF 添加、分组与标签的新建 / 改名 / 改色 / 移动 / 删除、笔记、移到回收站）。
-- `folio-cli call <工具> '<JSON>'` 以及 `search`、`get`、`cite`、`export`、`add`、`open` 快捷命令，供只能运行命令的智能体使用。
-- Folio 技能（`folio-library/SKILL.md`）教智能体如何根据描述找到论文、如何准确引用、哪些操作需要先问用户。
+- `folio-cli mcp`：stdio 方式的 MCP 服务器（支持 MCP 2026-07-28 以及 2025-11-25 及更早的握手版本），26 个工具：检索（可按作者、年份、类型、阅读状态、标签过滤，可搜全文并返回命中片段）、读取全文（可只返回与问题相关的段落及页码）与批注、9 种格式的参考文献与文中引用、BibTeX / RIS / CSL JSON 导入导出、按 DOI / arXiv / PDF / 网址添加（可下载开放获取 PDF）、给条目附加文件、分组与标签管理、笔记、移到回收站；3 个提示词（查找论文、引用论文、总结论文）。
+- `folio-cli call <工具> '<JSON>'` 以及 `search`、`get`、`cite`、`export`、`add`、`open` 快捷命令，供只能运行命令的智能体使用；`folio-cli status` 检查文献库与权限，`folio-cli agents` 查看或更改各智能体的安装状态。
+- Folio 技能（`folio-library/`：`SKILL.md` + `references/`）教智能体如何根据描述找到论文、准确引用、写 LaTeX / Markdown / Word 时如何引用和导出，以及哪些操作需要先问用户。
 
-在 设置 ▸ AI 中，Folio 会检测本机的智能体，每个智能体有"MCP""技能"两个开关，打开即写入配置（Claude Code、Codex 使用它们自己的 `mcp add` 命令），关闭即移除；也可以关闭"允许 AI 修改文献库"，只让 AI 读取。AI 写入后，正在运行的 Folio 会立即刷新。
+在 设置 ▸ AI 中，Folio 会检测本机的智能体，每个智能体有"MCP""技能"两个开关，打开即按该智能体官方文档的方式写入（Claude Code、Codex 用它们自己的 `mcp add` 命令；其他应用只改动 Folio 自己的条目，保留原文件的顺序、格式和注释），关闭即移除。技能放在各智能体读取的目录中：Claude Code 为 `~/.claude/skills`，Codex、Gemini CLI、Cursor、VS Code、Copilot CLI、Windsurf、opencode、Zed 共用开放标准目录 `~/.agents/skills`，Antigravity、Kiro、Cline、Qwen Code 各有自己的目录。"检查"按钮会像智能体一样启动 folio-cli 并完成握手。也可以关闭"允许 AI 修改文献库"，只让 AI 读取（对正在运行的会话立即生效）。AI 写入后，正在运行的 Folio 会立即刷新。
+
+注意：Gemini CLI 只在受信任的文件夹中启用 MCP 服务器；Claude 桌面版的技能需要用"导出技能包"上传。
 
 ## 浏览器插件
 
-Folio 运行时在 `127.0.0.1:23120` 提供本地连接服务，只接受浏览器扩展的请求（网页无法调用），可在 设置 ▸ 浏览器 中关闭。在论文页面点工具栏上的 Folio 按钮：
+Folio 运行时在 `127.0.0.1:23120` 提供本地连接服务，只接受浏览器扩展的请求（网页无法调用，并校验 Host 防止 DNS 重绑定），可在 设置 ▸ 浏览器 中关闭。在论文页面点工具栏上的 Folio 按钮（或 ⌘⇧S）：
 
-- 自动识别标题、作者、期刊、DOI / arXiv 编号（Highwire `citation_*`、Dublin Core、PRISM、JSON-LD、IEEE Xplore 等）；有标识符时由 Folio 的检索引擎补全元数据
-- 选择保存到哪个分组（默认 Folio 当前选中的分组）、添加标签、同时保存 PDF（由浏览器下载，可使用登录状态）
+- 自动识别标题、作者、期刊、DOI / arXiv 编号（Highwire `citation_*`、Dublin Core、PRISM、COinS、JSON-LD、IEEE Xplore、ScienceDirect 等）；有标识符时由 Folio 的检索引擎补全元数据
+- 选择保存到哪个分组（默认 Folio 当前选中的分组）、添加标签、同时保存 PDF（由浏览器下载，可使用登录状态，自动跟随出版社的中转页；结果在弹窗和 Folio 中都会提示）
+- 搜索结果、arXiv 列表等包含多篇文献的页面：勾选后一次保存，可同时下载开放获取的 PDF
+- 在 PDF、DOI 或 arXiv 链接上右键"保存链接到 Folio"
 - 已有的文献不会重复创建，只加入所选分组；当前页是 PDF 时直接导入该文件
 
-安装：
+安装（设置 ▸ 浏览器 中有分步引导，并会自动检测是否安装成功）：
 
-- **Safari**：扩展随 Folio.app 提供。设置 ▸ 浏览器 ▸"在 Safari 中启用…"，在 Safari 设置的"扩展"中勾选"Folio 文献保存"。
-- **Chrome / Edge / Brave / Arc 等**：设置 ▸ 浏览器 ▸"安装…"，Folio 会把扩展放到 `~/Library/Application Support/Folio/BrowserExtension/chromium` 并打开浏览器的扩展页面；打开"开发者模式"，点"加载已解压的扩展程序"，选择该文件夹。
+- **Safari**：扩展随 Folio.app 提供。因为 Folio 使用开发证书签名，需要先在 Safari 设置 ▸ 高级 中打开"显示网页开发者功能"，再在 开发者 中勾选"允许未签名的扩展"（每次重新打开 Safari 后需再次勾选），然后在 扩展 中勾选"Folio 文献保存"。使用 Developer ID 签名并公证后可省去这一步。
+- **Chrome / Edge / Brave / Arc / Opera 等**：点"安装…"，Folio 把扩展放到 `~/Library/Application Support/Folio/BrowserExtension/chromium`（路径已拷贝）并打开扩展页面；打开"开发者模式"，点"加载已解压的扩展程序"，在选择窗口中按 ⌘⇧G 粘贴路径。扩展 ID 固定为 `ljlmdoodaogoghgikjgdbpigeamnjejd`。Folio 更新后扩展文件会自动更新，浏览器重启或在扩展页点"重新加载"后生效。
 - **Firefox**：在 `about:debugging` 中"临时载入附加组件"，选择 `…/BrowserExtension/firefox/manifest.json`（重启 Firefox 后需重新载入）。
+- `script/package-extensions.sh` 生成上传 Chrome 应用商店的 `.zip` 和提交 Firefox 签名的 `.xpi`（需要你自己的开发者账号）。
 
-扩展源码在 `BrowserExtension/`（`shared/` 为共用代码，各浏览器的 `manifest.json` 分别放在 `chromium/`、`firefox/`、`safari/`），Safari 扩展的原生部分在 `SafariExtension/`。
+扩展源码在 `BrowserExtension/`（`shared/` 为共用代码，各浏览器的 `manifest.json` 分别放在 `chromium/`、`firefox/`、`safari/`），Safari 扩展的原生部分在 `SafariExtension/`，页面识别的回归测试在 `BrowserExtensionTests/`。
 
 ## 环境
 
@@ -79,6 +84,7 @@ FOLIO_LIBRARY=/tmp/my-test-library script/build_and_run.sh
 | `Packages/FolioCore/Sources/FolioZotero` | Zotero 数据库读取 |
 | `Packages/FolioCore/Sources/FolioAgent` | AI 接入：工具目录、MCP 服务器、folio-cli、技能、智能体配置；浏览器连接协议 |
 | `BrowserExtension/`、`SafariExtension/` | 浏览器扩展（Manifest V3）与 Safari Web Extension |
+| `BrowserExtensionTests/` | 页面识别回归测试（固定样例页 + 在浏览器中运行的测试页） |
 | `Packages/FolioCore/Sources/FolioSeed` | 开发工具：生成演示用和性能测试用的文献库 |
 | `FolioTests/` | App 层单元测试（菜单规则、拖放规则、引用服务） |
 | `FolioUITests/` | XCUITest 界面测试 |
@@ -108,6 +114,9 @@ FOLIO_LIVE=1 swift test --package-path Packages/FolioCore --filter FolioTranslat
 # 性能测试
 swift run --package-path Packages/FolioCore folio-seed bulk /tmp/folio-bulk 1000
 script/build_and_run.sh --release && script/perf.sh /tmp/folio-bulk
+
+# 浏览器插件页面识别回归测试：在仓库根目录运行 python3 -m http.server 8767，浏览器打开
+# http://127.0.0.1:8767/BrowserExtensionTests/ ，标题显示 PASSED / FAILED
 
 # 会操作鼠标键盘的测试（运行期间请不要动鼠标）
 script/ui-test.sh
