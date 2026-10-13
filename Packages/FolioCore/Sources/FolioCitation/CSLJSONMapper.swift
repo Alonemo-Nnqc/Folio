@@ -17,11 +17,22 @@ enum CSLJSONMapper {
         if let issued = cslIssued(m) {
             item["issued"] = issued
         }
-        if let source = m.source, !source.isEmpty { item["container-title"] = source }
+        // A repository is not a container: preprints cite it as the publisher with the identifier as
+        // the number (the CSL / Zotero convention), so styles print "arXiv:2401.12345" and a link.
+        let isRepositoryPreprint = m.type == .preprint && m.arxivId != nil
+        if let source = m.source, !source.isEmpty, !(isRepositoryPreprint && source.lowercased() == "arxiv") {
+            item["container-title"] = source
+        }
+        if isRepositoryPreprint, let arxiv = m.arxivId {
+            item["publisher"] = "arXiv"
+            item["number"] = "arXiv:\(arxiv)"
+            if (m.doi ?? "").isEmpty { item["DOI"] = "10.48550/arXiv.\(arxiv)" }
+            if (m.url ?? "").isEmpty { item["URL"] = "https://arxiv.org/abs/\(arxiv)" }
+        }
         if let volume = m.volume, !volume.isEmpty { item["volume"] = volume }
         if let issue = m.issue, !issue.isEmpty { item["issue"] = issue }
         if let pages = m.pages, !pages.isEmpty { item["page"] = pages }
-        if let publisher = m.publisher, !publisher.isEmpty { item["publisher"] = publisher }
+        if let publisher = m.publisher, !publisher.isEmpty, !isRepositoryPreprint { item["publisher"] = publisher }
         if let doi = m.doi, !doi.isEmpty { item["DOI"] = doi }
         if let url = m.url, !url.isEmpty { item["URL"] = url }
         if let abstract = m.abstract, !abstract.isEmpty { item["abstract"] = abstract }

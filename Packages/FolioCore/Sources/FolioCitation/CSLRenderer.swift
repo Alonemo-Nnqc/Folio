@@ -18,7 +18,8 @@ public enum CSLRendererError: Error, CustomStringConvertible, Equatable {
 }
 
 /// Renders `CitationEntry` lists into formatted citations using citeproc-js
-/// (GB/T 7714-2015, APA) or the pure-Swift `BibTeXWriter` (BibTeX).
+/// (GB/T 7714-2015, APA, IEEE, MLA, Chicago, Harvard, Vancouver, Nature) or the
+/// pure-Swift `BibTeXWriter` (BibTeX).
 ///
 /// citeproc-js runs inside one `JSContext`; this type is **not** `Sendable`
 /// and must only ever be used from a single thread/task. Create one
@@ -38,7 +39,6 @@ public final class CSLRenderer {
     private let engineConstructor: JSValue
     private let sys: JSValue
     private let itemStore = ItemStore()
-    private let styleXML: [CitationStyle: String]
     private var engines: [CitationStyle: JSValue] = [:]
     private var lastException: String?
 
@@ -71,12 +71,6 @@ public final class CSLRenderer {
         context.setObject(cslValue, forKeyedSubscript: "CSL" as NSString)
         self.engineConstructor = engineCtor
 
-        self.styleXML = [
-            .apa: try Self.loadResourceText("apa", extension: "csl"),
-            .gbt7714: try Self.loadResourceText(
-                "china-national-standard-gb-t-7714-2015-numeric", extension: "csl"),
-        ]
-
         let localeXML: [String: String] = [
             "en-US": try Self.loadResourceText("locales-en-US", extension: "xml"),
             "zh-CN": try Self.loadResourceText("locales-zh-CN", extension: "xml"),
@@ -106,8 +100,9 @@ public final class CSLRenderer {
     /// directly; GB/T 7714 and APA go through citeproc-js.
     ///
     /// GB/T 7714 output is plain text, one entry per line, with the style's
-    /// numeric "[1]" bibliography label stripped. APA output is plain text
-    /// plus an HTML rendering that preserves italics (e.g. journal titles).
+    /// numeric "[1]" bibliography label stripped. The other styles also get an
+    /// HTML rendering that preserves italics (e.g. journal titles); numeric
+    /// styles (IEEE, Vancouver, Nature) keep their labels.
     public func render(_ entries: [CitationEntry], style: CitationStyle) throws -> CitationOutput {
         guard !entries.isEmpty else { return CitationOutput(plainText: "") }
 
@@ -132,16 +127,14 @@ public final class CSLRenderer {
         engine.invokeMethod("updateItems", withArguments: [ids])
         try checkException()
 
-        var lines = try bibliographyEntries(engine: engine).map {
-            $0.trimmingCharacters(in: .newlines)
-        }
+        var lines = try bibliographyEntries(engine: engine).map(Self.cleanTextEntry)
         if style == .gbt7714 {
             lines = lines.map(Self.strippingNumericLabel)
         }
         let plainText = lines.joined(separator: "\n")
 
         var html: String?
-        if style == .apa {
+        if style != .gbt7714 {
             engine.invokeMethod("setOutputFormat", withArguments: ["html"])
             try checkException()
             html = try bibliographyHTML(engine: engine)
@@ -150,13 +143,44 @@ public final class CSLRenderer {
         return CitationOutput(plainText: plainText, html: html)
     }
 
+    /// In-text citations for `entries` in `style`: one per entry (in the given order) plus one
+    /// combined citation for all of them, e.g. "(Zhang & Gao, 2026)" / "[1]" and
+    /// "(Qi, 2025; Zhang & Gao, 2026)" / "[1], [2]". Numeric styles number the entries in the given
+    /// order, matching `render(_:style:)`. BibTeX gives LaTeX `\cite{key}` commands.
+    public func inTextCitations(_ entries: [CitationEntry], style: CitationStyle) throws -> (each: [String], combined: String) {
+        guard !entries.isEmpty else { return ([], "") }
+        if style == .bibtex {
+            let keys = entries.map(\.citationKey)
+            return (keys.map { "\\cite{\($0)}" }, "\\cite{\(keys.joined(separator: ","))}")
+        }
+        let engine = try cachedEngine(for: style)
+        var items: [String: [String: Any]] = [:]
+        for entry in entries { items[entry.id] = CSLJSONMapper.csljson(id: entry.id, metadata: entry.metadata) }
+        itemStore.items = items
+        let ids = entries.map(\.id)
+        lastException = nil
+        engine.invokeMethod("setOutputFormat", withArguments: ["text"])
+        engine.invokeMethod("updateItems", withArguments: [ids])
+        try checkException()
+        func cluster(_ ids: [String]) throws -> String {
+            let citationItems = ids.map { ["id": $0] }
+            guard let value = engine.invokeMethod("makeCitationCluster", withArguments: [citationItems]) else {
+                throw CSLRendererError.scriptFailed("makeCitationCluster() 未返回结果")
+            }
+            try checkException()
+            return value.toString() ?? ""
+        }
+        return (try ids.map { try cluster([$0]) }, try cluster(ids))
+    }
+
     // MARK: - Engine cache
 
     private func cachedEngine(for style: CitationStyle) throws -> JSValue {
         if let cached = engines[style] { return cached }
-        guard let xml = styleXML[style] else {
+        guard let resource = style.cslResource else {
             throw CSLRendererError.resourceMissing("\(style.rawValue).csl")
         }
+        let xml = try Self.loadResourceText(resource, extension: "csl")
         lastException = nil
         // Force English (en-US) locale terms regardless of the style's own
         // default-locale: Folio's metadata sources are English-only
@@ -218,6 +242,18 @@ public final class CSLRenderer {
             lastException = nil
             throw CSLRendererError.scriptFailed(message)
         }
+    }
+
+    /// One text-mode bibliography entry on one line: citeproc separates a numeric label from the
+    /// reference with a tab or nothing (`second-field-align`), so "[1]Author" becomes "[1] Author".
+    private static func cleanTextEntry(_ entry: String) -> String {
+        var line = entry.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\t", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+        if let match = line.firstMatch(of: /^(\[\d+\]|\d+\.)(?=\S)/) {
+            line.insert(" ", at: match.range.upperBound)
+        }
+        return line
     }
 
     /// Strips a leading numeric bibliography label such as `"[1]"` (with any

@@ -24,6 +24,48 @@ upstream; they are vendored as-is.
 - Project: [CSL styles repository](https://github.com/citation-style-language/styles).
 - License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
 
+## `ieee.csl`
+
+- IEEE Reference Guide.
+- Source: <https://raw.githubusercontent.com/citation-style-language/styles/master/ieee.csl> (retrieved 2026-10-13).
+- Project: [CSL styles repository](https://github.com/citation-style-language/styles).
+- License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+## `modern-language-association.csl`
+
+- MLA Handbook 9th edition.
+- Source: <https://raw.githubusercontent.com/citation-style-language/styles/master/modern-language-association.csl> (retrieved 2026-10-13).
+- Project: [CSL styles repository](https://github.com/citation-style-language/styles).
+- License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+## `chicago-author-date.csl`
+
+- Chicago Manual of Style 18th edition (author-date).
+- Source: <https://raw.githubusercontent.com/citation-style-language/styles/master/chicago-author-date.csl> (retrieved 2026-10-13).
+- Project: [CSL styles repository](https://github.com/citation-style-language/styles).
+- License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+## `harvard-cite-them-right.csl`
+
+- Cite Them Right 12th edition (Harvard).
+- Source: <https://raw.githubusercontent.com/citation-style-language/styles/master/harvard-cite-them-right.csl> (retrieved 2026-10-13).
+- Project: [CSL styles repository](https://github.com/citation-style-language/styles).
+- License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+## `nlm-citation-sequence.csl`
+
+- NLM/Vancouver: Citing Medicine 2nd edition.
+- Source: <https://raw.githubusercontent.com/citation-style-language/styles/master/nlm-citation-sequence.csl> (retrieved 2026-10-13).
+- Project: [CSL styles repository](https://github.com/citation-style-language/styles).
+- License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
+## `nature.csl`
+
+- Nature.
+- Source: <https://raw.githubusercontent.com/citation-style-language/styles/master/nature.csl> (retrieved 2026-10-13).
+- Project: [CSL styles repository](https://github.com/citation-style-language/styles).
+- License: [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
 ## `locales-en-US.xml` / `locales-zh-CN.xml`
 
 - Source: <https://raw.githubusercontent.com/citation-style-language/locales/master/locales-en-US.xml>
