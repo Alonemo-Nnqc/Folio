@@ -61,9 +61,10 @@ struct JSONCDocument {
 
     /// The document as Foundation objects (comments and trailing commas ignored).
     func object() throws -> [String: Any] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{FEFF}")))
         if trimmed.isEmpty { return [:] }
-        guard let data = Self.strippingComments(text).data(using: .utf8),
+        let body = text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
+        guard let data = Self.strippingComments(body).data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
             throw JSONCError(message: "not valid JSON")
         }
@@ -280,6 +281,8 @@ private struct Scanner {
     }
 
     mutating func parseRoot() throws -> Object? {
+        // A UTF-8 byte order mark (some editors write one) is not content.
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { position = 3 }
         skipTrivia()
         guard position < bytes.count, bytes[position] == UInt8(ascii: "{") else { return nil }
         return try parseObject()

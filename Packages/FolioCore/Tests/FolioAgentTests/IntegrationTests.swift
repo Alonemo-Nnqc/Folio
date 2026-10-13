@@ -85,6 +85,13 @@ private func read(_ path: String, in home: URL) throws -> String {
         #expect(notJSON.text == "{ oops")
     }
 
+    @Test func aByteOrderMarkIsKept() throws {
+        var document = JSONCDocument("\u{FEFF}{\n  \"mcpServers\": {}\n}\n")
+        try document.setMember("folio", in: "mcpServers", to: entry)
+        #expect(document.text.hasPrefix("\u{FEFF}{"))
+        #expect((try document.object()["mcpServers"] as? [String: Any])?["folio"] != nil)
+    }
+
     @Test func stringsWithSlashesAndBracesAreNotComments() throws {
         var document = JSONCDocument(#"{"url": "http://x/*y*/", "s": "}{", "mcpServers": {"a": "//b"}}"#)
         try document.setMember("folio", in: "mcpServers", to: entry)
