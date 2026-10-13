@@ -13,9 +13,11 @@
     <span id="connection" class="connection" hidden></span>
   </header>
 
+  <div id="update" class="banner" hidden></div>
+
   <main id="loading" class="state">
     <div class="spinner" aria-hidden="true"></div>
-    <p class="secondary">正在读取页面…</p>
+    <p class="secondary" id="loading-text">正在读取页面…</p>
   </main>
 
   <main id="offline" class="state" hidden>
@@ -36,6 +38,13 @@
       <div class="note" id="note" hidden></div>
     </section>
 
+    <section id="multi" class="multi" aria-label="页面中的文献" hidden>
+      <div class="multi-header">
+        <label class="check"><input id="select-all" type="checkbox" checked><span id="multi-count"></span></label>
+      </div>
+      <ul id="candidates" class="candidates"></ul>
+    </section>
+
     <label class="field">
       <span>分组</span>
       <select id="group"></select>
@@ -47,9 +56,9 @@
       <datalist id="tag-list"></datalist>
     </label>
 
-    <label class="check" id="pdf-row" hidden>
+    <label class="check indented" id="pdf-row" hidden>
       <input id="pdf" type="checkbox" checked>
-      <span>同时保存 PDF</span>
+      <span id="pdf-label">同时保存 PDF</span>
     </label>
 
     <div class="buttons">
@@ -62,6 +71,8 @@
     <div class="symbol success" id="done-symbol">✓</div>
     <h2 id="done-title">已保存</h2>
     <p class="secondary" id="done-detail"></p>
+    <p class="pdf-status" id="pdf-status" hidden></p>
+    <ul class="failures" id="failures" hidden></ul>
     <div class="buttons centered">
       <button id="reveal" type="button">在 Folio 中显示</button>
       <button id="close" type="button" class="primary">完成</button>

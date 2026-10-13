@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>extract.js tests</title>
+  <style>
+    body { font: 13px -apple-system, sans-serif; margin: 16px; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border-bottom: 1px solid #ddd; padding: 4px 8px; text-align: left; vertical-align: top; }
+    .pass { color: #1a7f37; } .fail { color: #cf222e; font-weight: 600; }
+    iframe { display: none; }
+  </style>
+</head>
+<body>
+  <!-- Runs ../BrowserExtension/shared/extract.js (the file the extension injects) inside each fixture page and checks the result.
+       Serve the repository root over HTTP (python3 -m http.server) and open /BrowserExtensionTests/. -->
+  <h1 id="summary">Running…</h1>
+  <table><thead><tr><th>fixture</th><th>check</th><th>expected</th><th>actual</th></tr></thead><tbody id="rows"></tbody></table>
+  <script src="cases.js"></script>
+  <script>
+    const rows = document.getElementById("rows");
+    let passed = 0, failed = 0;
+    function report(fixture, check, expected, actual) {
+      const ok = JSON.stringify(expected) === JSON.stringify(actual);
+      ok ? passed++ : failed++;
+      const tr = document.createElement("tr");
+      for (const text of [fixture, check, JSON.stringify(expected), JSON.stringify(actual)]) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        tr.append(td);
+      }
+      tr.className = ok ? "pass" : "fail";
+      rows.append(tr);
+    }
+    function run(source, fixture) {
+      return new Promise((resolve) => {
+        const frame = document.createElement("iframe");
+        frame.src = `fixtures/${fixture}.html`;
+        frame.onload = () => {
+          let result;
+          try { result = frame.contentWindow.eval(source); } catch (error) { result = { error: String(error) }; }
+          frame.remove();
+          resolve(result);
+        };
+        document.body.append(frame);
+      });
+    }
+    (async () => {
+      const source = await (await fetch(new URLSearchParams(location.search).get("src") || "../BrowserExtension/shared/extract.js", { cache: "no-store" })).text();
+      for (const [fixture, checks] of Object.entries(CASES)) {
+        const result = await run(source, fixture);
+        for (const [check, expected] of Object.entries(checks)) {
+          const actual = typeof expected === "object" && expected && "__fn" in expected ? null : undefined;
+          const value = check.split(".").reduce((value, key) => value == null ? value : value[key], result);
+          report(fixture, check, expected, value === undefined ? null : value);
+        }
+      }
+      document.getElementById("summary").textContent = failed ? `FAILED ${failed} / ${passed + failed}` : `PASSED ${passed} / ${passed}`;
+      document.title = document.getElementById("summary").textContent;
+    })();
+  </script>
+</body>
+</html>

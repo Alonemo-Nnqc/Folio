@@ -99,8 +99,47 @@ select { padding-right: 24px; }
 select:focus, input[type="text"]:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
 input::placeholder { color: var(--secondary); }
 
-.check { display: flex; align-items: center; gap: 6px; padding-left: 52px; }
+.check { display: flex; align-items: center; gap: 6px; }
+.check.indented { padding-left: 52px; }
 .check input { margin: 0; }
+
+.banner {
+  margin: 10px 14px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+}
+.banner[hidden] { display: none; }
+
+.multi { display: flex; flex-direction: column; gap: 6px; }
+.multi[hidden], .card[hidden] { display: none; }
+.multi-header { font-size: 12px; color: var(--secondary); }
+.candidates {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.candidates li + li { border-top: 0.5px solid var(--separator); }
+.candidates label { display: flex; gap: 8px; align-items: flex-start; padding: 6px 10px; }
+.candidates input { margin: 2px 0 0; flex: none; }
+.candidates span { display: flex; flex-direction: column; min-width: 0; }
+.candidate-title { font-size: 12.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.candidate-id { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.pdf-status { margin: 6px 0 0; font-size: 12px; max-width: 290px; }
+.pdf-status[hidden] { display: none; }
+.pdf-status.pending { color: var(--secondary); }
+.pdf-status.ok { color: var(--success); }
+.pdf-status.failed { color: var(--warning); }
+.failures { margin: 6px 0 0; padding: 0; list-style: none; font-size: 11px; color: var(--secondary); max-width: 300px; text-align: left; }
+.failures[hidden] { display: none; }
+.failures li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .buttons.centered { justify-content: center; margin-top: 10px; }

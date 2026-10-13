@@ -10,7 +10,7 @@ import Testing
 
     @Test func parsesRequestsInPieces() throws {
         let body = #"{"item":{"title":"A"}}"#
-        let data = raw("POST /save?groupId=g1 HTTP/1.1\nHost: 127.0.0.1\nOrigin: chrome-extension://abc\nX-Folio-Connector: 1\n", body: body)
+        let data = raw("POST /save?groupId=g1 HTTP/1.1\nHost: 127.0.0.1:23120\nOrigin: chrome-extension://abc\nX-Folio-Connector: 1\n", body: body)
         guard case .incomplete = ConnectorProtocol.parse(data.prefix(20)) else { Issue.record("partial headers"); return }
         guard case .incomplete = ConnectorProtocol.parse(data.dropLast(3)) else { Issue.record("partial body"); return }
         guard case .complete(let request) = ConnectorProtocol.parse(data) else { Issue.record("complete"); return }
@@ -21,14 +21,20 @@ import Testing
     }
 
     @Test func webPagesAndFormsAreRejected() throws {
-        guard case .complete(let fromSite) = ConnectorProtocol.parse(raw("POST /save HTTP/1.1\nOrigin: https://evil.example\nX-Folio-Connector: 1\n")),
-              case .complete(let form) = ConnectorProtocol.parse(raw("POST /save HTTP/1.1\nOrigin: safari-web-extension://x\n")),
-              case .complete(let ping) = ConnectorProtocol.parse(raw("GET /ping HTTP/1.1\nOrigin: moz-extension://y\n")) else {
+        guard case .complete(let fromSite) = ConnectorProtocol.parse(raw("POST /save HTTP/1.1\nHost: 127.0.0.1:23120\nOrigin: https://evil.example\nX-Folio-Connector: 1\n")),
+              case .complete(let form) = ConnectorProtocol.parse(raw("POST /save HTTP/1.1\nHost: 127.0.0.1:23120\nOrigin: safari-web-extension://x\n")),
+              case .complete(let ping) = ConnectorProtocol.parse(raw("GET /ping HTTP/1.1\nHost: localhost:23120\nOrigin: moz-extension://y\n")),
+              case .complete(let rebound) = ConnectorProtocol.parse(raw("GET /collections HTTP/1.1\nHost: evil.example:23120\n")),
+              case .complete(let noHost) = ConnectorProtocol.parse(raw("GET /collections HTTP/1.1\n")) else {
             Issue.record("parse"); return
         }
         #expect(ConnectorProtocol.reject(fromSite)?.status == 403)
         #expect(ConnectorProtocol.reject(form)?.status == 403, "writes need the custom header")
         #expect(ConnectorProtocol.reject(ping) == nil)
+        #expect(ConnectorProtocol.reject(rebound)?.status == 403, "DNS rebinding: the page's own domain as Host")
+        #expect(ConnectorProtocol.reject(noHost)?.status == 403)
+        #expect(ConnectorProtocol.isLocalHost("[::1]:23120") && ConnectorProtocol.isLocalHost("LOCALHOST"))
+        #expect(!ConnectorProtocol.isLocalHost("127.0.0.1.evil.example"))
         #expect(ConnectorProtocol.corsHeaders(origin: "https://evil.example").isEmpty)
         #expect(ConnectorProtocol.corsHeaders(origin: "chrome-extension://abc")["Access-Control-Allow-Origin"] == "chrome-extension://abc")
     }

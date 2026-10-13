@@ -2,8 +2,9 @@
   "manifest_version": 3,
   "name": "Folio 文献保存",
   "short_name": "Folio",
-  "version": "1.0.0",
-  "description": "一键把网页上的论文保存到 Mac 上的 Folio 文献库，并选择放入的分组。",
+  "version": "1.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsjxY3582eyUETlOK3pxw+hiorfpO/8TFaZBj5bL0WP4XHHeZXpupzlO0yxtsUOXgrCm6YUbc43vF8FRcfwkhKtnz7qNPO1h/wn0CPYwENF2kNrCG+yQOOCVMPk28LObketNERsX6++Gx01+fpMFP8mB/SfOqA7KEg18Bpn3uwKPVeVVQx8jK87kh88HTkTShB3lKXGkYRUCqZxWtlv3Rt2o/wvG5dXTPYNUj/Br2NvKUcJIXgYHndJ5F9nGSxDHN5c6qf31rStX5UnK5oBSa2BYGZJPIz1EibCKAU7y4ogWzkfQiqsAKHHOJvcRd0juRYHk0OpWUMyNVFZbndY+0VQIDAQAB",
+  "description": "一键把网页上的论文保存到 Mac 上的 Folio 文献库：识别标题、作者、DOI，选择分组和标签，同时保存 PDF；列表页可批量保存。",
   "icons": {
     "16": "icon-16.png",
     "32": "icon-32.png",
@@ -34,5 +35,14 @@
   "background": {
     "service_worker": "background.js"
   },
-  "minimum_chrome_version": "110"
+  "minimum_chrome_version": "110",
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "保存到 Folio"
+    }
+  }
 }

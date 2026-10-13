@@ -17,7 +17,22 @@ struct BrowserInfo: Identifiable, Hashable {
 }
 
 enum BrowserExtensions {
-    static let safariExtensionIdentifier = "com.nnqc.Folio.SafariExtension"
+    nonisolated static let safariExtensionIdentifier = "com.nnqc.Folio.SafariExtension"
+    /// Fixed by the `key` in the Chromium manifest, whatever folder the extension is loaded from.
+    static let chromiumExtensionID = "ljlmdoodaogoghgikjgdbpigeamnjejd"
+
+    /// The version of the extension inside this Folio.app (the popup asks for a reload when it is older).
+    static var bundledVersion: String? {
+        guard let url = Bundle.main.url(forResource: "BrowserExtension", withExtension: nil)?.appending(path: "chromium/manifest.json"),
+              let data = try? Data(contentsOf: url),
+              let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return manifest["version"] as? String
+    }
+
+    enum InstallState: Equatable {
+        case notInstalled
+        case installed(enabled: Bool, version: String?)
+    }
 
     private static let known: [(id: String, name: String, bundle: String, family: BrowserInfo.Family, page: String?, profiles: String?)] = [
         ("safari", "Safari", "Safari.app", .safari, nil, nil),
@@ -82,32 +97,54 @@ enum BrowserExtensions {
         }
     }
 
-    /// Whether a Chromium browser has loaded Folio's unpacked extension (its profile preferences name the folder).
-    static func isInstalled(in browser: BrowserInfo) -> Bool {
-        guard browser.family == .chromium, let profiles = browser.profileFolder else { return false }
+    /// Whether a Chromium browser has Folio's extension, read from its profiles' preferences (where
+    /// Chrome records every extension under `extensions.settings.<id>`).
+    static func installState(in browser: BrowserInfo) -> InstallState {
+        guard browser.family == .chromium, let profiles = browser.profileFolder else { return .notInstalled }
         let root = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support/\(profiles)")
-        let needle = Data(folder(for: .chromium).path.utf8)
-        guard let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return false }
-        for profile in entries where profile.lastPathComponent == "Default" || profile.lastPathComponent.hasPrefix("Profile") {
+        guard let entries = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) else { return .notInstalled }
+        var best = InstallState.notInstalled
+        let profileFolders = [root] + entries.filter { $0.lastPathComponent == "Default" || $0.lastPathComponent.hasPrefix("Profile") }
+        for profile in profileFolders {
             for name in ["Secure Preferences", "Preferences"] {
-                if let data = FileManager.default.contents(atPath: profile.appending(path: name).path), data.range(of: needle) != nil {
-                    return true
-                }
+                guard let data = FileManager.default.contents(atPath: profile.appending(path: name).path),
+                      data.range(of: Data(chromiumExtensionID.utf8)) != nil,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let settings = (json["extensions"] as? [String: Any])?["settings"] as? [String: Any],
+                      let entry = settings[chromiumExtensionID] as? [String: Any] else { continue }
+                let reasons = entry["disable_reasons"]
+                let disabled = (reasons as? [Any]).map { !$0.isEmpty } ?? ((reasons as? Int).map { $0 != 0 } ?? false)
+                    || (entry["state"] as? Int) == 0
+                let version = (entry["manifest"] as? [String: Any])?["version"] as? String
+                if !disabled { return .installed(enabled: true, version: version) }
+                best = .installed(enabled: false, version: version)
             }
         }
+        return best
+    }
+
+    static func isInstalled(in browser: BrowserInfo) -> Bool {
+        if case .installed = installState(in: browser) { return true }
         return false
     }
 
-    /// Prepares the folder, shows it in Finder, copies its path and opens the browser's extensions page.
-    static func install(in browser: BrowserInfo) throws -> URL {
+    /// Opens the browser's extensions page. Chromium browsers may refuse internal pages opened from
+    /// another app; the install guide then offers the address to paste.
+    static func openExtensionsPage(of browser: BrowserInfo) {
+        guard let page = browser.extensionsPage, let url = URL(string: page) else { return }
+        NSWorkspace.shared.open([url], withApplicationAt: browser.appURL, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    /// Prepares the folder and copies its path (the guide then walks through loading it).
+    static func prepareInstall(for browser: BrowserInfo) throws -> URL {
         let folder = try prepareCopy(for: browser.family)
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(folder.path, forType: .string)
-        NSWorkspace.shared.activateFileViewerSelecting([folder.appending(path: "manifest.json")])
-        if let page = browser.extensionsPage, let url = URL(string: page) {
-            NSWorkspace.shared.open([url], withApplicationAt: browser.appURL, configuration: NSWorkspace.OpenConfiguration())
-        }
+        copyToPasteboard(folder.path)
         return folder
+    }
+
+    static func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     // MARK: Safari
@@ -128,7 +165,17 @@ enum BrowserExtensions {
         }
     }
 
-    nonisolated static func openSafariSettings() {
-        SFSafariApplication.showPreferencesForExtension(withIdentifier: "com.nnqc.Folio.SafariExtension") { @Sendable _ in }
+    /// Opens Safari's settings at Folio's extension; returns why it could not (Safari does not list the
+    /// extension until unsigned extensions are allowed). Called through the Objective-C runtime for the
+    /// same reason as `safariState()`.
+    nonisolated static func openSafariSettings() async -> String? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<String?, Never>) in
+            let reply: @convention(block) @Sendable (NSError?) -> Void = { error in
+                continuation.resume(returning: error?.localizedDescription)
+            }
+            let selector = NSSelectorFromString("showPreferencesForExtensionWithIdentifier:completionHandler:")
+            guard SFSafariApplication.responds(to: selector) else { return continuation.resume(returning: "无法打开 Safari 设置") }
+            _ = (SFSafariApplication.self as AnyObject).perform(selector, with: safariExtensionIdentifier, with: reply)
+        }
     }
 }

@@ -151,3 +151,25 @@ private func decode(_ line: String?) throws -> JSONValue { try JSONValue.decode(
         #expect(value.pruned == ["c": [], "d": ["g": 1], "results": []])
     }
 }
+
+@Suite struct MCPSelfCheckTests {
+    /// The folio-cli built next to these tests (swift test builds every product).
+    static var builtCLI: String? {
+        let root = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let path = root.appending(path: ".build/debug/folio-cli").path
+        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
+    }
+
+    @Test(.enabled(if: builtCLI != nil)) func checksARealServerProcess() async throws {
+        let library = FileManager.default.temporaryDirectory.appending(path: "folio-selfcheck-\(UUID().uuidString)")
+        _ = try Library(root: library)
+        let report = try await MCPSelfCheck.run(cliPath: Self.builtCLI!, extraArguments: ["--library", library.path])
+        #expect(report.protocolVersion == "2025-11-25")
+        #expect(report.toolCount == ToolCatalog.all.count)
+        #expect(report.itemCount == 0 && report.libraryProblem == nil)
+
+        let missing = try await MCPSelfCheck.run(cliPath: Self.builtCLI!, extraArguments: ["--library", library.path + "-missing"])
+        #expect(missing.toolCount > 0 && missing.libraryProblem?.contains("No Folio library") == true)
+        await #expect(throws: MCPSelfCheck.Failure.self) { try await MCPSelfCheck.run(cliPath: "/nonexistent/folio-cli") }
+    }
+}

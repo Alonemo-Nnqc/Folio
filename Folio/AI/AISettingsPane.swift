@@ -15,6 +15,16 @@ struct AISettingsPane: View {
                     Text("允许 AI 修改文献库")
                     Text("关闭后，智能体只能搜索、阅读、引用和导出，不能添加、编辑或移到回收站。AI 不能彻底删除任何内容。")
                 }
+                LabeledContent {
+                    HStack {
+                        serverCheckLabel
+                        Button("检查") { integration.checkServer() }
+                            .disabled(integration.serverCheck == .running)
+                    }
+                } label: {
+                    Text("MCP 服务器")
+                    Text("像智能体一样启动 folio-cli，完成握手并读取文献库")
+                }
                 LabeledContent("命令行工具") {
                     HStack {
                         Text(AIIntegration.cliPath)
@@ -57,7 +67,7 @@ struct AISettingsPane: View {
                     .help("安装了新的智能体后点这里")
                 }
             } footer: {
-                Text("打开开关即为该智能体添加配置，关闭即移除；修改前会备份原配置文件。改动在重启智能体或开始新会话后生效。")
+                Text("打开开关即按该智能体官方文档的方式添加配置（Claude Code、Codex 使用它们自己的命令），关闭即移除；只改动 Folio 自己的条目，修改前备份原文件。技能放在开放标准的共享文件夹 ~/.agents/skills 时，Codex、Gemini CLI、Cursor、VS Code 等会共用同一份。改动在重启智能体或开始新会话后生效。")
             }
 
             if !integration.notDetected.isEmpty {
@@ -90,6 +100,33 @@ struct AISettingsPane: View {
         .formStyle(.grouped)
         .onAppear { integration.detect() }
     }
+
+    @ViewBuilder
+    private var serverCheckLabel: some View {
+        switch integration.serverCheck {
+        case .idle:
+            EmptyView()
+        case .running:
+            ProgressView().controlSize(.small)
+        case .passed(let text):
+            Label(text, systemImage: "checkmark.circle.fill").foregroundStyle(.green).labelStyle(CheckLabelStyle())
+        case .warning(let text):
+            Label(text, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).labelStyle(CheckLabelStyle())
+        case .failed(let text):
+            Label(text, systemImage: "xmark.octagon.fill").foregroundStyle(.red).labelStyle(CheckLabelStyle())
+        }
+    }
+}
+
+/// A coloured status symbol with secondary, wrapping text.
+private struct CheckLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            configuration.icon
+            configuration.title.foregroundStyle(.secondary).font(.callout).lineLimit(3).textSelection(.enabled)
+        }
+        .frame(maxWidth: 420, alignment: .trailing)
+    }
 }
 
 private struct AgentRow: View {
@@ -108,8 +145,8 @@ private struct AgentRow: View {
                        help: status.mcpInstalled ? "Folio 已添加到 \(descriptor.name) 的 MCP 服务器" : "为 \(descriptor.name) 添加 Folio MCP 服务器") {
                     integration.setMCP($0, for: status)
                 }
-                toggle("技能", isOn: status.skillInstalled, available: descriptor.skillsFolder != nil,
-                       help: descriptor.skillsFolder == nil ? (descriptor.skillNote ?? "不支持技能") : "为 \(descriptor.name) 安装 Folio 技能") {
+                toggle("技能", isOn: status.skillInstalled, available: descriptor.supportsSkills,
+                       help: descriptor.supportsSkills ? "为 \(descriptor.name) 安装 Folio 技能" : (descriptor.skillNote ?? "不支持技能")) {
                     integration.setSkill($0, for: status)
                 }
             }
@@ -126,11 +163,41 @@ private struct AgentRow: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
+                    if let details {
+                        Text(details)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.middle)
+                    }
+                    if status.mcpInstalled || status.skillInstalled, let hint = AIIntegration.hints[descriptor.id] {
+                        Text(hint)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(descriptor.name)
+        .contextMenu {
+            if status.mcpConfigPath != nil {
+                Button("在 Finder 中显示配置文件") { integration.revealConfiguration(status) }
+            }
+        }
+    }
+
+    /// Where Folio's entries live for this agent, once installed.
+    private var details: String? {
+        var parts: [String] = []
+        if status.mcpInstalled, let path = status.mcpConfigPath {
+            parts.append(status.mcpNeedsUpdate ? "MCP：\(path)（指向的 folio-cli 已不存在）" : "MCP：\(path)")
+        }
+        if let folder = status.skillFolder {
+            parts.append(folder == AgentIntegrator.sharedSkillsFolder ? "技能：~/\(folder)（共享）" : "技能：~/\(folder)")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     @ViewBuilder

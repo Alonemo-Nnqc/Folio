@@ -6,6 +6,8 @@ public enum ConnectorProtocol {
     public static let port: UInt16 = 23120
     /// Required on every write so plain web forms (which cannot set headers) cannot post to Folio.
     public static let header = "x-folio-connector"
+    /// What the extension and Folio speak; reported by /ping.
+    public static let apiVersion = 2
     public static let maxBodyBytes = 300 * 1024 * 1024
 
     public struct Request: Sendable {
@@ -40,7 +42,8 @@ public enum ConnectorProtocol {
 
         public func serialized() -> Data {
             let reason = [200: "OK", 204: "No Content", 400: "Bad Request", 403: "Forbidden", 404: "Not Found",
-                          413: "Payload Too Large", 500: "Internal Server Error", 503: "Service Unavailable"][status] ?? "OK"
+                          413: "Payload Too Large", 500: "Internal Server Error", 502: "Bad Gateway",
+                          503: "Service Unavailable"][status] ?? "OK"
             var head = "HTTP/1.1 \(status) \(reason)\r\nContent-Type: \(contentType)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n"
             for (name, value) in headers.sorted(by: { $0.key < $1.key }) { head += "\(name): \(value)\r\n" }
             return Data((head + "\r\n").utf8) + body
@@ -98,8 +101,22 @@ public enum ConnectorProtocol {
                 "Vary": "Origin"]
     }
 
-    /// Checks origin and the connector header; nil when the request may proceed.
+    /// Only names of this machine: a web page that rebinds its own domain to 127.0.0.1 (DNS rebinding)
+    /// still sends its domain as Host, and is refused.
+    public static func isLocalHost(_ host: String?) -> Bool {
+        guard let host, !host.isEmpty else { return false }
+        let name: Substring
+        if host.hasPrefix("[") {
+            name = host.dropFirst().prefix { $0 != "]" }
+        } else {
+            name = host.split(separator: ":", maxSplits: 1).first ?? ""
+        }
+        return ["127.0.0.1", "localhost", "::1"].contains(name.lowercased())
+    }
+
+    /// Checks host, origin and the connector header; nil when the request may proceed.
     public static func reject(_ request: Request) -> Response? {
+        guard isLocalHost(request.headers["host"]) else { return .error("Folio only answers requests to 127.0.0.1.", status: 403) }
         let origin = request.headers["origin"]
         guard isAllowedOrigin(origin) else { return .error("Only Folio's browser extension may use this service.", status: 403) }
         if request.method == "POST", request.headers[header] == nil {
