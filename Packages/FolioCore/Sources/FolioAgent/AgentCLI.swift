@@ -17,6 +17,8 @@ public enum AgentCLI {
       folio-cli add <DOI | arXiv ID | ISBN | PDF 路径> [--group <分组>]
       folio-cli open <条目> [--page N]
       folio-cli status                       文献库位置、条目数量、是否允许修改（排查连接问题）
+      folio-cli agents                       本机智能体及 Folio MCP / 技能的安装状态
+      folio-cli agents add|remove <智能体 id> [--mcp-only | --skill-only]
 
     选项：--library <目录> 使用指定文献库；--read-only 只允许读取。
     """
@@ -49,6 +51,9 @@ public enum AgentCLI {
         }
         if command == "status" {
             return status(configuration)
+        }
+        if command == "agents" {
+            return agents(rest)
         }
         let toolbox: LibraryToolbox
         do {
@@ -146,6 +151,52 @@ public enum AgentCLI {
         print("允许 AI 修改文献库：\(configuration.allowWrites ? "是" : "否（只读）")")
         print("工具：\(ToolCatalog.available(allowWrites: configuration.allowWrites).count) 个")
         return 0
+    }
+
+    /// `folio-cli agents [add|remove <id>]`: the same integration as 设置 ▸ AI, from a terminal.
+    /// `FOLIO_AGENT_HOME` points it at another home folder (tests).
+    private static func agents(_ args: [String]) -> Int32 {
+        let environment = ProcessInfo.processInfo.environment
+        let home = environment["FOLIO_AGENT_HOME"].map { URL(filePath: $0, directoryHint: .isDirectory) }
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let executable = URL(filePath: Bundle.main.executablePath ?? CommandLine.arguments[0]).resolvingSymlinksInPath().path
+        let integrator = AgentIntegrator(home: home, cliPath: executable)
+        guard let action = args.first else {
+            for status in integrator.detect() {
+                let mcp = status.descriptor.mcp == nil ? "—" : status.mcpInstalled ? (status.mcpNeedsUpdate ? "需更新" : "已安装") : "未安装"
+                let skill = !status.descriptor.supportsSkills ? "—" : status.skillInstalled ? "已安装（~/\(status.skillFolder ?? "")）" : "未安装"
+                print("\(status.isDetected ? "●" : "○") \(status.descriptor.id)\t\(status.descriptor.name)\tMCP：\(mcp)\t技能：\(skill)"
+                      + (status.mcpConfigPath.map { "\t\($0)" } ?? ""))
+            }
+            return 0
+        }
+        guard ["add", "remove"].contains(action), args.count >= 2,
+              let descriptor = AgentIntegrator.catalog.first(where: { $0.id == args[1] }) else {
+            printError("用法：folio-cli agents add|remove <\(AgentIntegrator.catalog.map(\.id).joined(separator: "|"))> [--mcp-only | --skill-only]")
+            return 64
+        }
+        let enable = action == "add"
+        var failed = false
+        if !args.contains("--skill-only"), descriptor.mcp != nil {
+            do {
+                try integrator.setMCP(enable, for: descriptor)
+                print("\(enable ? "已添加" : "已移除") \(descriptor.name) 的 Folio MCP（\(integrator.configPath(descriptor) ?? "")）")
+            } catch {
+                printError(error.localizedDescription)
+                failed = true
+            }
+        }
+        if !args.contains("--mcp-only"), descriptor.supportsSkills {
+            do {
+                try integrator.setSkill(enable, for: descriptor)
+                let folder = integrator.status(of: descriptor).skillFolder
+                print("\(enable ? "已安装" : "已移除") \(descriptor.name) 的 Folio 技能\(folder.map { "（~/\($0)）" } ?? "")")
+            } catch {
+                printError(error.localizedDescription)
+                failed = true
+            }
+        }
+        return failed ? 1 : 0
     }
 
     /// Prints the result as JSON (or one text field of it, for citations and exports).

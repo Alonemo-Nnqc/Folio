@@ -1,26 +1,42 @@
 import Foundation
 
-/// An AI agent Folio can configure (AI-04).
+/// An AI agent Folio can configure (AI-04). Paths are relative to the home folder and follow each
+/// agent's official documentation (checked 2026-10; see doc/开发计划-v2.6.md §2).
 public struct AgentDescriptor: Sendable, Identifiable, Hashable {
     public enum MCPTarget: Sendable, Hashable {
         /// `claude mcp add --scope user` (falls back to `~/.claude.json` → mcpServers).
         case claudeCode
         /// `codex mcp add` (falls back to `~/.codex/config.toml` → [mcp_servers.folio]).
         case codex
-        /// A JSON file (path relative to home) with servers under `key`.
+        /// A JSON (or JSON-with-comments) file with servers under `key`.
         case json(path: String, key: String, style: EntryStyle)
-        /// Several possible JSON files (an agent that moved its config between versions): Folio writes
-        /// to the ones whose folder exists and reads / removes all of them.
-        case jsonAny(paths: [String], key: String, style: EntryStyle)
+        /// Several possible files (an agent that moved its configuration, or several editions of it):
+        /// Folio reads and removes all of them and writes as `policy` says.
+        case jsonAny(paths: [String], key: String, style: EntryStyle, policy: WritePolicy)
+    }
+
+    public enum WritePolicy: Sendable, Hashable {
+        /// The first file that exists, else the first path (one configuration, several possible names).
+        case existingFile
+        /// The first path whose folder exists, else the first (an agent that moved its folder).
+        case existingFolder
+        /// Every path whose folder exists, else the first (separate editions, e.g. extension and CLI).
+        case everyExistingFolder
     }
 
     public enum EntryStyle: Sendable, Hashable {
-        /// `{"command": …, "args": […]}` (Claude Desktop, Cursor, Gemini, Windsurf, Cline, LM Studio, Kiro).
+        /// `{"command": …, "args": […]}` (Claude Desktop, Cursor, Gemini, Windsurf, Cline, LM Studio, Kiro, Antigravity, Qwen).
         case standard
+        /// Claude Code's own entries: `{"type": "stdio", "command": …, "args": […], "env": {}}`.
+        case claudeCode
         /// VS Code: `{"type": "stdio", "command": …, "args": […]}`.
         case vscode
         /// opencode: `{"type": "local", "command": [cli, "mcp"], "enabled": true}`.
         case opencode
+        /// GitHub Copilot CLI: `{"type": "local", "command": …, "args": […], "env": {}, "tools": ["*"]}`.
+        case copilotCLI
+        /// Zed `context_servers`: `{"command": …, "args": […], "env": {}}`.
+        case zed
     }
 
     public let id: String
@@ -32,12 +48,13 @@ public struct AgentDescriptor: Sendable, Identifiable, Hashable {
     /// Paths relative to home whose existence means the agent is installed.
     public let markers: [String]
     public let mcp: MCPTarget?
-    /// Skills folder relative to home (`<folder>/folio-library/SKILL.md`), when the agent supports skills.
-    public let skillsFolder: String?
-    /// Why the skill switch is unavailable, or how to add it by hand.
+    /// Personal skills folders the agent reads (`<folder>/folio-library/SKILL.md`), preferred first.
+    /// Folio installs into the first one whose parent folder exists (else the first).
+    public let skillFolders: [String]
+    /// Why the skill switch is unavailable, or how to add the skill by hand.
     public let skillNote: String?
-    /// Other skills folders the agent reads in some versions (Antigravity moved its folder).
-    public var alternateSkillsFolders: [String] = []
+
+    public var supportsSkills: Bool { !skillFolders.isEmpty }
 }
 
 /// Detected state of one agent.
@@ -51,6 +68,10 @@ public struct AgentStatus: Sendable, Identifiable, Hashable {
     public let skillInstalled: Bool
     /// The installed MCP entry points at another copy of folio-cli (Folio was moved).
     public let mcpNeedsUpdate: Bool
+    /// The configuration file holding Folio's MCP entry (or where it would go).
+    public let mcpConfigPath: String?
+    /// The skills folder (relative to home) where the agent finds Folio's skill, when installed.
+    public let skillFolder: String?
 }
 
 public struct AgentIntegrationError: Error, LocalizedError, Sendable {
@@ -76,50 +97,73 @@ public struct AgentIntegrator: Sendable {
         applicationFolders = [URL(filePath: "/Applications"), home.appending(path: "Applications")]
     }
 
+    /// The open Agent Skills standard's shared personal folder (Codex, Gemini CLI, Cursor, VS Code,
+    /// Copilot CLI, Windsurf, opencode, Zed read it).
+    public static let sharedSkillsFolder = ".agents/skills"
+
+    private static let vscodeUser = "Library/Application Support/Code/User"
+
     public static let catalog: [AgentDescriptor] = [
         .init(id: "claude-code", name: "Claude Code", apps: [], commands: ["claude"], markers: [".claude"],
-              mcp: .claudeCode, skillsFolder: ".claude/skills", skillNote: nil),
+              mcp: .claudeCode, skillFolders: [".claude/skills"], skillNote: nil),
         .init(id: "claude-desktop", name: "Claude 桌面版", apps: ["Claude.app"], commands: [],
               markers: ["Library/Application Support/Claude"],
               mcp: .json(path: "Library/Application Support/Claude/claude_desktop_config.json", key: "mcpServers", style: .standard),
-              skillsFolder: nil, skillNote: "Claude 桌面版的技能需在 设置 ▸ 功能 ▸ 技能 中上传，可用下方\"导出技能包…\"生成。"),
+              skillFolders: [], skillNote: "Claude 桌面版的技能需在 设置 ▸ 功能 ▸ 技能 中上传，可用下方\"导出技能包…\"生成。"),
         .init(id: "codex", name: "Codex", apps: ["Codex.app"], commands: ["codex"], markers: [".codex"],
-              mcp: .codex, skillsFolder: ".codex/skills", skillNote: nil),
-        .init(id: "gemini-cli", name: "Gemini CLI", apps: [], commands: ["gemini"], markers: [".gemini"],
+              mcp: .codex, skillFolders: [sharedSkillsFolder], skillNote: nil),
+        .init(id: "gemini-cli", name: "Gemini CLI", apps: [], commands: ["gemini"],
+              markers: [".gemini/settings.json", ".gemini/oauth_creds.json", ".gemini/skills"],
               mcp: .json(path: ".gemini/settings.json", key: "mcpServers", style: .standard),
-              skillsFolder: ".gemini/skills", skillNote: nil),
-        .init(id: "cursor", name: "Cursor", apps: ["Cursor.app"], commands: ["cursor"], markers: [".cursor"],
+              skillFolders: [sharedSkillsFolder, ".gemini/skills"], skillNote: nil),
+        .init(id: "cursor", name: "Cursor", apps: ["Cursor.app"], commands: ["cursor", "cursor-agent"], markers: [".cursor"],
               mcp: .json(path: ".cursor/mcp.json", key: "mcpServers", style: .standard),
-              skillsFolder: ".cursor/skills", skillNote: nil),
+              skillFolders: [sharedSkillsFolder, ".cursor/skills", ".claude/skills", ".codex/skills"], skillNote: nil),
         .init(id: "vscode", name: "VS Code（Copilot）", apps: ["Visual Studio Code.app"], commands: ["code"],
-              markers: ["Library/Application Support/Code/User"],
-              mcp: .json(path: "Library/Application Support/Code/User/mcp.json", key: "servers", style: .vscode),
-              skillsFolder: nil, skillNote: "VS Code 不支持全局技能，可通过 MCP 使用 Folio。"),
-        .init(id: "windsurf", name: "Windsurf", apps: ["Windsurf.app"], commands: ["windsurf"], markers: [".codeium/windsurf"],
-              mcp: .json(path: ".codeium/windsurf/mcp_config.json", key: "mcpServers", style: .standard),
-              skillsFolder: nil, skillNote: "Windsurf 不支持技能，可通过 MCP 使用 Folio。"),
-        .init(id: "cline", name: "Cline", apps: [], commands: [],
-              markers: ["Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev"],
-              mcp: .json(path: "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-                         key: "mcpServers", style: .standard),
-              skillsFolder: nil, skillNote: "Cline 不支持技能，可通过 MCP 使用 Folio。"),
+              markers: [vscodeUser],
+              mcp: .json(path: "\(vscodeUser)/mcp.json", key: "servers", style: .vscode),
+              skillFolders: [sharedSkillsFolder, ".copilot/skills", ".claude/skills"], skillNote: nil),
+        .init(id: "copilot-cli", name: "GitHub Copilot CLI", apps: [], commands: ["copilot"],
+              markers: [".copilot/config.json", ".copilot/mcp-config.json"],
+              mcp: .json(path: ".copilot/mcp-config.json", key: "mcpServers", style: .copilotCLI),
+              skillFolders: [sharedSkillsFolder, ".copilot/skills"], skillNote: nil),
+        .init(id: "windsurf", name: "Windsurf（Devin Desktop）", apps: ["Windsurf.app", "Devin.app"], commands: ["windsurf", "devin"],
+              markers: [".codeium/windsurf", ".config/devin"],
+              mcp: .jsonAny(paths: [".config/devin/mcp_config.json", ".codeium/windsurf/mcp_config.json"], key: "mcpServers",
+                            style: .standard, policy: .existingFolder),
+              skillFolders: [sharedSkillsFolder, ".codeium/windsurf/skills", ".config/devin/skills"], skillNote: nil),
+        .init(id: "cline", name: "Cline", apps: [], commands: ["cline"],
+              markers: ["\(vscodeUser)/globalStorage/saoudrizwan.claude-dev", ".cline"],
+              mcp: .jsonAny(paths: ["\(vscodeUser)/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
+                                    ".cline/data/settings/cline_mcp_settings.json"],
+                            key: "mcpServers", style: .standard, policy: .everyExistingFolder),
+              skillFolders: [".cline/skills"], skillNote: nil),
         .init(id: "opencode", name: "opencode", apps: [], commands: ["opencode"], markers: [".config/opencode"],
-              mcp: .json(path: ".config/opencode/opencode.json", key: "mcp", style: .opencode),
-              skillsFolder: nil, skillNote: "opencode 会读取 Claude Code 的技能目录，为 Claude Code 打开技能即可。"),
+              mcp: .jsonAny(paths: [".config/opencode/opencode.json", ".config/opencode/opencode.jsonc"], key: "mcp",
+                            style: .opencode, policy: .existingFile),
+              skillFolders: [sharedSkillsFolder, ".config/opencode/skills", ".claude/skills"], skillNote: nil),
+        .init(id: "antigravity", name: "Antigravity", apps: ["Antigravity.app"], commands: ["antigravity", "agy"],
+              markers: [".gemini/config", ".gemini/antigravity", ".gemini/antigravity-cli"],
+              mcp: .jsonAny(paths: [".gemini/config/mcp_config.json", ".gemini/antigravity/mcp_config.json"], key: "mcpServers",
+                            style: .standard, policy: .existingFolder),
+              skillFolders: [".gemini/config/skills", ".gemini/antigravity/skills", ".gemini/antigravity-cli/skills"], skillNote: nil),
+        .init(id: "kiro", name: "Kiro", apps: ["Kiro.app"], commands: ["kiro", "kiro-cli"], markers: [".kiro"],
+              mcp: .json(path: ".kiro/settings/mcp.json", key: "mcpServers", style: .standard),
+              skillFolders: [".kiro/skills"], skillNote: nil),
+        .init(id: "zed", name: "Zed", apps: ["Zed.app"], commands: ["zed"], markers: [".config/zed"],
+              mcp: .json(path: ".config/zed/settings.json", key: "context_servers", style: .zed),
+              skillFolders: [sharedSkillsFolder], skillNote: nil),
+        .init(id: "qwen-code", name: "Qwen Code", apps: [], commands: ["qwen"], markers: [".qwen"],
+              mcp: .json(path: ".qwen/settings.json", key: "mcpServers", style: .standard),
+              skillFolders: [".qwen/skills"], skillNote: nil),
         .init(id: "lm-studio", name: "LM Studio", apps: ["LM Studio.app"], commands: ["lms"], markers: [".lmstudio"],
               mcp: .json(path: ".lmstudio/mcp.json", key: "mcpServers", style: .standard),
-              skillsFolder: nil, skillNote: "LM Studio 不支持技能，可通过 MCP 使用 Folio。"),
-        // Antigravity keeps its files under ~/.gemini/antigravity in some versions and ~/.gemini/config in others.
-        .init(id: "antigravity", name: "Antigravity", apps: ["Antigravity.app"], commands: ["antigravity"],
-              markers: [".gemini/antigravity"],
-              mcp: .jsonAny(paths: [".gemini/antigravity/mcp_config.json", ".gemini/config/mcp_config.json"],
-                            key: "mcpServers", style: .standard),
-              skillsFolder: ".gemini/antigravity/skills", skillNote: nil,
-              alternateSkillsFolders: [".gemini/config/skills"]),
-        .init(id: "kiro", name: "Kiro", apps: ["Kiro.app"], commands: ["kiro"], markers: [".kiro"],
-              mcp: .json(path: ".kiro/settings/mcp.json", key: "mcpServers", style: .standard),
-              skillsFolder: nil, skillNote: "Kiro 不支持技能，可通过 MCP 使用 Folio。"),
+              skillFolders: [], skillNote: "LM Studio 不支持技能，可通过 MCP 使用 Folio。"),
     ]
+
+    /// Folders where earlier Folio versions installed the skill but the agent no longer reads it
+    /// (Codex moved to ~/.agents/skills): copies there are moved on launch.
+    static let retiredSkillFolders = [".codex/skills"]
 
     // MARK: Detection
 
@@ -133,9 +177,10 @@ public struct AgentIntegrator: Sendable {
         // Only a configured folio-cli that no longer exists needs re-pointing: another copy of Folio
         // (e.g. a development build) must not take over the user's agents just by launching.
         let stale = entry.map { $0 != cliPath && !FileManager.default.isExecutableFile(atPath: $0) } ?? false
+        let skillFolder = descriptor.skillFolders.first { isOurs(skillFile(in: $0)) }
         return AgentStatus(descriptor: descriptor, isDetected: location != nil, location: location,
-                           mcpInstalled: entry != nil, skillInstalled: skillInstalled(descriptor),
-                           mcpNeedsUpdate: stale)
+                           mcpInstalled: entry != nil, skillInstalled: skillFolder != nil,
+                           mcpNeedsUpdate: stale, mcpConfigPath: configPath(descriptor), skillFolder: skillFolder)
     }
 
     private func locate(_ descriptor: AgentDescriptor) -> String? {
@@ -160,7 +205,8 @@ public struct AgentIntegrator: Sendable {
         ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", home.appending(path: ".local/bin").path,
          home.appending(path: ".npm-global/bin").path, home.appending(path: ".bun/bin").path,
          home.appending(path: ".volta/bin").path, home.appending(path: "Library/pnpm").path,
-         home.appending(path: ".cargo/bin").path]
+         home.appending(path: ".cargo/bin").path, home.appending(path: ".claude/local").path,
+         home.appending(path: ".opencode/bin").path]
     }
 
     static func findCommand(_ name: String, home: URL) -> String? {
@@ -169,18 +215,31 @@ public struct AgentIntegrator: Sendable {
 
     // MARK: MCP
 
+    /// The configuration file Folio edits (or the agent's CLI edits) for this agent, for display.
+    func configPath(_ descriptor: AgentDescriptor) -> String? {
+        switch descriptor.mcp {
+        case nil: nil
+        case .claudeCode: "~/.claude.json"
+        case .codex: "~/.codex/config.toml"
+        case let .json(path, _, _): "~/" + path
+        case let .jsonAny(paths, key, style, policy):
+            paths.first { command(inJSON: $0, key: key, style: style) != nil }.map { "~/" + $0 }
+                ?? targets(paths, policy).first.map { "~/" + $0 }
+        }
+    }
+
     /// The folio-cli path currently configured for the agent, or nil when Folio's server is absent.
     func installedCommand(_ descriptor: AgentDescriptor) -> String? {
         switch descriptor.mcp {
         case nil:
             return nil
         case .claudeCode:
-            return command(inJSON: ".claude.json", key: "mcpServers", style: .standard)
+            return command(inJSON: ".claude.json", key: "mcpServers", style: .claudeCode)
         case .codex:
             return codexCommand()
         case let .json(path, key, style):
             return command(inJSON: path, key: key, style: style)
-        case let .jsonAny(paths, key, style):
+        case let .jsonAny(paths, key, style, _):
             return paths.lazy.compactMap { command(inJSON: $0, key: key, style: style) }.first
         }
     }
@@ -190,11 +249,12 @@ public struct AgentIntegrator: Sendable {
         case nil:
             throw AgentIntegrationError(message: "\(descriptor.name) 不支持 MCP。")
         case .claudeCode:
+            // The official way: Claude Code's own CLI writes its user-scope configuration.
+            if enabled { try? runAgentCommand("claude", ["mcp", "remove", "--scope", "user", Self.serverName]) }
             let args = enabled ? ["mcp", "add", "--scope", "user", Self.serverName, "--", cliPath, "mcp"]
                 : ["mcp", "remove", "--scope", "user", Self.serverName]
-            if enabled { try? runAgentCommand("claude", ["mcp", "remove", "--scope", "user", Self.serverName]) }
             if try !runAgentCommand("claude", args) {
-                try editJSON(".claude.json", key: "mcpServers", style: .standard, enabled: enabled)
+                try editJSON(".claude.json", key: "mcpServers", style: .claudeCode, enabled: enabled)
             }
         case .codex:
             if enabled { try? runAgentCommand("codex", ["mcp", "remove", Self.serverName]) }
@@ -204,9 +264,9 @@ public struct AgentIntegrator: Sendable {
             }
         case let .json(path, key, style):
             try editJSON(path, key: key, style: style, enabled: enabled)
-        case let .jsonAny(paths, key, style):
+        case let .jsonAny(paths, key, style, policy):
             if enabled {
-                for path in existingOrFirst(paths) { try editJSON(path, key: key, style: style, enabled: true) }
+                for path in targets(paths, policy) { try editJSON(path, key: key, style: style, enabled: true) }
             } else {
                 for path in paths where FileManager.default.fileExists(atPath: home.appending(path: path).path) {
                     try editJSON(path, key: key, style: style, enabled: false)
@@ -215,7 +275,22 @@ public struct AgentIntegrator: Sendable {
         }
         // Trust but verify: the agent's own tool may have written somewhere else.
         if (installedCommand(descriptor) != nil) != enabled {
-            throw AgentIntegrationError(message: "未能\(enabled ? "添加" : "移除") \(descriptor.name) 的配置，请检查其配置文件。")
+            throw AgentIntegrationError(message: "未能\(enabled ? "添加" : "移除") \(descriptor.name) 的配置，请检查 \(configPath(descriptor) ?? "其配置文件")。")
+        }
+    }
+
+    /// Which of several candidate files Folio writes.
+    private func targets(_ paths: [String], _ policy: AgentDescriptor.WritePolicy) -> [String] {
+        let manager = FileManager.default
+        let folderExists = { (path: String) in manager.fileExists(atPath: home.appending(path: path).deletingLastPathComponent().path) }
+        switch policy {
+        case .existingFile:
+            return [paths.first { manager.fileExists(atPath: home.appending(path: $0).path) } ?? paths[0]]
+        case .existingFolder:
+            return [paths.first(where: folderExists) ?? paths[0]]
+        case .everyExistingFolder:
+            let existing = paths.filter(folderExists)
+            return existing.isEmpty ? [paths[0]] : existing
         }
     }
 
@@ -229,8 +304,20 @@ public struct AgentIntegrator: Sendable {
 
     /// The JSON entry other agents need, for "复制 MCP 配置".
     public var manualConfiguration: String {
-        let entry: JSONValue = ["mcpServers": [Self.serverName: ["command": .string(cliPath), "args": ["mcp"]]]]
-        return entry.encoded(pretty: true)
+        OrderedJSON.object([("mcpServers", .object([(Self.serverName, entry(.standard))]))]).render(indent: "", unit: "  ")
+    }
+
+    func entry(_ style: AgentDescriptor.EntryStyle) -> OrderedJSON {
+        let args = OrderedJSON.array([.string("mcp")])
+        return switch style {
+        case .standard: .object([("command", .string(cliPath)), ("args", args)])
+        case .claudeCode: .object([("type", .string("stdio")), ("command", .string(cliPath)), ("args", args), ("env", .object([]))])
+        case .vscode: .object([("type", .string("stdio")), ("command", .string(cliPath)), ("args", args)])
+        case .opencode: .object([("type", .string("local")), ("command", .array([.string(cliPath), .string("mcp")])), ("enabled", .bool(true))])
+        case .copilotCLI: .object([("type", .string("local")), ("command", .string(cliPath)), ("args", args), ("env", .object([])),
+                                   ("tools", .array([.string("*")]))])
+        case .zed: .object([("command", .string(cliPath)), ("args", args), ("env", .object([]))])
+        }
     }
 
     /// Runs an agent's CLI; false when the CLI is not installed or commands are off.
@@ -246,13 +333,25 @@ public struct AgentIntegrator: Sendable {
         environment["HOME"] = home.path
         if environment["CODEX_HOME"] == nil { environment["CODEX_HOME"] = home.appending(path: ".codex").path }
         process.environment = environment
-        let output = Pipe()
+        process.standardInput = FileHandle.nullDevice
+        // A file rather than a pipe: a chatty CLI can never block on a full pipe buffer.
+        let log = FileManager.default.temporaryDirectory.appending(path: "folio-agent-\(UUID().uuidString).log")
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        defer { try? FileManager.default.removeItem(at: log) }
+        let output = try FileHandle(forWritingTo: log)
+        defer { try? output.close() }
         process.standardOutput = output
         process.standardError = output
         try process.run()
-        process.waitUntilExit()
+        // Never hang the settings window on a CLI that waits for something.
+        let deadline = Date().addingTimeInterval(30)
+        while process.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+        if process.isRunning {
+            process.terminate()
+            throw AgentIntegrationError(message: "\(name) \(arguments.prefix(2).joined(separator: " ")) 没有在 30 秒内完成。")
+        }
         if process.terminationStatus != 0 {
-            let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            let text = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
             // "not found" when removing something absent is fine.
             if arguments.contains("remove") { return true }
             throw AgentIntegrationError(message: "\(name) \(arguments.prefix(2).joined(separator: " ")) 失败：\(text.prefix(300))")
@@ -265,38 +364,27 @@ public struct AgentIntegrator: Sendable {
     private func command(inJSON path: String, key: String, style: AgentDescriptor.EntryStyle) -> String? {
         let url = home.appending(path: path)
         guard let data = FileManager.default.contents(atPath: url.path),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let root = try? JSONCDocument(String(decoding: data, as: UTF8.self)).object(),
               let servers = root[key] as? [String: Any], let entry = servers[Self.serverName] as? [String: Any] else { return nil }
         if style == .opencode { return (entry["command"] as? [String])?.first }
         return entry["command"] as? String
     }
 
+    /// Adds or removes Folio's entry, keeping everything else in the file exactly as it was.
     func editJSON(_ path: String, key: String, style: AgentDescriptor.EntryStyle, enabled: Bool) throws {
         let url = home.appending(path: path)
-        var root: [String: Any] = [:]
-        if let data = FileManager.default.contents(atPath: url.path), !data.isEmpty {
-            guard let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                throw AgentIntegrationError(message: "无法解析 \(url.path)（可能含有注释），为避免破坏它，请手动添加：\n\(manualConfiguration)")
-            }
-            root = parsed
-            try backUp(url)
-        } else if !enabled {
-            return
+        let existing = FileManager.default.contents(atPath: url.path).map { String(decoding: $0, as: UTF8.self) }
+        guard existing != nil || enabled else { return }
+        var document = JSONCDocument(existing ?? "")
+        do {
+            try document.setMember(Self.serverName, in: key, to: enabled ? entry(style) : nil)
+        } catch {
+            throw AgentIntegrationError(message: "无法解析 \(url.path)（\(error.localizedDescription)），为避免破坏它，请手动添加：\n\(manualConfiguration)")
         }
-        var servers = root[key] as? [String: Any] ?? [:]
-        if enabled {
-            servers[Self.serverName] = switch style {
-            case .standard: ["command": cliPath, "args": ["mcp"]] as [String: Any]
-            case .vscode: ["type": "stdio", "command": cliPath, "args": ["mcp"]]
-            case .opencode: ["type": "local", "command": [cliPath, "mcp"], "enabled": true]
-            }
-        } else {
-            servers[Self.serverName] = nil
-        }
-        root[key] = servers
+        guard document.text != existing else { return }
+        if existing != nil { try backUp(url) }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .withoutEscapingSlashes])
-        try data.write(to: url, options: .atomic)
+        try document.text.write(to: url, atomically: true, encoding: .utf8)
     }
 
     /// Keeps the user's original file once, before Folio first changes it.
@@ -319,9 +407,10 @@ public struct AgentIntegrator: Sendable {
         for line in lines[(start + 1)...] {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("[") { break }
-            if trimmed.hasPrefix("command") , let quote = trimmed.firstIndex(of: "\"") {
+            if trimmed.hasPrefix("command"), let quote = trimmed.firstIndex(where: { $0 == "\"" || $0 == "'" }) {
+                let delimiter = trimmed[quote]
                 let rest = trimmed[trimmed.index(after: quote)...]
-                return rest.firstIndex(of: "\"").map { String(rest[..<$0]) }
+                return rest.firstIndex(of: delimiter).map { String(rest[..<$0]).replacingOccurrences(of: "\\\\", with: "\\") }
             }
         }
         return ""
@@ -350,51 +439,57 @@ public struct AgentIntegrator: Sendable {
         try (text + "\n").write(to: codexConfig, atomically: true, encoding: .utf8)
     }
 
-    /// Of several candidate paths, the ones whose parent folder exists (the agent's version in use);
-    /// the first one when none does yet.
-    private func existingOrFirst(_ paths: [String]) -> [String] {
-        let existing = paths.filter { path in
-            let parent = home.appending(path: path).deletingLastPathComponent()
-            return FileManager.default.fileExists(atPath: parent.path)
-        }
-        return existing.isEmpty ? Array(paths.prefix(1)) : existing
-    }
-
     // MARK: Skills
 
-    private func skillFiles(_ descriptor: AgentDescriptor) -> [URL] {
-        guard let first = descriptor.skillsFolder else { return [] }
-        return ([first] + descriptor.alternateSkillsFolders).map { home.appending(path: "\($0)/\(FolioSkill.name)/SKILL.md") }
+    private func skillFile(in folder: String) -> URL {
+        home.appending(path: "\(folder)/\(FolioSkill.name)/SKILL.md")
     }
-
-    private func skillFile(_ descriptor: AgentDescriptor) -> URL? { skillFiles(descriptor).first }
 
     private func isOurs(_ file: URL) -> Bool {
         (try? String(contentsOf: file, encoding: .utf8))?.contains(FolioSkill.marker) ?? false
     }
 
     func skillInstalled(_ descriptor: AgentDescriptor) -> Bool {
-        skillFiles(descriptor).contains(where: isOurs)
+        descriptor.skillFolders.contains { isOurs(skillFile(in: $0)) }
+    }
+
+    /// The folder Folio installs into for this agent: the first whose parent folder exists (the
+    /// agent version in use), else the preferred one.
+    func skillTarget(_ descriptor: AgentDescriptor) -> String? {
+        descriptor.skillFolders.first { FileManager.default.fileExists(atPath: home.appending(path: $0).deletingLastPathComponent().path) }
+            ?? descriptor.skillFolders.first
+    }
+
+    /// Other agents that would no longer see Folio's skill if it were removed for `descriptor` (they
+    /// read it only from folders `descriptor` shares with them).
+    public func agentsLosingSkill(ifRemovedFor descriptor: AgentDescriptor) -> [AgentDescriptor] {
+        let removed = Set(descriptor.skillFolders.filter { isOurs(skillFile(in: $0)) })
+        return Self.catalog.filter { other in
+            guard other.id != descriptor.id else { return false }
+            let visible = Set(other.skillFolders.filter { isOurs(skillFile(in: $0)) })
+            return !visible.isEmpty && visible.isSubset(of: removed)
+        }
     }
 
     public func setSkill(_ enabled: Bool, for descriptor: AgentDescriptor) throws {
-        let files = skillFiles(descriptor)
-        guard !files.isEmpty else {
+        guard let target = skillTarget(descriptor) else {
             throw AgentIntegrationError(message: descriptor.skillNote ?? "\(descriptor.name) 不支持技能。")
         }
         if enabled {
-            // The skills folder of the agent version in use (its parent exists), else the main one.
-            let targets = files.filter { FileManager.default.fileExists(atPath: $0.deletingLastPathComponent()
-                .deletingLastPathComponent().deletingLastPathComponent().path) }
-            for file in targets.isEmpty ? [files[0]] : targets {
-                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try FolioSkill.markdown(cliPath: cliPath).write(to: file, atomically: true, encoding: .utf8)
-            }
+            // Already visible through a folder it shares with another agent: refresh that copy only,
+            // so the agent does not see two copies of the same skill.
+            let folder = descriptor.skillFolders.first { isOurs(skillFile(in: $0)) } ?? target
+            try FolioSkill.write(to: home.appending(path: "\(folder)/\(FolioSkill.name)"), cliPath: cliPath)
         } else {
-            for file in files where FileManager.default.fileExists(atPath: file.path) {
+            for folder in descriptor.skillFolders {
+                let file = skillFile(in: folder)
+                guard FileManager.default.fileExists(atPath: file.path) else { continue }
                 // Only remove a folder Folio wrote; never the user's own skill of the same name.
                 guard isOurs(file) else {
-                    throw AgentIntegrationError(message: "\(file.deletingLastPathComponent().path) 不是 Folio 安装的技能，未删除。")
+                    if folder == target {
+                        throw AgentIntegrationError(message: "\(file.deletingLastPathComponent().path) 不是 Folio 安装的技能，未删除。")
+                    }
+                    continue
                 }
                 try FileManager.default.removeItem(at: file.deletingLastPathComponent())
             }
@@ -404,23 +499,35 @@ public struct AgentIntegrator: Sendable {
     /// Writes the skill folder (for agents configured by hand or uploaded as a package).
     public func exportSkill(to folder: URL) throws -> URL {
         let target = folder.appending(path: FolioSkill.name, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
-        try FolioSkill.markdown(cliPath: cliPath).write(to: target.appending(path: "SKILL.md"), atomically: true, encoding: .utf8)
+        try FolioSkill.write(to: target, cliPath: cliPath)
         return target
     }
 
     /// Refreshes skills Folio installed earlier: new skill text for this copy of Folio, or a moved app
-    /// (the skill names a folio-cli that no longer exists). Skills of another existing copy are left alone.
+    /// (the skill names a folio-cli that no longer exists). Skills of another existing copy are left
+    /// alone. Copies in folders agents no longer read move to the shared folder. Returns how many
+    /// skill folders were rewritten.
     @discardableResult
     public func refreshInstalledSkills() -> Int {
-        Self.catalog.filter(skillInstalled).reduce(0) { count, descriptor in
-            guard let file = skillFiles(descriptor).first(where: isOurs),
-                  let text = try? String(contentsOf: file, encoding: .utf8) else { return count }
+        var count = 0
+        for retired in Self.retiredSkillFolders where isOurs(skillFile(in: retired)) {
+            let folder = skillFile(in: retired).deletingLastPathComponent()
+            if (try? FolioSkill.write(to: home.appending(path: "\(Self.sharedSkillsFolder)/\(FolioSkill.name)"), cliPath: cliPath)) != nil {
+                try? FileManager.default.removeItem(at: folder)
+                count += 1
+            }
+        }
+        let folders = Set(Self.catalog.flatMap(\.skillFolders)).sorted()
+        for folder in folders {
+            let file = skillFile(in: folder)
+            guard isOurs(file), let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
             let referenced = text.firstMatch(of: /(\/[^\s"`']*\/folio-cli)/).map { String($0.1) }
             let ours = text.contains(cliPath)
             let orphaned = referenced.map { !FileManager.default.isExecutableFile(atPath: $0) } ?? true
-            guard ours || orphaned, text != FolioSkill.markdown(cliPath: cliPath) else { return count }
-            return (try? setSkill(true, for: descriptor)) == nil ? count : count + 1
+            let target = file.deletingLastPathComponent()
+            guard ours || orphaned, !FolioSkill.isCurrent(at: target, cliPath: cliPath) else { continue }
+            if (try? FolioSkill.write(to: target, cliPath: cliPath)) != nil { count += 1 }
         }
+        return count
     }
 }

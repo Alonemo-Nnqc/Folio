@@ -190,13 +190,17 @@ private func seed(_ library: Library) throws -> [String] {
                 == ["/Applications/Folio.app/Contents/MacOS/folio-cli", "mcp"])
     }
 
-    @Test func unparsableJSONIsNotOverwritten() throws {
+    @Test func commentedJSONIsEditedAndBrokenJSONIsNotOverwritten() throws {
         let home = try tempHome()
         let file = home.appending(path: ".gemini/settings.json")
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "{ // comment\n \"a\": 1 }".write(to: file, atomically: true, encoding: .utf8)
-        #expect(throws: AgentIntegrationError.self) { try integrator(home).setMCP(true, for: descriptor("gemini-cli")) }
+        try integrator(home).setMCP(true, for: descriptor("gemini-cli"))
         #expect(try String(contentsOf: file, encoding: .utf8).contains("// comment"))
+        #expect(integrator(home).status(of: descriptor("gemini-cli")).mcpInstalled)
+        try "{ \"a\": 1, oops }".write(to: file, atomically: true, encoding: .utf8)
+        #expect(throws: AgentIntegrationError.self) { try integrator(home).setMCP(true, for: descriptor("gemini-cli")) }
+        #expect(try String(contentsOf: file, encoding: .utf8) == "{ \"a\": 1, oops }")
     }
 
     @Test func codexTOMLBlockIsAddedReplacedAndRemoved() throws {
@@ -239,7 +243,7 @@ private func seed(_ library: Library) throws -> [String] {
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "my own".write(to: skill, atomically: true, encoding: .utf8)
         #expect(throws: AgentIntegrationError.self) { try agent.setSkill(false, for: descriptor("claude-code")) }
-        #expect(throws: AgentIntegrationError.self) { try agent.setSkill(true, for: descriptor("vscode")) }
+        #expect(throws: AgentIntegrationError.self) { try agent.setSkill(true, for: descriptor("lm-studio")) }
     }
 
     @Test func anotherExistingCopyIsNotTakenOver() throws {
