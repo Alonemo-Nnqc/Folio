@@ -13,17 +13,15 @@ struct AISettingsPane: View {
             Section {
                 Toggle(isOn: $settings.aiAllowWrites) {
                     Text("允许 AI 修改文献库")
-                    Text("关闭后，智能体只能搜索、阅读、引用和导出，不能添加、编辑或移到回收站。AI 不能彻底删除任何内容。")
+                    Text("关闭后只能搜索、阅读和引用。AI 不能彻底删除任何内容。")
                 }
-                LabeledContent {
+                LabeledContent("MCP 服务器") {
                     HStack {
                         serverCheckLabel
                         Button("检查") { integration.checkServer() }
                             .disabled(integration.serverCheck == .running)
+                            .help("像智能体一样启动 folio-cli，完成握手并读取文献库")
                     }
-                } label: {
-                    Text("MCP 服务器")
-                    Text("像智能体一样启动 folio-cli，完成握手并读取文献库")
                 }
                 LabeledContent("命令行工具") {
                     HStack {
@@ -41,7 +39,7 @@ struct AISettingsPane: View {
             } header: {
                 Text("Folio 的 AI 接口")
             } footer: {
-                Text("智能体通过 MCP 访问你的文献库：查找论文、阅读全文和批注、生成 APA / GB/T 7714 / BibTeX 引用、导入导出 BibTeX / RIS，以及添加和整理文献。Folio 技能教智能体正确地使用这些功能。")
+                Text("智能体通过 MCP 查找、阅读、引用和整理你的文献；Folio 技能教它正确使用。")
             }
 
             Section {
@@ -63,27 +61,13 @@ struct AISettingsPane: View {
                 HStack(spacing: 8) {
                     Text("这台 Mac 上的智能体")
                     Spacer()
-                    if let result = integration.detectionResult {
-                        Label(result, systemImage: "checkmark.circle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .symbolRenderingMode(.hierarchical)
-                            .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
-                    }
-                    Button {
+                    RedetectButton(isChecking: integration.isDetecting, result: integration.detectionResult,
+                                   help: "重新查找已安装的智能体（安装或卸载后使用）") {
                         integration.detect(userInitiated: true)
-                    } label: {
-                        Label(integration.isDetecting ? "正在检测…" : "重新检测", systemImage: "arrow.trianglehead.2.clockwise")
-                            .symbolEffect(.rotate, options: .repeat(.continuous), isActive: integration.isDetecting)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(integration.isDetecting)
-                    .help("重新查找已安装的智能体（安装或卸载后使用）")
                 }
-                .animation(.smooth(duration: 0.25), value: integration.detectionResult)
             } footer: {
-                Text("只列出在这台 Mac 上能运行的智能体：App 完整，或命令能在终端中运行并报告版本。打开开关即按该智能体官方文档的方式添加配置（Claude Code、Codex 使用它们自己的命令），关闭即移除；只改动 Folio 自己的条目，修改前备份原文件。技能放在开放标准的共享文件夹 ~/.agents/skills 时，Codex、Gemini CLI、Cursor CLI 等会共用同一份。改动在重启智能体或开始新会话后生效。")
+                Text("打开开关即按官方方式写入该智能体的配置，关闭即移除，修改前会备份。重启智能体或开始新会话后生效。")
             }
 
             Section {
@@ -99,7 +83,7 @@ struct AISettingsPane: View {
             } header: {
                 Text("手动配置")
             } footer: {
-                Text("把 MCP 配置粘贴到其他应用（如 VS Code、Zed、Windsurf、Cherry Studio）的 MCP 设置中；技能包可在 Claude 桌面版 设置 ▸ 功能 ▸ 技能 中上传。")
+                Text("用于列表之外的应用，如 VS Code、Zed、Windsurf。")
             }
         }
         .formStyle(.grouped)
@@ -168,14 +152,8 @@ private struct AgentRow: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
-                    if let details {
-                        Text(details)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .truncationMode(.middle)
-                    }
-                    if status.mcpInstalled || status.skillInstalled, let hint = AIIntegration.hints[descriptor.id] {
+                    if status.mcpInstalled || status.skillInstalled, AIIntegration.inlineHints.contains(descriptor.id),
+                       let hint = AIIntegration.hints[descriptor.id] {
                         Text(hint)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -184,6 +162,8 @@ private struct AgentRow: View {
                 }
             }
         }
+        .help([details, AIIntegration.inlineHints.contains(descriptor.id) ? nil : AIIntegration.hints[descriptor.id]]
+                .compactMap { $0 }.joined(separator: "\n"))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(descriptor.name)
         .contextMenu {

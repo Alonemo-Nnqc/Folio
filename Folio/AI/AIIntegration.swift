@@ -26,7 +26,10 @@ final class AIIntegration {
         case failed(String)
     }
 
-    /// What each agent needs beyond Folio's configuration, shown under its row.
+    /// Hints that need the user to act, shown under the row; the others are in the row's tooltip.
+    static let inlineHints: Set<String> = ["gemini-cli", "claude-desktop"]
+
+    /// What each agent needs beyond Folio's configuration.
     static let hints: [String: String] = [
         "gemini-cli": "Gemini CLI 只在受信任的文件夹中启用 MCP 服务器：首次在某个文件夹中运行时选择信任。",
         "claude-desktop": "修改后需要完全退出并重新打开 Claude 桌面版。",

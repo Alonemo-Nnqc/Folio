@@ -212,17 +212,13 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Section {
+            Section("外观") {
                 AppearancePicker(settings: settings)
                 LabeledContent("边栏图标大小") {
                     Button("在系统设置中更改…") {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!)
                     }
                 }
-            } header: {
-                Text("外观")
-            } footer: {
-                Text("\"自动\"跟随系统切换浅色和深色。侧栏的行高和字号跟随系统的边栏图标大小。")
             }
             Section("打开") {
                 Picker("打开 PDF 时使用", selection: $settings.openWith) {
@@ -242,10 +238,7 @@ struct GeneralSettings: View {
                 Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
             }
             Section("列表") {
-                Toggle(isOn: $settings.includeSubgroupItems) {
-                    Text("父分组中显示子分组的条目")
-                    Text("关闭后，父分组只显示直接放在其中的条目。")
-                }
+                Toggle("父分组中显示子分组的条目", isOn: $settings.includeSubgroupItems)
                 .onChange(of: settings.includeSubgroupItems) { model.recompute() }
             }
         }
@@ -265,7 +258,7 @@ struct ReadingSettings: View {
 
     var body: some View {
         Form {
-            Section {
+            Section("页面") {
                 Picker("首次打开时的缩放", selection: $settings.readerZoom) {
                     ForEach(AppSettings.ReaderZoom.allCases) { Text($0.title).tag($0) }
                 }
@@ -273,12 +266,8 @@ struct ReadingSettings: View {
                     ForEach(AppSettings.ReaderLayout.allCases) { Text($0.title).tag($0) }
                 }
                 Toggle("显示页面阴影", isOn: $settings.readerPageShadows)
-            } header: {
-                Text("页面")
-            } footer: {
-                Text("再次打开读过的论文时，会回到上次的页码、位置和缩放。新设置在下次打开论文时生效。")
             }
-            Section {
+            Section("批注") {
                 LabeledContent("默认高亮颜色") {
                     ColorSwatchRow(hex: Binding(
                         get: { AnnotationColor(rawValue: settings.highlightColor)?.nsColor.hexString },
@@ -290,10 +279,6 @@ struct ReadingSettings: View {
                         presets: AnnotationColor.allCases.map { ($0.title, $0.nsColor.hexString) }, allowsCustom: false)
                 }
                 TextField("批注作者", text: $settings.annotationAuthor, prompt: Text(NSFullUserName()))
-            } header: {
-                Text("批注")
-            } footer: {
-                Text("作者会写入新建的批注，在\"预览\"等阅读器的批注列表中显示。")
             }
         }
         .formStyle(.grouped)
@@ -342,7 +327,7 @@ struct LibrarySettings: View {
             } header: {
                 Text("导入")
             } footer: {
-                Text("读取 Zotero 数据库的副本，导入条目、PDF、分组和标签，不会修改 Zotero。")
+                Text("导入条目、PDF、分组和标签，不会修改 Zotero。")
             }
         }
         .formStyle(.grouped)
@@ -378,24 +363,19 @@ struct RetrievalSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle(isOn: $settings.autoRetrieveOnImport) {
-                    Text("添加 PDF 后自动检索元数据")
-                    Text("关闭后，新文件先保留为独立文件，可在右键菜单中\"重新检索元数据\"。")
-                }
+                Toggle("添加 PDF 后自动检索元数据", isOn: $settings.autoRetrieveOnImport)
                 Toggle(isOn: $settings.useZoteroRecognizer) {
                     Text("使用 Zotero 识别服务")
-                    Text("把 PDF 前 5 页的文字和版面（每篇约 0.5 MB）发送给 Zotero 的识别服务，不需要账号，Zotero 声明不记录内容。开放数据源检索不畅时仍能识别。关闭后只使用开放数据源。")
+                    Text("会把 PDF 前 5 页的文字发送给 Zotero，无需账号。")
                 }
             }
             Section {
-                TextField("联系邮箱（选填）", text: $settings.crossrefMailto, prompt: Text("name@example.com"))
-            } footer: {
-                Text("填写后，Crossref 会把请求放进响应更快的礼貌访问池。邮箱只随检索请求发送给 Crossref 和 OpenAlex。")
-            }
-            Section {
+                TextField("联系邮箱（选填）", text: $settings.crossrefMailto, prompt: Text(verbatim: "name@example.com"))
+                    .help("Crossref 会更快地响应带联系邮箱的请求；邮箱只发送给 Crossref 和 OpenAlex")
                 SecureField("OpenAlex API Key（选填）", text: $settings.openAlexAPIKey)
+                    .help("可在 openalex.org 免费申请，用于提高 OpenAlex 的访问额度")
             } footer: {
-                Text("OpenAlex 对不带 Key 的请求按 IP 限额，Key 可在 openalex.org 免费申请。不填也能正常检索。")
+                Text("选填，可让检索更快、更稳定；不填也能正常检索。")
             }
         }
         .formStyle(.grouped)

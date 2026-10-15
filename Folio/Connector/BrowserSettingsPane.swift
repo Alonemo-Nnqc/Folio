@@ -9,35 +9,40 @@ struct BrowserSettingsPane: View {
     @State private var safariEnabled: Bool?
     @State private var states: [String: BrowserExtensions.InstallState] = [:]
     @State private var guide: BrowserInfo?
+    @State private var redetect = RedetectState()
 
     var body: some View {
         @Bindable var settings = model.settings
         Form {
             Section {
-                Toggle(isOn: $settings.browserConnectorEnabled) {
-                    Text("允许浏览器插件保存文献")
-                    Text("Folio 运行时在本机 127.0.0.1:\(String(ConnectorServer.port)) 接收插件的保存请求，只接受浏览器扩展、不接受网页的请求。")
-                }
+                Toggle("允许浏览器插件保存文献", isOn: $settings.browserConnectorEnabled)
+                    .help("Folio 运行时在本机 127.0.0.1:\(String(ConnectorServer.port)) 接收插件的保存请求，只接受浏览器扩展、不接受网页的请求")
                 .onChange(of: settings.browserConnectorEnabled) { _, on in on ? model.connector.start() : model.connector.stop() }
                 LabeledContent("状态") { status }
             } header: {
                 Text("Folio 连接器")
             } footer: {
-                Text("在论文页面点工具栏上的 Folio 按钮（或按 ⌘⇧S）：自动识别标题、作者、DOI 等信息，选择分组和标签，并可同时保存 PDF；搜索结果、arXiv 列表等页面可以勾选多篇一次保存。在 PDF、DOI 或 arXiv 链接上右键可直接\"保存链接到 Folio\"。")
+                Text("在论文页面点工具栏中的 Folio 按钮或按 ⌘⇧S 保存，也可在链接上右键\"保存链接到 Folio\"。")
             }
 
             Section {
                 ForEach(browsers) { browser in
                     LabeledContent {
-                        Button(buttonTitle(for: browser)) { guide = browser }
+                        HStack(spacing: 10) {
+                            let state = status(for: browser)
+                            StatusBadge(text: state.text, tone: state.tone)
+                            Button(buttonTitle(for: browser)) { guide = browser }
+                        }
                     } label: {
                         HStack(spacing: 10) {
                             Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.path))
                                 .resizable()
-                                .frame(width: 26, height: 26)
+                                .frame(width: 28, height: 28)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(browser.name)
-                                Text(detail(for: browser)).font(.caption).foregroundStyle(.secondary)
+                                if let detail = detail(for: browser) {
+                                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -46,16 +51,13 @@ struct BrowserSettingsPane: View {
                 HStack {
                     Text("浏览器")
                     Spacer()
-                    Button {
-                        refresh()
-                    } label: {
-                        Label("重新检测", systemImage: "arrow.clockwise")
+                    RedetectButton(isChecking: redetect.isChecking, result: redetect.result,
+                                   help: "重新检测各浏览器中的 Folio 扩展") {
+                        redetect.run { await refreshNow() }
                     }
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
                 }
             } footer: {
-                Text("扩展尚未上架各浏览器的应用商店（需要开发者账号），因此 Chrome、Edge 等通过\"开发者模式\"载入，Safari 需要先允许未签名的扩展。点按钮会一步步带你完成，并自动检测是否安装成功。")
+                Text("扩展暂未上架应用商店，点按钮按引导完成安装。")
             }
         }
         .formStyle(.grouped)
@@ -90,36 +92,60 @@ struct BrowserSettingsPane: View {
         }
     }
 
-    private func detail(for browser: BrowserInfo) -> String {
-        let seen = model.connector.lastSeen[ExtensionInstallGuide.connectorName(for: browser)]
-            .map { " · \($0.formatted(.relative(presentation: .named)))连接过" } ?? ""
+    /// The extension's state in a browser, as a badge.
+    private func status(for browser: BrowserInfo) -> (text: String, tone: StatusBadge.Tone) {
         switch browser.family {
         case .safari:
             switch safariEnabled {
-            case true?: return "已启用" + seen
-            case false?: return "未启用" + seen
-            case nil: return "需要先允许未签名的扩展"
+            case true?: return ("已启用", .positive)
+            case false?: return ("未启用", .attention)
+            case nil: return ("未允许", .attention)
             }
         case .chromium:
             switch states[browser.id] ?? .notInstalled {
-            case .notInstalled: return "未安装"
+            case .notInstalled: return ("未安装", .neutral)
             case .installed(let enabled, let version):
-                var outdated = false
-                if let version, let bundled = BrowserExtensions.bundledVersion {
-                    outdated = bundled.compare(version, options: .numeric) == .orderedDescending
-                }
-                if !enabled { return "已安装但已停用" }
-                return (outdated ? "有新版本：在扩展页点\"重新加载\"" : "已安装\(version.map { " \($0)" } ?? "")") + seen
+                if !enabled { return ("已停用", .attention) }
+                if let version, let bundled = BrowserExtensions.bundledVersion,
+                   bundled.compare(version, options: .numeric) == .orderedDescending { return ("有新版本", .info) }
+                return ("已启用", .positive)
             }
         case .firefox:
-            return "临时载入（重启 Firefox 后需重新载入）" + seen
+            return model.connector.lastSeen["Firefox"] == nil ? ("未载入", .neutral) : ("临时载入", .attention)
+        }
+    }
+
+    /// One short line under the name, only when it says something the badge does not.
+    private func detail(for browser: BrowserInfo) -> String? {
+        let seen = model.connector.lastSeen[ExtensionInstallGuide.connectorName(for: browser)]
+            .map { "\($0.formatted(.relative(presentation: .named)))连接过" }
+        switch browser.family {
+        case .safari:
+            return safariEnabled == nil ? "需要先在 Safari 中允许未签名的扩展" : seen
+        case .chromium:
+            if case .installed(true, let version)? = states[browser.id],
+               let version, let bundled = BrowserExtensions.bundledVersion,
+               bundled.compare(version, options: .numeric) == .orderedDescending {
+                return "在扩展页点\"重新加载\"即可更新"
+            }
+            return seen
+        case .firefox:
+            return "重启 Firefox 后需重新载入"
         }
     }
 
     private func refresh() {
+        Task { await refreshNow() }
+    }
+
+    /// Re-reads every browser and the Safari extension's state; returns a one-line summary.
+    @discardableResult
+    private func refreshNow() async -> String {
         browsers = BrowserExtensions.detect()
         states = Dictionary(uniqueKeysWithValues: browsers.map { ($0.id, BrowserExtensions.installState(in: $0)) })
-        Task { safariEnabled = await BrowserExtensions.safariState() }
+        safariEnabled = await BrowserExtensions.safariState()
+        let enabled = browsers.filter { status(for: $0).tone == .positive }.count
+        return enabled == 0 ? "尚未在浏览器中启用" : "\(enabled) 个浏览器已启用"
     }
 }
 
