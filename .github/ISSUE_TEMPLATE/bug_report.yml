@@ -1,0 +1,43 @@
+name: Bug 报告 / Bug report
+description: Folio 出现了错误或与预期不符的行为
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 感谢反馈！提交前请先搜索是否已有相同的 Issue，并确认已更新到最新版本（Folio ▸ 检查更新…）。
+  - type: input
+    id: version
+    attributes:
+      label: Folio 版本
+      description: 设置 ▸ 通用 ▸ 软件更新 中显示的版本，例如 1.0.0 (131)
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS 版本
+      placeholder: macOS 26.1
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述
+      description: 发生了什么？你期望发生什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 …
+        2. 点击 …
+        3. 出现 …
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图、日志或示例文件
+      description: 如果与特定 PDF 或网页有关，请附上链接（注意不要上传含个人信息的文件）。
