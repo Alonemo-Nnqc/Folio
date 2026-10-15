@@ -25,7 +25,7 @@ struct AISettingsPane: View {
                 }
                 LabeledContent("命令行工具") {
                     HStack {
-                        Text(AIIntegration.cliPath)
+                        Text((AIIntegration.cliPath as NSString).abbreviatingWithTildeInPath)
                             .font(.callout.monospaced())
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
