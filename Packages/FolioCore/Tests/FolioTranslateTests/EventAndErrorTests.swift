@@ -125,6 +125,14 @@ import Testing
         }
     }
 
+    @Test func stageShowsItsCount() {
+        var tracker = ProgressTracker()
+        #expect(tracker.stage("Translate Paragraphs", current: 34, total: 120) == "翻译段落 34/120")
+        #expect(tracker.stage("Translate Paragraphs", current: 34, total: 120) == nil)
+        #expect(tracker.stage("Translate Paragraphs", current: 35, total: 120) == "翻译段落 35/120")
+        #expect(tracker.stage("Save PDF", current: 1, total: 1) == "保存 PDF")
+    }
+
     @Test func appleTranslatorMarkerInLog() {
         let failure = TranslationErrorClassifier.classify(
             message: "Translation subprocess initialization error: RetryError[<Future raised CalledProcessError>]",

@@ -51,7 +51,7 @@ enum PreviewHooks {
         }
         if let prefix = defaults.string(forKey: "FolioPreviewTranslating"),
            let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
-            model.translations.previewJob(itemId: item.id, fileId: file.id, stage: "翻译段落", fraction: 0.42)
+            model.translations.previewJob(itemId: item.id, fileId: file.id, stage: "翻译段落 34/120", fraction: 0.42)
         }
         if let tab = defaults.string(forKey: "FolioPreviewTab").flatMap(InspectorTab.init(rawValue:)) { model.inspectorTab = tab }
         switch defaults.string(forKey: "FolioPreviewSheet") {

@@ -132,8 +132,8 @@ public final class TranslationJob: Sendable {
                 switch event.kind {
                 case .stage(let name):
                     if let stage = tracker.stage(name) { continuation.yield(.stage(stage)) }
-                case .progress(let stage, let overall, _, _):
-                    if let stage, let display = tracker.stage(stage) { continuation.yield(.stage(display)) }
+                case .progress(let stage, let overall, let current, let total):
+                    if let stage, let display = tracker.stage(stage, current: current, total: total) { continuation.yield(.stage(display)) }
                     if let overall, let value = tracker.progress(overall / 100) { continuation.yield(.progress(value)) }
                 case .finish(let mono, let dual, _):
                     finish = (mono, dual)
@@ -218,9 +218,11 @@ struct ProgressTracker {
     private(set) var lastStage: String?
     private(set) var lastProgress: Double = 0
 
-    /// Returns the display name when the stage changed.
-    mutating func stage(_ raw: String) -> String? {
-        let display = TranslationStageNames.displayName(for: raw)
+    /// Returns the display text when it changed: the stage name, with "34/120" when the engine counts the
+    /// stage's units (paragraphs, pages).
+    mutating func stage(_ raw: String, current: Int? = nil, total: Int? = nil) -> String? {
+        var display = TranslationStageNames.displayName(for: raw)
+        if let current, let total, total > 1 { display += " \(min(max(current, 0), total))/\(total)" }
         guard !raw.isEmpty, display != lastStage else { return nil }
         lastStage = display
         return display

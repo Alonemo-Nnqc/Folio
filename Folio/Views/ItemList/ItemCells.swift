@@ -11,9 +11,13 @@ final class TitleCell: NSTableCellView {
     let badge = CapsuleBadge()
     /// Translation progress of the item (TRANS-04), at the right edge of the cell.
     let progress = NSProgressIndicator()
-    /// "42%", or the stage ("等待翻译") before the engine reports progress.
+    /// What the engine is doing ("翻译段落 34/120"), before the bar.
+    let stageLabel = NSTextField(labelWithString: "")
+    /// "42%" after the bar, while the engine reports progress.
     let progressLabel = NSTextField(labelWithString: "")
     private var labelBeforeProgress: NSLayoutConstraint!
+    /// While translating, the title keeps some room; the stage text truncates first in a narrow column.
+    private var titleRoom: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -40,13 +44,21 @@ final class TitleCell: NSTableCellView {
         progress.maxValue = 1
         progress.isHidden = true
         progress.setAccessibilityIdentifier("translationProgressBar")
+        stageLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        stageLabel.textColor = .secondaryLabelColor
+        stageLabel.lineBreakMode = .byTruncatingTail
+        stageLabel.isHidden = true
+        // In a narrow column the title gives way first, then the bar narrows;
+        // what the engine is doing stays readable longest.
+        stageLabel.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(740), for: .horizontal)
+        stageLabel.setContentHuggingPriority(.required, for: .horizontal)
         progressLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         progressLabel.textColor = .secondaryLabelColor
         progressLabel.isHidden = true
         progressLabel.setContentHuggingPriority(.required, for: .horizontal)
         progressLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        for view in [icon, spinner, label, badge, progress, progressLabel] as [NSView] {
+        for view in [icon, spinner, label, badge, stageLabel, progress, progressLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -65,10 +77,15 @@ final class TitleCell: NSTableCellView {
             progressLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             progressLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             progress.trailingAnchor.constraint(equalTo: progressLabel.leadingAnchor, constant: -6),
+            stageLabel.trailingAnchor.constraint(equalTo: progress.leadingAnchor, constant: -8),
+            stageLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             progress.centerYAnchor.constraint(equalTo: centerYAnchor),
-            progress.widthAnchor.constraint(equalToConstant: 64),
+            progress.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
+            { let width = progress.widthAnchor.constraint(equalToConstant: 64); width.priority = NSLayoutConstraint.Priority(720); return width }(),
         ])
-        labelBeforeProgress = label.trailingAnchor.constraint(lessThanOrEqualTo: progress.leadingAnchor, constant: -10)
+        labelBeforeProgress = label.trailingAnchor.constraint(lessThanOrEqualTo: stageLabel.leadingAnchor, constant: -8)
+        titleRoom = label.widthAnchor.constraint(greaterThanOrEqualToConstant: 64)
+        titleRoom.priority = .defaultHigh
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
@@ -78,11 +95,15 @@ final class TitleCell: NSTableCellView {
     func configureItem(_ item: Item, fileURL: URL?, origin: String? = nil, hasNote: Bool = false,
                        translation: (stage: String, fraction: Double?)? = nil) {
         progress.isHidden = translation == nil
-        progressLabel.isHidden = translation == nil
+        stageLabel.isHidden = translation == nil
+        progressLabel.isHidden = translation?.fraction == nil
         labelBeforeProgress.isActive = translation != nil
+        titleRoom.isActive = translation != nil
         if let translation {
             TranslationProgressBar.apply(translation.fraction, to: progress)
-            progressLabel.stringValue = translation.fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? translation.stage
+            stageLabel.stringValue = translation.stage
+            stageLabel.toolTip = translation.stage
+            progressLabel.stringValue = translation.fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? ""
             progress.toolTip = translation.stage
         } else {
             progress.stopAnimation(nil)
@@ -120,8 +141,10 @@ final class TitleCell: NSTableCellView {
     func configureFile(_ file: FileRecord, url: URL, isDefault: Bool) {
         spinner.stopAnimation(nil)
         progress.isHidden = true
+        stageLabel.isHidden = true
         progressLabel.isHidden = true
         labelBeforeProgress.isActive = false
+        titleRoom.isActive = false
         icon.isHidden = false
         icon.image = NSWorkspace.shared.icon(forFile: url.path)
         icon.contentTintColor = nil
