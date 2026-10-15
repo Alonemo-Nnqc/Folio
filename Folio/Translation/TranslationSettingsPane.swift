@@ -558,7 +558,17 @@ private struct ReasoningRow: View {
     let serviceID: String
 
     var body: some View {
-        let fields = settings.translationFields[serviceID] ?? [:]
+        ReasoningPicker(serviceID: serviceID, fields: Binding(get: { settings.translationFields[serviceID] ?? [:] },
+                                                               set: { settings.translationFields[serviceID] = $0 }))
+    }
+}
+
+/// The reasoning levels the service and model accept, as a segmented control beside the address, key and model.
+struct ReasoningPicker: View {
+    let serviceID: String
+    @Binding var fields: [String: String]
+
+    var body: some View {
         switch ReasoningEffort.support(serviceID: serviceID, fields: fields) {
         case .none:
             EmptyView()
@@ -571,9 +581,9 @@ private struct ReasoningRow: View {
             Picker("推理强度", selection: Binding(
                 get: { ReasoningEffort.current(serviceID: serviceID, fields: fields) ?? "" },
                 set: { value in
-                    var updated = settings.translationFields[serviceID] ?? [:]
+                    var updated = fields
                     ReasoningEffort.set(value, serviceID: serviceID, fields: &updated)
-                    settings.translationFields[serviceID] = updated
+                    fields = updated
                 })) {
                 ForEach(choices) { Text($0.title).tag($0.value) }
             }

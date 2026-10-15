@@ -33,8 +33,8 @@ public protocol SecretStoring: Sendable {
 extension SecretStore: SecretStoring {}
 
 public enum TranslationProfiles {
-    /// Services with something to configure (all but Apple's offline translation).
-    public static func supportsProfiles(_ service: TranslationService) -> Bool { !service.fields.isEmpty }
+    /// Services with something to configure beyond advanced options: an address, a key or a model.
+    public static func supportsProfiles(_ service: TranslationService) -> Bool { service.fields.contains { !$0.isAdvanced } }
 
     /// A profile holding the service's current values, keys copied into the profile's own Keychain items.
     public static func capture(name: String, service: TranslationService, fields: [String: String],

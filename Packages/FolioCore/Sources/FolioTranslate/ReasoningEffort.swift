@@ -41,6 +41,10 @@ public enum ReasoningEffort {
 
     private static func choice(_ value: String, _ title: String) -> Choice { Choice(value: value, title: title) }
 
+    /// OpenAI's levels, lowest to highest.
+    private static let fullRange = [choice("minimal", "最低"), choice("low", "低"), choice("medium", "中"), choice("high", "高"),
+                                    choice("xhigh", "极高")]
+
     public static func support(serviceID: String, fields: [String: String]) -> Support {
         switch serviceID {
         case "openai", "openaicompatible":
@@ -50,9 +54,9 @@ public enum ReasoningEffort {
             let name = (model.isEmpty ? fallback : model).lowercased()
             // Strip a provider prefix such as "openai/gpt-5" used by gateways.
             let bare = name.split(separator: "/").last.map(String.init) ?? name
-            if bare.hasPrefix("gpt-5") {
-                return .choices([choice("minimal", "最低"), choice("low", "低"), choice("medium", "中"), choice("high", "高")],
-                                default: "medium")
+            // GPT-5 and later (gpt-5.x, gpt-6…): the full range, up to xhigh.
+            if bare.range(of: #"^gpt-([5-9]|\d{2})"#, options: .regularExpression) != nil {
+                return .choices(fullRange, default: "medium")
             }
             if bare.range(of: #"^o[1-9]"#, options: .regularExpression) != nil {
                 return .choices([choice("low", "低"), choice("medium", "中"), choice("high", "高")], default: "medium")
@@ -63,8 +67,7 @@ public enum ReasoningEffort {
             // Other models behind a compatible endpoint: offer the common levels, but let the user
             // keep the parameter off because many servers reject it.
             if serviceID == "openaicompatible" {
-                return .choices([choice("", "不设置"), choice("low", "低"), choice("medium", "中"), choice("high", "高")],
-                                default: "")
+                return .choices([choice("", "不设置")] + fullRange, default: "")
             }
             return .unsupportedModel
         case "deepseek":

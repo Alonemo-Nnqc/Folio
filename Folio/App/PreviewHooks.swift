@@ -58,8 +58,9 @@ enum PreviewHooks {
             model.translations.previewJob(itemId: item.id, fileId: file.id, stage: "翻译段落 34/120", fraction: 0.42)
         }
         if defaults.bool(forKey: "FolioPreviewTranslationProfiles") {
-            // Two sample configurations of the current service, in memory only; the Keychain is not touched.
-            let service = model.settings.translationService
+            // Sample configurations of the OpenAI-compatible service, in memory only; the Keychain is not touched.
+            let service = "openaicompatible"
+            model.settings.translationService = service
             let profiles = [
                 TranslationProfile(name: "DeepSeek", serviceID: service,
                                    fields: ["--openai-compatible-base-url": "https://api.deepseek.com/v1", "--openai-compatible-model": "deepseek-chat"]),

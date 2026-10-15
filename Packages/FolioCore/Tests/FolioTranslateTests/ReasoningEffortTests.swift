@@ -13,7 +13,12 @@ import Testing
         guard case let .choices(gpt5, d5) = ReasoningEffort.support(serviceID: "openai", fields: ["--openai-model": "gpt-5-mini"]) else {
             Issue.record("gpt-5 should reason"); return
         }
-        #expect(gpt5.map(\.value) == ["minimal", "low", "medium", "high"])
+        #expect(gpt5.map(\.value) == ["minimal", "low", "medium", "high", "xhigh"])
+        // Later generations behind a compatible endpoint get the same range.
+        guard case let .choices(gpt6, d6) = ReasoningEffort.support(serviceID: "openaicompatible", fields: ["--openai-compatible-model": "gpt-6.1-sol"]) else {
+            Issue.record("gpt-6 reasons"); return
+        }
+        #expect(gpt6.map(\.value) == ["minimal", "low", "medium", "high", "xhigh"] && d6 == "medium")
         #expect(d5 == "medium")
         guard case let .choices(o3, _) = ReasoningEffort.support(serviceID: "openai", fields: ["--openai-model": "o3"]) else {
             Issue.record("o3 should reason"); return

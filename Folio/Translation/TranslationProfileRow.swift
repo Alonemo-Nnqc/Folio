@@ -262,10 +262,15 @@ private struct ProfileDetailSheet: View {
                 Section {
                     TextField("名称", text: $draft.name, prompt: Text("例如 DeepSeek、Moonshot"))
                 }
-                Section("连接") {
-                    ForEach(service.fields.filter { !$0.isAdvanced }) { row(for: $0) }
+                let connection = service.fields.filter { !$0.isAdvanced }
+                if !connection.isEmpty {
+                    Section("连接") {
+                        ForEach(connection) { row(for: $0) }
+                        ReasoningPicker(serviceID: service.id, fields: $draft.fields)
+                    }
                 }
-                let advanced = service.fields.filter(\.isAdvanced)
+                // Reasoning effort is chosen above, not typed among the advanced options.
+                let advanced = service.fields.filter { $0.isAdvanced && !ReasoningEffort.managedOptions.contains($0.option) }
                 if !advanced.isEmpty {
                     Section {
                         DisclosureGroup("高级", isExpanded: $showAdvanced) { ForEach(advanced) { row(for: $0) } }
