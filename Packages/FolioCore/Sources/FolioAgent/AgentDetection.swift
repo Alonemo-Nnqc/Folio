@@ -8,7 +8,7 @@ import Foundation
 /// An app opened from Finder does not get the PATH of the user's shell, so the PATH is read from a login,
 /// interactive shell, as VS Code and Zed resolve their shell environment; Node-based CLIs (npm, nvm, Volta)
 /// also need it to find `node` when they run.
-enum ShellEnvironment {
+public enum ShellEnvironment {
     /// Folders where command-line agents are usually installed, searched after the shell's PATH.
     static func fallbackFolders(home: URL) -> [String] {
         ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", home.appending(path: ".local/bin").path,
@@ -22,7 +22,7 @@ enum ShellEnvironment {
     nonisolated(unsafe) private static var cachedLoginPATH: [String]?
 
     /// The PATH of the user's login shell, read once (until `reset()`); empty when the shell does not answer.
-    static func loginPATH() -> [String] {
+    public static func loginPATH() -> [String] {
         lock.lock()
         defer { lock.unlock() }
         if let cachedLoginPATH { return cachedLoginPATH }
@@ -32,7 +32,7 @@ enum ShellEnvironment {
     }
 
     /// Forget the cached PATH (设置 ▸ AI ▸ 重新检测: the user may just have installed something).
-    static func reset() {
+    public static func reset() {
         lock.lock()
         cachedLoginPATH = nil
         lock.unlock()
