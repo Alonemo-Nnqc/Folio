@@ -29,6 +29,7 @@ cd "$ROOT"
 echo "▶ Folio $VERSION (build $BUILD)"
 xcodegen generate --quiet
 rm -rf "$DERIVED/Build/Products/Release"
+mkdir -p "$DERIVED"
 xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Release -derivedDataPath "$DERIVED" \
   -destination 'generic/platform=macOS' \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
