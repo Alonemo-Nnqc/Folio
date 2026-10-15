@@ -77,20 +77,43 @@ public enum ModelListFetcher {
     }
 
     /// Fetches model ids, sorted. `fieldValues` / `secrets` are keyed by CLI option, as in `TranslationRequest`.
+    /// An OpenAI-style address is tried as given and with `/v1` (`OpenAIBaseURL`); the first that lists models wins,
+    /// otherwise the error of the address the engine will use is reported.
     public static func fetch(serviceID: String, fieldValues: [String: String], secrets: [String: String],
                              session: URLSession = .shared) async throws -> [String] {
         guard let endpoint = endpoints[serviceID] else { return [] }
-        let request = try makeRequest(endpoint, fieldValues: fieldValues, secrets: secrets)
-        let (data, response) = try await session.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw [401, 403].contains(http.statusCode) ? FetchError.unauthorized : FetchError.http(http.statusCode)
+        var firstError: Error?
+        for request in try makeRequests(endpoint, fieldValues: fieldValues, secrets: secrets) {
+            do {
+                let (data, response) = try await session.data(for: request)
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    throw [401, 403].contains(http.statusCode) ? FetchError.unauthorized : FetchError.http(http.statusCode)
+                }
+                let models = try parse(data, api: endpoint.api)
+                guard !models.isEmpty else { throw FetchError.empty }
+                return models
+            } catch {
+                if firstError == nil { firstError = error }
+            }
         }
-        let models = try parse(data, api: endpoint.api)
-        guard !models.isEmpty else { throw FetchError.empty }
-        return models
+        throw firstError ?? FetchError.empty
     }
 
-    static func makeRequest(_ endpoint: Endpoint, fieldValues: [String: String], secrets: [String: String]) throws -> URLRequest {
+    /// The requests to try, most likely first.
+    static func makeRequests(_ endpoint: Endpoint, fieldValues: [String: String], secrets: [String: String]) throws -> [URLRequest] {
+        let first = try makeRequest(endpoint, fieldValues: fieldValues, secrets: secrets)
+        guard case .openAI = endpoint.api, let option = endpoint.baseOption, OpenAIBaseURL.options.contains(option),
+              let base = fieldValues[option], !base.isEmpty else { return [first] }
+        // The other spelling of the address: with /v1 if it was given without, as given if /v1 was added.
+        var values = fieldValues
+        values[option] = OpenAIBaseURL.alternative(base)
+        guard let second = try? makeRequest(endpoint, fieldValues: values, secrets: secrets, normalizing: false),
+              second.url != first.url else { return [first] }
+        return [first, second]
+    }
+
+    static func makeRequest(_ endpoint: Endpoint, fieldValues: [String: String], secrets: [String: String],
+                            normalizing: Bool = true) throws -> URLRequest {
         func value(_ option: String?) -> String? {
             guard let option else { return nil }
             let text = (secrets[option] ?? fieldValues[option])?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -102,6 +125,7 @@ public enum ModelListFetcher {
         switch endpoint.api {
         case let .openAI(defaultBase, query):
             guard var base = value(endpoint.baseOption) ?? defaultBase else { throw FetchError.missingBaseURL }
+            if normalizing, let option = endpoint.baseOption, OpenAIBaseURL.options.contains(option) { base = OpenAIBaseURL.normalized(base) }
             while base.hasSuffix("/") { base.removeLast() }
             // Xinference's host is given without the /v1 prefix.
             if endpoint.baseOption == "--xinference-host", !base.hasSuffix("/v1") { base += "/v1" }
@@ -137,5 +161,30 @@ public enum ModelListFetcher {
                 .compactMap { ($0["name"] as? String).map { $0.hasPrefix("models/") ? String($0.dropFirst(7)) : $0 } }
         }
         return Array(Set(names)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+}
+
+/// OpenAI-style APIs live under `/v1`. Like other clients (Cherry Studio, most OpenAI SDK setups), an address given
+/// as a bare host — "https://api.example.com" — means its `/v1`; an address with a path is used as given. Some
+/// gateways answer a request outside their routes with 401, which looked like a wrong API key.
+public enum OpenAIBaseURL {
+    /// The address options this applies to (not Azure, whose paths differ).
+    public static let options: Set<String> = ["--openai-base-url", "--openai-compatible-base-url"]
+
+    public static func normalized(_ raw: String) -> String {
+        var base = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+        guard let url = URL(string: base), url.host() != nil, url.path().isEmpty || url.path() == "/" else { return base }
+        return base + "/v1"
+    }
+
+    /// The other spelling to try when listing models: with `/v1` for an address that has another path, without it
+    /// for one that ends in `/v1` because Folio added it.
+    static func alternative(_ raw: String) -> String {
+        let normalized = normalized(raw)
+        var given = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        while given.hasSuffix("/") { given.removeLast() }
+        if normalized != given { return given }
+        return given.hasSuffix("/v1") ? given : given + "/v1"
     }
 }

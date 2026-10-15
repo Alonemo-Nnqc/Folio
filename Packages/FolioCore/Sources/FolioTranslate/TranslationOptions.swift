@@ -154,7 +154,8 @@ public enum TranslationArgumentBuilder {
                         throw TranslationConfigurationError.missingField(service: service.displayName, field: field.title)
                     }
                 } else {
-                    args += [field.option, value]
+                    // A bare host means its /v1, as when listing models (OpenAIBaseURL).
+                    args += [field.option, OpenAIBaseURL.options.contains(field.option) ? OpenAIBaseURL.normalized(value) : value]
                 }
             }
         }
