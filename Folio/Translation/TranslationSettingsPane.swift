@@ -352,7 +352,7 @@ private struct FieldRow: View {
                 if ModelListFetcher.supports(serviceID: serviceID, modelOption: field.option) {
                     LabeledContent(title) {
                         HStack(spacing: 6) {
-                            TextField(title, text: Binding(get: { value }, set: setValue),
+                            TextField(title, text: Binding(get: { value }, set: { setValue($0) }),
                                       prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
                                 .labelsHidden()
                                 .multilineTextAlignment(.trailing)
@@ -360,7 +360,7 @@ private struct FieldRow: View {
                         }
                     }
                 } else {
-                    TextField(title, text: Binding(get: { value }, set: setValue),
+                    TextField(title, text: Binding(get: { value }, set: { setValue($0) }),
                               prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
                 }
             }

@@ -213,7 +213,7 @@ struct AgentRow: View {
             Text(title)
                 .font(.callout)
                 .foregroundStyle(available ? .primary : .tertiary)
-            Toggle(title, isOn: Binding(get: { isOn }, set: action))
+            Toggle(title, isOn: Binding(get: { isOn }, set: { action($0) }))
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .labelsHidden()

@@ -17,7 +17,7 @@ struct TranslationProfileRow: View {
         let settings = model.settings
         let profiles = settings.translationProfiles.filter { $0.serviceID == service.id }
         let selected = settings.selectedTranslationProfiles[service.id].flatMap { id in profiles.first { $0.id == id } }
-        Picker("配置", selection: Binding(get: { selected?.id ?? "" }, set: choose)) {
+        Picker("配置", selection: Binding(get: { selected?.id ?? "" }, set: { choose($0) })) {
             if selected == nil { Text("未保存的设置").tag("") }
             ForEach(profiles) { Text($0.name).tag($0.id) }
             Divider()
