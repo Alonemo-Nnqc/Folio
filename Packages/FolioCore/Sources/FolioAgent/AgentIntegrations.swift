@@ -1,7 +1,8 @@
 import Foundation
 
-/// An AI agent Folio can configure (AI-04). Paths are relative to the home folder and follow each
-/// agent's official documentation (checked 2026-10; see doc/开发计划-v2.6.md §2).
+/// An AI agent Folio can configure (AI-04): agents only (command-line agents and Claude 桌面版), not
+/// editors. Paths are relative to the home folder and follow each agent's official documentation
+/// (checked 2026-10; see doc/开发计划-v2.6.md §2).
 public struct AgentDescriptor: Sendable, Identifiable, Hashable {
     public enum MCPTarget: Sendable, Hashable {
         /// `claude mcp add --scope user` (falls back to `~/.claude.json` → mcpServers).
@@ -25,28 +26,24 @@ public struct AgentDescriptor: Sendable, Identifiable, Hashable {
     }
 
     public enum EntryStyle: Sendable, Hashable {
-        /// `{"command": …, "args": […]}` (Claude Desktop, Cursor, Gemini, Windsurf, Cline, LM Studio, Kiro, Antigravity, Qwen).
+        /// `{"command": …, "args": […]}` (Claude Desktop, Cursor, Gemini, Cline, Kiro, Qwen).
         case standard
         /// Claude Code's own entries: `{"type": "stdio", "command": …, "args": […], "env": {}}`.
         case claudeCode
-        /// VS Code: `{"type": "stdio", "command": …, "args": […]}`.
-        case vscode
         /// opencode: `{"type": "local", "command": [cli, "mcp"], "enabled": true}`.
         case opencode
         /// GitHub Copilot CLI: `{"type": "local", "command": …, "args": […], "env": {}, "tools": ["*"]}`.
         case copilotCLI
-        /// Zed `context_servers`: `{"command": …, "args": […], "env": {}}`.
-        case zed
     }
 
     public let id: String
     public let name: String
     /// App bundles (in /Applications or ~/Applications) that mean the agent is installed.
     public let apps: [String]
-    /// Command-line tools that mean the agent is installed.
+    /// Command-line tools that mean the agent is installed, once they answer `versionArguments`.
     public let commands: [String]
-    /// Paths relative to home whose existence means the agent is installed.
-    public let markers: [String]
+    /// How to ask a command for its version; tried in order until one succeeds.
+    public var versionArguments: [[String]] = [["--version"]]
     public let mcp: MCPTarget?
     /// Personal skills folders the agent reads (`<folder>/folio-library/SKILL.md`), preferred first.
     /// Folio installs into the first one whose parent folder exists (else the first).
@@ -62,8 +59,12 @@ public struct AgentStatus: Sendable, Identifiable, Hashable {
     public let descriptor: AgentDescriptor
     public var id: String { descriptor.id }
     public let isDetected: Bool
-    /// Where it was found (app path, command path or config folder).
+    /// Where it was found: the app bundle or the command's path.
     public let location: String?
+    /// The version the app or command reported.
+    public let version: String?
+    /// Found as an app bundle (its icon can be shown) rather than a command.
+    public let isApp: Bool
     public let mcpInstalled: Bool
     public let skillInstalled: Bool
     /// The installed MCP entry points at another copy of folio-cli (Folio was moved).
@@ -88,7 +89,11 @@ public struct AgentIntegrator: Sendable {
     public let cliPath: String
     /// Use the agents' own CLIs (`claude mcp add` …) when present. Tests turn this off.
     public var useAgentCommands: Bool
+    /// Run each found command with `--version` before counting it as installed.
+    var verifiesCommands = true
     var applicationFolders: [URL]
+    /// Replaces the shell PATH and the usual install folders (tests).
+    var commandFoldersOverride: [String]?
 
     public init(home: URL = FileManager.default.homeDirectoryForCurrentUser, cliPath: String, useAgentCommands: Bool = true) {
         self.home = home
@@ -97,68 +102,49 @@ public struct AgentIntegrator: Sendable {
         applicationFolders = [URL(filePath: "/Applications"), home.appending(path: "Applications")]
     }
 
-    /// The open Agent Skills standard's shared personal folder (Codex, Gemini CLI, Cursor, VS Code,
-    /// Copilot CLI, Windsurf, opencode, Zed read it).
+    /// Re-read the shell's PATH on the next detection (after the user installed something).
+    public static func refreshEnvironment() {
+        ShellEnvironment.reset()
+    }
+
+    /// The open Agent Skills standard's shared personal folder (Codex, Gemini CLI, Cursor CLI, Copilot CLI,
+    /// opencode read it).
     public static let sharedSkillsFolder = ".agents/skills"
 
-    private static let vscodeUser = "Library/Application Support/Code/User"
-
     public static let catalog: [AgentDescriptor] = [
-        .init(id: "claude-code", name: "Claude Code", apps: [], commands: ["claude"], markers: [".claude"],
+        .init(id: "claude-code", name: "Claude Code", apps: [], commands: ["claude"],
               mcp: .claudeCode, skillFolders: [".claude/skills"], skillNote: nil),
         .init(id: "claude-desktop", name: "Claude 桌面版", apps: ["Claude.app"], commands: [],
-              markers: ["Library/Application Support/Claude"],
               mcp: .json(path: "Library/Application Support/Claude/claude_desktop_config.json", key: "mcpServers", style: .standard),
               skillFolders: [], skillNote: "Claude 桌面版的技能需在 设置 ▸ 功能 ▸ 技能 中上传，可用下方\"导出技能包…\"生成。"),
-        .init(id: "codex", name: "Codex", apps: ["Codex.app"], commands: ["codex"], markers: [".codex"],
+        .init(id: "codex", name: "Codex", apps: ["Codex.app"], commands: ["codex"],
               mcp: .codex, skillFolders: [sharedSkillsFolder], skillNote: nil),
         .init(id: "gemini-cli", name: "Gemini CLI", apps: [], commands: ["gemini"],
-              markers: [".gemini/settings.json", ".gemini/oauth_creds.json", ".gemini/skills"],
               mcp: .json(path: ".gemini/settings.json", key: "mcpServers", style: .standard),
               skillFolders: [sharedSkillsFolder, ".gemini/skills"], skillNote: nil),
-        .init(id: "cursor", name: "Cursor", apps: ["Cursor.app"], commands: ["cursor", "cursor-agent"], markers: [".cursor"],
-              mcp: .json(path: ".cursor/mcp.json", key: "mcpServers", style: .standard),
-              skillFolders: [sharedSkillsFolder, ".cursor/skills", ".claude/skills", ".codex/skills"], skillNote: nil),
-        .init(id: "vscode", name: "VS Code（Copilot）", apps: ["Visual Studio Code.app"], commands: ["code"],
-              markers: [vscodeUser],
-              mcp: .json(path: "\(vscodeUser)/mcp.json", key: "servers", style: .vscode),
-              skillFolders: [sharedSkillsFolder, ".copilot/skills", ".claude/skills"], skillNote: nil),
         .init(id: "copilot-cli", name: "GitHub Copilot CLI", apps: [], commands: ["copilot"],
-              markers: [".copilot/config.json", ".copilot/mcp-config.json"],
               mcp: .json(path: ".copilot/mcp-config.json", key: "mcpServers", style: .copilotCLI),
               skillFolders: [sharedSkillsFolder, ".copilot/skills"], skillNote: nil),
-        .init(id: "windsurf", name: "Windsurf（Devin Desktop）", apps: ["Windsurf.app", "Devin.app"], commands: ["windsurf", "devin"],
-              markers: [".codeium/windsurf", ".config/devin"],
-              mcp: .jsonAny(paths: [".config/devin/mcp_config.json", ".codeium/windsurf/mcp_config.json"], key: "mcpServers",
-                            style: .standard, policy: .existingFolder),
-              skillFolders: [sharedSkillsFolder, ".codeium/windsurf/skills", ".config/devin/skills"], skillNote: nil),
-        .init(id: "cline", name: "Cline", apps: [], commands: ["cline"],
-              markers: ["\(vscodeUser)/globalStorage/saoudrizwan.claude-dev", ".cline"],
-              mcp: .jsonAny(paths: ["\(vscodeUser)/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json",
-                                    ".cline/data/settings/cline_mcp_settings.json"],
-                            key: "mcpServers", style: .standard, policy: .everyExistingFolder),
+        // Cursor's and Kiro's command-line agents share their editors' configuration.
+        .init(id: "cursor", name: "Cursor CLI", apps: [], commands: ["cursor-agent"],
+              mcp: .json(path: ".cursor/mcp.json", key: "mcpServers", style: .standard),
+              skillFolders: [sharedSkillsFolder, ".cursor/skills", ".claude/skills", ".codex/skills"], skillNote: nil),
+        .init(id: "kiro", name: "Kiro CLI", apps: [], commands: ["kiro-cli"],
+              mcp: .json(path: ".kiro/settings/mcp.json", key: "mcpServers", style: .standard),
+              skillFolders: [".kiro/skills"], skillNote: nil),
+        // The VS Code extension's file is still read and cleaned up; the CLI's is written.
+        .init(id: "cline", name: "Cline CLI", apps: [], commands: ["cline"], versionArguments: [["--version"], ["version"]],
+              mcp: .jsonAny(paths: [".cline/data/settings/cline_mcp_settings.json",
+                                    "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"],
+                            key: "mcpServers", style: .standard, policy: .existingFolder),
               skillFolders: [".cline/skills"], skillNote: nil),
-        .init(id: "opencode", name: "opencode", apps: [], commands: ["opencode"], markers: [".config/opencode"],
+        .init(id: "opencode", name: "opencode", apps: [], commands: ["opencode"],
               mcp: .jsonAny(paths: [".config/opencode/opencode.json", ".config/opencode/opencode.jsonc"], key: "mcp",
                             style: .opencode, policy: .existingFile),
               skillFolders: [sharedSkillsFolder, ".config/opencode/skills", ".claude/skills"], skillNote: nil),
-        .init(id: "antigravity", name: "Antigravity", apps: ["Antigravity.app"], commands: ["antigravity", "agy"],
-              markers: [".gemini/config", ".gemini/antigravity", ".gemini/antigravity-cli"],
-              mcp: .jsonAny(paths: [".gemini/config/mcp_config.json", ".gemini/antigravity/mcp_config.json"], key: "mcpServers",
-                            style: .standard, policy: .existingFolder),
-              skillFolders: [".gemini/config/skills", ".gemini/antigravity/skills", ".gemini/antigravity-cli/skills"], skillNote: nil),
-        .init(id: "kiro", name: "Kiro", apps: ["Kiro.app"], commands: ["kiro", "kiro-cli"], markers: [".kiro"],
-              mcp: .json(path: ".kiro/settings/mcp.json", key: "mcpServers", style: .standard),
-              skillFolders: [".kiro/skills"], skillNote: nil),
-        .init(id: "zed", name: "Zed", apps: ["Zed.app"], commands: ["zed"], markers: [".config/zed"],
-              mcp: .json(path: ".config/zed/settings.json", key: "context_servers", style: .zed),
-              skillFolders: [sharedSkillsFolder], skillNote: nil),
-        .init(id: "qwen-code", name: "Qwen Code", apps: [], commands: ["qwen"], markers: [".qwen"],
+        .init(id: "qwen-code", name: "Qwen Code", apps: [], commands: ["qwen"],
               mcp: .json(path: ".qwen/settings.json", key: "mcpServers", style: .standard),
               skillFolders: [".qwen/skills"], skillNote: nil),
-        .init(id: "lm-studio", name: "LM Studio", apps: ["LM Studio.app"], commands: ["lms"], markers: [".lmstudio"],
-              mcp: .json(path: ".lmstudio/mcp.json", key: "mcpServers", style: .standard),
-              skillFolders: [], skillNote: "LM Studio 不支持技能，可通过 MCP 使用 Folio。"),
     ]
 
     /// Folders where earlier Folio versions installed the skill but the agent no longer reads it
@@ -167,50 +153,29 @@ public struct AgentIntegrator: Sendable {
 
     // MARK: Detection
 
+    /// Every agent in the catalog; commands are checked in parallel (each answers `--version`).
     public func detect() -> [AgentStatus] {
-        Self.catalog.map(status)
+        _ = commandFolders   // read the shell's PATH once, before the parallel checks
+        let catalog = Self.catalog
+        nonisolated(unsafe) var results = [AgentStatus?](repeating: nil, count: catalog.count)
+        let lock = NSLock()
+        DispatchQueue.concurrentPerform(iterations: catalog.count) { index in
+            let status = status(of: catalog[index])
+            lock.withLock { results[index] = status }
+        }
+        return results.compactMap { $0 }
     }
 
     public func status(of descriptor: AgentDescriptor) -> AgentStatus {
-        let location = locate(descriptor)
+        let installation = installation(of: descriptor)
         let entry = installedCommand(descriptor)
         // Only a configured folio-cli that no longer exists needs re-pointing: another copy of Folio
         // (e.g. a development build) must not take over the user's agents just by launching.
         let stale = entry.map { $0 != cliPath && !FileManager.default.isExecutableFile(atPath: $0) } ?? false
         let skillFolder = descriptor.skillFolders.first { isOurs(skillFile(in: $0)) }
-        return AgentStatus(descriptor: descriptor, isDetected: location != nil, location: location,
-                           mcpInstalled: entry != nil, skillInstalled: skillFolder != nil,
+        return AgentStatus(descriptor: descriptor, isDetected: installation != nil, location: installation?.location,
+                           version: installation?.version, isApp: installation?.isApp ?? false, mcpInstalled: entry != nil, skillInstalled: skillFolder != nil,
                            mcpNeedsUpdate: stale, mcpConfigPath: configPath(descriptor), skillFolder: skillFolder)
-    }
-
-    private func locate(_ descriptor: AgentDescriptor) -> String? {
-        for app in descriptor.apps {
-            for folder in applicationFolders {
-                let url = folder.appending(path: app)
-                if FileManager.default.fileExists(atPath: url.path) { return url.path }
-            }
-        }
-        for command in descriptor.commands {
-            if let path = Self.findCommand(command, home: home) { return path }
-        }
-        for marker in descriptor.markers {
-            let url = home.appending(path: marker)
-            if FileManager.default.fileExists(atPath: url.path) { return "~/" + marker }
-        }
-        return nil
-    }
-
-    /// Where command-line agents are usually installed (an app launched from Finder has no shell PATH).
-    static func searchPath(home: URL) -> [String] {
-        ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", home.appending(path: ".local/bin").path,
-         home.appending(path: ".npm-global/bin").path, home.appending(path: ".bun/bin").path,
-         home.appending(path: ".volta/bin").path, home.appending(path: "Library/pnpm").path,
-         home.appending(path: ".cargo/bin").path, home.appending(path: ".claude/local").path,
-         home.appending(path: ".opencode/bin").path]
-    }
-
-    static func findCommand(_ name: String, home: URL) -> String? {
-        searchPath(home: home).map { "\($0)/\(name)" }.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
     // MARK: MCP
@@ -312,25 +277,21 @@ public struct AgentIntegrator: Sendable {
         return switch style {
         case .standard: .object([("command", .string(cliPath)), ("args", args)])
         case .claudeCode: .object([("type", .string("stdio")), ("command", .string(cliPath)), ("args", args), ("env", .object([]))])
-        case .vscode: .object([("type", .string("stdio")), ("command", .string(cliPath)), ("args", args)])
         case .opencode: .object([("type", .string("local")), ("command", .array([.string(cliPath), .string("mcp")])), ("enabled", .bool(true))])
         case .copilotCLI: .object([("type", .string("local")), ("command", .string(cliPath)), ("args", args), ("env", .object([])),
                                    ("tools", .array([.string("*")]))])
-        case .zed: .object([("command", .string(cliPath)), ("args", args), ("env", .object([]))])
         }
     }
 
     /// Runs an agent's CLI; false when the CLI is not installed or commands are off.
     @discardableResult
     func runAgentCommand(_ name: String, _ arguments: [String]) throws -> Bool {
-        guard useAgentCommands, let path = Self.findCommand(name, home: home) else { return false }
+        guard useAgentCommands, let path = findCommand(name) else { return false }
         let process = Process()
         process.executableURL = URL(filePath: path)
         process.arguments = arguments
-        var environment = ProcessInfo.processInfo.environment
         // Node-based CLIs need their runtime on PATH even when Folio was opened from Finder.
-        environment["PATH"] = (Self.searchPath(home: home) + [environment["PATH"] ?? ""]).joined(separator: ":")
-        environment["HOME"] = home.path
+        var environment = commandEnvironment
         if environment["CODEX_HOME"] == nil { environment["CODEX_HOME"] = home.appending(path: ".codex").path }
         process.environment = environment
         process.standardInput = FileHandle.nullDevice

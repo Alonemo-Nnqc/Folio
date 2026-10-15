@@ -165,8 +165,9 @@ public enum AgentCLI {
             for status in integrator.detect() {
                 let mcp = status.descriptor.mcp == nil ? "—" : status.mcpInstalled ? (status.mcpNeedsUpdate ? "需更新" : "已安装") : "未安装"
                 let skill = !status.descriptor.supportsSkills ? "—" : status.skillInstalled ? "已安装（~/\(status.skillFolder ?? "")）" : "未安装"
+                let found = status.location.map { "\t\($0)" + (status.version.map { " \($0)" } ?? "") } ?? ""
                 print("\(status.isDetected ? "●" : "○") \(status.descriptor.id)\t\(status.descriptor.name)\tMCP：\(mcp)\t技能：\(skill)"
-                      + (status.mcpConfigPath.map { "\t\($0)" } ?? ""))
+                      + (status.mcpConfigPath.map { "\t\($0)" } ?? "") + found)
             }
             return 0
         }

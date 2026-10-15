@@ -48,37 +48,42 @@ struct AISettingsPane: View {
                 if integration.statuses.isEmpty {
                     HStack { ProgressView().controlSize(.small); Text("正在检测…").foregroundStyle(.secondary) }
                 } else if integration.detected.isEmpty {
-                    Text("没有在这台 Mac 上检测到支持的智能体。").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("没有在这台 Mac 上找到可用的智能体")
+                        Text("支持 \(AgentIntegrator.catalog.map(\.name).joined(separator: "、"))。安装后点\"重新检测\"。")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 ForEach(integration.detected) { status in
                     AgentRow(status: status, integration: integration)
                 }
             } header: {
-                HStack {
+                HStack(spacing: 8) {
                     Text("这台 Mac 上的智能体")
                     Spacer()
-                    Button {
-                        integration.detect()
-                    } label: {
-                        Label("重新检测", systemImage: "arrow.clockwise")
+                    if let result = integration.detectionResult {
+                        Label(result, systemImage: "checkmark.circle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .symbolRenderingMode(.hierarchical)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
                     }
-                    .buttonStyle(.borderless)
+                    Button {
+                        integration.detect(userInitiated: true)
+                    } label: {
+                        Label(integration.isDetecting ? "正在检测…" : "重新检测", systemImage: "arrow.trianglehead.2.clockwise")
+                            .symbolEffect(.rotate, options: .repeat(.continuous), isActive: integration.isDetecting)
+                    }
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .help("安装了新的智能体后点这里")
+                    .disabled(integration.isDetecting)
+                    .help("重新查找已安装的智能体（安装或卸载后使用）")
                 }
+                .animation(.smooth(duration: 0.25), value: integration.detectionResult)
             } footer: {
-                Text("打开开关即按该智能体官方文档的方式添加配置（Claude Code、Codex 使用它们自己的命令），关闭即移除；只改动 Folio 自己的条目，修改前备份原文件。技能放在开放标准的共享文件夹 ~/.agents/skills 时，Codex、Gemini CLI、Cursor、VS Code 等会共用同一份。改动在重启智能体或开始新会话后生效。")
-            }
-
-            if !integration.notDetected.isEmpty {
-                Section {
-                    Text(integration.notDetected.map(\.descriptor.name).joined(separator: "、"))
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("未检测到")
-                } footer: {
-                    Text("安装后点\"重新检测\"。")
-                }
+                Text("只列出在这台 Mac 上能运行的智能体：App 完整，或命令能在终端中运行并报告版本。打开开关即按该智能体官方文档的方式添加配置（Claude Code、Codex 使用它们自己的命令），关闭即移除；只改动 Folio 自己的条目，修改前备份原文件。技能放在开放标准的共享文件夹 ~/.agents/skills 时，Codex、Gemini CLI、Cursor CLI 等会共用同一份。改动在重启智能体或开始新会话后生效。")
             }
 
             Section {
@@ -94,7 +99,7 @@ struct AISettingsPane: View {
             } header: {
                 Text("手动配置")
             } footer: {
-                Text("把 MCP 配置粘贴到其他应用（如 Zed、Cherry Studio）的 MCP 设置中；技能包可在 Claude 桌面版 设置 ▸ 功能 ▸ 技能 中上传。")
+                Text("把 MCP 配置粘贴到其他应用（如 VS Code、Zed、Windsurf、Cherry Studio）的 MCP 设置中；技能包可在 Claude 桌面版 设置 ▸ 功能 ▸ 技能 中上传。")
             }
         }
         .formStyle(.grouped)
@@ -156,8 +161,8 @@ private struct AgentRow: View {
                 icon
                 VStack(alignment: .leading, spacing: 2) {
                     Text(descriptor.name)
-                    if let location = status.location {
-                        Text(location)
+                    if let found {
+                        Text(found)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -188,6 +193,14 @@ private struct AgentRow: View {
         }
     }
 
+    /// "~/.local/bin/claude · 2.1.3": where the agent is and the version it reported.
+    private var found: String? {
+        guard let location = status.location else { return nil }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = location.hasPrefix(home + "/") ? "~" + location.dropFirst(home.count) : location
+        return status.version.map { "\(path) · \($0)" } ?? path
+    }
+
     /// Where Folio's entries live for this agent, once installed.
     private var details: String? {
         var parts: [String] = []
@@ -202,15 +215,14 @@ private struct AgentRow: View {
 
     @ViewBuilder
     private var icon: some View {
-        if let location = status.location, location.hasSuffix(".app") {
+        if status.isApp, let location = status.location {
+            // App icons carry their own margin; a little larger so they match the tiles.
             Image(nsImage: NSWorkspace.shared.icon(forFile: location))
                 .resizable()
-                .frame(width: 26, height: 26)
+                .frame(width: 32, height: 32)
+                .padding(-2)
         } else {
-            Image(systemName: "terminal")
-                .font(.system(size: 15))
-                .frame(width: 26, height: 26)
-                .foregroundStyle(.secondary)
+            AgentLogoTile(id: status.id)
         }
     }
 
@@ -229,5 +241,41 @@ private struct AgentRow: View {
         }
         .fixedSize()
         .help(help)
+    }
+}
+
+/// A command-line agent's official logo on an app-icon-like tile, so every row has the same visual weight.
+/// Logos that are tiles themselves (Codex, Gemini CLI, Kiro) fill it; plain marks sit on a neutral tile and
+/// follow light and dark mode.
+struct AgentLogoTile: View {
+    let id: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let size: CGFloat = 28
+    private static let fullBleed: Set<String> = ["codex", "gemini-cli", "kiro"]
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Self.size * 0.24, style: .continuous)
+        Group {
+            if NSImage(named: "agent-\(id)") == nil {
+                Image(systemName: "terminal")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+            } else if Self.fullBleed.contains(id) {
+                Image("agent-\(id)").resizable().interpolation(.high)
+            } else {
+                Image("agent-\(id)")
+                    .resizable()
+                    .interpolation(.high)
+                    .foregroundStyle(.primary)
+                    .frame(width: Self.size * 0.66, height: Self.size * 0.66)
+            }
+        }
+        .frame(width: Self.size, height: Self.size)
+        .background(colorScheme == .dark ? Color(white: 0.20) : Color.white, in: shape)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.10), lineWidth: 0.5))
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.3 : 0.08), radius: 0.5, y: 0.5)
+        .accessibilityHidden(true)
     }
 }

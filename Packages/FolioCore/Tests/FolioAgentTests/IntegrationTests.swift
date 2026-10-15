@@ -13,6 +13,7 @@ private func tempHome() throws -> URL {
 private func integrator(_ home: URL) -> AgentIntegrator {
     var integrator = AgentIntegrator(home: home, cliPath: cli, useAgentCommands: false)
     integrator.applicationFolders = []
+    integrator.commandFoldersOverride = []
     return integrator
 }
 
@@ -105,60 +106,49 @@ private func read(_ path: String, in home: URL) throws -> String {
     @Test func everyAgentFollowsItsOfficialLayout() {
         #expect(descriptor("codex").skillFolders == [".agents/skills"], "Codex reads personal skills from ~/.agents/skills only")
         #expect(descriptor("claude-code").skillFolders == [".claude/skills"])
-        #expect(descriptor("vscode").skillFolders.contains(".agents/skills"))
         #expect(descriptor("cursor").skillFolders.contains(".agents/skills"))
         #expect(descriptor("kiro").skillFolders == [".kiro/skills"])
         #expect(descriptor("cline").skillFolders == [".cline/skills"])
-        #expect(descriptor("antigravity").skillFolders.first == ".gemini/config/skills")
         #expect(Set(AgentIntegrator.catalog.map(\.id)).count == AgentIntegrator.catalog.count)
-        #expect(AgentIntegrator.catalog.contains { $0.id == "zed" } && AgentIntegrator.catalog.contains { $0.id == "copilot-cli" })
+        #expect(AgentIntegrator.catalog.contains { $0.id == "copilot-cli" })
+        // Agents only: editors (VS Code, Zed, Windsurf, Antigravity …) are configured by hand.
+        for editor in ["vscode", "zed", "windsurf", "antigravity", "lm-studio"] {
+            #expect(!AgentIntegrator.catalog.contains { $0.id == editor }, "\(editor)")
+        }
+        #expect(AgentIntegrator.catalog.allSatisfy { !$0.apps.isEmpty || !$0.commands.isEmpty }, "every agent is detected by an app or a command")
     }
 
     @Test func entryStylesMatchEachAgentsSchema() throws {
         let home = try tempHome()
         let agent = integrator(home)
-        for id in ["copilot-cli", "zed", "claude-code", "qwen-code", "kiro"] { try agent.setMCP(true, for: descriptor(id)) }
+        for id in ["copilot-cli", "claude-code", "qwen-code", "kiro", "cursor"] { try agent.setMCP(true, for: descriptor(id)) }
         let copilot = try JSONCDocument(read(".copilot/mcp-config.json", in: home)).object()
         let copilotEntry = try #require((copilot["mcpServers"] as? [String: Any])?["folio"] as? [String: Any])
         #expect(copilotEntry["type"] as? String == "local" && copilotEntry["tools"] as? [String] == ["*"])
-        let zed = try JSONCDocument(read(".config/zed/settings.json", in: home)).object()
-        #expect(((zed["context_servers"] as? [String: Any])?["folio"] as? [String: Any])?["command"] as? String == cli)
+        let kiro = try JSONCDocument(read(".kiro/settings/mcp.json", in: home)).object()
+        #expect(((kiro["mcpServers"] as? [String: Any])?["folio"] as? [String: Any])?["command"] as? String == cli)
         let claude = try JSONCDocument(read(".claude.json", in: home)).object()
         #expect(((claude["mcpServers"] as? [String: Any])?["folio"] as? [String: Any])?["type"] as? String == "stdio")
-        for id in ["copilot-cli", "zed", "claude-code", "qwen-code", "kiro"] {
+        for id in ["copilot-cli", "claude-code", "qwen-code", "kiro", "cursor"] {
             #expect(agent.status(of: descriptor(id)).mcpInstalled, "\(id)")
             try agent.setMCP(false, for: descriptor(id))
             #expect(!agent.status(of: descriptor(id)).mcpInstalled, "\(id)")
         }
     }
 
-    @Test func zedSettingsWithCommentsAreEditedInPlace() throws {
-        let home = try tempHome()
-        let settings = "// Zed settings\n{\n  \"theme\": \"One Dark\", // favourite\n  \"vim_mode\": true,\n}\n"
-        try write(settings, to: ".config/zed/settings.json", in: home)
-        try integrator(home).setMCP(true, for: descriptor("zed"))
-        let edited = try read(".config/zed/settings.json", in: home)
-        #expect(edited.hasPrefix("// Zed settings\n{\n  \"theme\": \"One Dark\", // favourite\n  \"vim_mode\": true,\n  \"context_servers\""))
-        try integrator(home).setMCP(false, for: descriptor("zed"))
-        #expect(try read(".config/zed/settings.json", in: home).contains("\"context_servers\": {"), "an empty container may stay")
-        #expect(try read(".config/zed/settings.json", in: home).contains("// favourite"))
-    }
-
     @Test func movedConfigurationFoldersAreFollowed() throws {
         let home = try tempHome()
-        // Windsurf before the Devin rename: only ~/.codeium/windsurf exists.
-        try FileManager.default.createDirectory(at: home.appending(path: ".codeium/windsurf"), withIntermediateDirectories: true)
-        try integrator(home).setMCP(true, for: descriptor("windsurf"))
-        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".codeium/windsurf/mcp_config.json").path))
-        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".config/devin/mcp_config.json").path))
-        // Cline: both the VS Code extension and the CLI get the server.
-        for folder in ["Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings", ".cline/data/settings"] {
-            try FileManager.default.createDirectory(at: home.appending(path: folder), withIntermediateDirectories: true)
-        }
+        // Cline CLI: written to the CLI's file; an entry an earlier Folio left in the VS Code extension's file
+        // still counts and is removed with it.
+        let extensionFile = "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"
+        try write("{\n  \"mcpServers\": {\n    \"folio\": { \"command\": \"\(cli)\", \"args\": [\"mcp\"] }\n  }\n}\n", to: extensionFile, in: home)
+        try FileManager.default.createDirectory(at: home.appending(path: ".cline/data/settings"), withIntermediateDirectories: true)
+        #expect(integrator(home).status(of: descriptor("cline")).mcpInstalled)
         try integrator(home).setMCP(true, for: descriptor("cline"))
         #expect(FileManager.default.fileExists(atPath: home.appending(path: ".cline/data/settings/cline_mcp_settings.json").path))
-        #expect(FileManager.default.fileExists(atPath: home.appending(
-            path: "Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json").path))
+        try integrator(home).setMCP(false, for: descriptor("cline"))
+        #expect(!(try read(extensionFile, in: home)).contains("folio"))
+        #expect(!(try read(".cline/data/settings/cline_mcp_settings.json", in: home)).contains("folio"))
         // opencode: an existing opencode.jsonc is the configuration, not a new opencode.json.
         try write("{\n  // mine\n  \"$schema\": \"https://opencode.ai/config.json\"\n}\n", to: ".config/opencode/opencode.jsonc", in: home)
         try integrator(home).setMCP(true, for: descriptor("opencode"))
@@ -174,8 +164,8 @@ private func read(_ path: String, in home: URL) throws -> String {
         let skill = home.appending(path: ".agents/skills/folio-library")
         #expect(FileManager.default.fileExists(atPath: skill.appending(path: "SKILL.md").path))
         #expect(FileManager.default.fileExists(atPath: skill.appending(path: "references/tools.md").path))
-        // Shared folder: Gemini CLI, Cursor, VS Code … see the same copy.
-        for id in ["gemini-cli", "cursor", "vscode", "copilot-cli", "windsurf", "opencode", "zed"] {
+        // Shared folder: Gemini CLI, Cursor CLI, Copilot CLI, opencode see the same copy.
+        for id in ["gemini-cli", "cursor", "copilot-cli", "opencode"] {
             #expect(agent.status(of: descriptor(id)).skillInstalled, "\(id)")
         }
         #expect(!agent.status(of: descriptor("claude-code")).skillInstalled)
@@ -184,7 +174,7 @@ private func read(_ path: String, in home: URL) throws -> String {
         #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".cursor/skills/folio-library").path))
         let losing = agent.agentsLosingSkill(ifRemovedFor: descriptor("codex")).map(\.id)
         #expect(losing.contains("gemini-cli") && losing.contains("cursor") && !losing.contains("claude-code"))
-        // With Claude Code's own copy, Cursor and VS Code keep seeing the skill.
+        // With Claude Code's own copy, Cursor CLI keeps seeing the skill.
         try agent.setSkill(true, for: descriptor("claude-code"))
         #expect(!agent.agentsLosingSkill(ifRemovedFor: descriptor("codex")).map(\.id).contains("cursor"))
         try agent.setSkill(false, for: descriptor("codex"))

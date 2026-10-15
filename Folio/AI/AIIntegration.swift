@@ -12,6 +12,10 @@ final class AIIntegration {
     /// Agent ids with an install / remove in progress.
     private(set) var busy: Set<String> = []
     private(set) var lastDetection: Date?
+    private(set) var isDetecting = false
+    /// Shown briefly beside "重新检测" after the user asked for it.
+    private(set) var detectionResult: String?
+    private var resultGeneration = 0
     private(set) var serverCheck = ServerCheck.idle
 
     enum ServerCheck: Equatable {
@@ -26,10 +30,9 @@ final class AIIntegration {
     static let hints: [String: String] = [
         "gemini-cli": "Gemini CLI 只在受信任的文件夹中启用 MCP 服务器：首次在某个文件夹中运行时选择信任。",
         "claude-desktop": "修改后需要完全退出并重新打开 Claude 桌面版。",
-        "vscode": "在 Copilot 对话的 Agent 模式中使用；首次启动服务器时 VS Code 会请你确认。",
         "copilot-cli": "在 Copilot CLI 中输入 /mcp 可查看连接状态。",
-        "zed": "在 Agent 面板的设置中可看到 folio 服务器状态。",
-        "antigravity": "如果是新版 Antigravity，在 设置 ▸ Customizations 中可看到 folio 服务器。",
+        "cursor": "与 Cursor 编辑器共用 ~/.cursor/mcp.json，编辑器中也会出现 folio 服务器。",
+        "kiro": "与 Kiro 编辑器共用 ~/.kiro/settings/mcp.json。",
     ]
 
     /// folio-cli inside this copy of Folio.app.
@@ -39,15 +42,33 @@ final class AIIntegration {
 
     var integrator: AgentIntegrator { AgentIntegrator(cliPath: Self.cliPath) }
 
+    /// Only agents that are really installed are shown (AI-04).
     var detected: [AgentStatus] { statuses.filter(\.isDetected) }
-    var notDetected: [AgentStatus] { statuses.filter { !$0.isDetected } }
 
-    func detect() {
+    /// Detects the agents. `userInitiated` (重新检测) re-reads the shell's PATH and reports the result.
+    func detect(userInitiated: Bool = false) {
+        guard !isDetecting else { return }
+        isDetecting = true
+        detectionResult = nil
         let integrator = self.integrator
         Task {
-            let result = await Task.detached { integrator.detect() }.value
+            let started = ContinuousClock.now
+            let result = await Task.detached {
+                if userInitiated { AgentIntegrator.refreshEnvironment() }
+                return integrator.detect()
+            }.value
+            // A check that ends in an instant reads as "nothing happened".
+            if userInitiated { try? await Task.sleep(until: started + .milliseconds(600)) }
             statuses = result
             lastDetection = Date()
+            isDetecting = false
+            guard userInitiated else { return }
+            let count = result.filter(\.isDetected).count
+            detectionResult = count == 0 ? "未找到智能体" : "找到 \(count) 个智能体"
+            resultGeneration += 1
+            let generation = resultGeneration
+            try? await Task.sleep(for: .seconds(3))
+            if generation == resultGeneration { detectionResult = nil }
         }
     }
 

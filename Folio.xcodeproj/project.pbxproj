@@ -24,6 +24,7 @@
 		229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4F5834E91F4789B3E9B510 /* ToastOverlay.swift */; };
 		233BD9CB989E0FD7C545E321 /* SidebarNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F56119AC33A554616DDE332 /* SidebarNode.swift */; };
 		262F73093B1C8E9406AF514E /* FolioZotero in Frameworks */ = {isa = PBXBuildFile; productRef = 4838D9DEB8300120A13D43FC /* FolioZotero */; };
+		26461268FE170D1CAE5A262D /* AgentIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = EBE5B233C430FF09AED54877 /* AgentIcons.xcassets */; };
 		2732748DFC335EE44FFA6CE6 /* ItemPasteboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CF1A00042A4B78272B1120A /* ItemPasteboard.swift */; };
 		280950BC061520D7ADCE73EC /* ListDropRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90648DD7FFBB057C0036F89 /* ListDropRules.swift */; };
 		296B30BFD850FA76A75ED9BD /* CitationStyleOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */; };
@@ -68,8 +69,10 @@
 		7AF1E0D8FF0C42A3DD1DEDEE /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2196364CD8371363D279F008 /* AppModel.swift */; };
 		84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9205ABEB146D8780222EF2F7 /* CitationService.swift */; };
 		87C46546AF0E1CBA8CE8C861 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7259EEF7399617BA5B49CB6C /* main.swift */; };
+		8CFE251CDCFD60FECBF0CD13 /* CapsuleLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46C010C09BCC5E184BD3E595 /* CapsuleLabel.swift */; };
 		8D3B76C4F6EA16435A0E5C48 /* ItemCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF15B612B7CD351CEF0B6188 /* ItemCells.swift */; };
 		8E1A15EA32BD6A5B682A2C59 /* FolioTranslate in Frameworks */ = {isa = PBXBuildFile; productRef = 1F89A3360258BDE81035A9E2 /* FolioTranslate */; };
+		912041C97F8994EA708725A1 /* BrowserExtensionEncodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C89ABB532FB6649400B2B99 /* BrowserExtensionEncodingTests.swift */; };
 		932DE5E81407DCC5929400E3 /* ObservationLoop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F5402BBEE720CF3D9328C5 /* ObservationLoop.swift */; };
 		947CC943F1DD46C3A2F548DC /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
 		95DDB4769AE2F3C34B830CF1 /* MetadataInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F4908084420120AA90A895B /* MetadataInspector.swift */; };
@@ -99,6 +102,7 @@
 		C9744AA5A10B9053B21CE99C /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 7D39B6B995CDB0A0A880CC4C /* manifest.json */; };
 		C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */; };
 		CB244C50F001D689892AB530 /* ReaderSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C515588B5798D262DBE05D /* ReaderSidebarView.swift */; };
+		CD397B02336CB406C0352DA1 /* GlassRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61E3094FA5D2142828747A14 /* GlassRowView.swift */; };
 		CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */; };
 		CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */; };
 		CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */; };
@@ -213,8 +217,10 @@
 		4262FBCFBF74F063C7B2307A /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		456D36A7DCA513B7AF7D3A5C /* BrowserExtension */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BrowserExtension; sourceTree = SOURCE_ROOT; };
 		46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarUITests.swift; sourceTree = "<group>"; };
+		46C010C09BCC5E184BD3E595 /* CapsuleLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapsuleLabel.swift; sourceTree = "<group>"; };
 		4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationServiceTests.swift; sourceTree = "<group>"; };
 		4B548F12622EAACEE853C8C7 /* ColorSwatchRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorSwatchRow.swift; sourceTree = "<group>"; };
+		4C89ABB532FB6649400B2B99 /* BrowserExtensionEncodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserExtensionEncodingTests.swift; sourceTree = "<group>"; };
 		4E44FD82C40C6CD74761B155 /* FolioUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioUITestCase.swift; sourceTree = "<group>"; };
 		5437B0A45443DA1FFBC67DAB /* Folio.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Folio.icon; sourceTree = "<group>"; };
 		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
@@ -224,6 +230,7 @@
 		5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitExtensions.swift; sourceTree = "<group>"; };
 		5DA65511EB946A0A4443109A /* AppModel+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Actions.swift"; sourceTree = "<group>"; };
 		5F5F8B92C7DA55859E5E18F7 /* icon-128.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-128.png"; sourceTree = "<group>"; };
+		61E3094FA5D2142828747A14 /* GlassRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassRowView.swift; sourceTree = "<group>"; };
 		64C14109AE40FEC74F5AFB6C /* BrowserSettingsPane.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserSettingsPane.swift; sourceTree = "<group>"; };
 		6624F66927AC6EFCD451BC17 /* folio-cli */ = {isa = PBXFileReference; includeInIndex = 0; path = "folio-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
 		66BA89FC5B00A03E80FC5CFB /* SheetDismiss.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SheetDismiss.swift; sourceTree = "<group>"; };
@@ -285,6 +292,7 @@
 		E54607F6BC7018DABEB8C9B4 /* BrowserExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserExtensions.swift; sourceTree = "<group>"; };
 		E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastCenter.swift; sourceTree = "<group>"; };
 		E88490FC0D6D0D20CD3A4860 /* TagChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChip.swift; sourceTree = "<group>"; };
+		EBE5B233C430FF09AED54877 /* AgentIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = AgentIcons.xcassets; sourceTree = "<group>"; };
 		EF15B612B7CD351CEF0B6188 /* ItemCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemCells.swift; sourceTree = "<group>"; };
 		EF4ADEF94FCB91031CE5894A /* ItemListController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListController.swift; sourceTree = "<group>"; };
 		F065581256E947A093EC5E22 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = background.js; sourceTree = "<group>"; };
@@ -418,6 +426,7 @@
 		360934E47C7F5273A0F37E7B /* FolioTests */ = {
 			isa = PBXGroup;
 			children = (
+				4C89ABB532FB6649400B2B99 /* BrowserExtensionEncodingTests.swift */,
 				4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */,
 				6B2A27867558A6BA5A3F7C39 /* ItemMenuBuilderTests.swift */,
 				855B48CF2FF6D07A30CE0178 /* ListDropRulesTests.swift */,
@@ -510,6 +519,7 @@
 		5A0BDF2B586650B8CF686F45 /* ItemList */ = {
 			isa = PBXGroup;
 			children = (
+				61E3094FA5D2142828747A14 /* GlassRowView.swift */,
 				EF15B612B7CD351CEF0B6188 /* ItemCells.swift */,
 				98E1F116DA3A1C23CF222150 /* ItemColumn.swift */,
 				EF4ADEF94FCB91031CE5894A /* ItemListController.swift */,
@@ -543,6 +553,7 @@
 		622445697A6A1393E6CDE54D /* Tags */ = {
 			isa = PBXGroup;
 			children = (
+				46C010C09BCC5E184BD3E595 /* CapsuleLabel.swift */,
 				4B548F12622EAACEE853C8C7 /* ColorSwatchRow.swift */,
 				E88490FC0D6D0D20CD3A4860 /* TagChip.swift */,
 				556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */,
@@ -666,6 +677,7 @@
 		D4FB9A636E6175FE47B5C7BF /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				EBE5B233C430FF09AED54877 /* AgentIcons.xcassets */,
 				5437B0A45443DA1FFBC67DAB /* Folio.icon */,
 			);
 			path = Resources;
@@ -926,6 +938,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				26461268FE170D1CAE5A262D /* AgentIcons.xcassets in Resources */,
 				C8B35E495884A6FDB5EE41FD /* BrowserExtension in Resources */,
 				7622528FDD18D475E60DE8EA /* Folio.icon in Resources */,
 			);
@@ -955,6 +968,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C48037879CB4E088FD6C45FC /* AppKitExtensions.swift in Sources */,
+				912041C97F8994EA708725A1 /* BrowserExtensionEncodingTests.swift in Sources */,
 				F0C54F2368DDFD4986BAD8B6 /* CitationService.swift in Sources */,
 				C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */,
 				296B30BFD850FA76A75ED9BD /* CitationStyleOption.swift in Sources */,
@@ -985,6 +999,7 @@
 				7AACE0431591845FDC8BE783 /* AuthorsEditor.swift in Sources */,
 				6DAF0764680D6E0C169B9F5D /* BrowserExtensions.swift in Sources */,
 				6AEAD16D5B8B22B2D1B31874 /* BrowserSettingsPane.swift in Sources */,
+				8CFE251CDCFD60FECBF0CD13 /* CapsuleLabel.swift in Sources */,
 				84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */,
 				CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */,
 				1A372ABA504E0E9692C890EE /* ColorSwatchRow.swift in Sources */,
@@ -994,6 +1009,7 @@
 				2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */,
 				D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */,
 				B276990702FE10835E8F1F4F /* FolioWindowController.swift in Sources */,
+				CD397B02336CB406C0352DA1 /* GlassRowView.swift in Sources */,
 				1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */,
 				656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */,
 				DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */,

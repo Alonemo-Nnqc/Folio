@@ -146,18 +146,81 @@ private func seed(_ library: Library) throws -> [String] {
     func integrator(_ home: URL, cli: String = "/Applications/Folio.app/Contents/MacOS/folio-cli") -> AgentIntegrator {
         var integrator = AgentIntegrator(home: home, cliPath: cli, useAgentCommands: false)
         integrator.applicationFolders = []
+        integrator.commandFoldersOverride = []
         return integrator
+    }
+
+    /// An executable script in `~/bin` of the temporary home.
+    @discardableResult
+    func tool(_ name: String, in home: URL, script: String) throws -> URL {
+        let url = home.appending(path: "bin/\(name)")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "#!/bin/sh\n\(script)\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        return url
     }
 
     func descriptor(_ id: String) -> AgentDescriptor { AgentIntegrator.catalog.first { $0.id == id }! }
 
-    @Test func detectsByMarkersOnly() throws {
+    @Test func leftoverConfigurationFoldersAreNotAgents() throws {
         let home = try tempHome()
-        try FileManager.default.createDirectory(at: home.appending(path: ".cursor"), withIntermediateDirectories: true)
-        let statuses = integrator(home).detect()
-        let cursor = statuses.first { $0.id == "cursor" }!
-        #expect(cursor.isDetected && cursor.location == "~/.cursor")
-        #expect(!(statuses.first { $0.id == "windsurf" }!.isDetected))
+        for folder in [".cursor", ".copilot", ".gemini", ".kiro", ".qwen", ".claude", "Library/Application Support/Claude"] {
+            try FileManager.default.createDirectory(at: home.appending(path: folder), withIntermediateDirectories: true)
+        }
+        #expect(integrator(home).detect().filter(\.isDetected).isEmpty)
+    }
+
+    @Test func commandsCountOnlyWhenTheyAnswer() throws {
+        let home = try tempHome()
+        var agent = integrator(home)
+        agent.commandFoldersOverride = [home.appending(path: "bin").path]
+        try tool("claude", in: home, script: "echo '2.1.3 (Claude Code)'")
+        try tool("gemini", in: home, script: "echo 'broken install' >&2; exit 1")
+        try tool("codex", in: home, script: "echo 'codex-cli 0.50.0'")
+        // A command whose package was removed: the symlink dangles.
+        try FileManager.default.createSymbolicLink(atPath: home.appending(path: "bin/qwen").path,
+                                                   withDestinationPath: home.appending(path: "gone/qwen.js").path)
+        // Cline answers `version`, not `--version`.
+        try tool("cline", in: home, script: "[ \"$1\" = version ] && echo 'Cline CLI 1.4.0' || exit 2")
+        let statuses = Dictionary(uniqueKeysWithValues: agent.detect().map { ($0.id, $0) })
+        #expect(statuses["claude-code"]?.isDetected == true && statuses["claude-code"]?.version == "2.1.3")
+        #expect(statuses["claude-code"]?.location == home.appending(path: "bin/claude").path)
+        #expect(statuses["codex"]?.version == "0.50.0" && statuses["codex"]?.isApp == false)
+        #expect(statuses["cline"]?.version == "1.4.0")
+        #expect(statuses["gemini-cli"]?.isDetected == false, "fails --version")
+        #expect(statuses["qwen-code"]?.isDetected == false, "dangling symlink")
+    }
+
+    @Test func aHangingCommandIsGivenUp() throws {
+        let home = try tempHome()
+        var agent = integrator(home)
+        agent.commandFoldersOverride = [home.appending(path: "bin").path]
+        try tool("opencode", in: home, script: "sleep 30")
+        let start = Date()
+        #expect(!agent.status(of: descriptor("opencode")).isDetected)
+        #expect(Date().timeIntervalSince(start) < 15)
+    }
+
+    @Test func appsNeedTheirExecutable() throws {
+        let home = try tempHome()
+        var agent = integrator(home)
+        let applications = home.appending(path: "Applications")
+        agent.applicationFolders = [applications]
+        // An emptied bundle (what an interrupted uninstall leaves) is not an app.
+        try FileManager.default.createDirectory(at: applications.appending(path: "Claude.app/Contents"), withIntermediateDirectories: true)
+        #expect(!agent.status(of: descriptor("claude-desktop")).isDetected)
+        let contents = applications.appending(path: "Claude.app/Contents")
+        try """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <plist version="1.0"><dict><key>CFBundleExecutable</key><string>Claude</string>\
+        <key>CFBundleIdentifier</key><string>com.example.claude-\(UUID().uuidString)</string>\
+        <key>CFBundleShortVersionString</key><string>1.2.3</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>
+        """.write(to: contents.appending(path: "Info.plist"), atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: contents.appending(path: "MacOS"), withIntermediateDirectories: true)
+        try "#!/bin/sh\n".write(to: contents.appending(path: "MacOS/Claude"), atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: contents.appending(path: "MacOS/Claude").path)
+        let status = agent.status(of: descriptor("claude-desktop"))
+        #expect(status.isDetected && status.isApp && status.version == "1.2.3")
     }
 
     @Test func jsonConfigKeepsOtherServersAndBacksUp() throws {
@@ -178,13 +241,9 @@ private func seed(_ library: Library) throws -> [String] {
         #expect((root["mcpServers"] as! [String: Any]).keys.sorted() == ["other"])
     }
 
-    @Test func vscodeAndOpencodeStyles() throws {
+    @Test func opencodeStyle() throws {
         let home = try tempHome()
-        let agent = integrator(home)
-        try agent.setMCP(true, for: descriptor("vscode"))
-        try agent.setMCP(true, for: descriptor("opencode"))
-        let vscode = try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: "Library/Application Support/Code/User/mcp.json"))) as! [String: Any]
-        #expect(((vscode["servers"] as! [String: Any])["folio"] as! [String: Any])["type"] as? String == "stdio")
+        try integrator(home).setMCP(true, for: descriptor("opencode"))
         let opencode = try JSONSerialization.jsonObject(with: Data(contentsOf: home.appending(path: ".config/opencode/opencode.json"))) as! [String: Any]
         #expect(((opencode["mcp"] as! [String: Any])["folio"] as! [String: Any])["command"] as? [String]
                 == ["/Applications/Folio.app/Contents/MacOS/folio-cli", "mcp"])
@@ -243,7 +302,7 @@ private func seed(_ library: Library) throws -> [String] {
         try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "my own".write(to: skill, atomically: true, encoding: .utf8)
         #expect(throws: AgentIntegrationError.self) { try agent.setSkill(false, for: descriptor("claude-code")) }
-        #expect(throws: AgentIntegrationError.self) { try agent.setSkill(true, for: descriptor("lm-studio")) }
+        #expect(throws: AgentIntegrationError.self) { try agent.setSkill(true, for: descriptor("claude-desktop")) }
     }
 
     @Test func anotherExistingCopyIsNotTakenOver() throws {
@@ -259,22 +318,5 @@ private func seed(_ library: Library) throws -> [String] {
         #expect(integrator(home).refreshInstalledSkills() == 0)
         try FileManager.default.removeItem(at: other)
         #expect(integrator(home).refreshInstalledSkills() == 1, "orphaned skill follows the remaining copy")
-    }
-
-    @Test func antigravityUsesWhicheverFolderItsVersionHas() throws {
-        let home = try tempHome()
-        try FileManager.default.createDirectory(at: home.appending(path: ".gemini/config"), withIntermediateDirectories: true)
-        let agent = integrator(home)
-        try agent.setMCP(true, for: descriptor("antigravity"))
-        try agent.setSkill(true, for: descriptor("antigravity"))
-        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/mcp_config.json").path))
-        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".gemini/antigravity/mcp_config.json").path))
-        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/skills/folio-library/SKILL.md").path))
-        let status = agent.status(of: descriptor("antigravity"))
-        #expect(status.mcpInstalled && status.skillInstalled)
-        try agent.setMCP(false, for: descriptor("antigravity"))
-        try agent.setSkill(false, for: descriptor("antigravity"))
-        #expect(!agent.status(of: descriptor("antigravity")).mcpInstalled)
-        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/skills/folio-library").path))
     }
 }
