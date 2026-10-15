@@ -92,6 +92,17 @@ script/drag-tests.sh
 
 浏览器插件页面识别测试：在仓库根目录运行 `python3 -m http.server 8767`，浏览器打开 <http://127.0.0.1:8767/BrowserExtensionTests/>，标题显示 PASSED / FAILED。
 
+## README 截图
+
+`assets/screenshots/` 中的截图由脚本生成：用演示文献库启动 App，只截取 Folio 窗口（含阴影），再合成到桌面背景上（背景图不随仓库提供，例如 macOS Sequoia 壁纸）：
+
+```bash
+swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo --pdfs <放有 PDF 的文件夹>
+FOLIO_PREVIEW_FOREGROUND=1 FOLIO_PREVIEW_SHADOW=1 FOLIO_PREVIEW_WAIT=5 \
+  script/preview.sh /tmp/library.png /tmp/folio-demo -appearance light -FolioPreviewSelect "Spectral" -FolioPreviewFocusedSelection YES
+swift script/compose-screenshot.swift /tmp/library.png <壁纸> assets/screenshots/library.jpg
+```
+
 ## 提交规范
 
 - 从 `main` 新建分支：`feat/<简述>`、`fix/<简述>`、`docs/<简述>`
