@@ -236,6 +236,11 @@ final class TranslationCoordinator {
         }
         let settings = model.settings
         let serviceID = settings.translationService
+        // Who translates, for the file names, taken now: settings may change while the engine runs.
+        let profileName = settings.selectedTranslationProfiles[serviceID].flatMap { id in settings.translationProfiles.first { $0.id == id }?.name }
+        let provider = TranslationServiceCatalog.service(id: serviceID).map {
+            TranslationNaming.Provider(service: $0, fields: settings.translationFields[serviceID] ?? [:], profileName: profileName)
+        } ?? TranslationNaming.Provider(name: serviceID, model: nil)
         let source = model.fileURL(file)
         let output = installation.layout.base.appending(path: "output/\(UUID().uuidString)", directoryHint: .isDirectory)
         jobs[next.itemId] = JobState(fileId: next.fileId, fraction: nil, stage: "正在启动翻译")
@@ -257,7 +262,7 @@ final class TranslationCoordinator {
                                              appleTranslatorCommand: Self.appleHelper.map { [$0.path] })
                     current.job = job
                     for await event in job.start() {
-                        self.handle(event, itemId: next.itemId, fileId: next.fileId)
+                        self.handle(event, itemId: next.itemId, fileId: next.fileId, provider: provider)
                     }
                 }
             } catch {
@@ -270,7 +275,7 @@ final class TranslationCoordinator {
         }
     }
 
-    private func handle(_ event: TranslationEvent, itemId: String, fileId: String) {
+    private func handle(_ event: TranslationEvent, itemId: String, fileId: String, provider: TranslationNaming.Provider) {
         switch event {
         case .stage(let stage):
             jobs[itemId]?.stage = stage
@@ -279,7 +284,7 @@ final class TranslationCoordinator {
             if jobs[itemId]?.stage == "正在启动翻译" { jobs[itemId]?.stage = "正在翻译" }
         case .finished(let mono, let dual):
             jobs[itemId] = nil
-            file(mono: mono, dual: dual, of: fileId)
+            file(mono: mono, dual: dual, of: fileId, provider: provider)
         case .failed(let message, let logURL):
             fail(itemId: itemId, fileId: fileId, message: message, log: logURL)
         case .cancelled:
@@ -288,18 +293,23 @@ final class TranslationCoordinator {
         }
     }
 
-    /// Copies the results into the library next to the original (TRANS-05).
-    private func file(mono: URL?, dual: URL?, of fileId: String) {
+    /// Copies the results into the library next to the original (TRANS-05), named by language, provider and
+    /// model ("论文（简体中文译文 · DeepSeek · deepseek-chat）.pdf").
+    private func file(mono: URL?, dual: URL?, of fileId: String, provider: TranslationNaming.Provider) {
         guard let model, let source = model.snapshot.files[fileId] else { return }
         let base = (source.fileName as NSString).deletingPathExtension
-        let language = TranslationOptions.commonLanguages.first { $0.code == model.settings.translationOptions.langOut }?.name ?? "译文"
+        let language = TranslationOptions.commonLanguages.first { $0.code == model.settings.translationOptions.langOut }?.name ?? ""
+        let existing = Set(model.snapshot.files(of: source.itemId).map { ($0.fileName as NSString).deletingPathExtension })
+        func name(_ kind: TranslationNaming.TranslationKindName) -> String {
+            TranslationNaming.baseName(original: base, kind: kind, language: language, provider: provider, existing: existing)
+        }
         var added: [FileRecord] = []
         model.perform("无法保存译文") {
             if let mono {
-                added.append(try model.library.addTranslatedFile(at: mono, of: fileId, kind: .mono, baseName: "\(base)（\(language)译文）"))
+                added.append(try model.library.addTranslatedFile(at: mono, of: fileId, kind: .mono, baseName: name(.mono)))
             }
             if let dual {
-                added.append(try model.library.addTranslatedFile(at: dual, of: fileId, kind: .dual, baseName: "\(base)（双语对照）"))
+                added.append(try model.library.addTranslatedFile(at: dual, of: fileId, kind: .dual, baseName: name(.dual)))
             }
         }
         guard let first = added.first else { return }
