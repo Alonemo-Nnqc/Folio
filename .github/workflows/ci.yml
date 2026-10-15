@@ -26,8 +26,12 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      # xcodebuild compiles the String Catalogs (some SwiftPM versions only copy them); tests expect English.
       - name: Package tests (FolioCore)
-        run: swift test --package-path Packages/FolioCore
+        working-directory: Packages/FolioCore
+        run: |
+          xcodebuild test -scheme FolioCore-Package -destination 'platform=macOS' \
+            -derivedDataPath ../../build/PackageDerivedData -testLanguage en -testRegion US
 
       - name: Generate project
         run: xcodegen generate
@@ -37,7 +41,7 @@ jobs:
           xcodebuild -project Folio.xcodeproj -scheme Folio -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            test -only-testing:FolioTests
+            -testLanguage en -testRegion US test -only-testing:FolioTests
 
   secrets:
     name: Secret scan

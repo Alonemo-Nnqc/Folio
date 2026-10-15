@@ -68,9 +68,11 @@ swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo   # 
 提交 Pull Request 前请至少运行前两项（CI 也会运行）：
 
 ```bash
-swift test --package-path Packages/FolioCore
-xcodebuild -project Folio.xcodeproj -scheme Folio -destination 'platform=macOS' test -only-testing:FolioTests
+cd Packages/FolioCore && xcodebuild test -scheme FolioCore-Package -destination 'platform=macOS' -testLanguage en && cd ../..
+xcodebuild -project Folio.xcodeproj -scheme Folio -destination 'platform=macOS' -testLanguage en test -only-testing:FolioTests
 ```
+
+测试按英文界面断言文字，所以要用 `-testLanguage en` 固定语言（Xcode 27 的 `swift test --package-path Packages/FolioCore` 也会得到英文）。
 
 其他测试：
 

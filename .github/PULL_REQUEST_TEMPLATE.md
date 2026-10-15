@@ -6,6 +6,6 @@
 
 <!-- 你如何验证这些改动？涉及界面请附截图。 -->
 
-- [ ] `swift test --package-path Packages/FolioCore` 通过
+- [ ] 包测试通过（见 CONTRIBUTING.md 的“测试”）
 - [ ] `xcodebuild … test -only-testing:FolioTests` 通过
 - [ ] 用户可感知的变更已写入 `CHANGELOG.md` 的 `[Unreleased]`
