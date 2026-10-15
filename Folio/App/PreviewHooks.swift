@@ -26,6 +26,7 @@ import Foundation
 ///   -FolioPreviewSnapshotDelay <seconds>        when to draw it (default 3)
 ///   -FolioPreviewTranslating <title prefix>    shows that item as being translated (42%)
 ///   -FolioPreviewTranslationProfiles YES        two sample translation configurations (in memory)
+///   -FolioPreviewProfileEditor YES              with Settings 翻译: opens 编辑配置…
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -106,7 +107,8 @@ enum PreviewHooks {
                 let reader = NSApp.windows.first { $0.windowController is ReaderWindowController && $0.isVisible }
                 let window = defaults.string(forKey: "FolioPreviewSettings") != nil ? AppDelegate.shared.settingsWindow?.window
                     : defaults.string(forKey: "FolioPreviewOpenReader") != nil ? reader : AppDelegate.shared.libraryWindowController.window
-                guard let view = window?.contentView?.superview,
+                // An open sheet (e.g. 编辑配置…) is what the window shows.
+                guard let view = (window?.attachedSheet ?? window)?.contentView?.superview,
                       let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
                 view.cacheDisplay(in: view.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(filePath: path))

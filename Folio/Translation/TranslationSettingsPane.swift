@@ -463,9 +463,11 @@ private struct OptionsSection: View {
 
 /// "获取模型列表": fetches the service's models with the key and address entered above and lets the
 /// user pick one from a searchable list.
-private struct ModelListButton: View {
+struct ModelListButton: View {
     let model: AppModel
     let serviceID: String
+    /// The values to query with (a saved configuration); nil: the service's current values.
+    var values: (() -> (fields: [String: String], secrets: [String: String]))?
     let onPick: (String) -> Void
     @State private var showing = false
     @State private var loading = false
@@ -540,10 +542,9 @@ private struct ModelListButton: View {
         error = nil
         defer { loading = false }
         do {
-            let secrets = (try? model.translations.secrets.secrets(for: service)) ?? [:]
-            models = try await ModelListFetcher.fetch(serviceID: serviceID,
-                                                      fieldValues: model.settings.translationFields[serviceID] ?? [:],
-                                                      secrets: secrets)
+            let current = values?() ?? (fields: model.settings.translationFields[serviceID] ?? [:],
+                                         secrets: (try? model.translations.secrets.secrets(for: service)) ?? [:])
+            models = try await ModelListFetcher.fetch(serviceID: serviceID, fieldValues: current.fields, secrets: current.secrets)
         } catch {
             models = []
             self.error = error.localizedDescription
