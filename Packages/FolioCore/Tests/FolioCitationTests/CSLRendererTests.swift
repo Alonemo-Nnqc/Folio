@@ -1,3 +1,4 @@
+import Foundation
 import FolioCore
 import Testing
 
@@ -46,7 +47,9 @@ struct CSLRendererTests {
                 _ = try renderer.render(entries, style: .apa)
             }
         }
-        #expect(elapsed < .seconds(1))
+        // Shared CI runners are several times slower than a Mac.
+        let budget: Duration = ProcessInfo.processInfo.environment["CI"] == nil ? .seconds(1) : .seconds(5)
+        #expect(elapsed < budget)
     }
 
     @Test(arguments: CitationStyle.allCases.filter { $0 != .bibtex })

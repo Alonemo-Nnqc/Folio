@@ -1,0 +1,7 @@
+# Secret scanning (gitleaks). The default rules, plus known false positives.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Chrome extension public key: pins the unpacked extension's ID, not a secret"
+paths = ['''BrowserExtension/chromium/manifest\.json''']
