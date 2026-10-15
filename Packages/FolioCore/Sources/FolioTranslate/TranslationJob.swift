@@ -109,7 +109,7 @@ public final class TranslationJob: Sendable {
             process = try ChildProcess.launch(spec)
         } catch {
             log.write("Launch failed: \(error)")
-            continuation.yield(.failed(message: "无法启动翻译组件（\(error.localizedDescription)）。请在设置的“翻译”页重新安装组件。",
+            continuation.yield(.failed(message: "无法启动翻译组件（\(error.localizedDescription)），请在 设置 ▸ 翻译 中重新安装组件",
                                        logURL: logURL))
             return
         }

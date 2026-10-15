@@ -97,6 +97,34 @@ import Testing
         #expect(config.reason == .configuration)
     }
 
+    /// One specific cause per failure, never a list of possibilities.
+    @Test func specificMessages() {
+        func message(_ text: String, details: String? = nil) -> String {
+            TranslationErrorClassifier.classify(message: text, details: details).message
+        }
+        #expect(message("Error code: 401 - {'error': {'message': 'Incorrect API key provided'}}") == "API Key 无效（401），请在 设置 ▸ 翻译 中检查是否填写正确")
+        #expect(message("HTTPError: 403 Client Error: Forbidden for url: https://api.x.com/v1").hasPrefix("翻译服务拒绝访问（403）"))
+        #expect(message("Error code: 402 - Insufficient Balance").hasPrefix("翻译服务的账户余额或额度已用完（402）"))
+        #expect(message("openai.RateLimitError: Error code: 429 - rate limit").hasPrefix("请求过于频繁，被翻译服务限流（429）"))
+        let model = TranslationErrorClassifier.classify(
+            message: "Error code: 404 - {'error': {'message': 'The model `gpt-6.1-sol` does not exist or you do not have access to it.', 'code': 'model_not_found'}}")
+        #expect(model.reason == .modelNotFound && model.message.contains("gpt-6.1-sol"))
+        #expect(message("Connection error.", details: "httpcore.ConnectError: [Errno 8] nodename nor servname provided, or not known (url https://api.example.org/v1)")
+                == "找不到服务器 api.example.org，请检查 Base URL 是否正确")
+        #expect(message("Connection error.", details: "HTTPConnectionPool(host='localhost', port=11434): Max retries exceeded (Caused by NewConnectionError: [Errno 61] Connection refused)")
+                .hasPrefix("服务器 localhost 拒绝连接"))
+        #expect(message("httpx.ReadTimeout: timed out", details: "url https://api.deepseek.com/chat") == "连接服务器 api.deepseek.com 超时，网络较慢或需要代理")
+        #expect(TranslationErrorClassifier.classify(message: "Error code: 503 - Service Unavailable").reason == .serverError)
+        #expect(message("Error code: 400 - {'error': {'message': 'temperature must be at most 1', 'type': 'invalid_request_error'}}")
+                == "翻译服务不接受这次请求（400）：temperature must be at most 1")
+        #expect(message("ModuleNotFoundError: No module named 'babeldoc'").contains("缺少 Python 模块 babeldoc"))
+        #expect(message("OSError: [Errno 28] No space left on device") == "磁盘空间不足，无法保存译文")
+        for reason in TranslationFailureReason.allCases {
+            let text = TranslationErrorClassifier.text(for: reason, raw: "x", haystack: "x", original: "x")
+            #expect(!text.contains("或没有权限") && !text.contains("或请求过于频繁"), "\(reason): one cause, not a list")
+        }
+    }
+
     @Test func appleTranslatorMarkerInLog() {
         let failure = TranslationErrorClassifier.classify(
             message: "Translation subprocess initialization error: RetryError[<Future raised CalledProcessError>]",
