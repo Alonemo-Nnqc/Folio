@@ -13,6 +13,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private weak var model: AppModel?
     private var isSyncingSelection = false
     private var isRestoringExpansion = false
+    /// The model selection last shown, to tell a new selection (reveal it) from a hidden one (leave it).
+    private var shownSelection: ViewScope?
     private var renamingGroupId: String?
     private let colorPanel = ColorPanelBridge()
     private static let expandedKey = "sidebarExpandedGroups"
@@ -37,7 +39,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.autoresizesOutlineColumn = false
         outline.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         outline.refusesFirstResponder = true
-        outline.allowsEmptySelection = false
+        // Collapsing the section or parent group of the selected row hides it; with an empty selection
+        // allowed, AppKit does not jump to the first row (所有文献). Clicks never empty it (see below).
+        outline.allowsEmptySelection = true
         outline.dataSource = self
         outline.delegate = self
         outline.target = self
@@ -95,11 +99,15 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case .tag(let id): .tag(id)
         }
         guard let node = tree.node(for: kind) else { return }
-        expandAncestors(of: node)
+        // A selection made elsewhere (a menu, a new group) is revealed; one the user hid by collapsing its
+        // section or parent group stays hidden, without highlighting another row.
+        if model.sidebarSelection != shownSelection { expandAncestors(of: node) }
+        shownSelection = model.sidebarSelection
         let row = outline.row(forItem: node)
-        guard row >= 0, outline.selectedRow != row else { return }
+        let target = row >= 0 ? IndexSet(integer: row) : IndexSet()
+        guard outline.selectedRowIndexes != target else { return }
         isSyncingSelection = true
-        outline.selectRowIndexes([row], byExtendingSelection: false)
+        outline.selectRowIndexes(target, byExtendingSelection: false)
         isSyncingSelection = false
     }
 
@@ -238,8 +246,24 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         model?.sidebarSelection = scope
     }
 
-    func outlineViewItemDidExpand(_ notification: Notification) { persistExpansion() }
-    func outlineViewItemDidCollapse(_ notification: Notification) { persistExpansion() }
+    /// Clicking empty space or a section header keeps the current selection.
+    func outlineView(_ outlineView: NSOutlineView, selectionIndexesForProposedSelection proposedSelectionIndexes: IndexSet) -> IndexSet {
+        proposedSelectionIndexes.isEmpty && !isSyncingSelection ? outlineView.selectedRowIndexes : proposedSelectionIndexes
+    }
+
+    // Collapsing never changes what is shown in the list; expanding shows the selection again.
+    func outlineViewItemWillCollapse(_ notification: Notification) { isSyncingSelection = true }
+
+    func outlineViewItemDidCollapse(_ notification: Notification) {
+        isSyncingSelection = false
+        persistExpansion()
+        syncSelection()
+    }
+
+    func outlineViewItemDidExpand(_ notification: Notification) {
+        persistExpansion()
+        if !isRestoringExpansion, !isSyncingSelection { syncSelection() }
+    }
 
     // MARK: Renaming (SIDE-06/08)
 
