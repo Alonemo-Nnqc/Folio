@@ -20,6 +20,8 @@ import Foundation
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
 ///   -FolioPreviewCollapseSidebar YES            hides the sidebar
 ///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
+///   -FolioPreviewFocusedSelection YES           list selection drawn as if the list had focus
+///   -FolioPreviewSnapshot <png>                 draws the window into a PNG (works while the screen is locked)
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -81,6 +83,16 @@ enum PreviewHooks {
                 if let log = defaults.string(forKey: "FolioReaderSelfTest") {
                     ReaderSelfTest.run(model: model, fileId: file.id, log: log)
                 }
+            }
+        }
+        if let path = defaults.string(forKey: "FolioPreviewSnapshot") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                let window = defaults.string(forKey: "FolioPreviewSettings") != nil
+                    ? AppDelegate.shared.settingsWindow?.window : AppDelegate.shared.libraryWindowController.window
+                guard let view = window?.contentView?.superview,
+                      let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(filePath: path))
             }
         }
         if let paths = defaults.string(forKey: "FolioPreviewSimulateDrop") {

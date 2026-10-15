@@ -214,10 +214,7 @@ struct MetadataInspector: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if file.id == item.defaultFileId {
-                        Text("默认")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 5)
-                            .background(Color.accentColor.opacity(0.2), in: Capsule())
+                        DefaultFileBadge()
                     }
                     Spacer()
                 }

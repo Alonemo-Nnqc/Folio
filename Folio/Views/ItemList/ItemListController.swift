@@ -297,6 +297,13 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         }
     }
 
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        outlineView.makeView(withIdentifier: Self.rowViewIdentifier, owner: nil) as? GlassRowView
+            ?? { let row = GlassRowView(); row.identifier = Self.rowViewIdentifier; return row }()
+    }
+
+    private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("GlassRow")
+
     private func make<T: NSTableCellView>(_ type: T.Type, _ identifier: NSUserInterfaceItemIdentifier) -> T {
         outline.makeView(withIdentifier: identifier, owner: nil) as? T ?? T(frame: .zero)
     }

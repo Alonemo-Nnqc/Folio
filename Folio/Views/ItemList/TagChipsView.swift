@@ -5,9 +5,9 @@ import FolioCore
 /// "…"; chips that do not fit collapse into "+N" (TAG-05).
 final class TagChipsView: NSView {
     static let maxChipWidth: CGFloat = 90
-    private static let font = NSFont.systemFont(ofSize: 11, weight: .medium)
+    private static let font = CapsuleLabel.tagFont
     private static let spacing: CGFloat = 4
-    private static let padding: CGFloat = 7
+    private static let padding = CapsuleLabel.tagPadding
 
     var tags: [Tag] = [] {
         didSet {
@@ -20,8 +20,9 @@ final class TagChipsView: NSView {
     override var isFlipped: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        let height: CGFloat = 18
-        let y = (bounds.height - height) / 2
+        let height = CapsuleLabel.tagHeight
+        let scale = window?.backingScaleFactor ?? 2
+        let y = ((bounds.height - height) / 2 * scale).rounded() / scale
         var x: CGFloat = 2
         let limit = bounds.width - 2
         for (index, tag) in tags.enumerated() {
@@ -30,56 +31,32 @@ final class TagChipsView: NSView {
             let reserve: CGFloat = remaining > 0 ? Self.badgeWidth(remaining) + Self.spacing : 0
             if x + width + reserve > limit {
                 guard index == 0 else {
-                    drawBadge("+\(tags.count - index)", x: x, y: y, height: height)
+                    drawCount("+\(tags.count - index)", x: x, y: y, height: height, scale: scale)
                     return
                 }
                 // Always show the first tag, truncated to the space left.
                 width = max(limit - x - reserve, 28)
             }
-            drawChip(tag, x: x, y: y, width: width, height: height)
+            CapsuleLabel.draw(tag.name, in: NSRect(x: x, y: y, width: width, height: height), tint: NSColor(hex: tag.colorHex),
+                              font: Self.font, padding: Self.padding, appearance: effectiveAppearance, flipped: true, scale: scale)
             x += width + Self.spacing
         }
     }
 
     static func chipWidth(_ name: String) -> CGFloat {
-        let text = (name as NSString).size(withAttributes: [.font: font]).width
-        return min(ceil(text) + padding * 2, maxChipWidth)
+        min(CapsuleLabel.textWidth(name, font: font) + padding * 2, maxChipWidth)
     }
 
     private static func badgeWidth(_ count: Int) -> CGFloat {
-        ceil(("+\(count)" as NSString).size(withAttributes: [.font: font]).width) + padding * 2
+        CapsuleLabel.textWidth("+\(count)", font: font) + padding * 2
     }
 
-    private func drawChip(_ tag: Tag, x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat) {
-        let color = NSColor(hex: tag.colorHex)
-        let rect = NSRect(x: x, y: y, width: width, height: height)
-        let path = NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2)
-        color.withAlphaComponent(0.22).setFill()
-        path.fill()
-        color.withAlphaComponent(0.55).setStroke()
-        path.lineWidth = 0.75
-        path.stroke()
-        let style = NSMutableParagraphStyle()
-        style.lineBreakMode = .byTruncatingTail
-        let textColor = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? color.blended(withFraction: 0.45, of: .white) ?? color
-            : color.blended(withFraction: 0.35, of: .black) ?? color
-        let attributes: [NSAttributedString.Key: Any] = [.font: Self.font, .foregroundColor: textColor, .paragraphStyle: style]
-        let textRect = rect.insetBy(dx: Self.padding, dy: 0)
-        let lineHeight = Self.font.boundingRectForFont.height
-        (tag.name as NSString).draw(with: NSRect(x: textRect.minX, y: y + (height - lineHeight) / 2 + 1,
-                                                 width: textRect.width, height: lineHeight),
-                                    options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
-                                    attributes: attributes)
-    }
-
-    private func drawBadge(_ text: String, x: CGFloat, y: CGFloat, height: CGFloat) {
-        let width = ceil((text as NSString).size(withAttributes: [.font: Self.font]).width) + Self.padding * 2
-        let rect = NSRect(x: x, y: y, width: width, height: height)
+    /// "+N": the tags that did not fit, in a neutral capsule.
+    private func drawCount(_ text: String, x: CGFloat, y: CGFloat, height: CGFloat, scale: CGFloat) {
+        let rect = NSRect(x: x, y: y, width: Self.badgeWidth(Int(text.dropFirst()) ?? 0), height: height)
         NSColor.quaternaryLabelColor.setFill()
         NSBezierPath(roundedRect: rect, xRadius: height / 2, yRadius: height / 2).fill()
-        let lineHeight = Self.font.boundingRectForFont.height
-        (text as NSString).draw(at: NSPoint(x: x + Self.padding, y: y + (height - lineHeight) / 2 + 1),
-                                withAttributes: [.font: Self.font, .foregroundColor: NSColor.secondaryLabelColor])
+        CapsuleLabel.drawText(text, in: rect.insetBy(dx: Self.padding, dy: 0), color: .secondaryLabelColor, font: Self.font,
+                              flipped: true, scale: scale)
     }
 }

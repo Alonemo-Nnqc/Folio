@@ -8,7 +8,7 @@ final class TitleCell: NSTableCellView {
     let icon = NSImageView()
     let spinner = NSProgressIndicator()
     let label = NSTextField(labelWithString: "")
-    let badge = NSTextField(labelWithString: "默认")
+    let badge = CapsuleBadge()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -26,14 +26,8 @@ final class TitleCell: NSTableCellView {
         label.cell?.truncatesLastVisibleLine = true
         label.allowsExpansionToolTips = true
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        badge.font = .systemFont(ofSize: 10, weight: .semibold)
-        badge.textColor = .white
-        badge.alignment = .center
-        badge.wantsLayer = true
-        badge.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
-        badge.layer?.cornerRadius = 7
         badge.setContentHuggingPriority(.required, for: .horizontal)
-        badge.setAccessibilityIdentifier("defaultFileBadge")
+        badge.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         for view in [icon, spinner, label, badge] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
@@ -51,21 +45,10 @@ final class TitleCell: NSTableCellView {
             badge.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 6),
             badge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
             badge.centerYAnchor.constraint(equalTo: centerYAnchor),
-            badge.widthAnchor.constraint(equalToConstant: 32),
-            badge.heightAnchor.constraint(equalToConstant: 15),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
-
-    // Layer colours don't follow appearance changes on their own (dark mode, accent colour).
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        let isDefault = badge.stringValue == "默认"
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            badge.layer?.backgroundColor = (isDefault ? NSColor.controlAccentColor : NSColor.systemTeal).cgColor
-        }
-    }
 
     /// `origin` is the title of the item a trashed file was deleted from (TRASH-03); `translation` is the
     /// progress line of a running translation (TRANS-04).
@@ -110,8 +93,7 @@ final class TitleCell: NSTableCellView {
         label.stringValue = file.fileName
         label.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
         let isTranslation = file.translationOf != nil
-        badge.stringValue = isDefault ? "默认" : "译文"
-        badge.layer?.backgroundColor = (isDefault ? NSColor.controlAccentColor : NSColor.systemTeal).cgColor
+        badge.configure(isDefault ? "默认" : "译文", tint: isDefault ? .controlAccentColor : .systemTeal)
         badge.isHidden = !(isDefault || isTranslation)
         badge.setAccessibilityIdentifier(isDefault ? "defaultFileBadge" : "translationBadge")
         setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : isTranslation ? "（译文）" : ""))
@@ -234,4 +216,40 @@ enum CellText {
                                        attributes: [.foregroundColor: NSColor.quaternaryLabelColor]))
         return text
     }
+}
+
+/// The "默认" / "译文" capsule after a file name.
+final class CapsuleBadge: NSView {
+    private(set) var text = ""
+    private var tint: NSColor = .controlAccentColor
+
+    override var isFlipped: Bool { true }
+
+    func configure(_ text: String, tint: NSColor) {
+        guard text != self.text || tint != self.tint else { return }
+        self.text = text
+        self.tint = tint
+        setAccessibilityLabel(text)
+        invalidateIntrinsicContentSize()
+        needsDisplay = true
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: CapsuleLabel.textWidth(text, font: CapsuleLabel.badgeFont) + CapsuleLabel.badgePadding * 2,
+               height: CapsuleLabel.badgeHeight)
+    }
+
+    // Accent colour and dark mode resolve at draw time.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        CapsuleLabel.draw(text, in: bounds, tint: tint, font: CapsuleLabel.badgeFont, padding: CapsuleLabel.badgePadding,
+                          appearance: effectiveAppearance, flipped: true, scale: window?.backingScaleFactor ?? 2)
+    }
+
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityRole() -> NSAccessibility.Role? { .staticText }
 }
