@@ -49,7 +49,7 @@ struct TranslateSheet: View {
             .formStyle(.grouped)
             .frame(minHeight: 360)
             HStack {
-                Text("保留原文排版、公式和图表；译文会作为新文件加入该条目。")
+                Text("保留原文排版、公式和图表\n译文会作为新文件加入该条目")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -96,7 +96,7 @@ private struct EngineSection: View {
         } header: {
             Text("翻译组件")
         } footer: {
-            Text("由 pdf2zh_next（BabelDOC，AGPL-3.0）完成保留排版的翻译。内置组件首次使用时下载，约 1.4 GB。")
+            Text("由 pdf2zh_next（BabelDOC，AGPL-3.0）完成保留排版的翻译\n内置组件首次使用时下载，约 1.4 GB")
         }
         .task(id: coordinator.engineRevision) { refresh() }
         .task(id: settings.translatorCustomPath) { await checkOwn() }
@@ -200,7 +200,7 @@ private struct EngineSection: View {
             } else {
                 let alert = NSAlert()
                 alert.messageText = "没有在这台 Mac 上找到 pdf2zh_next"
-                alert.informativeText = "已查找终端的 PATH 以及 uv、pipx、conda、Homebrew 的安装位置。可以在终端运行 uv tool install pdf2zh-next 安装后再打开此开关，或手动选择它的位置。\n\n不开启时，Folio 使用内置的翻译组件。"
+                alert.informativeText = "已查找\(TranslatorDiscovery.searchedPlaces)。\n\n可以在终端运行 uv tool install pdf2zh-next 安装后再打开此开关，或手动选择它的位置；也可以让智能体通过 Folio 的 MCP 帮你查找。不开启时，Folio 使用内置的翻译组件。"
                 alert.addButton(withTitle: "手动选择…")
                 alert.addButton(withTitle: "好")
                 if alert.runModal() == .alertFirstButtonReturn { chooseExecutable() }
@@ -552,7 +552,7 @@ private struct ReasoningRow: View {
             LabeledContent("推理强度") {
                 Text("当前模型不支持").foregroundStyle(.secondary)
             }
-            .help("所选模型不是推理模型，不会发送推理强度参数。")
+            .help("所选模型不是推理模型，不会发送推理强度参数")
         case let .choices(choices, _):
             Picker("推理强度", selection: Binding(
                 get: { ReasoningEffort.current(serviceID: serviceID, fields: fields) ?? "" },

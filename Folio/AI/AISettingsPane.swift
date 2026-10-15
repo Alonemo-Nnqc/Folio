@@ -13,7 +13,7 @@ struct AISettingsPane: View {
             Section {
                 Toggle(isOn: $settings.aiAllowWrites) {
                     Text("允许 AI 修改文献库")
-                    Text("关闭后只能搜索、阅读和引用。AI 不能彻底删除任何内容。")
+                    Text("关闭后只能搜索、阅读和引用\nAI 不能彻底删除任何内容")
                 }
                 LabeledContent("MCP 服务器") {
                     HStack {
@@ -39,7 +39,7 @@ struct AISettingsPane: View {
             } header: {
                 Text("Folio 的 AI 接口")
             } footer: {
-                Text("智能体通过 MCP 查找、阅读、引用和整理你的文献；Folio 技能教它正确使用。")
+                Text("智能体通过 MCP 查找、阅读、引用和整理你的文献\nFolio 技能教它正确地使用")
             }
 
             Section {
@@ -48,7 +48,7 @@ struct AISettingsPane: View {
                 } else if integration.detected.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("没有在这台 Mac 上找到可用的智能体")
-                        Text("支持 \(AgentIntegrator.catalog.map(\.name).joined(separator: "、"))。安装后点\"重新检测\"。")
+                        Text("支持 \(AgentIntegrator.catalog.map(\.name).joined(separator: "、"))\n安装后点\"重新检测\"")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -67,7 +67,7 @@ struct AISettingsPane: View {
                     }
                 }
             } footer: {
-                Text("打开开关即按官方方式写入该智能体的配置，关闭即移除，修改前会备份。重启智能体或开始新会话后生效。")
+                Text("打开开关即按官方方式写入该智能体的配置，关闭即移除，修改前会备份\n重启智能体或开始新会话后生效")
             }
 
             Section {
@@ -83,7 +83,7 @@ struct AISettingsPane: View {
             } header: {
                 Text("手动配置")
             } footer: {
-                Text("用于列表之外的应用，如 VS Code、Zed、Windsurf。")
+                Text("用于列表之外的应用，如 VS Code、Zed、Windsurf")
             }
         }
         .formStyle(.grouped)

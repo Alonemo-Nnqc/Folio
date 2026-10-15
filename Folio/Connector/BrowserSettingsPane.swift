@@ -22,7 +22,7 @@ struct BrowserSettingsPane: View {
             } header: {
                 Text("Folio 连接器")
             } footer: {
-                Text("在论文页面点工具栏中的 Folio 按钮或按 ⌘⇧S 保存，也可在链接上右键\"保存链接到 Folio\"。")
+                Text("在论文页面点工具栏中的 Folio 按钮或按 ⌘⇧S 保存\n也可以在链接上右键\"保存链接到 Folio\"")
             }
 
             Section {
@@ -57,7 +57,7 @@ struct BrowserSettingsPane: View {
                     }
                 }
             } footer: {
-                Text("扩展暂未上架应用商店，点按钮按引导完成安装。")
+                Text("扩展暂未上架应用商店，点按钮按引导完成安装")
             }
         }
         .formStyle(.grouped)
@@ -204,9 +204,9 @@ private struct ExtensionInstallGuide: View {
 
     private var subtitle: String {
         switch browser.family {
-        case .safari: "扩展随 Folio 提供，按下面三步打开即可。"
-        case .chromium: "扩展尚未上架应用商店，需要以\"开发者模式\"载入，约一分钟。"
-        case .firefox: "以临时附加组件载入，Firefox 重启后需要重新载入。"
+        case .safari: "扩展随 Folio 提供，按下面三步打开即可"
+        case .chromium: "扩展尚未上架应用商店，需要以\"开发者模式\"载入，约一分钟"
+        case .firefox: "以临时附加组件载入，Firefox 重启后需要重新载入"
         }
     }
 
@@ -221,7 +221,7 @@ private struct ExtensionInstallGuide: View {
         }
         step(2, browser.id == "edge" ? "打开左侧的\"开发人员模式\"" : "打开右上角的\"开发者模式\"开关", detail: nil) { EmptyView() }
         step(3, browser.id == "edge" ? "点\"加载解压缩的扩展\"" : "点\"加载已解压的扩展程序\"", detail: nil) { EmptyView() }
-        step(4, "选择 Folio 扩展文件夹", detail: "在弹出的窗口中按 ⌘⇧G，再按 ⌘V 粘贴下面的路径（已拷贝），回车后点\"选择\"。也可以把 Finder 中的文件夹拖进窗口。") {
+        step(4, "选择 Folio 扩展文件夹", detail: "在弹出的窗口中按 ⌘⇧G，再按 ⌘V 粘贴下面的路径（已拷贝），回车后点\"选择\"\n也可以把 Finder 中的文件夹拖进窗口") {
             Button("拷贝路径") { if let folder { copy(folder.path, label: "路径") } }
             Button("在 Finder 中显示") { if let folder { NSWorkspace.shared.activateFileViewerSelecting([folder]) } }
         }
@@ -236,15 +236,15 @@ private struct ExtensionInstallGuide: View {
 
     @ViewBuilder
     private var safariSteps: some View {
-        step(1, "打开网页开发者功能", detail: "Safari ▸ 设置 ▸ 高级，勾选\"显示网页开发者功能\"。") {
+        step(1, "打开网页开发者功能", detail: "Safari ▸ 设置 ▸ 高级，勾选\"显示网页开发者功能\"") {
             Button("打开 Safari") { NSWorkspace.shared.open(browser.appURL) }
         }
-        step(2, "允许未签名的扩展", detail: "Safari ▸ 设置 ▸ 开发者，勾选\"允许未签名的扩展\"。Folio 使用开发证书签名，Safari 每次重新打开后需要再勾选一次。") {
+        step(2, "允许未签名的扩展", detail: "Safari ▸ 设置 ▸ 开发者，勾选\"允许未签名的扩展\"\nFolio 使用开发证书签名，Safari 每次重新打开后需要再勾选一次") {
             EmptyView()
         }
-        step(3, "启用 Folio 文献保存", detail: "Safari ▸ 设置 ▸ 扩展，勾选\"Folio 文献保存\"，并允许它在所有网站上使用（读取论文页面时需要）。") {
+        step(3, "启用 Folio 文献保存", detail: "Safari ▸ 设置 ▸ 扩展，勾选\"Folio 文献保存\"，并允许它在所有网站上使用（读取论文页面时需要）") {
             Button("打开扩展设置") {
-                Task { problem = await BrowserExtensions.openSafariSettings().map { "Safari 还没有列出 Folio 扩展：请先完成第 2 步（\($0)）。" } }
+                Task { problem = await BrowserExtensions.openSafariSettings().map { "Safari 还没有列出 Folio 扩展，请先完成第 2 步（\($0)）" } }
             }
         }
     }
@@ -256,7 +256,7 @@ private struct ExtensionInstallGuide: View {
             Button("拷贝地址") { copy(page, label: "地址") }
             Button("打开 Firefox") { NSWorkspace.shared.open(browser.appURL) }
         }
-        step(2, "点\"临时载入附加组件…\"", detail: "在选择窗口中按 ⌘⇧G，粘贴路径（已拷贝）后回车，选择其中的 manifest.json。") {
+        step(2, "点\"临时载入附加组件…\"", detail: "在选择窗口中按 ⌘⇧G，粘贴路径（已拷贝）后回车，选择其中的 manifest.json") {
             Button("拷贝路径") { if let folder { copy(folder.appending(path: "manifest.json").path, label: "路径") } }
         }
         if let folder {

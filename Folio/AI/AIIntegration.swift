@@ -31,12 +31,12 @@ final class AIIntegration {
 
     /// What each agent needs beyond Folio's configuration.
     static let hints: [String: String] = [
-        "gemini-cli": "Gemini CLI 只在受信任的文件夹中启用 MCP 服务器：首次在某个文件夹中运行时选择信任。",
-        "claude-desktop": "修改后需要完全退出并重新打开 Claude 桌面版。",
-        "copilot-cli": "在 Copilot CLI 中输入 /mcp 可查看连接状态。",
-        "cursor": "与 Cursor 编辑器共用 ~/.cursor/mcp.json，编辑器中也会出现 folio 服务器。",
-        "kiro": "与 Kiro 编辑器共用 ~/.kiro/settings/mcp.json。",
-        "antigravity": "在 Antigravity 的 设置 ▸ Customizations 中可看到 folio 服务器；修改后重新打开 Antigravity。",
+        "gemini-cli": "Gemini CLI 只在受信任的文件夹中启用 MCP 服务器\n首次在某个文件夹中运行时选择信任",
+        "claude-desktop": "修改后需要完全退出并重新打开 Claude 桌面版",
+        "copilot-cli": "在 Copilot CLI 中输入 /mcp 可查看连接状态",
+        "cursor": "与 Cursor 编辑器共用 ~/.cursor/mcp.json，编辑器中也会出现 folio 服务器",
+        "kiro": "与 Kiro 编辑器共用 ~/.kiro/settings/mcp.json",
+        "antigravity": "在 Antigravity 的 设置 ▸ Customizations 中可看到 folio 服务器\n修改后重新打开 Antigravity",
     ]
 
     /// folio-cli inside this copy of Folio.app.

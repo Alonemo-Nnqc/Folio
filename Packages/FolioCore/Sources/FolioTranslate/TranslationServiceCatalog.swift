@@ -103,13 +103,13 @@ public enum TranslationServiceCatalog {
     public static let all: [TranslationService] = [
         .init(id: "siliconflowfree", displayName: "SiliconFlow 免费", cliSwitch: "--siliconflowfree", isFree: true,
               fields: [jsonMode("--siliconflow-free-enable-json-mode")],
-              note: "pdf2zh 项目提供的免费大模型通道，无需注册；高峰期可能限流。"),
+              note: "pdf2zh 项目提供的免费大模型通道，无需注册\n高峰期可能限流"),
         .init(id: "google", displayName: "Google（免费）", cliSwitch: "--google", isFree: true,
-              note: "使用 Google 翻译网页接口，无需 Key；频繁使用会被暂时限流（HTTP 429）。"),
+              note: "使用 Google 翻译网页接口，无需 Key\n频繁使用会被暂时限流（HTTP 429）"),
         .init(id: "bing", displayName: "Bing（免费）", cliSwitch: "--bing", isFree: true,
-              note: "使用 Bing 翻译网页接口，无需 Key；有频率限制。"),
+              note: "使用 Bing 翻译网页接口，无需 Key\n有频率限制"),
         .init(id: appleServiceID, displayName: "Apple 系统翻译（离线）", cliSwitch: "--clitranslator", isFree: true, isLocal: true,
-              note: "使用 macOS 自带的翻译模型，完全离线、免费；需要先在“系统设置 › 通用 › 语言与地区 › 翻译语言”中下载对应语言。"),
+              note: "使用 macOS 自带的翻译模型，完全离线、免费\n需要先在“系统设置 › 通用 › 语言与地区 › 翻译语言”中下载对应语言"),
         .init(id: "openai", displayName: "OpenAI", cliSwitch: "--openai", fields: [
             apiKey("--openai-api-key"),
             model("--openai-model", default: "gpt-4o-mini"),
@@ -136,7 +136,7 @@ public enum TranslationServiceCatalog {
             .init(option: "--ollama-host", title: "服务地址", kind: .url, isRequired: true,
                   defaultValue: "http://localhost:11434", placeholder: "http://localhost:11434"),
             .init(option: "--num-predict", title: "最大生成 Token 数", kind: .number, defaultValue: "2000", isAdvanced: true),
-        ], note: "需要先在本机运行 Ollama 并下载模型。"),
+        ], note: "需要先在本机运行 Ollama 并下载模型"),
         .init(id: "xinference", displayName: "Xinference（本地）", cliSwitch: "--xinference", isFree: true, isLocal: true, fields: [
             model("--xinference-model", default: "gemma-2-it"),
             .init(option: "--xinference-host", title: "服务地址", kind: .url, isRequired: true, placeholder: "http://localhost:9997"),
@@ -222,16 +222,16 @@ public enum TranslationServiceCatalog {
             .init(option: "--openai-compatible-send-temperature", title: "发送 Temperature 参数", kind: .toggle, isAdvanced: true),
             .init(option: "--openai-compatible-send-reasoning-effort", title: "发送推理强度参数", kind: .toggle, isAdvanced: true),
             jsonMode("--openai-compatible-enable-json-mode"),
-        ], note: "适用于任何兼容 OpenAI Chat Completions 的服务（如 Moonshot、LM Studio、vLLM 等）。"),
+        ], note: "适用于任何兼容 OpenAI Chat Completions 的服务（如 Moonshot、LM Studio、vLLM 等）"),
         .init(id: "claudecode", displayName: "Claude Code", cliSwitch: "--claudecode", fields: [
             .init(option: "--claude-code-path", title: "claude 可执行文件路径", isRequired: true,
                   defaultValue: "claude", placeholder: "/usr/local/bin/claude"),
             .init(option: "--claude-code-model", title: "模型", defaultValue: "sonnet", placeholder: "sonnet"),
-        ], note: "调用本机已登录的 Claude Code 命令行；建议填写 claude 的完整路径。"),
+        ], note: "调用本机已登录的 Claude Code 命令行\n建议填写 claude 的完整路径"),
         .init(id: "clitranslator", displayName: "自定义命令行翻译器", cliSwitch: "--clitranslator", fields: [
             .init(option: "--clitranslator-command", title: "命令", isRequired: true, placeholder: "my-translator --from en --to zh"),
             .init(option: "--clitranslator-timeout", title: "超时（秒）", kind: .number, defaultValue: "60", placeholder: "60"),
             .init(option: "--clitranslator-postprocess-command", title: "后处理命令", placeholder: "jq -r .translation", isAdvanced: true),
-        ], note: "每段原文通过标准输入传给命令，命令把译文写到标准输出。"),
+        ], note: "每段原文通过标准输入传给命令，命令把译文写到标准输出"),
     ]
 }

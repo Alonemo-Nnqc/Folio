@@ -327,7 +327,7 @@ struct LibrarySettings: View {
             } header: {
                 Text("导入")
             } footer: {
-                Text("导入条目、PDF、分组和标签，不会修改 Zotero。")
+                Text("导入条目、PDF、分组和标签，不会修改 Zotero")
             }
         }
         .formStyle(.grouped)
@@ -366,7 +366,7 @@ struct RetrievalSettings: View {
                 Toggle("添加 PDF 后自动检索元数据", isOn: $settings.autoRetrieveOnImport)
                 Toggle(isOn: $settings.useZoteroRecognizer) {
                     Text("使用 Zotero 识别服务")
-                    Text("会把 PDF 前 5 页的文字发送给 Zotero，无需账号。")
+                    Text("会把 PDF 前 5 页的文字发送给 Zotero，无需账号")
                 }
             }
             Section {
@@ -375,7 +375,7 @@ struct RetrievalSettings: View {
                 SecureField("OpenAlex API Key（选填）", text: $settings.openAlexAPIKey)
                     .help("可在 openalex.org 免费申请，用于提高 OpenAlex 的访问额度")
             } footer: {
-                Text("选填，可让检索更快、更稳定；不填也能正常检索。")
+                Text("选填，可让检索更快、更稳定\n不填也能正常检索")
             }
         }
         .formStyle(.grouped)
