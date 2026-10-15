@@ -1,11 +1,13 @@
 import AppKit
 
-/// Item list rows with a light, translucent selection instead of the solid accent fill: the solid fill
-/// turned the row's text white and drowned the coloured tag chips. A faint tint (accent while the list
-/// has focus, neutral otherwise), a hairline edge and a soft top highlight, like a sheet of glass laid over
-/// the row; consecutive selected rows merge into one shape.
+/// Item list rows selected with a sheet of grey glass instead of the solid accent fill, which turned the
+/// row's text white and drowned the coloured tag chips: a translucent grey body lit from above, a light rim
+/// along its upper edge and a hairline below, like the Liquid Glass of macOS controls. It is drawn rather than
+/// an `NSGlassEffectView`, whose specular rim turned into bright brackets on a row this thin. Text, icons and
+/// tags keep their colours; the glass is a little denser while the list has focus. Consecutive selected rows
+/// read as one shape: a joined edge reaches past the row and is clipped, so only the outer corners are round.
 final class GlassRowView: NSTableRowView {
-    private static let radius: CGFloat = 7
+    private static let radius: CGFloat = 8
     private static let inset: CGFloat = 4
 
     // Keep text, icons and tag colours as they are on an unselected row.
@@ -30,38 +32,38 @@ final class GlassRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard selectionHighlightStyle != .none else { return }
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let focused = isEmphasized
         let pixel = 1 / max(window?.backingScaleFactor ?? 2, 1)
-        // Joined edges reach past the row, so the corners and the outline there are clipped away.
-        let joinTop = isPreviousRowSelected, joinBottom = isNextRowSelected
-        let over = Self.radius + 1
+        let joinUp = isFlipped ? isPreviousRowSelected : isNextRowSelected
+        let joinDown = isFlipped ? isNextRowSelected : isPreviousRowSelected
+        let over = Self.radius + 2
         var shape = bounds.insetBy(dx: Self.inset, dy: 0)
-        if isFlipped {
-            if joinTop { shape.origin.y -= over; shape.size.height += over }
-            if joinBottom { shape.size.height += over }
-        } else {
-            if joinTop { shape.size.height += over }
-            if joinBottom { shape.origin.y -= over; shape.size.height += over }
-        }
+        if joinDown { shape.origin.y -= over; shape.size.height += over }
+        if joinUp { shape.size.height += over }
         shape = shape.insetBy(dx: pixel / 2, dy: pixel / 2)
         let path = NSBezierPath(roundedRect: shape, xRadius: Self.radius, yRadius: Self.radius)
+        // In view coordinates "top" is maxY unless flipped.
+        let topIsMax = !isFlipped
+        let lit = topIsMax ? 90.0 : -90.0
 
-        let tint: NSColor = isEmphasized ? .controlAccentColor : .labelColor
-        let fill = isEmphasized ? (dark ? 0.24 : 0.13) : (dark ? 0.10 : 0.06)
-        tint.withAlphaComponent(fill).setFill()
-        path.fill()
-        tint.withAlphaComponent(isEmphasized ? (dark ? 0.42 : 0.30) : (dark ? 0.16 : 0.10)).setStroke()
+        // Body: translucent grey, lighter at the top.
+        let base = dark ? NSColor(white: 1, alpha: focused ? 0.13 : 0.085) : NSColor(white: 0.30, alpha: focused ? 0.11 : 0.07)
+        let top = dark ? NSColor(white: 1, alpha: focused ? 0.17 : 0.11) : NSColor(white: 0.30, alpha: focused ? 0.07 : 0.045)
+        NSGradient(starting: base, ending: top)?.draw(in: path, angle: lit)
+
+        // Rim: a light edge on top fading out, and a faint hairline that defines the shape.
+        NSColor(white: dark ? 1 : 0, alpha: dark ? 0.10 : (focused ? 0.10 : 0.07)).setStroke()
         path.lineWidth = pixel
         path.stroke()
-
-        // Soft highlight along the top edge of the selection.
-        guard !joinTop else { return }
+        // Shine along the upper edge, fading out halfway down the sides.
+        guard !joinUp, let context = NSGraphicsContext.current?.cgContext else { return }
+        let rim = NSBezierPath(roundedRect: shape.insetBy(dx: pixel, dy: pixel), xRadius: Self.radius - pixel, yRadius: Self.radius - pixel)
         NSGraphicsContext.saveGraphicsState()
-        path.addClip()
-        let top = isFlipped ? shape.minY : shape.maxY
-        let band = NSRect(x: shape.minX, y: isFlipped ? top : top - bounds.height / 2,
-                          width: shape.width, height: bounds.height / 2)
-        let gradient = NSGradient(colors: [NSColor.white.withAlphaComponent(dark ? 0.07 : 0.35), NSColor.white.withAlphaComponent(0)])
-        gradient?.draw(in: band, angle: isFlipped ? 90 : -90)
+        context.addPath(rim.cgPath.copy(strokingWithWidth: pixel, lineCap: .butt, lineJoin: .round, miterLimit: 1))
+        context.clip()
+        let band = NSRect(x: shape.minX, y: topIsMax ? shape.midY : shape.minY, width: shape.width, height: shape.height / 2)
+        let shine = NSColor.white.withAlphaComponent(dark ? 0.24 : 0.9)
+        NSGradient(starting: shine, ending: shine.withAlphaComponent(0))?.draw(in: band, angle: -lit)
         NSGraphicsContext.restoreGraphicsState()
     }
 }
