@@ -1,5 +1,6 @@
 import AppKit
 import FolioCore
+import FolioTranslate
 import Foundation
 
 /// Launch-argument hooks that put the window into a given state, so UI can be checked from
@@ -24,6 +25,7 @@ import Foundation
 ///   -FolioPreviewSnapshot <png>                 draws the window into a PNG (works while the screen is locked)
 ///   -FolioPreviewSnapshotDelay <seconds>        when to draw it (default 3)
 ///   -FolioPreviewTranslating <title prefix>    shows that item as being translated (42%)
+///   -FolioPreviewTranslationProfiles YES        two sample translation configurations (in memory)
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -52,6 +54,13 @@ enum PreviewHooks {
         if let prefix = defaults.string(forKey: "FolioPreviewTranslating"),
            let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
             model.translations.previewJob(itemId: item.id, fileId: file.id, stage: "翻译段落 34/120", fraction: 0.42)
+        }
+        if defaults.bool(forKey: "FolioPreviewTranslationProfiles") {
+            // Two sample configurations of the current service, in memory only; the Keychain is not touched.
+            let service = model.settings.translationService
+            let profiles = [TranslationProfile(name: "DeepSeek", serviceID: service), TranslationProfile(name: "Moonshot", serviceID: service)]
+            model.settings.translationProfiles = profiles
+            model.settings.selectedTranslationProfiles[service] = profiles[0].id
         }
         if let tab = defaults.string(forKey: "FolioPreviewTab").flatMap(InspectorTab.init(rawValue:)) { model.inspectorTab = tab }
         switch defaults.string(forKey: "FolioPreviewSheet") {

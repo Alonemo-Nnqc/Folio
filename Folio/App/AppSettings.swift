@@ -81,6 +81,8 @@ final class AppSettings {
         static let translationService = "translationService"
         static let translationFields = "translationFields"
         static let translationOptions = "translationOptions"
+        static let translationProfiles = "translationProfiles"
+        static let selectedTranslationProfiles = "selectedTranslationProfiles"
         static let translatorCustomPath = "translatorCustomPath"
         static let appearance = "appearance"
         static let markReadingOnOpen = "markReadingOnOpen"
@@ -118,7 +120,27 @@ final class AppSettings {
     var translationService: String { didSet { save(translationService, Key.translationService) } }
     /// Non-secret field values per service: service id → CLI option → value. Secrets live in the Keychain.
     var translationFields: [String: [String: String]] {
-        didSet { save(translationFields, Key.translationFields) }
+        didSet {
+            save(translationFields, Key.translationFields)
+            syncSelectedProfiles()
+        }
+    }
+    /// Saved configurations of translation services (several OpenAI-compatible providers…); keys in the Keychain.
+    var translationProfiles: [TranslationProfile] {
+        didSet { save(try? JSONEncoder().encode(translationProfiles), Key.translationProfiles) }
+    }
+    /// The configuration in use per service: service id → profile id. None: the values are not saved as one.
+    var selectedTranslationProfiles: [String: String] {
+        didSet { save(selectedTranslationProfiles, Key.selectedTranslationProfiles) }
+    }
+
+    /// Edits of a service's values (fields, model list, reasoning effort) go into the configuration in use.
+    private func syncSelectedProfiles() {
+        for (serviceID, profileID) in selectedTranslationProfiles {
+            guard let index = translationProfiles.firstIndex(where: { $0.id == profileID }) else { continue }
+            let current = (translationFields[serviceID] ?? [:]).filter { !$0.value.isEmpty }
+            if translationProfiles[index].fields != current { translationProfiles[index].fields = current }
+        }
     }
     var translationOptions: TranslationOptions {
         didSet { save(try? JSONEncoder().encode(translationOptions), Key.translationOptions) }
@@ -179,6 +201,9 @@ final class AppSettings {
         translationFields = defaults.dictionary(forKey: Key.translationFields) as? [String: [String: String]] ?? [:]
         translationOptions = defaults.data(forKey: Key.translationOptions)
             .flatMap { try? JSONDecoder().decode(TranslationOptions.self, from: $0) } ?? TranslationOptions()
+        translationProfiles = defaults.data(forKey: Key.translationProfiles)
+            .flatMap { try? JSONDecoder().decode([TranslationProfile].self, from: $0) } ?? []
+        selectedTranslationProfiles = defaults.dictionary(forKey: Key.selectedTranslationProfiles) as? [String: String] ?? [:]
         translatorCustomPath = defaults.string(forKey: Key.translatorCustomPath) ?? ""
         markReadingOnOpen = defaults.bool(forKey: Key.markReadingOnOpen)
         readerPageShadows = defaults.bool(forKey: Key.readerPageShadows)

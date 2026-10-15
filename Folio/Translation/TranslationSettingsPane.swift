@@ -269,12 +269,15 @@ private struct ServiceSection: View {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
             if let service {
-                ForEach(service.fields.filter { !$0.isAdvanced }) { FieldRow(model: model, serviceID: service.id, field: $0) }
+                if TranslationProfiles.supportsProfiles(service) { TranslationProfileRow(model: model, service: service) }
+                // Rows are rebuilt when another configuration is chosen, so key fields reload from the Keychain.
+                let profileID = settings.selectedTranslationProfiles[service.id] ?? ""
+                ForEach(service.fields.filter { !$0.isAdvanced }) { FieldRow(model: model, serviceID: service.id, field: $0).id("\($0.id)-\(profileID)") }
                 ReasoningRow(settings: settings, serviceID: service.id)
                 let advanced = service.fields.filter { $0.isAdvanced && !ReasoningEffort.managedOptions.contains($0.option) }
                 if !compact, !advanced.isEmpty {
                     DisclosureGroup("高级", isExpanded: $showAdvanced) {
-                        ForEach(advanced) { FieldRow(model: model, serviceID: service.id, field: $0) }
+                        ForEach(advanced) { FieldRow(model: model, serviceID: service.id, field: $0).id("\($0.id)-\(profileID)") }
                     }
                 }
                 if service.id == TranslationServiceCatalog.appleServiceID { appleRow }
@@ -385,6 +388,11 @@ private struct FieldRow: View {
             try? store.delete(serviceID: serviceID, option: field.option)
         } else {
             try? store.set(secret, serviceID: serviceID, option: field.option)
+        }
+        // The configuration in use keeps the same key.
+        if let id = model.settings.selectedTranslationProfiles[serviceID],
+           let profile = model.settings.translationProfiles.first(where: { $0.id == id }) {
+            try? TranslationProfiles.recordSecret(secret, option: field.option, in: profile, secrets: store)
         }
     }
 }

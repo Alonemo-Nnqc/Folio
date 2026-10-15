@@ -12,6 +12,7 @@
 		0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */; };
 		10CEAA29ED2842A7238C8B93 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299E291F200CFD09619544A /* main.swift */; };
 		115FA95DA4AB73ADE12ED00B /* SidebarDragRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */; };
+		14897C9D5085321AFA4B014F /* TranslationProfileRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FF8596EBDE8EC16D50DAE66 /* TranslationProfileRow.swift */; };
 		179802828504A543D5DF8A24 /* ItemColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E1F116DA3A1C23CF222150 /* ItemColumn.swift */; };
 		17983CD1B463FAE5A41B8DE5 /* PreviewHooks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1BD8E2B45F1B7A08CBF191A /* PreviewHooks.swift */; };
 		1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DE44A2E0602D23AC7840A9 /* ToastCenter.swift */; };
@@ -242,6 +243,7 @@
 		6BB51A125EC50A54621232F6 /* FolioTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FolioTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E34BF32FEB6F8F6665F59EF /* EngineResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineResolver.swift; sourceTree = "<group>"; };
 		6F4908084420120AA90A895B /* MetadataInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetadataInspector.swift; sourceTree = "<group>"; };
+		6FF8596EBDE8EC16D50DAE66 /* TranslationProfileRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProfileRow.swift; sourceTree = "<group>"; };
 		7259EEF7399617BA5B49CB6C /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		72A9176F30D97BB563BA8B9E /* folio-apple-translate */ = {isa = PBXFileReference; includeInIndex = 0; path = "folio-apple-translate"; sourceTree = BUILT_PRODUCTS_DIR; };
 		73252C02D629DC9A82C7BA20 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = popup.html; sourceTree = "<group>"; };
@@ -548,6 +550,7 @@
 			isa = PBXGroup;
 			children = (
 				FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */,
+				6FF8596EBDE8EC16D50DAE66 /* TranslationProfileRow.swift */,
 				012419A55B3491DCBD2D0407 /* TranslationProgressViews.swift */,
 				D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */,
 				D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */,
@@ -1062,6 +1065,7 @@
 				1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */,
 				229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */,
 				0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */,
+				14897C9D5085321AFA4B014F /* TranslationProfileRow.swift in Sources */,
 				316947EF98C3A56A9F1C497D /* TranslationProgressViews.swift in Sources */,
 				CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */,
 				BBC7EE9E2DA263FFDD2F7D60 /* TranslationSettingsPane.swift in Sources */,
