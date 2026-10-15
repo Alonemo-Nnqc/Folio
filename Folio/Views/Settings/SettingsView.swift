@@ -9,12 +9,15 @@ final class SettingsWindowController: NSWindowController {
     init(model: AppModel) {
         let host = NSHostingController(rootView: SettingsRootView(model: model, navigation: navigation))
         host.sceneBridgingOptions = [.toolbars]
+        // The window keeps its own size; long panes scroll. (Sized to the content, the window grew as tall
+        // as the longest form and that frame was saved.)
+        host.sizingOptions = []
         let window = NSWindow(contentViewController: host)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
-        window.setContentSize(NSSize(width: 760, height: 560))
+        window.setContentSize(Self.defaultSize)
         window.minSize = NSSize(width: 640, height: 420)
-        window.setFrameAutosaveName("FolioSettingsWindow2")
+        window.setFrameAutosaveName(Self.autosaveName)
         window.setAccessibilityIdentifier("settingsWindow")
         super.init(window: window)
         // The pane title is the window title, as in System Settings. Set from AppKit: SwiftUI's title
@@ -26,11 +29,14 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private var titleObserver: ObservationLoop?
+    /// Changed when the default size changes, so a frame saved by an earlier version is not restored.
+    private static let autosaveName = "FolioSettingsWindow3"
+    private static let defaultSize = NSSize(width: 780, height: 600)
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
     override func showWindow(_ sender: Any?) {
-        if window?.isVisible == false, !(window?.setFrameUsingName("FolioSettingsWindow2") ?? false) { window?.center() }
+        if window?.isVisible == false, !(window?.setFrameUsingName(Self.autosaveName) ?? false) { window?.center() }
         super.showWindow(sender)
         DispatchQueue.main.async { [weak self] in self?.pinSidebar() }
     }
