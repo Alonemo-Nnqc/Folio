@@ -1,6 +1,20 @@
 import AppKit
 import FolioCore
 
+/// Sizes of the item list: roomier than AppKit's defaults so a long library does not feel crowded, like Mail's
+/// and Finder's larger list sizes.
+enum ItemListMetrics {
+    static let rowHeight: CGFloat = 32
+    static let columnSpacing: CGFloat = 12
+    static let iconSize: CGFloat = 18
+    /// Item titles.
+    static let titleFont = NSFont.systemFont(ofSize: 14)
+    /// Other columns and file rows.
+    static let bodyFont = NSFont.systemFont(ofSize: 13)
+    /// Notes after a title ("正在检索元数据…", "来自：…"), translation stages.
+    static let secondaryFont = NSFont.systemFont(ofSize: 12)
+}
+
 /// Title column: icon (or spinner while retrieving), title, and the "默认" / "译文" badges on files (a translation
 /// that is the default file shows both).
 final class TitleCell: NSTableCellView {
@@ -55,7 +69,7 @@ final class TitleCell: NSTableCellView {
         progress.maxValue = 1
         progress.isHidden = true
         progress.setAccessibilityIdentifier("translationProgressBar")
-        stageLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        stageLabel.font = ItemListMetrics.secondaryFont
         stageLabel.textColor = .secondaryLabelColor
         stageLabel.lineBreakMode = .byTruncatingTail
         stageLabel.isHidden = true
@@ -63,7 +77,7 @@ final class TitleCell: NSTableCellView {
         // what the engine is doing stays readable longest.
         stageLabel.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(740), for: .horizontal)
         stageLabel.setContentHuggingPriority(.required, for: .horizontal)
-        progressLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: ItemListMetrics.secondaryFont.pointSize, weight: .regular)
         progressLabel.textColor = .secondaryLabelColor
         progressLabel.isHidden = true
         progressLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -76,8 +90,8 @@ final class TitleCell: NSTableCellView {
         NSLayoutConstraint.activate([
             icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
-            icon.widthAnchor.constraint(equalToConstant: 16),
-            icon.heightAnchor.constraint(equalToConstant: 16),
+            icon.widthAnchor.constraint(equalToConstant: ItemListMetrics.iconSize),
+            icon.heightAnchor.constraint(equalToConstant: ItemListMetrics.iconSize),
             spinner.centerXAnchor.constraint(equalTo: icon.centerXAnchor),
             spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
@@ -120,7 +134,7 @@ final class TitleCell: NSTableCellView {
             progress.stopAnimation(nil)
         }
         // Set the base font before any attributed text so the smaller secondary run survives.
-        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+        label.font = ItemListMetrics.titleFont
         let retrieving = item.kind == .standalone && item.metadataState == .pending
         if retrieving {
             icon.isHidden = true
@@ -161,7 +175,7 @@ final class TitleCell: NSTableCellView {
         icon.image = NSWorkspace.shared.icon(forFile: url.path)
         icon.contentTintColor = nil
         label.stringValue = file.fileName
-        label.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
+        label.font = ItemListMetrics.bodyFont
         let translation = file.translationOf == nil ? nil : (file.translationKind == .dual ? "双语" : "译文")
         badge.configure("默认", tint: .controlAccentColor)
         badge.isHidden = !isDefault
@@ -175,8 +189,8 @@ final class TitleCell: NSTableCellView {
     /// Title followed by a small symbol (e.g. the note indicator, NOTE-03).
     static func title(_ title: String, symbol: String, label: String) -> NSAttributedString {
         let text = NSMutableAttributedString(string: title + "  ", attributes: [
-            .foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize)])
-        let configuration = NSImage.SymbolConfiguration(pointSize: NSFont.smallSystemFontSize, weight: .regular)
+            .foregroundColor: NSColor.labelColor, .font: ItemListMetrics.titleFont])
+        let configuration = NSImage.SymbolConfiguration(pointSize: ItemListMetrics.secondaryFont.pointSize, weight: .regular)
             .applying(.init(hierarchicalColor: .secondaryLabelColor))
         if let image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?.withSymbolConfiguration(configuration) {
             let attachment = NSTextAttachment()
@@ -195,9 +209,9 @@ final class TitleCell: NSTableCellView {
         let style = NSMutableParagraphStyle()
         style.lineBreakMode = .byTruncatingTail
         let text = NSMutableAttributedString(string: title, attributes: [
-            .foregroundColor: NSColor.labelColor, .font: NSFont.systemFont(ofSize: NSFont.systemFontSize), .paragraphStyle: style])
+            .foregroundColor: NSColor.labelColor, .font: ItemListMetrics.titleFont, .paragraphStyle: style])
         text.append(NSAttributedString(string: "   " + secondary, attributes: [
-            .foregroundColor: NSColor.secondaryLabelColor, .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: NSColor.secondaryLabelColor, .font: ItemListMetrics.secondaryFont,
             .paragraphStyle: style]))
         return text
     }
@@ -226,6 +240,7 @@ final class TextCell: NSTableCellView {
         super.init(frame: frameRect)
         identifier = Self.identifier
         textField = label
+        label.font = ItemListMetrics.bodyFont
         label.lineBreakMode = .byTruncatingTail
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)

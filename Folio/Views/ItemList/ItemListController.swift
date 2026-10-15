@@ -89,8 +89,8 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         outline.dataSource = self
         outline.delegate = self
         outline.style = .inset
-        outline.rowHeight = 26
-        outline.intercellSpacing = NSSize(width: 10, height: 0)
+        outline.rowHeight = ItemListMetrics.rowHeight
+        outline.intercellSpacing = NSSize(width: ItemListMetrics.columnSpacing, height: 0)
         outline.allowsMultipleSelection = true
         outline.allowsColumnReordering = true
         outline.allowsColumnResizing = true
@@ -298,11 +298,11 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
     }
 
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-        outlineView.makeView(withIdentifier: Self.rowViewIdentifier, owner: nil) as? GlassRowView
-            ?? { let row = GlassRowView(); row.identifier = Self.rowViewIdentifier; return row }()
+        outlineView.makeView(withIdentifier: Self.rowViewIdentifier, owner: nil) as? SelectionRowView
+            ?? { let row = SelectionRowView(); row.identifier = Self.rowViewIdentifier; return row }()
     }
 
-    private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("GlassRow")
+    private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("SelectionRow")
 
     private func make<T: NSTableCellView>(_ type: T.Type, _ identifier: NSUserInterfaceItemIdentifier) -> T {
         outline.makeView(withIdentifier: identifier, owner: nil) as? T ?? T(frame: .zero)
