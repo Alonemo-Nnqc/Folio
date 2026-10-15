@@ -33,8 +33,15 @@ xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Release -derive
   -destination 'generic/platform=macOS' \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
-  build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
-[[ -d "$APP" ]] || { echo "build failed: $APP missing" >&2; exit 1; }
+  build > "$DERIVED.log" 2>&1 && BUILD_STATUS=0 || BUILD_STATUS=$?
+grep -E "error:|BUILD (SUCCEEDED|FAILED)" "$DERIVED.log" || true
+if [[ $BUILD_STATUS -ne 0 || ! -d "$APP" ]]; then
+  # Compiler crashes have no "error:" line; show what was being compiled.
+  grep -E "While (evaluating|emitting|silgen|type-checking)|Apple Swift version|^[0-9]+\.\s|LLVM ERROR|Assertion failed|Command .* failed" "$DERIVED.log" | head -40 >&2
+  tail -40 "$DERIVED.log" >&2
+  echo "build failed (full log: $DERIVED.log)" >&2
+  exit 1
+fi
 codesign --verify --deep --strict "$APP"
 
 SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"

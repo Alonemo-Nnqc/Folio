@@ -5,6 +5,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # A trial run from the Actions tab: builds and packages, uploads the result, publishes nothing.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (needs a section in CHANGELOG.md)
+        required: true
 
 permissions:
   contents: write
@@ -34,12 +40,28 @@ jobs:
             echo "::error::Secret SPARKLE_ED_PRIVATE_KEY is missing (run script/setup-release-secret.sh)"
             exit 1
           fi
-          script/release.sh "${GITHUB_REF_NAME#v}"
+          VERSION="${{ inputs.version }}"
+          script/release.sh "${VERSION:-${GITHUB_REF_NAME#v}}"
+
+      - name: Upload the build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-build-log
+          path: build/ReleaseDerivedData.log
 
       - name: Package browser extensions
         run: script/package-extensions.sh
 
+      - name: Upload the trial build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: folio-trial-build
+          path: dist/
+
       - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
