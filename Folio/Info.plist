@@ -27,7 +27,15 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Folio</string>
+	<string>© 2026 Alonemo-Nnqc. MIT License.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/Alonemo-Nnqc/Folio/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>36TbV2Qi6dcwYgqF21+FpfX7w13j9y6NJkyc8CuC4Yw=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

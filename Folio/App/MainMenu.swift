@@ -19,6 +19,9 @@ enum MainMenu {
         main.addItem(submenu("窗口", window))
         let help = NSMenu(title: "帮助")
         help.addItem(item("在 Finder 中显示文献库", #selector(AppDelegate.revealLibraryInFinder(_:))))
+        help.addItem(.separator())
+        help.addItem(item("Folio 主页", #selector(AppDelegate.openProjectPage(_:))))
+        help.addItem(item("报告问题…", #selector(AppDelegate.reportIssue(_:))))
         main.addItem(submenu("帮助", help))
         NSApp.mainMenu = main
         NSApp.windowsMenu = window
@@ -30,6 +33,7 @@ enum MainMenu {
     private static func appMenu() -> NSMenu {
         let menu = NSMenu(title: "Folio")
         menu.addItem(item("关于 Folio", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
+        menu.addItem(item("检查更新…", #selector(AppDelegate.checkForUpdates(_:))))
         menu.addItem(.separator())
         menu.addItem(item("设置…", #selector(AppDelegate.showSettings(_:)), ","))
         menu.addItem(.separator())

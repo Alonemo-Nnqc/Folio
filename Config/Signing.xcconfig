@@ -1,0 +1,8 @@
+// Code signing defaults for everyone who clones the repository: "Sign to Run Locally" (ad-hoc),
+// no team needed. To sign with your own Apple ID, copy Local.xcconfig.example to Local.xcconfig
+// (git-ignored) and fill in your team. Release builds are ad-hoc signed by script/release.sh.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

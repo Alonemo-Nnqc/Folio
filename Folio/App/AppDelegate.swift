@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private(set) var model: AppModel!
     private(set) var libraryWindowController: LibraryWindowController!
+    private(set) var updater: SoftwareUpdater!
     private var settingsWindowController: SettingsWindowController?
     private var pendingOpens: [URL] = []
     private var didFinishLaunching = false
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Full Screen is in our own View menu; don't let AppKit add a second one.
         UserDefaults.standard.set(false, forKey: "NSFullScreenMenuItemEverywhere")
         model = AppModel()
+        updater = SoftwareUpdater()
         NSApp.appearance = model.settings.appearance.nsAppearance
         MainMenu.install()
     }
@@ -119,6 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     var settingsWindow: SettingsWindowController? { settingsWindowController }
 
+    @objc func checkForUpdates(_ sender: Any?) { updater.checkForUpdates(sender) }
+
     @objc func showSettings(_ sender: Any?) {
         if settingsWindowController == nil { settingsWindowController = SettingsWindowController(model: model) }
         settingsWindowController?.showWindow(nil)
@@ -132,6 +136,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func importFromZotero(_ sender: Any?) { showLibrary(nil); model.activeSheet = .zoteroImport }
     @objc func importReferences(_ sender: Any?) { showLibrary(nil); model.chooseReferencesToImport() }
 
+    static let projectURL = URL(string: "https://github.com/Alonemo-Nnqc/Folio")!
+
+    @objc func openProjectPage(_ sender: Any?) { NSWorkspace.shared.open(Self.projectURL) }
+
+    @objc func reportIssue(_ sender: Any?) {
+        NSWorkspace.shared.open(Self.projectURL.appending(path: "issues/new/choose"))
+    }
+
     @objc func revealLibraryInFinder(_ sender: Any?) {
         NSWorkspace.shared.activateFileViewerSelecting([model.library.root])
     }
@@ -140,6 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if menuItem.action == #selector(showLibrary(_:)) {
             menuItem.state = libraryWindowController?.window?.isKeyWindow == true ? .on : .off
         }
+        if menuItem.action == #selector(checkForUpdates(_:)) { return updater.canCheckForUpdates }
         return true
     }
 }

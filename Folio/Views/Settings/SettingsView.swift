@@ -241,6 +241,7 @@ struct GeneralSettings: View {
                 Toggle("父分组中显示子分组的条目", isOn: $settings.includeSubgroupItems)
                 .onChange(of: settings.includeSubgroupItems) { model.recompute() }
             }
+            UpdateSettingsSection(updater: AppDelegate.shared.updater)
         }
         .formStyle(.grouped)
     }
@@ -250,6 +251,32 @@ struct GeneralSettings: View {
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(filePath: "/Applications")
         if panel.runModal() == .OK, let url = panel.url { settings.openWithAppPath = url.path }
+    }
+}
+
+/// 软件更新: version, automatic checks / installs, and a manual check (Sparkle, from GitHub Releases).
+private struct UpdateSettingsSection: View {
+    @Bindable var updater: SoftwareUpdater
+
+    var body: some View {
+        Section {
+            LabeledContent("当前版本") {
+                HStack {
+                    Text(SoftwareUpdater.versionDescription)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Button("检查更新…") { updater.checkForUpdates(nil) }
+                        .disabled(!updater.canCheckForUpdates)
+                }
+            }
+            Toggle("自动检查更新", isOn: $updater.automaticallyChecks)
+            Toggle("自动下载并在退出时安装更新", isOn: $updater.automaticallyDownloads)
+                .disabled(!updater.automaticallyChecks)
+        } header: {
+            Text("软件更新")
+        } footer: {
+            Text("更新从 GitHub 发布页下载，安装前会校验签名。")
+        }
     }
 }
 
