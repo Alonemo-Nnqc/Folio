@@ -1,10 +1,24 @@
+# macOS
 .DS_Store
+
+# Xcode / SwiftPM
 *.xcuserstate
 xcuserdata/
 DerivedData/
 build/
 .build/
 .swiftpm/
-.worktrees/
+
+# Release output (script/release.sh, script/package-extensions.sh)
 dist/
+
+# Personal signing settings (see Config/Local.xcconfig.example)
+Config/Local.xcconfig
+
+# Local development notes and agent instructions, kept out of the public repository
+doc/
+agent.md
+
+# Worktrees
+.worktrees/
 .claude/worktrees/
