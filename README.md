@@ -6,7 +6,7 @@
 - 内置阅读器（与"预览"同一引擎 PDFKit）：论文以原生标签页打开；高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，与"预览"互通；记住每篇论文的阅读位置
 - 保留排版的整篇翻译（pdf2zh_next / BabelDOC），支持 20 多种翻译服务，译文与原文可对照阅读
 - 每个条目一篇 Markdown 笔记，可以在阅读时把选中的文字一键加入笔记
-- AI 接入：内置 MCP 服务器和命令行工具 `folio-cli`，以及教 AI 使用 Folio 的技能；在 设置 ▸ AI 中按各智能体官方的方式一键为 Claude Code、Claude 桌面版、Codex、Gemini CLI、Copilot CLI、Cursor CLI 等 10 种智能体添加或移除
+- AI 接入：内置 MCP 服务器和命令行工具 `folio-cli`，以及教 AI 使用 Folio 的技能；在 设置 ▸ AI 中按各智能体官方的方式一键为 Claude Code、Claude 桌面版、Codex、Gemini CLI、Copilot CLI、Cursor CLI、Antigravity 等 11 种智能体添加或移除
 - 浏览器插件（Safari、Chrome、Edge、Brave、Arc、Firefox 等）：在论文页面一键保存到 Folio，可选分组和标签，并可同时保存 PDF；搜索结果、arXiv 列表等页面可批量保存
 - 两级分组（可自定义颜色）、彩色标签、回收站、全文搜索、阅读状态与星级评分
 - 每个条目可以挂多个文件，并可指定默认打开的文件；也可以随时用"预览"或其他应用打开
@@ -24,7 +24,7 @@ Folio.app 内附带 `folio-cli`（`Folio.app/Contents/MacOS/folio-cli`）：
 - `folio-cli call <工具> '<JSON>'` 以及 `search`、`get`、`cite`、`export`、`add`、`open` 快捷命令，供只能运行命令的智能体使用；`folio-cli status` 检查文献库与权限，`folio-cli agents` 查看或更改各智能体的安装状态。
 - Folio 技能（`folio-library/`：`SKILL.md` + `references/`）教智能体如何根据描述找到论文、准确引用、写 LaTeX / Markdown / Word 时如何引用和导出，以及哪些操作需要先问用户。
 
-在 设置 ▸ AI 中，Folio 只列出本机真实可用的智能体（App 完整，或命令能在终端中运行并报告版本），每个智能体有"MCP""技能"两个开关，打开即按该智能体官方文档的方式写入（Claude Code、Codex 用它们自己的 `mcp add` 命令；其他应用只改动 Folio 自己的条目，保留原文件的顺序、格式和注释），关闭即移除。技能放在各智能体读取的目录中：Claude Code 为 `~/.claude/skills`，Codex、Gemini CLI、Cursor CLI、Copilot CLI、opencode 共用开放标准目录 `~/.agents/skills`，Kiro CLI、Cline CLI、Qwen Code 各有自己的目录。VS Code、Zed、Windsurf 等编辑器可用"拷贝 MCP 配置"手动添加。"检查"按钮会像智能体一样启动 folio-cli 并完成握手。也可以关闭"允许 AI 修改文献库"，只让 AI 读取（对正在运行的会话立即生效）。AI 写入后，正在运行的 Folio 会立即刷新。
+在 设置 ▸ AI 中，Folio 只列出本机真实可用的智能体（App 完整，或命令能在终端中运行并报告版本），每个智能体有"MCP""技能"两个开关，打开即按该智能体官方文档的方式写入（Claude Code、Codex 用它们自己的 `mcp add` 命令；其他应用只改动 Folio 自己的条目，保留原文件的顺序、格式和注释），关闭即移除。技能放在各智能体读取的目录中：Claude Code 为 `~/.claude/skills`，Codex、Gemini CLI、Cursor CLI、Copilot CLI、opencode 共用开放标准目录 `~/.agents/skills`，Kiro CLI、Cline CLI、Qwen Code、Antigravity 各有自己的目录。VS Code、Zed、Windsurf 等编辑器可用"拷贝 MCP 配置"手动添加。"检查"按钮会像智能体一样启动 folio-cli 并完成握手。也可以关闭"允许 AI 修改文献库"，只让 AI 读取（对正在运行的会话立即生效）。AI 写入后，正在运行的 Folio 会立即刷新。
 
 注意：Gemini CLI 只在受信任的文件夹中启用 MCP 服务器；Claude 桌面版的技能需要用"导出技能包"上传。
 
