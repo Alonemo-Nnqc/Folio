@@ -137,7 +137,10 @@ final class OnboardingState {
         discoverTranslator()
         // Back from a browser or System Settings: the extension may be enabled now.
         activation = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { Task { await self?.refreshBrowsers() } }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                Task { await self.refreshBrowsers() }
+            }
         }
     }
 
