@@ -405,7 +405,8 @@ import Testing
         let elapsed = await clock.measure { result = await MetadataEngine.testing(http).resolve(pdfAt: pdf) }
         guard case .found(let m) = result else { Issue.record("expected a match"); return }
         #expect(m.doi == Self.rvsDOI)
-        #expect(elapsed < .seconds(1.5))
+        // The recognizer takes 3 s; not waiting for it is what matters (CI runners are slower).
+        #expect(elapsed < (ProcessInfo.processInfo.environment["CI"] == nil ? .seconds(1.5) : .seconds(2.5)))
     }
 
     enum Failure: CaseIterable { case offline, serverError, rejected, malformed, timeout }

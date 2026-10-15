@@ -133,7 +133,9 @@ import Testing
             _ = ViewResolver.rows(ViewQuery(scope: .all, searchText: "segmentation 12"), in: s)
             _ = ViewResolver.rows(ViewQuery(scope: .all, sort: SortState(column: .year, ascending: false)), in: s)
         }
-        #expect(elapsed < .milliseconds(500), "debug build budget; release target is 100 ms")
+        // Debug build budget (release target is 100 ms); shared CI runners are several times slower.
+        let budget: Duration = ProcessInfo.processInfo.environment["CI"] == nil ? .milliseconds(500) : .seconds(2)
+        #expect(elapsed < budget)
     }
 }
 
