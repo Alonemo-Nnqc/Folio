@@ -92,14 +92,14 @@ struct ZoteroImportSheet: View {
             case .finished:
                 Button("完成") { dismiss() }
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
             default:
                 Button("取消", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .disabled(isImporting)
                 Button("导入", action: startImport)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                     .disabled(phase != .ready)
             }
         }

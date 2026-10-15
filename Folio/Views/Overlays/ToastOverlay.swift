@@ -16,14 +16,14 @@ struct ToastOverlay: View {
                             center.dismiss()
                             action()
                         }
-                        .buttonStyle(.glassProminent)
+                        .glassProminentButtonStyle()
                         .controlSize(.small)
                     }
                 }
                     .font(.callout)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .glassEffect(.regular, in: Capsule())
+                    .glassBackground(in: Capsule())
                     .onTapGesture { center.dismiss() }
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                     .id(toast.id)

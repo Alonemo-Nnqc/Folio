@@ -108,6 +108,7 @@
 		C8B35E495884A6FDB5EE41FD /* BrowserExtension in Resources */ = {isa = PBXBuildFile; fileRef = 456D36A7DCA513B7AF7D3A5C /* BrowserExtension */; };
 		C9744AA5A10B9053B21CE99C /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 7D39B6B995CDB0A0A880CC4C /* manifest.json */; };
 		C98C7A9E02C347ECF760F1A4 /* CitationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B297186EAEE3BEACD7D981B /* CitationServiceTests.swift */; };
+		C9C0348EECF2A165C215BF6D /* GlassCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BC1F9CB8E585B45E2A4C32 /* GlassCompatibility.swift */; };
 		CB244C50F001D689892AB530 /* ReaderSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4C515588B5798D262DBE05D /* ReaderSidebarView.swift */; };
 		CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */; };
 		CDA52F3DE33D0D753F29F7EA /* SidebarUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46AD83528EA75BDE7F81E274 /* SidebarUITests.swift */; };
@@ -210,6 +211,7 @@
 		20484C461230A82CA4056E35 /* ReaderState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderState.swift; sourceTree = "<group>"; };
 		2196364CD8371363D279F008 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		21D3EB308474DAB9FCCE3D41 /* CitationStyleOption.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationStyleOption.swift; sourceTree = "<group>"; };
+		23BC1F9CB8E585B45E2A4C32 /* GlassCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCompatibility.swift; sourceTree = "<group>"; };
 		24F1DF7E040C9F5D52316FBA /* SidebarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarController.swift; sourceTree = "<group>"; };
 		25F5402BBEE720CF3D9328C5 /* ObservationLoop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservationLoop.swift; sourceTree = "<group>"; };
 		268B655678B1E6C751B8F393 /* ReaderWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderWindowController.swift; sourceTree = "<group>"; };
@@ -641,6 +643,7 @@
 			children = (
 				5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */,
 				C5A1F0001E4BF60E89623E36 /* ColorSwatchMenuItem.swift */,
+				23BC1F9CB8E585B45E2A4C32 /* GlassCompatibility.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -1039,6 +1042,7 @@
 				2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */,
 				D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */,
 				B276990702FE10835E8F1F4F /* FolioWindowController.swift in Sources */,
+				C9C0348EECF2A165C215BF6D /* GlassCompatibility.swift in Sources */,
 				1A246125F28538962E7FB6F8 /* IdentifierAddSheet.swift in Sources */,
 				656DE0D3F05733D169AF77B0 /* ImportCoordinator.swift in Sources */,
 				DC14252E1FECE7DC58D7040C /* InspectorView.swift in Sources */,
@@ -1367,7 +1371,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1469,7 +1473,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";

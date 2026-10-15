@@ -1,6 +1,5 @@
 import Darwin
 import Foundation
-import Synchronization
 
 /// What a child process should run. Nothing is inherited implicitly: the
 /// environment and working directory are always explicit.
@@ -76,7 +75,11 @@ public final class ChildProcess: Sendable {
         posix_spawn_file_actions_addopen(&fileActions, 0, "/dev/null", O_RDONLY, 0)
         posix_spawn_file_actions_adddup2(&fileActions, outPipe[1], 1)
         posix_spawn_file_actions_adddup2(&fileActions, errPipe[1], 2)
-        posix_spawn_file_actions_addchdir(&fileActions, spec.currentDirectory.path)
+        if #available(macOS 26, *) {
+            posix_spawn_file_actions_addchdir(&fileActions, spec.currentDirectory.path)
+        } else {
+            posix_spawn_file_actions_addchdir_np(&fileActions, spec.currentDirectory.path)
+        }
 
         var attributes: posix_spawnattr_t?
         posix_spawnattr_init(&attributes)

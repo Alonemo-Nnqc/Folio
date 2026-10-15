@@ -39,7 +39,7 @@ struct StandaloneFileInspector: View {
                             .disabled(item.metadataState == .pending)
                         Button("手动匹配…", systemImage: "magnifyingglass") { model.activeSheet = .manualMatch(itemId: item.id) }
                     }
-                    .buttonStyle(.glass)
+                    .glassButtonStyle()
                 }
             }
             .padding(16)

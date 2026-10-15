@@ -47,7 +47,7 @@ struct TagEditorSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button(tagId == nil ? "创建" : "保存", action: save)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }

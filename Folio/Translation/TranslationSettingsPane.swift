@@ -60,7 +60,7 @@ struct TranslateSheet: View {
                     model.translations.start(fileId: fileId)
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.glassProminent)
+                .glassProminentButtonStyle()
             }
             .padding([.horizontal, .bottom], 20)
         }
@@ -158,7 +158,7 @@ private struct EngineSection: View {
             case .notInstalled:
                 LabeledContent("内置组件未安装") {
                     Button("下载并安装") { coordinator.install() }
-                        .buttonStyle(.glassProminent)
+                        .glassProminentButtonStyle()
                 }
             case .broken(let reason):
                 LabeledContent("内置组件已损坏") {
@@ -252,7 +252,7 @@ private struct ServiceSection: View {
     var compact = false
     @State private var showAdvanced = false
     @State private var appleStatus: AppleSystemTranslator.Availability?
-    @State private var appleDownload: TranslationSession.Configuration?
+    @State private var appleDownloadRequested = false
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -290,28 +290,25 @@ private struct ServiceSection: View {
             appleStatus = await AppleSystemTranslator.availability(from: settings.translationOptions.langIn,
                                                                    to: settings.translationOptions.langOut)
         }
-        .translationTask(appleDownload) { session in
-            // Shows the system prompt that downloads the offline language models. The session is only
-            // used inside this closure, on the main actor.
-            nonisolated(unsafe) let session = session
-            try? await session.prepareTranslation()
-            appleStatus = await AppleSystemTranslator.availability(from: settings.translationOptions.langIn,
-                                                                   to: settings.translationOptions.langOut)
+        .background {
+            if #available(macOS 15, *) {
+                AppleLanguageDownloader(requested: $appleDownloadRequested, from: settings.translationOptions.langIn,
+                                        to: settings.translationOptions.langOut) {
+                    appleStatus = await AppleSystemTranslator.availability(from: settings.translationOptions.langIn,
+                                                                           to: settings.translationOptions.langOut)
+                }
+            }
         }
     }
 
     @ViewBuilder
     private var appleRow: some View {
-        let options = model.settings.translationOptions
         switch appleStatus {
         case .installed:
             Label("语言包已就绪，可以离线翻译", systemImage: "checkmark.circle").foregroundStyle(.secondary)
         case .needsDownload:
             LabeledContent("需要下载离线语言包") {
-                Button("下载语言包…") {
-                    appleDownload = TranslationSession.Configuration(source: AppleSystemTranslator.language(forCode: options.langIn),
-                                                                     target: AppleSystemTranslator.language(forCode: options.langOut))
-                }
+                Button("下载语言包…") { appleDownloadRequested = true }
             }
         case .unsupported:
             Label("Apple 系统翻译不支持这组语言", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
@@ -321,7 +318,9 @@ private struct ServiceSection: View {
     }
 
     private var groups: [(title: String, services: [TranslationService])] {
-        let all = TranslationServiceCatalog.all
+        let all = TranslationServiceCatalog.all.filter {
+            $0.id != TranslationServiceCatalog.appleServiceID || AppleSystemTranslator.isSupportedOnThisSystem
+        }
         return [("免费", all.filter { $0.isFree && !$0.isLocal }),
                 ("本地 / 离线", all.filter(\.isLocal)),
                 ("需要 API Key", all.filter { !$0.isFree && !$0.isLocal })].filter { !$0.services.isEmpty }
@@ -589,5 +588,31 @@ struct ReasoningPicker: View {
             }
             .pickerStyle(.segmented)
         }
+    }
+}
+
+/// Shows the system prompt that downloads Apple's offline language models for a language pair.
+@available(macOS 15, *)
+private struct AppleLanguageDownloader: View {
+    @Binding var requested: Bool
+    let from: String
+    let to: String
+    let finished: () async -> Void
+    @State private var configuration: TranslationSession.Configuration?
+
+    var body: some View {
+        Color.clear
+            .onChange(of: requested) {
+                guard requested else { return }
+                configuration = TranslationSession.Configuration(source: AppleSystemTranslator.language(forCode: from),
+                                                                 target: AppleSystemTranslator.language(forCode: to))
+            }
+            .translationTask(configuration) { session in
+                // The session is only used inside this closure, on the main actor.
+                nonisolated(unsafe) let session = session
+                try? await session.prepareTranslation()
+                requested = false
+                await finished()
+            }
     }
 }

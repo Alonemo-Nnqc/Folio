@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// Runs one PDF translation in a separate process group.
 ///

@@ -9,6 +9,11 @@ struct RedetectButton: View {
     var help = "重新检测"
     let action: () -> Void
 
+    /// The arrow-head variant is new in macOS 15.
+    private static var symbol: String {
+        if #available(macOS 15, *) { "arrow.trianglehead.2.clockwise.rotate.90" } else { "arrow.clockwise" }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             if let result {
@@ -19,8 +24,8 @@ struct RedetectButton: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             }
             Button(action: action) {
-                Label(isChecking ? "正在检测…" : "重新检测", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
-                    .symbolEffect(.rotate, options: .repeat(.continuous), isActive: isChecking)
+                Label(isChecking ? "正在检测…" : "重新检测", systemImage: Self.symbol)
+                    .spinning(isChecking)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -85,5 +90,16 @@ struct StatusBadge: View {
         .overlay(Capsule().strokeBorder(color.opacity(0.28), lineWidth: 0.5))
         .fixedSize()
         .accessibilityElement(children: .combine)
+    }
+}
+
+private extension View {
+    /// The circular arrows turn while a check runs (pulse before macOS 15, which has no rotate effect).
+    @ViewBuilder func spinning(_ active: Bool) -> some View {
+        if #available(macOS 15, *) {
+            symbolEffect(.rotate, options: .repeat(.continuous), isActive: active)
+        } else {
+            symbolEffect(.pulse, options: .repeating, isActive: active)
+        }
     }
 }

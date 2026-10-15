@@ -32,7 +32,7 @@ struct IdentifierAddSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("添加", action: add)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                     .disabled(identifier.trimmingCharacters(in: .whitespaces).isEmpty || working)
             }
         }

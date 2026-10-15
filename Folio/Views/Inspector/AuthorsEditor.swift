@@ -41,7 +41,7 @@ struct AuthorsEditor: View {
                                           given: $0.given.trimmingCharacters(in: .whitespaces)) })
                         editing = false
                     }
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                 }
                 .controlSize(.small)
             }

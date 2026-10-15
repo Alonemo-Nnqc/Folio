@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "FolioCore",
     defaultLocalization: "zh-Hans",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v14)],
     products: [
         .library(name: "FolioCore", targets: ["FolioCore"]),
         .library(name: "FolioMetadata", targets: ["FolioMetadata"]),

@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 public enum TranslatorStatus: Sendable, Hashable {
     case notInstalled

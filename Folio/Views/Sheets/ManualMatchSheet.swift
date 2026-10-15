@@ -43,7 +43,7 @@ struct ManualMatchSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("使用所选结果", action: apply)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.glassProminent)
+                    .glassProminentButtonStyle()
                     .disabled(selection == nil)
             }
         }

@@ -40,7 +40,13 @@ public enum AppleSystemTranslator {
         }
     }
 
+    /// Translating from a command-line process with installed models needs macOS 26.
+    public static var isSupportedOnThisSystem: Bool {
+        if #available(macOS 26, *) { true } else { false }
+    }
+
     public static func availability(from source: String, to target: String) async -> Availability {
+        guard #available(macOS 26, *) else { return .unsupported }
         let status = await LanguageAvailability().status(from: language(forCode: source), to: language(forCode: target))
         switch status {
         case .installed: return .installed
@@ -80,6 +86,9 @@ public enum AppleSystemTranslator {
         case .installed: break
         case .needsDownload: throw Failure.notInstalled(sourceLanguage.minimalIdentifier, targetLanguage.minimalIdentifier)
         case .unsupported: throw Failure.unsupported(sourceLanguage.minimalIdentifier, targetLanguage.minimalIdentifier)
+        }
+        guard #available(macOS 26, *) else {
+            throw Failure.unsupported(sourceLanguage.minimalIdentifier, targetLanguage.minimalIdentifier)
         }
         let session = TranslationSession(installedSource: sourceLanguage, target: targetLanguage)
         do {

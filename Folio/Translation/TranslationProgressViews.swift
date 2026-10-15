@@ -3,10 +3,36 @@ import AppKit
 /// Floating capsule at the bottom of the reader while its paper is being translated (TRANS-04): what the
 /// engine is doing, a progress bar and the percentage, on Liquid Glass so the page shows through.
 final class TranslationProgressHUD: NSView {
-    private let glass = NSGlassEffectView()
+    private var glass: NSView!
     private let stage = NSTextField(labelWithString: "")
     private let percent = NSTextField(labelWithString: "")
     private let bar = NSProgressIndicator()
+
+    /// Liquid Glass on macOS 26, a HUD material before that.
+    private static func capsule(around content: NSView, cornerRadius: CGFloat) -> NSView {
+        if #available(macOS 26, *) {
+            let glass = NSGlassEffectView()
+            glass.contentView = content
+            glass.cornerRadius = cornerRadius
+            return glass
+        }
+        let material = NSVisualEffectView()
+        material.material = .popover
+        material.blendingMode = .withinWindow
+        material.state = .active
+        material.wantsLayer = true
+        material.layer?.cornerRadius = cornerRadius
+        material.layer?.masksToBounds = true
+        content.translatesAutoresizingMaskIntoConstraints = false
+        material.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: material.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: material.trailingAnchor),
+            content.topAnchor.constraint(equalTo: material.topAnchor),
+            content.bottomAnchor.constraint(equalTo: material.bottomAnchor),
+        ])
+        return material
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -32,8 +58,7 @@ final class TranslationProgressHUD: NSView {
             percent.widthAnchor.constraint(equalToConstant: 34),
             stage.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
         ])
-        glass.contentView = stack
-        glass.cornerRadius = 18
+        glass = Self.capsule(around: stack, cornerRadius: 18)
         glass.translatesAutoresizingMaskIntoConstraints = false
         addSubview(glass)
         NSLayoutConstraint.activate([
