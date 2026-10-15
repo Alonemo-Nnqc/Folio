@@ -77,7 +77,7 @@ final class ImportCoordinator {
         Task {
             let files = Self.expand(urls)
             guard !files.isEmpty else {
-                model?.toasts.show("没有找到可导入的文件", systemImage: "doc.questionmark")
+                model?.toasts.show(String(localized: "没有找到可导入的文件"), systemImage: "doc.questionmark")
                 return
             }
             let outcomes = await Task.detached(priority: .userInitiated) {
@@ -104,9 +104,9 @@ final class ImportCoordinator {
             case .duplicateFile(let existing, let addedToGroup):
                 let title = model.snapshot.items[existing]?.title ?? ""
                 if addedToGroup, let groupId, let name = model.snapshot.groupsById[groupId]?.name {
-                    model.toasts.show("已有该文献，已加入「\(name)」", systemImage: "doc.on.doc")
+                    model.toasts.show(String(localized: "已有该文献，已加入「\(name)」"), systemImage: "doc.on.doc")
                 } else {
-                    model.toasts.show("已有该文献「\(title)」", systemImage: "doc.on.doc")
+                    model.toasts.show(String(localized: "已有该文献「\(title)」"), systemImage: "doc.on.doc")
                 }
             case .duplicateInTrash(let existing):
                 let title = model.snapshot.items[existing]?.title ?? ""
@@ -114,7 +114,7 @@ final class ImportCoordinator {
                     if restore { model?.restoreItems([existing]) }
                 }
             case .failed(let url, let reason):
-                model.toasts.show("无法添加「\(url.lastPathComponent)」：\(reason)", systemImage: "exclamationmark.triangle")
+                model.toasts.show(String(localized: "无法添加「\(url.lastPathComponent)」：\(reason)"), systemImage: "exclamationmark.triangle")
             }
         }
     }
@@ -126,9 +126,9 @@ final class ImportCoordinator {
             let outcomes = await Task.detached { (try? library.addFiles(urls, toItem: itemId, autoRename: rename)) ?? [] }.value
             let added = outcomes.filter { if case .added = $0 { true } else { false } }.count
             if outcomes.contains(where: { if case .duplicate = $0 { true } else { false } }) {
-                model?.toasts.show("已有该文献", systemImage: "doc.on.doc")
+                model?.toasts.show(String(localized: "已有该文献"), systemImage: "doc.on.doc")
             } else if added > 0 {
-                model?.toasts.show(added == 1 ? "已添加文件" : "已添加 \(added) 个文件", systemImage: "paperclip")
+                model?.toasts.show(added == 1 ? String(localized: "已添加文件") : String(localized: "已添加 \(added) 个文件"), systemImage: "paperclip")
             }
         }
     }
@@ -225,7 +225,7 @@ final class ImportCoordinator {
                 }
             }
         } catch {
-            model.toasts.show("无法创建条目：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            model.toasts.show(String(localized: "无法创建条目：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
         }
     }
 
@@ -235,7 +235,7 @@ final class ImportCoordinator {
         let identifier = item.doi ?? item.arxivId ?? item.isbn
         let title = item.title
         let rename = autoRename
-        model?.toasts.show("正在重新检索元数据…", systemImage: "arrow.clockwise")
+        model?.toasts.show(String(localized: "正在重新检索元数据…"), systemImage: "arrow.clockwise")
         Task {
             let result: RetrievalResult = await Task.detached {
                 if let identifier, !identifier.isEmpty { return await resolver.resolve(identifier: identifier) }
@@ -246,11 +246,11 @@ final class ImportCoordinator {
             switch result {
             case .found(let metadata):
                 model?.perform { try library.updateMetadata(item.id, metadata, autoRename: rename) }
-                model?.toasts.show("元数据已更新", systemImage: "checkmark.circle")
+                model?.toasts.show(String(localized: "元数据已更新"), systemImage: "checkmark.circle")
             case .notFound:
-                model?.toasts.show("未检索到该条目的元数据", systemImage: "questionmark.circle")
+                model?.toasts.show(String(localized: "未检索到该条目的元数据"), systemImage: "questionmark.circle")
             case .networkError:
-                model?.toasts.show("网络不可用，请稍后重试", systemImage: "wifi.slash")
+                model?.toasts.show(String(localized: "网络不可用，请稍后重试"), systemImage: "wifi.slash")
             }
         }
     }
@@ -273,8 +273,8 @@ final class ImportCoordinator {
             guard !Task.isCancelled, let self else { return }
             let names = self.failedNames
             self.failedNames = []
-            let message = names.count == 1 ? "未检索到「\(names[0])」的元数据，已保留为独立文件"
-                : "\(names.count) 个文件未检索到元数据，已保留为独立文件"
+            let message = names.count == 1 ? String(localized: "未检索到「\(names[0])」的元数据，已保留为独立文件")
+                : String(localized: "\(names.count) 个文件未检索到元数据，已保留为独立文件")
             self.model?.toasts.show(message, systemImage: "questionmark.circle")
         }
     }

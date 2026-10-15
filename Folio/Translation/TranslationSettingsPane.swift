@@ -196,13 +196,13 @@ private struct EngineSection: View {
             searching = false
             if let found {
                 settings.translatorCustomPath = found.executable.path
-                AppDelegate.shared.model?.toasts.show("已找到 pdf2zh_next \(found.version)，翻译将使用它", systemImage: "checkmark.circle")
+                AppDelegate.shared.model?.toasts.show(String(localized: "已找到 pdf2zh_next \(found.version)，翻译将使用它"), systemImage: "checkmark.circle")
             } else {
                 let alert = NSAlert()
-                alert.messageText = "没有在这台 Mac 上找到 pdf2zh_next"
-                alert.informativeText = "已查找\(TranslatorDiscovery.searchedPlaces)。\n\n可以在终端运行 uv tool install pdf2zh-next 安装后再打开此开关，或手动选择它的位置；也可以让智能体通过 Folio 的 MCP 帮你查找。不开启时，Folio 使用内置的翻译组件。"
-                alert.addButton(withTitle: "手动选择…")
-                alert.addButton(withTitle: "好")
+                alert.messageText = String(localized: "没有在这台 Mac 上找到 pdf2zh_next")
+                alert.informativeText = String(localized: "已查找\(TranslatorDiscovery.searchedPlaces)。\n\n可以在终端运行 uv tool install pdf2zh-next 安装后再打开此开关，或手动选择它的位置；也可以让智能体通过 Folio 的 MCP 帮你查找。不开启时，Folio 使用内置的翻译组件。")
+                alert.addButton(withTitle: String(localized: "手动选择…"))
+                alert.addButton(withTitle: String(localized: "好"))
                 if alert.runModal() == .alertFirstButtonReturn { chooseExecutable() }
             }
         }
@@ -210,10 +210,10 @@ private struct EngineSection: View {
 
     private func confirmUninstall() {
         let alert = NSAlert()
-        alert.messageText = "卸载翻译组件？"
-        alert.informativeText = "会删除 Python、pdf2zh_next 和版面模型（\(ByteCountFormatter.string(fromByteCount: usage, countStyle: .file))）。已翻译好的 PDF 不受影响，之后需要时可以重新下载。"
-        alert.addButton(withTitle: "卸载")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = String(localized: "卸载翻译组件？")
+        alert.informativeText = String(localized: "会删除 Python、pdf2zh_next 和版面模型（\(ByteCountFormatter.string(fromByteCount: usage, countStyle: .file))）。已翻译好的 PDF 不受影响，之后需要时可以重新下载。")
+        alert.addButton(withTitle: String(localized: "卸载"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons[0].hasDestructiveAction = true
         if alert.runModal() == .alertFirstButtonReturn { coordinator.uninstall() }
     }
@@ -221,8 +221,8 @@ private struct EngineSection: View {
     /// Picks the file by hand; it is used only if it runs.
     private func chooseExecutable() {
         let panel = NSOpenPanel()
-        panel.message = "选择 pdf2zh_next 可执行文件"
-        panel.prompt = "使用"
+        panel.message = String(localized: "选择 pdf2zh_next 可执行文件")
+        panel.prompt = String(localized: "使用")
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin")
         panel.showsHiddenFiles = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -233,7 +233,7 @@ private struct EngineSection: View {
                 settings.translatorCustomPath = url.path
             } catch {
                 let alert = NSAlert()
-                alert.messageText = "无法使用这个文件"
+                alert.messageText = String(localized: "无法使用这个文件")
                 alert.informativeText = error.localizedDescription
                 alert.runModal()
             }
@@ -321,9 +321,9 @@ private struct ServiceSection: View {
         let all = TranslationServiceCatalog.all.filter {
             $0.id != TranslationServiceCatalog.appleServiceID || AppleSystemTranslator.isSupportedOnThisSystem
         }
-        return [("免费", all.filter { $0.isFree && !$0.isLocal }),
-                ("本地 / 离线", all.filter(\.isLocal)),
-                ("需要 API Key", all.filter { !$0.isFree && !$0.isLocal })].filter { !$0.services.isEmpty }
+        return [(String(localized: "免费"), all.filter { $0.isFree && !$0.isLocal }),
+                (String(localized: "本地 / 离线"), all.filter(\.isLocal)),
+                (String(localized: "需要 API Key"), all.filter { !$0.isFree && !$0.isLocal })].filter { !$0.services.isEmpty }
     }
 }
 
@@ -341,7 +341,7 @@ private struct FieldRow: View {
         Group {
             switch field.kind {
             case .secret:
-                SecureField(title, text: $secret, prompt: Text(field.placeholder ?? "未填写"))
+                SecureField(title, text: $secret, prompt: Text(field.placeholder ?? String(localized: "未填写")))
                     .onSubmit(saveSecret)
                     .onChange(of: secret) { saveSecret() }
             case .toggle:
@@ -367,7 +367,7 @@ private struct FieldRow: View {
         .onChange(of: serviceID) { loaded = false; load() }
     }
 
-    private var title: String { field.isRequired ? field.title : "\(field.title)（选填）" }
+    private var title: String { field.isRequired ? field.title : String(localized: "\(field.title)（选填）") }
 
     private var value: String { model.settings.translationFields[serviceID]?[field.option] ?? "" }
 
@@ -433,7 +433,7 @@ private struct OptionsSection: View {
                     .help("译文 PDF 在部分阅读器中显示异常时打开")
                 LabeledContent("术语表（选填）") {
                     HStack {
-                        Text(settings.translationOptions.glossaryFile?.lastPathComponent ?? "未选择")
+                        Text(settings.translationOptions.glossaryFile?.lastPathComponent ?? String(localized: "未选择"))
                             .foregroundStyle(.secondary)
                         if settings.translationOptions.glossaryFile != nil {
                             Button("清除") { settings.translationOptions.glossaryFile = nil }
@@ -448,14 +448,14 @@ private struct OptionsSection: View {
                 .help("付费接口额度较高时可以调大以加快速度；免费服务请保持较低")
             }
         } header: {
-            Text(compact ? "选项" : "默认选项")
+            Text(compact ? String(localized: "选项") : String(localized: "默认选项"))
         }
     }
 
     private func chooseGlossary() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.commaSeparatedText]
-        panel.message = "选择术语表 CSV（两列：原文, 译文）"
+        panel.message = String(localized: "选择术语表 CSV（两列：原文, 译文）")
         if panel.runModal() == .OK { settings.translationOptions.glossaryFile = panel.url }
     }
 }
@@ -486,7 +486,7 @@ struct ModelListButton: View {
             }
         }
         .help("获取模型列表")
-        .accessibilityLabel("获取模型列表")
+        .accessibilityLabel(String(localized: "获取模型列表"))
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -507,7 +507,7 @@ struct ModelListButton: View {
                     ContentUnavailableView("无法获取模型列表", systemImage: "exclamationmark.triangle", description: Text(error))
                         .frame(minHeight: 160)
                 } else {
-                    PopoverSearchField(prompt: "搜索模型", text: $filter)
+                    PopoverSearchField(prompt: String(localized: "搜索模型"), text: $filter)
                     List(filtered, id: \.self) { name in
                         Button {
                             onPick(name)

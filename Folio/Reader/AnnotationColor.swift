@@ -8,12 +8,12 @@ enum AnnotationColor: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .yellow: "黄色"
-        case .green: "绿色"
-        case .blue: "蓝色"
-        case .pink: "粉色"
-        case .purple: "紫色"
-        case .red: "红色"
+        case .yellow: String(localized: "黄色")
+        case .green: String(localized: "绿色")
+        case .blue: String(localized: "蓝色")
+        case .pink: String(localized: "粉色")
+        case .purple: String(localized: "紫色")
+        case .red: String(localized: "红色")
         }
     }
 

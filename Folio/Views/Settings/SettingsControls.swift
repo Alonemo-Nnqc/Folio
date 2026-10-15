@@ -6,7 +6,7 @@ import SwiftUI
 struct RedetectButton: View {
     let isChecking: Bool
     let result: String?
-    var help = "重新检测"
+    var help = String(localized: "重新检测")
     let action: () -> Void
 
     /// The arrow-head variant is new in macOS 15.
@@ -24,7 +24,7 @@ struct RedetectButton: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing)))
             }
             Button(action: action) {
-                Label(isChecking ? "正在检测…" : "重新检测", systemImage: Self.symbol)
+                Label(isChecking ? String(localized: "正在检测…") : String(localized: "重新检测"), systemImage: Self.symbol)
                     .spinning(isChecking)
             }
             .buttonStyle(.bordered)

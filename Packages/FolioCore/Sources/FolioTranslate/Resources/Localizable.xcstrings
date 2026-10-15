@@ -1,0 +1,1918 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "%@ 需要填写“%@”，请在设置的“翻译”页补充。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ requires “%2$@”. Please fill it in on the Translation page in Settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 需要填写“%2$@”，请在设置的“翻译”页补充。"
+          }
+        }
+      }
+    },
+    "%@失败：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ failed: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@失败：%2$@"
+          }
+        }
+      }
+    },
+    "%@译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ translation"
+          }
+        }
+      }
+    },
+    "%@（%@ · %@ · %@）" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@（%2$@ · %3$@ · %4$@）"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@ · %3$@ · %4$@)"
+          }
+        }
+      }
+    },
+    "%@（%@ · %@）" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@（%2$@ · %3$@）"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@ · %3$@)"
+          }
+        }
+      }
+    },
+    "API Key 已过期%@，请在 设置 ▸ 翻译 中换用新的 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The API key has expired%@. Please use a new key in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "API Key 无效%@，请在 设置 ▸ 翻译 中检查是否填写正确" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The API key is invalid%@. Please check it in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "API Key 无效或没有权限（401 / 403）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The API key is invalid or lacks permission (401 / 403)."
+          }
+        }
+      }
+    },
+    "API 版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API Version"
+          }
+        }
+      }
+    },
+    "Apple 系统翻译不支持 %@ → %@。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation doesn't support %1$@ → %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple 系统翻译不支持 %1$@ → %2$@。"
+          }
+        }
+      }
+    },
+    "Apple 系统翻译不支持当前的语言组合" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation doesn't support the current language pair"
+          }
+        }
+      }
+    },
+    "Apple 系统翻译失败：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation failed: %@"
+          }
+        }
+      }
+    },
+    "Apple 系统翻译尚未下载 %@ → %@ 的语言模型。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation hasn't downloaded the language models for %1$@ → %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Apple 系统翻译尚未下载 %1$@ → %2$@ 的语言模型。"
+          }
+        }
+      }
+    },
+    "Apple 系统翻译缺少所需语言，请在 系统设置 ▸ 通用 ▸ 语言与地区 ▸ 翻译语言 中下载后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation is missing a required language. Download it in System Settings ▸ General ▸ Language & Region ▸ Translation Languages and try again"
+          }
+        }
+      }
+    },
+    "Apple 系统翻译（离线）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation (offline)"
+          }
+        }
+      }
+    },
+    "Azure 翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Azure Translator"
+          }
+        }
+      }
+    },
+    "Bing（免费）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bing (free)"
+          }
+        }
+      }
+    },
+    "Folio 翻译：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folio translation: %@"
+          }
+        }
+      }
+    },
+    "Google（免费）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google (free)"
+          }
+        }
+      }
+    },
+    "HTTP %@：%@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "HTTP %1$@：%2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP %1$@: %2$@"
+          }
+        }
+      }
+    },
+    "ModelScope 魔搭" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ModelScope"
+          }
+        }
+      }
+    },
+    "M月d日 HH.mm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MMM d HH.mm"
+          }
+        }
+      }
+    },
+    "Ollama（本地）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ollama (local)"
+          }
+        }
+      }
+    },
+    "OpenAI 兼容接口" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI-compatible API"
+          }
+        }
+      }
+    },
+    "PDF 已加密或受密码保护，无法翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The PDF is encrypted or password protected and can't be translated"
+          }
+        }
+      }
+    },
+    "Python 环境缺失" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Python environment is missing"
+          }
+        }
+      }
+    },
+    "SiliconFlow 免费" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SiliconFlow Free"
+          }
+        }
+      }
+    },
+    "SiliconFlow 硅基流动" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SiliconFlow"
+          }
+        }
+      }
+    },
+    "Xinference（本地）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Xinference (local)"
+          }
+        }
+      }
+    },
+    "claude 可执行文件路径" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Path to the claude executable"
+          }
+        }
+      }
+    },
+    "https://<资源名>.openai.azure.com" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://<resource-name>.openai.azure.com"
+          }
+        }
+      }
+    },
+    "pdf2zh 项目提供的免费大模型通道，无需注册\n高峰期可能限流" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A free LLM channel provided by the pdf2zh project; no sign-up needed\nMay be rate limited at peak times"
+          }
+        }
+      }
+    },
+    "pdf2zh_next 可执行文件缺失" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pdf2zh_next executable is missing"
+          }
+        }
+      }
+    },
+    "pdf2zh_next 软件包缺失" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pdf2zh_next package is missing"
+          }
+        }
+      }
+    },
+    "uv 下载文件校验失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The downloaded uv failed verification"
+          }
+        }
+      }
+    },
+    "。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "."
+          }
+        }
+      }
+    },
+    "上次安装没有完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The last installation didn't finish"
+          }
+        }
+      }
+    },
+    "下载 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download %@"
+          }
+        }
+      }
+    },
+    "下载 Python 3.12" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download Python 3.12"
+          }
+        }
+      }
+    },
+    "下载 uv" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download uv"
+          }
+        }
+      }
+    },
+    "下载版面模型和字体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download layout models and fonts"
+          }
+        }
+      }
+    },
+    "下载的 uv 无法运行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The downloaded uv can't run"
+          }
+        }
+      }
+    },
+    "不设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not set"
+          }
+        }
+      }
+    },
+    "与服务器%@的安全连接（SSL）失败，请检查代理或证书设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The secure connection (SSL) to the server%@ failed. Please check your proxy or certificate settings"
+          }
+        }
+      }
+    },
+    "中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medium"
+          }
+        }
+      }
+    },
+    "从 GitHub 下载 uv %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download uv %@ from GitHub"
+          }
+        }
+      }
+    },
+    "代理服务器连接失败，请检查代理设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't connect to the proxy server. Please check your proxy settings"
+          }
+        }
+      }
+    },
+    "低" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Low"
+          }
+        }
+      }
+    },
+    "余额不足" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insufficient balance"
+          }
+        }
+      }
+    },
+    "使用 Bing 翻译网页接口，无需 Key\n有频率限制" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Bing's web translation; no key needed\nRate limited"
+          }
+        }
+      }
+    },
+    "使用 Google 翻译网页接口，无需 Key\n频繁使用会被暂时限流（HTTP 429）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Google's web translation; no key needed\nHeavy use is temporarily rate limited (HTTP 429)"
+          }
+        }
+      }
+    },
+    "使用 macOS 自带的翻译模型，完全离线、免费\n需要先在“系统设置 › 通用 › 语言与地区 › 翻译语言”中下载对应语言" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the translation models built into macOS: fully offline and free\nDownload the languages first in System Settings › General › Language & Region › Translation Languages"
+          }
+        }
+      }
+    },
+    "俄语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Russian"
+          }
+        }
+      }
+    },
+    "保存 PDF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save PDF"
+          }
+        }
+      }
+    },
+    "关闭思考" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thinking off"
+          }
+        }
+      }
+    },
+    "内存不足，翻译被中止，请只翻译部分页码" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Out of memory; translation stopped. Please translate only some pages"
+          }
+        }
+      }
+    },
+    "准备安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing to install"
+          }
+        }
+      }
+    },
+    "分析页面版面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyze page layout"
+          }
+        }
+      }
+    },
+    "压缩包中没有 uv" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The archive doesn't contain uv"
+          }
+        }
+      }
+    },
+    "双语对照" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "bilingual"
+          }
+        }
+      }
+    },
+    "发送 Temperature 参数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send the temperature parameter"
+          }
+        }
+      }
+    },
+    "发送思考开关参数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send the thinking switch"
+          }
+        }
+      }
+    },
+    "发送推理强度参数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send the reasoning effort"
+          }
+        }
+      }
+    },
+    "后处理命令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post-processing command"
+          }
+        }
+      }
+    },
+    "启动翻译引擎" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start translation engine"
+          }
+        }
+      }
+    },
+    "启用 JSON 模式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable JSON mode"
+          }
+        }
+      }
+    },
+    "启用思考" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thinking on"
+          }
+        }
+      }
+    },
+    "命令" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command"
+          }
+        }
+      }
+    },
+    "安装 Python 和 pdf2zh_next" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install Python and pdf2zh_next"
+          }
+        }
+      }
+    },
+    "安装 pdf2zh_next" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install pdf2zh_next"
+          }
+        }
+      }
+    },
+    "安装完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installation complete"
+          }
+        }
+      }
+    },
+    "安装已取消。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installation canceled."
+          }
+        }
+      }
+    },
+    "嵌入字体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embed fonts"
+          }
+        }
+      }
+    },
+    "已下载 %lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded %1$lld/%2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "已下载 %1$lld/%2$lld"
+          }
+        }
+      }
+    },
+    "已下载 %lld/%lld 个大文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded %1$lld/%2$lld large files"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "已下载 %1$lld/%2$lld 个大文件"
+          }
+        }
+      }
+    },
+    "已下载 Python 3.12" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded Python 3.12"
+          }
+        }
+      }
+    },
+    "已解析依赖：%@ 个包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resolved dependencies: %@ packages"
+          }
+        }
+      }
+    },
+    "开启思考" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thinking on"
+          }
+        }
+      }
+    },
+    "德语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "German"
+          }
+        }
+      }
+    },
+    "思考模式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thinking mode"
+          }
+        }
+      }
+    },
+    "意大利语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Italian"
+          }
+        }
+      }
+    },
+    "所选的 pdf2zh_next 不可用：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected pdf2zh_next can't be used: %@"
+          }
+        }
+      }
+    },
+    "找不到 Apple 系统翻译组件（folio-apple-translate）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Apple Translation helper (folio-apple-translate) wasn't found."
+          }
+        }
+      }
+    },
+    "找不到 uv" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uv not found"
+          }
+        }
+      }
+    },
+    "找不到服务器%@，请检查 Base URL 是否正确" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server%@ not found. Please check that the Base URL is correct"
+          }
+        }
+      }
+    },
+    "排版译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Typeset translation"
+          }
+        }
+      }
+    },
+    "推理强度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reasoning Effort"
+          }
+        }
+      }
+    },
+    "提取术语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Extract terms"
+          }
+        }
+      }
+    },
+    "文件不存在或不可执行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file doesn't exist or isn't executable"
+          }
+        }
+      }
+    },
+    "文本超过了模型的上下文长度，请换用上下文更长的模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The text exceeds the model's context length. Please use a model with a longer context"
+          }
+        }
+      }
+    },
+    "无法下载安装工具 uv：%@。请检查网络后重试。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't download the installer tool uv: %@. Please check your network and try again."
+          }
+        }
+      }
+    },
+    "无法启动 %@：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start %1$@: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "无法启动 %1$@：%2$@"
+          }
+        }
+      }
+    },
+    "无法启动翻译组件（%@），请在 设置 ▸ 翻译 中重新安装组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start the translation components (%@). Please reinstall them in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "无法解压 uv" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't extract uv"
+          }
+        }
+      }
+    },
+    "无法识别服务返回的模型列表。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read the model list returned by the service."
+          }
+        }
+      }
+    },
+    "无法读取 uv 的校验值" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read uv's checksum"
+          }
+        }
+      }
+    },
+    "无法连接翻译服务%@，请检查网络" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't connect to the translation service%@. Please check your network"
+          }
+        }
+      }
+    },
+    "日语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Japanese"
+          }
+        }
+      }
+    },
+    "智谱 AI" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zhipu AI"
+          }
+        }
+      }
+    },
+    "最低" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimal"
+          }
+        }
+      }
+    },
+    "最大生成 Token 数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max tokens"
+          }
+        }
+      }
+    },
+    "最高" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highest"
+          }
+        }
+      }
+    },
+    "服务器%@中断了连接，请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server%@ closed the connection. Please try again later"
+          }
+        }
+      }
+    },
+    "服务器%@拒绝连接：服务没有运行或端口不对（本地服务如 Ollama 需要先启动）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server%@ refused the connection: the service isn't running or the port is wrong (local services such as Ollama must be started first)"
+          }
+        }
+      }
+    },
+    "服务地址" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service URL"
+          }
+        }
+      }
+    },
+    "服务没有返回任何模型。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service returned no models."
+          }
+        }
+      }
+    },
+    "服务返回错误 %lld。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service returned error %lld."
+          }
+        }
+      }
+    },
+    "未知的翻译服务：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown translation service: %@"
+          }
+        }
+      }
+    },
+    "未知错误" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown error"
+          }
+        }
+      }
+    },
+    "极高" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Very high"
+          }
+        }
+      }
+    },
+    "检查安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check installation"
+          }
+        }
+      }
+    },
+    "检查版面模型和字体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check layout models and fonts"
+          }
+        }
+      }
+    },
+    "检查需要下载的文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check files to download"
+          }
+        }
+      }
+    },
+    "检测扫描件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detect scanned pages"
+          }
+        }
+      }
+    },
+    "模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model"
+          }
+        }
+      }
+    },
+    "模型%@ 不存在或无权使用，请在 设置 ▸ 翻译 中检查模型名称" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model%@ doesn't exist or isn't available to you. Please check the model name in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "模型不存在" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model not found"
+          }
+        }
+      }
+    },
+    "正在启动翻译引擎" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starting the translation engine"
+          }
+        }
+      }
+    },
+    "正在安装软件包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installing packages"
+          }
+        }
+      }
+    },
+    "每段原文通过标准输入传给命令，命令把译文写到标准输出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each source segment is passed to the command on standard input; the command writes the translation to standard output"
+          }
+        }
+      }
+    },
+    "没有输出版本号（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printed no version number (%@)"
+          }
+        }
+      }
+    },
+    "法语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "French"
+          }
+        }
+      }
+    },
+    "清理临时文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clean up temporary files"
+          }
+        }
+      }
+    },
+    "生成页面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generate pages"
+          }
+        }
+      }
+    },
+    "磁盘空间不足，无法保存译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough disk space to save the translation"
+          }
+        }
+      }
+    },
+    "简体中文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simplified Chinese"
+          }
+        }
+      }
+    },
+    "精简字体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subset fonts"
+          }
+        }
+      }
+    },
+    "繁体中文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traditional Chinese"
+          }
+        }
+      }
+    },
+    "终端的 PATH、uv / pipx / conda / pyenv / Homebrew / virtualenv 的安装位置、zotero-pdf2zh 插件目录、Spotlight 以及主文件夹中的虚拟环境" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Terminal PATH, install locations of uv / pipx / conda / pyenv / Homebrew / virtualenv, the zotero-pdf2zh plugin folder, Spotlight and virtual environments in your home folder"
+          }
+        }
+      }
+    },
+    "网络不可用，请检查网络连接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The network is unavailable. Please check your connection"
+          }
+        }
+      }
+    },
+    "网络不稳定，正在重试剩余 %lld 个文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The network is unstable; retrying the remaining %lld files"
+          }
+        }
+      }
+    },
+    "翻译失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation Failed"
+          }
+        }
+      }
+    },
+    "翻译失败：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation failed: %@"
+          }
+        }
+      }
+    },
+    "翻译服务%@暂时出错%@，这是服务端的问题，请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service%1$@ had a temporary error%2$@. This is a server-side problem; please try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "翻译服务%1$@暂时出错%2$@，这是服务端的问题，请稍后重试"
+          }
+        }
+      }
+    },
+    "翻译服务不接受这次请求%@：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service rejected this request%1$@: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "翻译服务不接受这次请求%1$@：%2$@"
+          }
+        }
+      }
+    },
+    "翻译服务拒绝访问%@：这个 API Key 没有使用该服务或模型的权限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service denied access%@: this API key isn't allowed to use the service or model"
+          }
+        }
+      }
+    },
+    "翻译服务的账户余额或额度已用完%@，请充值或换用其他服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service account is out of balance or quota%@. Please top up or use another service"
+          }
+        }
+      }
+    },
+    "翻译服务配置不完整：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service settings are incomplete: %@"
+          }
+        }
+      }
+    },
+    "翻译段落" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate paragraphs"
+          }
+        }
+      }
+    },
+    "翻译组件安装后无法运行：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation components can't run after installation: %@"
+          }
+        }
+      }
+    },
+    "翻译组件尚未安装。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation components aren't installed yet."
+          }
+        }
+      }
+    },
+    "翻译组件无法运行，请在 设置 ▸ 翻译 中重新安装组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation components can't run. Please reinstall them in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "翻译组件的依赖 %@ 版本不匹配，请在 设置 ▸ 翻译 中重新安装组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The version of the dependency %@ doesn't match. Please reinstall the components in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "翻译组件缺少 Python 模块 %@，请在 设置 ▸ 翻译 中重新安装组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation components are missing the Python module %@. Please reinstall them in Settings ▸ Translation"
+          }
+        }
+      }
+    },
+    "翻译进程意外终止（信号 %d）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation process stopped unexpectedly (signal %d)"
+          }
+        }
+      }
+    },
+    "翻译进程意外退出（代码 %d）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation process exited unexpectedly (code %d)"
+          }
+        }
+      }
+    },
+    "翻译进程被系统终止（可能内存不足）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system stopped the translation process (possibly out of memory)"
+          }
+        }
+      }
+    },
+    "腾讯云机器翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tencent Machine Translation"
+          }
+        }
+      }
+    },
+    "自定义命令行翻译器" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom command-line translator"
+          }
+        }
+      }
+    },
+    "英语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "English"
+          }
+        }
+      }
+    },
+    "葡萄牙语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Portuguese"
+          }
+        }
+      }
+    },
+    "西班牙语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spanish"
+          }
+        }
+      }
+    },
+    "解析 PDF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parse PDF"
+          }
+        }
+      }
+    },
+    "解析依赖" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resolve dependencies"
+          }
+        }
+      }
+    },
+    "识别公式和样式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognize formulas and styles"
+          }
+        }
+      }
+    },
+    "识别段落" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognize paragraphs"
+          }
+        }
+      }
+    },
+    "识别表格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognize tables"
+          }
+        }
+      }
+    },
+    "请先填写 API Key。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please enter the API key first."
+          }
+        }
+      }
+    },
+    "请先填写服务地址（Base URL）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please enter the service URL (Base URL) first."
+          }
+        }
+      }
+    },
+    "请求过于频繁，被翻译服务限流%@，请调低 设置 ▸ 翻译 ▸ 每秒请求数，稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many requests; the translation service is rate limiting%@. Lower Settings ▸ Translation ▸ Requests per second and try again later"
+          }
+        }
+      }
+    },
+    "调整字符基线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adjust character baselines"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Claude Code 命令行\n建议填写 claude 的完整路径" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Claude Code command line signed in on this Mac\nEntering the full path to claude is recommended"
+          }
+        }
+      }
+    },
+    "资源已存在" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resource already exists"
+          }
+        }
+      }
+    },
+    "超时（秒）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Timeout (seconds)"
+          }
+        }
+      }
+    },
+    "软件包安装完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Packages installed"
+          }
+        }
+      }
+    },
+    "软件包已安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Package already installed"
+          }
+        }
+      }
+    },
+    "连接服务器%@超时，网络较慢或需要代理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to the server%@ timed out; the network is slow or needs a proxy"
+          }
+        }
+      }
+    },
+    "连接翻译服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to translation service"
+          }
+        }
+      }
+    },
+    "适用于任何兼容 OpenAI Chat Completions 的服务（如 Moonshot、LM Studio、vLLM 等）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Works with any service compatible with OpenAI Chat Completions (such as Moonshot, LM Studio and vLLM)"
+          }
+        }
+      }
+    },
+    "通义千问 MT" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qwen MT"
+          }
+        }
+      }
+    },
+    "钥匙串操作失败：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keychain operation failed: %@"
+          }
+        }
+      }
+    },
+    "阿拉伯语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arabic"
+          }
+        }
+      }
+    },
+    "阿里云百炼" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Model Studio"
+          }
+        }
+      }
+    },
+    "需要下载 %lld 个文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld files to download"
+          }
+        }
+      }
+    },
+    "需要先在本机运行 Ollama 并下载模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run Ollama on this Mac and download a model first"
+          }
+        }
+      }
+    },
+    "韩语" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korean"
+          }
+        }
+      }
+    },
+    "领域提示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Domain hint"
+          }
+        }
+      }
+    },
+    "高" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "High"
+          }
+        }
+      }
+    },
+    "默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        }
+      }
+    },
+    "默认：学术论文风格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default: academic paper style"
+          }
+        }
+      }
+    },
+    "（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (%@)"
+          }
+        }
+      }
+    },
+    "：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ": %@"
+          }
+        }
+      }
+    },
+    "；" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "; "
+          }
+        }
+      }
+    },
+    " %@ " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " %@"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

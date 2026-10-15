@@ -155,7 +155,7 @@ struct ItemListOverlay: View {
             ContentUnavailableView.search(text: model.search.text)
         } else if model.sidebarSelection == .trash {
             ContentUnavailableView("回收站是空的", systemImage: "trash",
-                                   description: Text(model.settings.autoPurgeTrash ? "删除的文献会在这里保留 30 天" : "删除的文献会保留在这里"))
+                                   description: Text(model.settings.autoPurgeTrash ? String(localized: "删除的文献会在这里保留 30 天") : String(localized: "删除的文献会保留在这里")))
         } else {
             ContentUnavailableView("拖入 PDF 或点击 + 添加文献", systemImage: "doc.badge.plus",
                                    description: Text("Folio 会自动检索元数据并创建条目"))

@@ -75,9 +75,9 @@ struct ReaderSidebarView: View {
             if state.isSearching && state.searchHits.isEmpty {
                 ProgressView().frame(maxHeight: .infinity)
             } else if state.searchHits.isEmpty {
-                ContentUnavailableView(state.searchQuery.isEmpty ? "在文档中查找" : "没有找到「\(state.searchQuery)」",
+                ContentUnavailableView(state.searchQuery.isEmpty ? String(localized: "在文档中查找") : String(localized: "没有找到「\(state.searchQuery)」"),
                                        systemImage: "magnifyingglass",
-                                       description: Text(state.searchQuery.isEmpty ? "在工具栏的搜索框中输入文字（⌘F）" : ""))
+                                       description: Text(state.searchQuery.isEmpty ? String(localized: "在工具栏的搜索框中输入文字（⌘F）") : ""))
             } else {
                 List(state.searchHits) { hit in
                     Button { actions.showHit(hit.id) } label: {

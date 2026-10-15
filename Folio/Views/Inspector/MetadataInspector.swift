@@ -25,7 +25,7 @@ struct MetadataInspector: View {
     }
 
     private func update(_ change: @escaping (inout Item) -> Void) {
-        model.perform("无法保存") { try model.library.updateItem(item.id, change) }
+        model.perform(String(localized: "无法保存")) { try model.library.updateItem(item.id, change) }
     }
 
     // MARK: Header: type, title, authors, key
@@ -75,15 +75,15 @@ struct MetadataInspector: View {
     // MARK: Citation fields
 
     private var citationSection: some View {
-        InspectorSection(title: "引用") {
-            EditableField(label: "年份", value: item.year.map(String.init)) { value in
+        InspectorSection(title: String(localized: "引用")) {
+            EditableField(label: String(localized: "年份"), value: item.year.map(String.init)) { value in
                 update { $0.year = Int(value) }
             }
-            EditableField(label: "来源", value: item.source) { value in update { $0.source = value.nilIfEmpty } }
-            EditableField(label: "卷", value: item.volume) { value in update { $0.volume = value.nilIfEmpty } }
-            EditableField(label: "期", value: item.issue) { value in update { $0.issue = value.nilIfEmpty } }
-            EditableField(label: "页码", value: item.pages) { value in update { $0.pages = value.nilIfEmpty } }
-            EditableField(label: "出版社", value: item.publisher) { value in update { $0.publisher = value.nilIfEmpty } }
+            EditableField(label: String(localized: "来源"), value: item.source) { value in update { $0.source = value.nilIfEmpty } }
+            EditableField(label: String(localized: "卷"), value: item.volume) { value in update { $0.volume = value.nilIfEmpty } }
+            EditableField(label: String(localized: "期"), value: item.issue) { value in update { $0.issue = value.nilIfEmpty } }
+            EditableField(label: String(localized: "页码"), value: item.pages) { value in update { $0.pages = value.nilIfEmpty } }
+            EditableField(label: String(localized: "出版社"), value: item.publisher) { value in update { $0.publisher = value.nilIfEmpty } }
             EditableField(label: "DOI", value: item.doi, monospaced: true,
                           link: item.doi.flatMap { $0.isEmpty ? nil : URL(string: "https://doi.org/\($0)") }) { value in
                 update { $0.doi = value.nilIfEmpty }
@@ -96,7 +96,7 @@ struct MetadataInspector: View {
             EditableField(label: "URL", value: item.url, link: item.url.flatMap(URL.init(string:))) { value in
                 update { $0.url = value.nilIfEmpty }
             }
-            EditableField(label: "引用键", value: item.citationKey, monospaced: true) { value in
+            EditableField(label: String(localized: "引用键"), value: item.citationKey, monospaced: true) { value in
                 update { $0.citationKey = value.nilIfEmpty }
             }
         }
@@ -105,11 +105,11 @@ struct MetadataInspector: View {
     // MARK: Library: rating, status, groups, tags
 
     private var librarySection: some View {
-        InspectorSection(title: "文库") {
-            row("评分") {
+        InspectorSection(title: String(localized: "文库")) {
+            row(String(localized: "评分")) {
                 RatingControl(rating: item.rating) { value in model.setRating(value, on: [item.id]) }
             }
-            row("状态") {
+            row(String(localized: "状态")) {
                 Picker("阅读状态", selection: Binding(get: { item.readStatus },
                                                      set: { model.setReadStatus($0, on: [item.id]) })) {
                     ForEach(ReadStatus.allCases, id: \.self) { Text($0.displayName).tag($0) }
@@ -119,7 +119,7 @@ struct MetadataInspector: View {
                 .controlSize(.small)
                 .fixedSize()
             }
-            row("分组") {
+            row(String(localized: "分组")) {
                 FlowLayout(spacing: 6) {
                     ForEach(groups, id: \.id) { group in
                         GroupChip(name: group.name, colorHex: group.colorHex) {
@@ -142,7 +142,7 @@ struct MetadataInspector: View {
                     .help("添加到分组")
                 }
             }
-            row("标签") {
+            row(String(localized: "标签")) {
                 FlowLayout(spacing: 6) {
                     ForEach(model.snapshot.tags(of: item.id)) { tag in
                         TagChip(tag: tag) { model.setTag(tag.id, on: [item.id], enabled: false) }
@@ -182,7 +182,7 @@ struct MetadataInspector: View {
     // MARK: Abstract
 
     private func abstractSection(_ abstract: String) -> some View {
-        InspectorSection(title: "内容") {
+        InspectorSection(title: String(localized: "内容")) {
             DisclosureGroup("摘要", isExpanded: $abstractExpanded) {
                 Text(abstract)
                     .font(.system(.callout, design: .serif))
@@ -199,7 +199,7 @@ struct MetadataInspector: View {
     // MARK: Files and dates
 
     private var filesSection: some View {
-        InspectorSection(title: "文件") {
+        InspectorSection(title: String(localized: "文件")) {
             let files = model.snapshot.files(of: item.id)
             if files.isEmpty {
                 Button("添加文件…", systemImage: "paperclip") { model.chooseFilesToAttach(to: item.id) }
@@ -217,7 +217,7 @@ struct MetadataInspector: View {
                         DefaultFileBadge()
                     }
                     if file.translationOf != nil {
-                        CapsuleText(text: file.translationKind == .dual ? "双语" : "译文", tint: .systemTeal, font: CapsuleLabel.badgeFont,
+                        CapsuleText(text: file.translationKind == .dual ? String(localized: "双语") : String(localized: "译文"), tint: .systemTeal, font: CapsuleLabel.badgeFont,
                                     height: CapsuleLabel.badgeHeight, padding: CapsuleLabel.badgePadding)
                     }
                     Spacer()

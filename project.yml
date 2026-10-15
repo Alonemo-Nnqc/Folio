@@ -14,6 +14,9 @@ settings:
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ENABLE_HARDENED_RUNTIME: YES
     DEAD_CODE_STRIPPING: YES
+    # String Catalogs (Localizable.xcstrings): extract Swift strings at build time.
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
 packages:
   FolioCore:
     path: Packages/FolioCore
@@ -102,6 +105,12 @@ targets:
           - SafariExtension.entitlements
       # The web extension itself: shared files plus Safari's manifest, at the bundle's Resources root.
       - path: BrowserExtension/shared
+        buildPhase: resources
+        excludes:
+          - _locales/**
+      # Localized extension strings keep their folder structure (_locales/<language>/messages.json).
+      - path: BrowserExtension/shared/_locales
+        type: folder
         buildPhase: resources
       - path: BrowserExtension/safari/manifest.json
         buildPhase: resources

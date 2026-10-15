@@ -1,11 +1,11 @@
 import Foundation
-import Synchronization
+import os
 import Testing
 @testable import FolioTranslate
 
 /// Keys in memory instead of the Keychain.
 final class MemorySecrets: SecretStoring {
-    private let values = Mutex<[String: String]>([:])
+    private let values = OSAllocatedUnfairLock<[String: String]>(initialState: [:])
     func get(serviceID: String, option: String) throws -> String? { values.withLock { $0["\(serviceID)|\(option)"] } }
     func set(_ value: String, serviceID: String, option: String) throws { values.withLock { $0["\(serviceID)|\(option)"] = value } }
     func delete(serviceID: String, option: String) throws { values.withLock { $0["\(serviceID)|\(option)"] = nil } }

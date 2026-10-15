@@ -17,13 +17,13 @@ public enum TranslatorInstallPhase: String, Sendable, Hashable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .preparing: "准备安装"
-        case .downloadingUV: "下载 uv"
-        case .installingPackages: "安装 Python 和 pdf2zh_next"
-        case .downloadingAssets: "下载版面模型和字体"
-        case .verifying: "检查安装"
-        case .cleaningUp: "清理临时文件"
-        case .finished: "安装完成"
+        case .preparing: String(localized: "准备安装", bundle: .module)
+        case .downloadingUV: String(localized: "下载 uv", bundle: .module)
+        case .installingPackages: String(localized: "安装 Python 和 pdf2zh_next", bundle: .module)
+        case .downloadingAssets: String(localized: "下载版面模型和字体", bundle: .module)
+        case .verifying: String(localized: "检查安装", bundle: .module)
+        case .cleaningUp: String(localized: "清理临时文件", bundle: .module)
+        case .finished: String(localized: "安装完成", bundle: .module)
         }
     }
 }
@@ -52,12 +52,12 @@ public enum TranslatorInstallError: Error, LocalizedError, Sendable, Equatable {
 
     public var errorDescription: String? {
         switch self {
-        case .uvDownloadFailed(let detail): "无法下载安装工具 uv：\(detail)。请检查网络后重试。"
-        case .commandFailed(let step, let summary, _): "\(step)失败：\(summary)"
-        case .verificationFailed(let detail): "翻译组件安装后无法运行：\(detail)"
-        case .invalidCustomExecutable(let detail): "所选的 pdf2zh_next 不可用：\(detail)"
-        case .notInstalled: "翻译组件尚未安装。"
-        case .cancelled: "安装已取消。"
+        case .uvDownloadFailed(let detail): String(localized: "无法下载安装工具 uv：\(detail)。请检查网络后重试。", bundle: .module)
+        case .commandFailed(let step, let summary, _): String(localized: "\(step)失败：\(summary)", bundle: .module)
+        case .verificationFailed(let detail): String(localized: "翻译组件安装后无法运行：\(detail)", bundle: .module)
+        case .invalidCustomExecutable(let detail): String(localized: "所选的 pdf2zh_next 不可用：\(detail)", bundle: .module)
+        case .notInstalled: String(localized: "翻译组件尚未安装。", bundle: .module)
+        case .cancelled: String(localized: "安装已取消。", bundle: .module)
         }
     }
 
@@ -113,10 +113,10 @@ public struct TranslatorInstallation: Sendable {
         let hasMarker = fm.fileExists(atPath: layout.marker.path)
         let hasEnvironment = fm.fileExists(atPath: layout.toolEnvironment.path)
         if !hasMarker && !hasEnvironment { return .notInstalled }
-        if !hasMarker { return .broken(reason: "上次安装没有完成") }
-        guard fm.isExecutableFile(atPath: layout.toolPython.path) else { return .broken(reason: "Python 环境缺失") }
-        guard fm.fileExists(atPath: layout.executable.path) else { return .broken(reason: "pdf2zh_next 可执行文件缺失") }
-        guard let version = layout.installedPackageVersion else { return .broken(reason: "pdf2zh_next 软件包缺失") }
+        if !hasMarker { return .broken(reason: String(localized: "上次安装没有完成", bundle: .module)) }
+        guard fm.isExecutableFile(atPath: layout.toolPython.path) else { return .broken(reason: String(localized: "Python 环境缺失", bundle: .module)) }
+        guard fm.fileExists(atPath: layout.executable.path) else { return .broken(reason: String(localized: "pdf2zh_next 可执行文件缺失", bundle: .module)) }
+        guard let version = layout.installedPackageVersion else { return .broken(reason: String(localized: "pdf2zh_next 软件包缺失", bundle: .module)) }
         return .installed(version: version, executableURL: layout.executable)
     }
 
@@ -141,7 +141,7 @@ public struct TranslatorInstallation: Sendable {
     public func customRuntime(executable: URL) async throws -> (runtime: TranslatorRuntime, version: String) {
         let fm = FileManager.default
         guard fm.isExecutableFile(atPath: executable.path) else {
-            throw TranslatorInstallError.invalidCustomExecutable("文件不存在或不可执行")
+            throw TranslatorInstallError.invalidCustomExecutable(String(localized: "文件不存在或不可执行", bundle: .module))
         }
         let cli = TranslatorRuntime(mode: .cli(executable: executable), executable: executable, layout: layout, redirectsHome: false)
         let cliVersion: String
@@ -169,7 +169,7 @@ public struct TranslatorInstallation: Sendable {
             }
         }
         let tail = result.lines.suffix(5).map(\.text).joined(separator: "\n")
-        throw TranslatorInstallError.verificationFailed(tail.isEmpty ? "没有输出版本号（\(result.termination)）" : tail)
+        throw TranslatorInstallError.verificationFailed(tail.isEmpty ? String(localized: "没有输出版本号（\(result.termination)）", bundle: .module) : tail)
     }
 
     // MARK: Install
@@ -209,11 +209,11 @@ public struct TranslatorInstallation: Sendable {
         var uv = await toolchain.locate()
         if uv == nil {
             try checkCancelled()
-            report(.downloadingUV, 0.01, "从 GitHub 下载 uv \(UVToolchain.pinnedVersion)")
+            report(.downloadingUV, 0.01, String(localized: "从 GitHub 下载 uv \(UVToolchain.pinnedVersion)", bundle: .module))
             log.write("Downloading uv \(UVToolchain.pinnedVersion) from \(UVToolchain.downloadURL())")
             uv = try await toolchain.download()
         }
-        guard let uv else { throw TranslatorInstallError.uvDownloadFailed("找不到 uv") }
+        guard let uv else { throw TranslatorInstallError.uvDownloadFailed(String(localized: "找不到 uv", bundle: .module)) }
         log.write("Using uv \(uv.version) at \(uv.url.path)")
         report(.downloadingUV, 0.03, "uv \(uv.version)")
         try checkCancelled()
@@ -226,7 +226,7 @@ public struct TranslatorInstallation: Sendable {
                                       environment: EngineEnvironment.uv(layout: layout, cacheDirectory: cache),
                                       currentDirectory: layout.temporaryDirectory)
         log.write("$ uv \(arguments.joined(separator: " "))")
-        report(.installingPackages, 0.03, "解析依赖")
+        report(.installingPackages, 0.03, String(localized: "解析依赖", bundle: .module))
         let parser = LockedValue(UVInstallProgressParser())
         let installResult = try await ChildProcess.run(installSpec) { line in
             log.write(line.text)
@@ -237,24 +237,24 @@ public struct TranslatorInstallation: Sendable {
         try checkCancelled()
         guard installResult.termination.isSuccess else {
             let summary = Self.summarize(installResult.lines.map(\.text))
-            throw TranslatorInstallError.commandFailed(step: "安装 pdf2zh_next", summary: summary, logURL: logURL)
+            throw TranslatorInstallError.commandFailed(step: String(localized: "安装 pdf2zh_next", bundle: .module), summary: summary, logURL: logURL)
         }
 
         // 4. Assets (0.60 … 0.95)
         let runtime = TranslatorRuntime(mode: .driver(python: layout.toolPython), executable: layout.executable,
                                         layout: layout, redirectsHome: true)
-        report(.downloadingAssets, 0.60, "检查需要下载的文件")
+        report(.downloadingAssets, 0.60, String(localized: "检查需要下载的文件", bundle: .module))
         let warmupResult = try await ChildProcess.run(try runtime.spec(driverCommand: "warmup")) { line in
             log.write(line.text)
             guard let event = DriverEvent.parse(line.text) else { return }
             switch event.kind {
             case .warmupStart(let total):
-                report(.downloadingAssets, 0.61, total == 0 ? "资源已存在" : "需要下载 \(total) 个文件")
+                report(.downloadingAssets, 0.61, total == 0 ? String(localized: "资源已存在", bundle: .module) : String(localized: "需要下载 \(total) 个文件", bundle: .module))
             case .warmupProgress(let done, let total, let file):
                 report(.downloadingAssets, 0.61 + 0.34 * Double(done) / Double(max(total, 1)),
-                       "已下载 \(done)/\(total)" + (file.map { "：\($0)" } ?? ""))
+                       String(localized: "已下载 \(done)/\(total)", bundle: .module) + (file.map { String(localized: "：\($0)", bundle: .module) } ?? ""))
             case .warmupRetry(_, let remaining):
-                report(.downloadingAssets, 0, "网络不稳定，正在重试剩余 \(remaining) 个文件")
+                report(.downloadingAssets, 0, String(localized: "网络不稳定，正在重试剩余 \(remaining) 个文件", bundle: .module))
             default: break
             }
         }
@@ -264,11 +264,11 @@ public struct TranslatorInstallation: Sendable {
                 if case .error(let message, _, _)? = DriverEvent.parse(line.text)?.kind { return message }
                 return nil
             }.last ?? Self.summarize(warmupResult.lines.map(\.text))
-            throw TranslatorInstallError.commandFailed(step: "下载版面模型和字体", summary: message, logURL: logURL)
+            throw TranslatorInstallError.commandFailed(step: String(localized: "下载版面模型和字体", bundle: .module), summary: message, logURL: logURL)
         }
 
         // 5. Verify (0.95 … 0.98)
-        report(.verifying, 0.95, "启动翻译引擎")
+        report(.verifying, 0.95, String(localized: "启动翻译引擎", bundle: .module))
         let version: String
         do {
             version = try await Self.engineVersion(runtime: runtime)
@@ -345,8 +345,8 @@ public struct TranslatorInstallation: Sendable {
         }
         let chosen = (interesting.isEmpty ? Array(lines.suffix(3)) : Array(interesting.suffix(3)))
             .map { $0.trimmingCharacters(in: .whitespaces) }
-        let text = chosen.joined(separator: "；")
-        return text.isEmpty ? "未知错误" : String(text.prefix(300))
+        let text = chosen.joined(separator: String(localized: "；", bundle: .module))
+        return text.isEmpty ? String(localized: "未知错误", bundle: .module) : String(text.prefix(300))
     }
 }
 

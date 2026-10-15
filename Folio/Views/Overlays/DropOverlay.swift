@@ -13,7 +13,7 @@ struct DropOverlay: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.tint)
                 .symbolEffect(.bounce, options: .repeating.speed(0.6), value: bounce)
-            Text(fileCount > 1 ? "松开以添加 \(fileCount) 个文件" : "松开以添加文件")
+            Text(fileCount > 1 ? String(localized: "松开以添加 \(fileCount) 个文件") : String(localized: "松开以添加文件"))
                 .font(.title3.weight(.semibold))
             Text("PDF 会自动检索元数据并创建条目")
                 .font(.callout)

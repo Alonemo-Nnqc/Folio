@@ -4,16 +4,16 @@ public enum ItemType: String, Codable, Sendable, CaseIterable {
 
     public var displayName: String {
         switch self {
-        case .journalArticle: "期刊文章"
-        case .conferencePaper: "会议论文"
-        case .preprint: "预印本"
-        case .book: "图书"
-        case .bookChapter: "图书章节"
-        case .thesis: "学位论文"
-        case .report: "报告"
-        case .webpage: "网页"
-        case .dataset: "数据集"
-        case .other: "其他"
+        case .journalArticle: String(localized: "期刊文章", bundle: .module)
+        case .conferencePaper: String(localized: "会议论文", bundle: .module)
+        case .preprint: String(localized: "预印本", bundle: .module)
+        case .book: String(localized: "图书", bundle: .module)
+        case .bookChapter: String(localized: "图书章节", bundle: .module)
+        case .thesis: String(localized: "学位论文", bundle: .module)
+        case .report: String(localized: "报告", bundle: .module)
+        case .webpage: String(localized: "网页", bundle: .module)
+        case .dataset: String(localized: "数据集", bundle: .module)
+        case .other: String(localized: "其他", bundle: .module)
         }
     }
 }

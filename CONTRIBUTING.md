@@ -92,6 +92,16 @@ script/drag-tests.sh
 
 浏览器插件页面识别测试：在仓库根目录运行 `python3 -m http.server 8767`，浏览器打开 <http://127.0.0.1:8767/BrowserExtensionTests/>，标题显示 PASSED / FAILED。
 
+## 多语言
+
+界面支持简体中文（源语言）和英文，文字放在 String Catalog（`Localizable.xcstrings`）中：App 在 `Folio/Resources/`，各 Swift 包模块在 `Packages/FolioCore/Sources/<模块>/Resources/`（FolioCitation 为 `Localization/`）。
+
+- 新增界面文字：SwiftUI 的 `Text("…")`、`Button("…")` 等会自动提取；其他地方用 `String(localized: "…")`，Swift 包内用 `String(localized: "…", bundle: .module)`
+- 在 Xcode 中构建后，新文字会出现在对应的 `.xcstrings` 中，打开文件补上英文翻译即可
+- 浏览器扩展的文字在 `BrowserExtension/shared/_locales/<语言>/messages.json`
+- 交给 AI 智能体的内容（MCP 工具说明、技能、`folio-cli` 输出）保持原样，不做翻译
+- 用英文界面检查：`script/preview.sh /tmp/en.png /tmp/folio-demo -AppleLanguages "(en)"`
+
 ## README 截图
 
 `assets/screenshots/` 中的截图由脚本生成：用演示文献库启动 App，只截取 Folio 窗口（含阴影），再合成到桌面背景上（背景图不随仓库提供，例如 macOS Sequoia 壁纸）：

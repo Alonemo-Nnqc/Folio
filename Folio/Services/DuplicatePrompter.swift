@@ -13,13 +13,13 @@ final class DuplicatePrompter {
         enqueue { [weak self] in
             if let remembered = self?.rememberedChoice { return completion(remembered) }
             let alert = NSAlert()
-            alert.messageText = "已有该条目「\(title)」"
-            alert.informativeText = "库中已有同一篇文献。要把新添加的文件作为附件放到这个条目下吗？"
-            alert.addButton(withTitle: "作为附件添加到该条目")
-            alert.addButton(withTitle: "放弃")
+            alert.messageText = String(localized: "已有该条目「\(title)」")
+            alert.informativeText = String(localized: "库中已有同一篇文献。要把新添加的文件作为附件放到这个条目下吗？")
+            alert.addButton(withTitle: String(localized: "作为附件添加到该条目"))
+            alert.addButton(withTitle: String(localized: "放弃"))
             if (self?.pending ?? 0) > 1 {
                 alert.showsSuppressionButton = true
-                alert.suppressionButton?.title = "对其余项执行相同操作"
+                alert.suppressionButton?.title = String(localized: "对其余项执行相同操作")
             }
             let response = await Self.present(alert)
             let choice: DuplicateChoice = response == .alertFirstButtonReturn ? .attach : .discard
@@ -32,10 +32,10 @@ final class DuplicatePrompter {
     func askRestore(title: String, completion: @escaping (Bool) -> Void) {
         enqueue {
             let alert = NSAlert()
-            alert.messageText = "回收站中已有该文献，是否恢复？"
-            alert.informativeText = "「\(title)」"
-            alert.addButton(withTitle: "恢复")
-            alert.addButton(withTitle: "取消")
+            alert.messageText = String(localized: "回收站中已有该文献，是否恢复？")
+            alert.informativeText = String(localized: "「\(title)」")
+            alert.addButton(withTitle: String(localized: "恢复"))
+            alert.addButton(withTitle: String(localized: "取消"))
             completion(await Self.present(alert) == .alertFirstButtonReturn)
         }
     }

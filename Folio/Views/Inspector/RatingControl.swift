@@ -15,9 +15,9 @@ struct RatingControl: View {
                         .foregroundStyle(value <= rating ? Color.orange : Color.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(value) 星")
+                .accessibilityLabel(String(localized: "\(value) 星"))
             }
-            Text(rating == 0 ? "未评分" : "\(rating) 星")
+            Text(rating == 0 ? String(localized: "未评分") : String(localized: "\(rating) 星"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)

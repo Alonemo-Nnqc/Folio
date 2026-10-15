@@ -10,9 +10,9 @@ public enum CSLRendererError: Error, CustomStringConvertible, Equatable {
 
     public var description: String {
         switch self {
-        case .contextUnavailable: "无法创建 JavaScriptCore 环境"
-        case .resourceMissing(let name): "缺少引用导出所需的资源文件：\(name)"
-        case .scriptFailed(let message): "citeproc-js 出错：\(message)"
+        case .contextUnavailable: String(localized: "无法创建 JavaScriptCore 环境", bundle: .module)
+        case .resourceMissing(let name): String(localized: "缺少引用导出所需的资源文件：\(name)", bundle: .module)
+        case .scriptFailed(let message): String(localized: "citeproc-js 出错：\(message)", bundle: .module)
         }
     }
 }
@@ -66,7 +66,7 @@ public final class CSLRenderer {
             let engineCtor = cslValue.objectForKeyedSubscript("Engine"),
             !engineCtor.isUndefined
         else {
-            throw CSLRendererError.scriptFailed("citeproc-js 未导出 CSL.Engine")
+            throw CSLRendererError.scriptFailed(String(localized: "citeproc-js 未导出 CSL.Engine", bundle: .module))
         }
         context.setObject(cslValue, forKeyedSubscript: "CSL" as NSString)
         self.engineConstructor = engineCtor
@@ -165,7 +165,7 @@ public final class CSLRenderer {
         func cluster(_ ids: [String]) throws -> String {
             let citationItems = ids.map { ["id": $0] }
             guard let value = engine.invokeMethod("makeCitationCluster", withArguments: [citationItems]) else {
-                throw CSLRendererError.scriptFailed("makeCitationCluster() 未返回结果")
+                throw CSLRendererError.scriptFailed(String(localized: "makeCitationCluster() 未返回结果", bundle: .module))
             }
             try checkException()
             return value.toString() ?? ""
@@ -191,7 +191,7 @@ public final class CSLRenderer {
             !engine.isUndefined
         else {
             throw CSLRendererError.scriptFailed(
-                lastException ?? "无法为样式 \(style.rawValue) 创建 CSL.Engine")
+                lastException ?? String(localized: "无法为样式 \(style.rawValue) 创建 CSL.Engine", bundle: .module))
         }
         try checkException()
         engines[style] = engine
@@ -205,11 +205,11 @@ public final class CSLRenderer {
     private func makeBibliography(engine: JSValue) throws -> JSValue {
         lastException = nil
         guard let result = engine.invokeMethod("makeBibliography", withArguments: []) else {
-            throw CSLRendererError.scriptFailed("makeBibliography() 未返回结果")
+            throw CSLRendererError.scriptFailed(String(localized: "makeBibliography() 未返回结果", bundle: .module))
         }
         try checkException()
         guard !result.isUndefined, !result.isNull else {
-            throw CSLRendererError.scriptFailed("makeBibliography() 未返回结果")
+            throw CSLRendererError.scriptFailed(String(localized: "makeBibliography() 未返回结果", bundle: .module))
         }
         return result
     }

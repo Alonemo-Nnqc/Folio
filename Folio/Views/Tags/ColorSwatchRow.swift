@@ -22,7 +22,7 @@ struct ColorSwatchRow: View {
     var body: some View {
         HStack(spacing: 6) {
             if allowsNone {
-                swatch(selected: hex == nil, help: "默认（强调色）") {
+                swatch(selected: hex == nil, help: String(localized: "默认（强调色）")) {
                     Circle().fill(Color.accentColor)
                         .overlay(Image(systemName: "folder.fill").font(.system(size: diameter * 0.42)).foregroundStyle(.white))
                 } action: { hex = nil }
@@ -38,7 +38,7 @@ struct ColorSwatchRow: View {
     }
 
     private var customSwatch: some View {
-        swatch(selected: isCustom, help: "自定义颜色…") {
+        swatch(selected: isCustom, help: String(localized: "自定义颜色…")) {
             if isCustom, let hex {
                 Circle().fill(Color(hex: hex))
             } else {
@@ -120,7 +120,7 @@ struct PopoverSearchField: View {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("清除")
+                .accessibilityLabel(String(localized: "清除"))
             }
         }
         .padding(.horizontal, 8)

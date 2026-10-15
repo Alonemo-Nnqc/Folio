@@ -36,7 +36,7 @@ public struct ProcessLaunchError: Error, LocalizedError, Sendable {
     public var executable: String
     public var code: Int32
     public var errorDescription: String? {
-        "无法启动 \(executable)：\(String(cString: strerror(code)))"
+        String(localized: "无法启动 \(executable)：\(String(cString: strerror(code)))", bundle: .module)
     }
 }
 

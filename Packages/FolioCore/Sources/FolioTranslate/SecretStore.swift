@@ -18,7 +18,7 @@ public struct SecretStore: Sendable {
         public let status: OSStatus
         public var errorDescription: String? {
             let message = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-            return "钥匙串操作失败：\(message)"
+            return String(localized: "钥匙串操作失败：\(message)", bundle: .module)
         }
     }
 
@@ -62,7 +62,7 @@ public struct SecretStore: Sendable {
         if status == errSecItemNotFound {
             var add = query(account)
             add[kSecValueData as String] = data
-            add[kSecAttrLabel as String] = "Folio 翻译：\(account)"
+            add[kSecAttrLabel as String] = String(localized: "Folio 翻译：\(account)", bundle: .module)
             add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             status = SecItemAdd(add as CFDictionary, nil)
         }

@@ -99,7 +99,7 @@ extension Library {
             item.metadata = metadata
             item.metadataState = .resolved
         case .standalone:
-            item = Item(kind: .standalone, title: hashed.first?.0.originalName ?? entry.files.first?.originalName ?? "未命名",
+            item = Item(kind: .standalone, title: hashed.first?.0.originalName ?? entry.files.first?.originalName ?? String(localized: "未命名", bundle: .module),
                         dateAdded: entry.dateAdded)
         }
         item.dateModified = entry.dateModified

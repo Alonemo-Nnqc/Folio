@@ -32,7 +32,7 @@ struct ZoteroImportSheet: View {
     private var directoryRow: some View {
         HStack {
             Text("数据目录").foregroundStyle(.secondary)
-            Text(directory?.path ?? "未找到 Zotero 数据目录")
+            Text(directory?.path ?? String(localized: "未找到 Zotero 数据目录"))
                 .font(.callout.monospaced())
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -113,14 +113,14 @@ struct ZoteroImportSheet: View {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.message = "选择包含 zotero.sqlite 的 Zotero 数据目录"
+        panel.message = String(localized: "选择包含 zotero.sqlite 的 Zotero 数据目录")
         panel.directoryURL = directory
         if panel.runModal() == .OK, let url = panel.url { directory = url }
     }
 
     private func probe() async {
         guard let directory else {
-            phase = .failed("未找到 Zotero 数据目录，请点击「选择…」手动指定")
+            phase = .failed(String(localized: "未找到 Zotero 数据目录，请点击「选择…」手动指定"))
             return
         }
         phase = .probing
@@ -128,7 +128,7 @@ struct ZoteroImportSheet: View {
             report = try await Task.detached { try ZoteroReader(dataDirectory: directory).probe() }.value
             phase = .ready
         } catch {
-            phase = .failed("无法读取 Zotero 数据库：\(error.localizedDescription)")
+            phase = .failed(String(localized: "无法读取 Zotero 数据库：\(error.localizedDescription)"))
         }
     }
 
@@ -158,7 +158,7 @@ struct ZoteroImportSheet: View {
                 phase = .finished(summary)
                 model.importer.indexFulltext()
             } catch {
-                phase = .failed("导入失败：\(error.localizedDescription)")
+                phase = .failed(String(localized: "导入失败：\(error.localizedDescription)"))
             }
         }
     }

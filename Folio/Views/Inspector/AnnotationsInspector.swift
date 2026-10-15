@@ -11,13 +11,13 @@ struct AnnotationsInspector: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            PopoverSearchField(prompt: "搜索标注", text: $query)
+            PopoverSearchField(prompt: String(localized: "搜索标注"), text: $query)
                 .padding(.horizontal, 16)
             if loading {
                 ProgressView().frame(maxHeight: .infinity)
             } else if filtered.allSatisfy({ $0.annotations.isEmpty }) {
-                ContentUnavailableView(query.isEmpty ? "没有标注" : "没有匹配的标注", systemImage: "highlighter",
-                                       description: Text(query.isEmpty ? "在 Folio 阅读器或\"预览\"中添加的高亮和批注会显示在这里" : ""))
+                ContentUnavailableView(query.isEmpty ? String(localized: "没有标注") : String(localized: "没有匹配的标注"), systemImage: "highlighter",
+                                       description: Text(query.isEmpty ? String(localized: "在 Folio 阅读器或\"预览\"中添加的高亮和批注会显示在这里") : ""))
                     .frame(maxHeight: .infinity)
             } else {
                 ScrollView {

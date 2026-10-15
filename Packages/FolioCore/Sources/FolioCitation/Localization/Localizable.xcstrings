@@ -1,0 +1,106 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "APA 第 7 版" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APA 7th edition"
+          }
+        }
+      }
+    },
+    "Chicago 第 18 版（作者-日期）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chicago 18th edition (author-date)"
+          }
+        }
+      }
+    },
+    "MLA 第 9 版" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MLA 9th edition"
+          }
+        }
+      }
+    },
+    "citeproc-js 出错：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "citeproc-js error: %@"
+          }
+        }
+      }
+    },
+    "citeproc-js 未导出 CSL.Engine" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "citeproc-js didn't export CSL.Engine"
+          }
+        }
+      }
+    },
+    "makeBibliography() 未返回结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "makeBibliography() returned no result"
+          }
+        }
+      }
+    },
+    "makeCitationCluster() 未返回结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "makeCitationCluster() returned no result"
+          }
+        }
+      }
+    },
+    "无法为样式 %@ 创建 CSL.Engine" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create CSL.Engine for style %@"
+          }
+        }
+      }
+    },
+    "无法创建 JavaScriptCore 环境" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create a JavaScriptCore context"
+          }
+        }
+      }
+    },
+    "缺少引用导出所需的资源文件：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A resource file needed for citations is missing: %@"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

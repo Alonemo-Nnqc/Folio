@@ -52,7 +52,7 @@ struct BrowserSettingsPane: View {
                     Text("浏览器")
                     Spacer()
                     RedetectButton(isChecking: redetect.isChecking, result: redetect.result,
-                                   help: "重新检测各浏览器中的 Folio 扩展") {
+                                   help: String(localized: "重新检测各浏览器中的 Folio 扩展")) {
                         redetect.run { await refreshNow() }
                     }
                 }
@@ -74,7 +74,7 @@ struct BrowserSettingsPane: View {
         switch connector.state {
         case .running:
             let recent = connector.lastSeen.max { $0.value < $1.value }
-            Label(recent.map { "运行中 · \($0.key) \($0.value.formatted(.relative(presentation: .named)))连接过" } ?? "运行中，等待插件连接",
+            Label(recent.map { String(localized: "运行中 · \($0.key) \($0.value.formatted(.relative(presentation: .named)))连接过") } ?? String(localized: "运行中，等待插件连接"),
                   systemImage: "circle.fill")
                 .labelStyle(StatusLabelStyle(color: .green))
         case .stopped:
@@ -86,9 +86,9 @@ struct BrowserSettingsPane: View {
 
     private func buttonTitle(for browser: BrowserInfo) -> String {
         switch browser.family {
-        case .safari: safariEnabled == true ? "设置…" : "启用…"
-        case .chromium: states[browser.id].map { $0 == .notInstalled ? "安装…" : "重新安装…" } ?? "安装…"
-        case .firefox: "安装…"
+        case .safari: safariEnabled == true ? String(localized: "设置…") : String(localized: "启用…")
+        case .chromium: states[browser.id].map { $0 == .notInstalled ? String(localized: "安装…") : String(localized: "重新安装…") } ?? String(localized: "安装…")
+        case .firefox: String(localized: "安装…")
         }
     }
 
@@ -97,40 +97,40 @@ struct BrowserSettingsPane: View {
         switch browser.family {
         case .safari:
             switch safariEnabled {
-            case true?: return ("已启用", .positive)
-            case false?: return ("未启用", .attention)
-            case nil: return ("未允许", .attention)
+            case true?: return (String(localized: "已启用"), .positive)
+            case false?: return (String(localized: "未启用"), .attention)
+            case nil: return (String(localized: "未允许"), .attention)
             }
         case .chromium:
             switch states[browser.id] ?? .notInstalled {
-            case .notInstalled: return ("未安装", .neutral)
+            case .notInstalled: return (String(localized: "未安装"), .neutral)
             case .installed(let enabled, let version):
-                if !enabled { return ("已停用", .attention) }
+                if !enabled { return (String(localized: "已停用"), .attention) }
                 if let version, let bundled = BrowserExtensions.bundledVersion,
-                   bundled.compare(version, options: .numeric) == .orderedDescending { return ("有新版本", .info) }
-                return ("已启用", .positive)
+                   bundled.compare(version, options: .numeric) == .orderedDescending { return (String(localized: "有新版本"), .info) }
+                return (String(localized: "已启用"), .positive)
             }
         case .firefox:
-            return model.connector.lastSeen["Firefox"] == nil ? ("未载入", .neutral) : ("临时载入", .attention)
+            return model.connector.lastSeen["Firefox"] == nil ? (String(localized: "未载入"), .neutral) : (String(localized: "临时载入"), .attention)
         }
     }
 
     /// One short line under the name, only when it says something the badge does not.
     private func detail(for browser: BrowserInfo) -> String? {
         let seen = model.connector.lastSeen[ExtensionInstallGuide.connectorName(for: browser)]
-            .map { "\($0.formatted(.relative(presentation: .named)))连接过" }
+            .map { String(localized: "\($0.formatted(.relative(presentation: .named)))连接过") }
         switch browser.family {
         case .safari:
-            return safariEnabled == nil ? "需要先在 Safari 中允许未签名的扩展" : seen
+            return safariEnabled == nil ? String(localized: "需要先在 Safari 中允许未签名的扩展") : seen
         case .chromium:
             if case .installed(true, let version)? = states[browser.id],
                let version, let bundled = BrowserExtensions.bundledVersion,
                bundled.compare(version, options: .numeric) == .orderedDescending {
-                return "在扩展页点\"重新加载\"即可更新"
+                return String(localized: "在扩展页点\"重新加载\"即可更新")
             }
             return seen
         case .firefox:
-            return "重启 Firefox 后需重新载入"
+            return String(localized: "重启 Firefox 后需重新载入")
         }
     }
 
@@ -145,7 +145,7 @@ struct BrowserSettingsPane: View {
         states = Dictionary(uniqueKeysWithValues: browsers.map { ($0.id, BrowserExtensions.installState(in: $0)) })
         safariEnabled = await BrowserExtensions.safariState()
         let enabled = browsers.filter { status(for: $0).tone == .positive }.count
-        return enabled == 0 ? "尚未在浏览器中启用" : "\(enabled) 个浏览器已启用"
+        return enabled == 0 ? String(localized: "尚未在浏览器中启用") : String(localized: "\(enabled) 个浏览器已启用")
     }
 }
 
@@ -176,7 +176,7 @@ private struct ExtensionInstallGuide: View {
             HStack(spacing: 12) {
                 Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.path)).resizable().frame(width: 40, height: 40)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("在 \(browser.name) 中\(browser.family == .safari ? "启用" : "安装") Folio 扩展").font(.headline)
+                    (browser.family == .safari ? Text("在 \(browser.name) 中启用 Folio 扩展") : Text("在 \(browser.name) 中安装 Folio 扩展")).font(.headline)
                     Text(subtitle).font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -204,9 +204,9 @@ private struct ExtensionInstallGuide: View {
 
     private var subtitle: String {
         switch browser.family {
-        case .safari: "扩展随 Folio 提供，按下面三步打开即可"
-        case .chromium: "扩展尚未上架应用商店，需要以\"开发者模式\"载入，约一分钟"
-        case .firefox: "以临时附加组件载入，Firefox 重启后需要重新载入"
+        case .safari: String(localized: "扩展随 Folio 提供，按下面三步打开即可")
+        case .chromium: String(localized: "扩展尚未上架应用商店，需要以\"开发者模式\"载入，约一分钟")
+        case .firefox: String(localized: "以临时附加组件载入，Firefox 重启后需要重新载入")
         }
     }
 
@@ -215,14 +215,14 @@ private struct ExtensionInstallGuide: View {
     @ViewBuilder
     private var chromiumSteps: some View {
         let page = browser.extensionsPage ?? "chrome://extensions"
-        step(1, "打开扩展页面", detail: "如果浏览器没有跳转，把地址粘贴到地址栏：\(page)") {
+        step(1, String(localized: "打开扩展页面"), detail: String(localized: "如果浏览器没有跳转，把地址粘贴到地址栏：\(page)")) {
             Button("打开") { BrowserExtensions.openExtensionsPage(of: browser) }
-            Button("拷贝地址") { copy(page, label: "地址") }
+            Button("拷贝地址") { copy(page, label: String(localized: "地址")) }
         }
-        step(2, browser.id == "edge" ? "打开左侧的\"开发人员模式\"" : "打开右上角的\"开发者模式\"开关", detail: nil) { EmptyView() }
-        step(3, browser.id == "edge" ? "点\"加载解压缩的扩展\"" : "点\"加载已解压的扩展程序\"", detail: nil) { EmptyView() }
-        step(4, "选择 Folio 扩展文件夹", detail: "在弹出的窗口中按 ⌘⇧G，再按 ⌘V 粘贴下面的路径（已拷贝），回车后点\"选择\"\n也可以把 Finder 中的文件夹拖进窗口") {
-            Button("拷贝路径") { if let folder { copy(folder.path, label: "路径") } }
+        step(2, browser.id == "edge" ? String(localized: "打开左侧的\"开发人员模式\"") : String(localized: "打开右上角的\"开发者模式\"开关"), detail: nil) { EmptyView() }
+        step(3, browser.id == "edge" ? String(localized: "点\"加载解压缩的扩展\"") : String(localized: "点\"加载已解压的扩展程序\""), detail: nil) { EmptyView() }
+        step(4, String(localized: "选择 Folio 扩展文件夹"), detail: String(localized: "在弹出的窗口中按 ⌘⇧G，再按 ⌘V 粘贴下面的路径（已拷贝），回车后点\"选择\"\n也可以把 Finder 中的文件夹拖进窗口")) {
+            Button("拷贝路径") { if let folder { copy(folder.path, label: String(localized: "路径")) } }
             Button("在 Finder 中显示") { if let folder { NSWorkspace.shared.activateFileViewerSelecting([folder]) } }
         }
         if let folder {
@@ -236,15 +236,15 @@ private struct ExtensionInstallGuide: View {
 
     @ViewBuilder
     private var safariSteps: some View {
-        step(1, "打开网页开发者功能", detail: "Safari ▸ 设置 ▸ 高级，勾选\"显示网页开发者功能\"") {
+        step(1, String(localized: "打开网页开发者功能"), detail: String(localized: "Safari ▸ 设置 ▸ 高级，勾选\"显示网页开发者功能\"")) {
             Button("打开 Safari") { NSWorkspace.shared.open(browser.appURL) }
         }
-        step(2, "允许未签名的扩展", detail: "Safari ▸ 设置 ▸ 开发者，勾选\"允许未签名的扩展\"\nFolio 使用开发证书签名，Safari 每次重新打开后需要再勾选一次") {
+        step(2, String(localized: "允许未签名的扩展"), detail: String(localized: "Safari ▸ 设置 ▸ 开发者，勾选\"允许未签名的扩展\"\nFolio 使用开发证书签名，Safari 每次重新打开后需要再勾选一次")) {
             EmptyView()
         }
-        step(3, "启用 Folio 文献保存", detail: "Safari ▸ 设置 ▸ 扩展，勾选\"Folio 文献保存\"，并允许它在所有网站上使用（读取论文页面时需要）") {
+        step(3, String(localized: "启用 Folio 文献保存"), detail: String(localized: "Safari ▸ 设置 ▸ 扩展，勾选\"Folio 文献保存\"，并允许它在所有网站上使用（读取论文页面时需要）")) {
             Button("打开扩展设置") {
-                Task { problem = await BrowserExtensions.openSafariSettings().map { "Safari 还没有列出 Folio 扩展，请先完成第 2 步（\($0)）" } }
+                Task { problem = await BrowserExtensions.openSafariSettings().map { String(localized: "Safari 还没有列出 Folio 扩展，请先完成第 2 步（\($0)）") } }
             }
         }
     }
@@ -252,12 +252,12 @@ private struct ExtensionInstallGuide: View {
     @ViewBuilder
     private var firefoxSteps: some View {
         let page = "about:debugging#/runtime/this-firefox"
-        step(1, "打开 Firefox 的调试页面", detail: "Firefox 不允许其他应用打开该页面，请把地址粘贴到地址栏：\(page)") {
-            Button("拷贝地址") { copy(page, label: "地址") }
+        step(1, String(localized: "打开 Firefox 的调试页面"), detail: String(localized: "Firefox 不允许其他应用打开该页面，请把地址粘贴到地址栏：\(page)")) {
+            Button("拷贝地址") { copy(page, label: String(localized: "地址")) }
             Button("打开 Firefox") { NSWorkspace.shared.open(browser.appURL) }
         }
-        step(2, "点\"临时载入附加组件…\"", detail: "在选择窗口中按 ⌘⇧G，粘贴路径（已拷贝）后回车，选择其中的 manifest.json") {
-            Button("拷贝路径") { if let folder { copy(folder.appending(path: "manifest.json").path, label: "路径") } }
+        step(2, String(localized: "点\"临时载入附加组件…\""), detail: String(localized: "在选择窗口中按 ⌘⇧G，粘贴路径（已拷贝）后回车，选择其中的 manifest.json")) {
+            Button("拷贝路径") { if let folder { copy(folder.appending(path: "manifest.json").path, label: String(localized: "路径")) } }
         }
         if let folder {
             Text(folder.appending(path: "manifest.json").path)
@@ -291,19 +291,19 @@ private struct ExtensionInstallGuide: View {
             case .installed(false, _):
                 Label("已安装但已停用：在扩展页面中打开它的开关", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             case .notInstalled:
-                waiting(copied.map { "已拷贝\($0)，正在等待安装…" } ?? "正在等待安装…")
+                waiting(copied.map { String(localized: "已拷贝\($0)，正在等待安装…") } ?? String(localized: "正在等待安装…"))
             }
         case .safari:
             switch safariEnabled {
             case true?: Label("已启用", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            case false?: waiting("Safari 已列出 Folio 扩展，等待勾选启用…")
-            case nil: waiting("等待 Safari 列出 Folio 扩展（完成第 2 步后出现）…")
+            case false?: waiting(String(localized: "Safari 已列出 Folio 扩展，等待勾选启用…"))
+            case nil: waiting(String(localized: "等待 Safari 列出 Folio 扩展（完成第 2 步后出现）…"))
             }
         case .firefox:
             if connected {
                 Label("扩展已连接 Folio", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {
-                waiting("载入后在论文页面点一次 Folio 按钮即可确认")
+                waiting(String(localized: "载入后在论文页面点一次 Folio 按钮即可确认"))
             }
         }
     }
@@ -325,9 +325,9 @@ private struct ExtensionInstallGuide: View {
         if browser.family != .safari {
             do {
                 folder = try BrowserExtensions.prepareInstall(for: browser)
-                copied = "路径"
+                copied = String(localized: "路径")
             } catch {
-                problem = "无法准备扩展文件夹：\(error.localizedDescription)"
+                problem = String(localized: "无法准备扩展文件夹：\(error.localizedDescription)")
             }
         }
         if browser.family == .chromium { BrowserExtensions.openExtensionsPage(of: browser) }

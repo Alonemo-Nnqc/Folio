@@ -50,7 +50,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         outline.setDraggingSourceOperationMask(.move, forLocal: true)
         outline.draggingDestinationFeedbackStyle = .sourceList
         outline.setAccessibilityIdentifier("sidebar")
-        outline.setAccessibilityLabel("边栏")
+        outline.setAccessibilityLabel(String(localized: "边栏"))
         let menu = NSMenu()
         menu.delegate = self
         outline.menu = menu
@@ -193,12 +193,12 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard let node = item as? SidebarNode, let model else { return nil }
         switch node.kind {
         case .libraryHeader:
-            return header(title: "文献库", addTitle: nil, action: nil, identifier: nil)
+            return header(title: String(localized: "文献库"), addTitle: nil, action: nil, identifier: nil)
         case .groupsHeader:
-            return header(title: "分组", addTitle: "新建分组", action: #selector(LibraryWindowController.newGroup(_:)),
+            return header(title: String(localized: "分组"), addTitle: String(localized: "新建分组"), action: #selector(LibraryWindowController.newGroup(_:)),
                           identifier: "sidebar.addGroup")
         case .tagsHeader:
-            return header(title: "标签", addTitle: "新建标签", action: #selector(LibraryWindowController.newTag(_:)),
+            return header(title: String(localized: "标签"), addTitle: String(localized: "新建标签"), action: #selector(LibraryWindowController.newTag(_:)),
                           identifier: "sidebar.addTag")
         case .builtin(let scope):
             let cell = makeCell()
@@ -313,10 +313,10 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         let node = outline.clickedRow >= 0 ? outline.item(atRow: outline.clickedRow) as? SidebarNode : nil
         switch node?.kind {
         case .none, .libraryHeader, .groupsHeader:
-            menu.addItem(item("创建分组", "folder.badge.plus") { model.createGroup() })
-            menu.addItem(item("搜索文献", "magnifyingglass") { model.showSearch() })
+            menu.addItem(item(String(localized: "创建分组"), "folder.badge.plus") { model.createGroup() })
+            menu.addItem(item(String(localized: "搜索文献"), "magnifyingglass") { model.showSearch() })
         case .builtin(.trash):
-            let empty = item("清空回收站…", "trash.slash") { model.confirmEmptyTrash() }
+            let empty = item(String(localized: "清空回收站…"), "trash.slash") { model.confirmEmptyTrash() }
             empty.isEnabled = (model.counts[.trash] ?? 0) > 0
             menu.addItem(empty)
         case .builtin:
@@ -324,17 +324,17 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case .group(let id):
             let row = outline.clickedRow
             if model.snapshot.groupsById[id]?.parentId == nil {
-                menu.addItem(item("新建子分组", "folder.badge.plus") { model.createGroup(parentId: id) })
+                menu.addItem(item(String(localized: "新建子分组"), "folder.badge.plus") { model.createGroup(parentId: id) })
             }
-            menu.addItem(item("重命名", "pencil") { [weak self] in self?.beginRenaming(row: row) })
+            menu.addItem(item(String(localized: "重命名"), "pencil") { [weak self] in self?.beginRenaming(row: row) })
             menu.addItem(colorMenu(for: id))
             menu.addItem(.separator())
-            menu.addItem(item("删除分组…", "trash") { model.confirmDeleteGroup(id) })
+            menu.addItem(item(String(localized: "删除分组…"), "trash") { model.confirmDeleteGroup(id) })
         case .tagsHeader:
-            menu.addItem(item("新建标签…", "tag") { model.activeSheet = .tagEditor(tagId: nil, applyTo: []) })
+            menu.addItem(item(String(localized: "新建标签…"), "tag") { model.activeSheet = .tagEditor(tagId: nil, applyTo: []) })
         case .tag(let id):
-            menu.addItem(item("编辑标签…", "pencil") { model.activeSheet = .tagEditor(tagId: id, applyTo: []) })
-            menu.addItem(item("删除标签…", "trash") { model.confirmDeleteTag(id) })
+            menu.addItem(item(String(localized: "编辑标签…"), "pencil") { model.activeSheet = .tagEditor(tagId: id, applyTo: []) })
+            menu.addItem(item(String(localized: "删除标签…"), "trash") { model.confirmDeleteTag(id) })
         }
     }
 
@@ -342,8 +342,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     /// system colour panel.
     private func colorMenu(for groupId: String) -> NSMenuItem {
         let current = model?.snapshot.groupsById[groupId]?.colorHex
-        let submenu = NSMenu(title: "颜色")
-        let choices: [(name: String, hex: String?)] = [("默认", nil)] + TagPalette.presets.map { ($0.name, Optional($0.hex)) }
+        let submenu = NSMenu(title: String(localized: "颜色"))
+        let choices: [(name: String, hex: String?)] = [(String(localized: "默认"), nil)] + TagPalette.presets.map { ($0.name, Optional($0.hex)) }
         let selected = choices.firstIndex { choice in
             switch (choice.hex, current) {
             case (nil, nil): true
@@ -356,7 +356,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             self?.model?.setGroupColor(groupId, colorHex: choices[index].hex)
         })
         submenu.addItem(.separator())
-        let custom = NSMenuItem.closure("自定义颜色…") { [weak self] in
+        let custom = NSMenuItem.closure(String(localized: "自定义颜色…")) { [weak self] in
             self?.colorPanel.show(initial: current.map(NSColor.init(hex:)) ?? .controlAccentColor) { color in
                 self?.model?.setGroupColor(groupId, colorHex: color.hexString)
             }
@@ -366,7 +366,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             custom.state = .on
         }
         submenu.addItem(custom)
-        let item = NSMenuItem(title: "颜色", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: String(localized: "颜色"), action: nil, keyEquivalent: "")
         item.image = NSImage(systemSymbolName: "paintpalette", accessibilityDescription: nil)
         item.submenu = submenu
         return item
@@ -424,7 +424,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             model.trashItems(ids)
         case let .tagItems(ids, tagId):
             model.setTag(tagId, on: ids, enabled: true)
-            model.toasts.show("已添加标签「\(model.snapshot.tagsById[tagId]?.name ?? "")」", systemImage: "tag")
+            model.toasts.show(String(localized: "已添加标签「\(model.snapshot.tagsById[tagId]?.name ?? "")」"), systemImage: "tag")
         case let .importFiles(urls, groupId):
             model.importer.importFiles(urls, toGroup: groupId)
         }

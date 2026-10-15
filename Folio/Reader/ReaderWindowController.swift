@@ -146,7 +146,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     /// Reads the file into memory (mapped), so atomic saves can replace it underneath safely.
     private func loadDocument() -> Bool {
         guard let data = try? Data(contentsOf: fileURL, options: .alwaysMapped), let document = PDFDocument(data: data) else {
-            model.toasts.show("无法打开「\(fileURL.lastPathComponent)」：不是有效的 PDF", systemImage: "exclamationmark.triangle")
+            model.toasts.show(String(localized: "无法打开「\(fileURL.lastPathComponent)」：不是有效的 PDF"), systemImage: "exclamationmark.triangle")
             return false
         }
         // Pages become ReaderPage (selection outline) and find results come back here.
@@ -211,17 +211,17 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private func unlockDocument() {
         guard let window, let document = pdfView.document else { return }
         let alert = NSAlert()
-        alert.messageText = "这份 PDF 受密码保护"
-        alert.informativeText = "输入密码以打开「\(window.title)」。"
+        alert.messageText = String(localized: "这份 PDF 受密码保护")
+        alert.informativeText = String(localized: "输入密码以打开「\(window.title)」。")
         let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 24))
         alert.accessoryView = field
-        alert.addButton(withTitle: "打开")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: String(localized: "打开"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.window.initialFirstResponder = field
         alert.beginSheetModal(for: window) { [weak self] response in
             guard response == .alertFirstButtonReturn else { return }
             if !document.unlock(withPassword: field.stringValue) {
-                self?.model.toasts.show("密码不正确", systemImage: "lock")
+                self?.model.toasts.show(String(localized: "密码不正确"), systemImage: "lock")
                 self?.unlockDocument()
             }
         }
@@ -249,14 +249,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         let temp = fileURL.deletingLastPathComponent().appending(path: ".\(UUID().uuidString).folio-saving.pdf")
         guard document.write(to: temp) else {
             try? FileManager.default.removeItem(at: temp)
-            model.toasts.show("无法保存批注：写入文件失败", systemImage: "exclamationmark.triangle")
+            model.toasts.show(String(localized: "无法保存批注：写入文件失败"), systemImage: "exclamationmark.triangle")
             return false
         }
         do {
             _ = try FileManager.default.replaceItemAt(fileURL, withItemAt: temp)
         } catch {
             try? FileManager.default.removeItem(at: temp)
-            model.toasts.show("无法保存批注：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            model.toasts.show(String(localized: "无法保存批注：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
             return false
         }
         isDirty = false
@@ -326,8 +326,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         window.title = item?.title ?? fileURL.lastPathComponent
         if let page = pdfView.currentPage, let index = pdfView.document?.index(for: page) {
             state.pageIndex = index
-            let label = page.label.flatMap { $0 == String(index + 1) ? nil : "（\($0)）" } ?? ""
-            var subtitle = "第 \(index + 1) / \(state.pageCount) 页\(label)"
+            let label = page.label.flatMap { $0 == String(index + 1) ? nil : String(localized: "（\($0)）") } ?? ""
+            var subtitle = String(localized: "第 \(index + 1) / \(state.pageCount) 页\(label)")
             window.subtitle = subtitle
         }
         // Translation progress of this paper (TRANS-04).
@@ -356,14 +356,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     private static func kindName(_ type: String) -> String {
         switch type {
-        case "Highlight": "高亮"
-        case "Underline": "下划线"
-        case "StrikeOut": "删除线"
-        case "Squiggly": "波浪线"
-        case "Text": "便签"
-        case "FreeText": "文本框"
-        case "Ink": "手绘"
-        default: "图形"
+        case "Highlight": String(localized: "高亮")
+        case "Underline": String(localized: "下划线")
+        case "StrikeOut": String(localized: "删除线")
+        case "Squiggly": String(localized: "波浪线")
+        case "Text": String(localized: "便签")
+        case "FreeText": String(localized: "文本框")
+        case "Ink": String(localized: "手绘")
+        default: String(localized: "图形")
         }
     }
 
@@ -398,7 +398,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     private func addToNote(_ text: String, pageIndex: Int) {
         let quote = text.split(separator: "\n").map { "> \($0)" }.joined(separator: "\n")
-        model.appendToNote(itemId: itemId, "\(quote)\n> —— 第 \(pageIndex + 1) 页")
+        model.appendToNote(itemId: itemId, String(localized: "\(quote)\n> —— 第 \(pageIndex + 1) 页"))
         showNotes()
     }
 
@@ -410,8 +410,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
         let citation = reference.isEmpty ? "p. \(pageIndex + 1)" : "\(reference), p. \(pageIndex + 1)"
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("“\(text)”（\(citation)）", forType: .string)
-        model.toasts.show("已拷贝为引用", systemImage: "quote.opening")
+        NSPasteboard.general.setString(String(localized: "“\(text)”（\(citation)）"), forType: .string)
+        model.toasts.show(String(localized: "已拷贝为引用"), systemImage: "quote.opening")
     }
 
     private func showNotes() {
@@ -445,10 +445,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard !save() else { return true }
         let alert = NSAlert()
-        alert.messageText = "无法保存批注"
-        alert.informativeText = "关闭后，这次添加的批注会丢失。"
-        alert.addButton(withTitle: "取消")
-        alert.addButton(withTitle: "仍然关闭")
+        alert.messageText = String(localized: "无法保存批注")
+        alert.informativeText = String(localized: "关闭后，这次添加的批注会丢失。")
+        alert.addButton(withTitle: String(localized: "取消"))
+        alert.addButton(withTitle: String(localized: "仍然关闭"))
         alert.buttons[1].hasDestructiveAction = true
         alert.beginSheetModal(for: sender) { [weak self] response in
             if response == .alertSecondButtonReturn {
@@ -581,7 +581,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             return
         }
         guard let translation = translationFile else {
-            model.toasts.show("这篇论文还没有译文。可以先\"翻译全文\"", systemImage: "character.book.closed")
+            model.toasts.show(String(localized: "这篇论文还没有译文。可以先\"翻译全文\""), systemImage: "character.book.closed")
             return
         }
         state.parallelFileId = translation.id
@@ -618,13 +618,13 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     @objc func goToPageNumber(_ sender: Any?) {
         guard let window, let document = pdfView.document else { return }
         let alert = NSAlert()
-        alert.messageText = "前往页面"
-        alert.informativeText = "输入页码（1–\(document.pageCount)）"
+        alert.messageText = String(localized: "前往页面")
+        alert.informativeText = String(localized: "输入页码（1–\(document.pageCount)）")
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 120, height: 24))
         field.stringValue = "\(state.pageIndex + 1)"
         alert.accessoryView = field
-        alert.addButton(withTitle: "前往")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: String(localized: "前往"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.window.initialFirstResponder = field
         alert.beginSheetModal(for: window) { [weak self] response in
             guard response == .alertFirstButtonReturn, let self else { return }
@@ -755,12 +755,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         switch id {
         case .readerZoom:
             let group = NSToolbarItemGroup(itemIdentifier: id,
-                                           images: [NSImage(systemSymbolName: "minus.magnifyingglass", accessibilityDescription: "缩小")!,
-                                                    NSImage(systemSymbolName: "plus.magnifyingglass", accessibilityDescription: "放大")!],
-                                           selectionMode: .momentary, labels: ["缩小", "放大"],
+                                           images: [NSImage(systemSymbolName: "minus.magnifyingglass", accessibilityDescription: String(localized: "缩小"))!,
+                                                    NSImage(systemSymbolName: "plus.magnifyingglass", accessibilityDescription: String(localized: "放大"))!],
+                                           selectionMode: .momentary, labels: [String(localized: "缩小"), String(localized: "放大")],
                                            target: nil, action: #selector(zoomFromToolbar(_:)))
-            group.label = "缩放"
-            group.paletteLabel = "缩放"
+            group.label = String(localized: "缩放")
+            group.paletteLabel = String(localized: "缩放")
             return group
         case .readerTools:
             let tools = AnnotationTool.allCases
@@ -768,11 +768,11 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                                            images: tools.map { NSImage(systemSymbolName: $0.symbol, accessibilityDescription: $0.title)! },
                                            selectionMode: .selectOne, labels: tools.map(\.title),
                                            target: nil, action: #selector(selectTool(_:)))
-            group.label = "批注工具"
-            group.paletteLabel = "批注工具"
+            group.label = String(localized: "批注工具")
+            group.paletteLabel = String(localized: "批注工具")
             group.selectedIndex = state.tool.rawValue
             for (index, tool) in tools.enumerated() {
-                group.subitems[index].toolTip = "\(tool.title)（⌃⌘\(tool.keyEquivalent.uppercased())）"
+                group.subitems[index].toolTip = String(localized: "\(tool.title)（⌃⌘\(tool.keyEquivalent.uppercased())）")
             }
             group.controlRepresentation = .expanded
             toolGroup = group
@@ -784,30 +784,30 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
             item.showsIndicator = false
-            item.label = "颜色"
-            item.paletteLabel = "批注颜色"
-            item.toolTip = "批注颜色"
+            item.label = String(localized: "颜色")
+            item.paletteLabel = String(localized: "批注颜色")
+            item.toolTip = String(localized: "批注颜色")
             item.image = Self.colorSwatch(state.color)
             colorItem = item
             return item
         case .readerTranslate:
             let menu = NSMenu()
-            menu.addItem(withTitle: "翻译全文…", action: #selector(translateDocument(_:)), keyEquivalent: "")
-            menu.addItem(withTitle: "对照阅读", action: #selector(toggleParallelReading(_:)), keyEquivalent: "")
-            menu.addItem(withTitle: "取消翻译", action: #selector(cancelTranslation(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: String(localized: "翻译全文…"), action: #selector(translateDocument(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: String(localized: "对照阅读"), action: #selector(toggleParallelReading(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: String(localized: "取消翻译"), action: #selector(cancelTranslation(_:)), keyEquivalent: "")
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
             item.showsIndicator = false
-            item.label = "翻译"
-            item.paletteLabel = "翻译"
-            item.toolTip = "保留排版翻译全文、对照阅读"
-            item.image = NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: "翻译")
+            item.label = String(localized: "翻译")
+            item.paletteLabel = String(localized: "翻译")
+            item.toolTip = String(localized: "保留排版翻译全文、对照阅读")
+            item.image = NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: String(localized: "翻译"))
             return item
         case .readerSearch:
             let item = NSSearchToolbarItem(itemIdentifier: id)
-            item.label = "查找"
-            item.paletteLabel = "在文档中查找"
-            item.searchField.placeholderString = "在文档中查找"
+            item.label = String(localized: "查找")
+            item.paletteLabel = String(localized: "在文档中查找")
+            item.searchField.placeholderString = String(localized: "在文档中查找")
             item.searchField.delegate = self
             item.searchField.sendsSearchStringImmediately = false
             item.preferredWidthForSearchField = 160
@@ -817,14 +817,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             return item
         case .readerPrint:
             let item = NSToolbarItem(itemIdentifier: id)
-            item.label = "打印"
-            item.paletteLabel = "打印"
-            item.image = NSImage(systemSymbolName: "printer", accessibilityDescription: "打印")
+            item.label = String(localized: "打印")
+            item.paletteLabel = String(localized: "打印")
+            item.image = NSImage(systemSymbolName: "printer", accessibilityDescription: String(localized: "打印"))
             item.action = #selector(printDocument(_:))
             return item
         case .folioReveal:
             let item = NSToolbarItem(itemIdentifier: id)
-            item.label = "在 Finder 中显示"
+            item.label = String(localized: "在 Finder 中显示")
             item.paletteLabel = item.label
             item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: item.label)
             item.action = #selector(revealInFinder(_:))

@@ -39,10 +39,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard model.readers.saveAll() else {
             let alert = NSAlert()
-            alert.messageText = "部分批注无法保存"
-            alert.informativeText = "仍要退出吗？未保存的批注会丢失。"
-            alert.addButton(withTitle: "取消")
-            alert.addButton(withTitle: "退出")
+            alert.messageText = String(localized: "部分批注无法保存")
+            alert.informativeText = String(localized: "仍要退出吗？未保存的批注会丢失。")
+            alert.addButton(withTitle: String(localized: "取消"))
+            alert.addButton(withTitle: String(localized: "退出"))
             return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
         }
         return .terminateNow
@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if model.snapshot.items[itemId] == nil { model.reloadFromDisk() }
         DispatchQueue.main.asyncAfter(deadline: .now() + (model.snapshot.items[itemId] == nil ? 0.5 : 0)) { [self] in
             guard let item = model.snapshot.items[itemId] else {
-                model.toasts.show("Folio 中没有这个条目", systemImage: "questionmark.circle")
+                model.toasts.show(String(localized: "Folio 中没有这个条目"), systemImage: "questionmark.circle")
                 return
             }
             NSApp.activate()

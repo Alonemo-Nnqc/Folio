@@ -42,8 +42,8 @@ public enum ReasoningEffort {
     private static func choice(_ value: String, _ title: String) -> Choice { Choice(value: value, title: title) }
 
     /// OpenAI's levels, lowest to highest.
-    private static let fullRange = [choice("minimal", "最低"), choice("low", "低"), choice("medium", "中"), choice("high", "高"),
-                                    choice("xhigh", "极高")]
+    private static let fullRange = [choice("minimal", String(localized: "最低", bundle: .module)), choice("low", String(localized: "低", bundle: .module)), choice("medium", String(localized: "中", bundle: .module)), choice("high", String(localized: "高", bundle: .module)),
+                                    choice("xhigh", String(localized: "极高", bundle: .module))]
 
     public static func support(serviceID: String, fields: [String: String]) -> Support {
         switch serviceID {
@@ -59,7 +59,7 @@ public enum ReasoningEffort {
                 return .choices(fullRange, default: "medium")
             }
             if bare.range(of: #"^o[1-9]"#, options: .regularExpression) != nil {
-                return .choices([choice("low", "低"), choice("medium", "中"), choice("high", "高")], default: "medium")
+                return .choices([choice("low", String(localized: "低", bundle: .module)), choice("medium", String(localized: "中", bundle: .module)), choice("high", String(localized: "高", bundle: .module))], default: "medium")
             }
             if bare.hasPrefix("gpt-4") || bare.hasPrefix("gpt-3") || bare.hasPrefix("chatgpt") {
                 return .unsupportedModel
@@ -67,14 +67,14 @@ public enum ReasoningEffort {
             // Other models behind a compatible endpoint: offer the common levels, but let the user
             // keep the parameter off because many servers reject it.
             if serviceID == "openaicompatible" {
-                return .choices([choice("", "不设置")] + fullRange, default: "")
+                return .choices([choice("", String(localized: "不设置", bundle: .module))] + fullRange, default: "")
             }
             return .unsupportedModel
         case "deepseek":
-            return .choices([choice("", "默认"), choice("off", "关闭思考"), choice("high", "高"), choice("max", "最高")],
+            return .choices([choice("", String(localized: "默认", bundle: .module)), choice("off", String(localized: "关闭思考", bundle: .module)), choice("high", String(localized: "高", bundle: .module)), choice("max", String(localized: "最高", bundle: .module))],
                             default: "")
         case "siliconflow":
-            return .choices([choice("", "默认"), choice("on", "开启思考"), choice("off", "关闭思考")], default: "")
+            return .choices([choice("", String(localized: "默认", bundle: .module)), choice("on", String(localized: "开启思考", bundle: .module)), choice("off", String(localized: "关闭思考", bundle: .module))], default: "")
         default:
             return .none
         }

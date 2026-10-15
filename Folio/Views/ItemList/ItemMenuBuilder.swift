@@ -46,26 +46,26 @@ enum ItemMenuBuilder {
     static func entries(for context: ItemMenuContext, snapshot: LibrarySnapshot,
                         groups: [(group: LibraryGroup, depth: Int)]) -> [ItemMenuEntry] {
         if context.scope == .trash {
-            return [.action(title: "恢复", symbol: "arrow.uturn.backward", command: .restore),
-                    .action(title: "彻底删除", symbol: "trash.slash", command: .purge)]
+            return [.action(title: String(localized: "恢复"), symbol: "arrow.uturn.backward", command: .restore),
+                    .action(title: String(localized: "彻底删除"), symbol: "trash.slash", command: .purge)]
         }
         if let fileId = context.fileId, let file = snapshot.files[fileId] {
             let isDefault = snapshot.items[file.itemId]?.defaultFileId == fileId
             var entries: [ItemMenuEntry] = [
-                .action(title: "打开", symbol: "arrow.up.forward.app", command: .open),
+                .action(title: String(localized: "打开"), symbol: "arrow.up.forward.app", command: .open),
                 openWithEntry(isPDF: file.isPDF, apps: context.openWithApps),
-                .action(title: "快速查看", symbol: "eye", command: .quickLook),
+                .action(title: String(localized: "快速查看"), symbol: "eye", command: .quickLook),
                 .separator,
-                .action(title: "设为默认打开文件", symbol: "star", command: .setDefaultFile(fileId),
+                .action(title: String(localized: "设为默认打开文件"), symbol: "star", command: .setDefaultFile(fileId),
                         enabled: !isDefault, checked: isDefault),
             ]
             if file.isPDF && file.translationOf == nil {
                 entries.append(translateEntry(translating: context.translatingItemIds.contains(file.itemId)))
             }
             entries += [
-                .action(title: "在 Finder 中显示", symbol: "folder", command: .revealInFinder),
+                .action(title: String(localized: "在 Finder 中显示"), symbol: "folder", command: .revealInFinder),
                 .separator,
-                .action(title: "删除", symbol: "trash", command: .trashFile),
+                .action(title: String(localized: "删除"), symbol: "trash", command: .trashFile),
             ]
             return entries
         }
@@ -76,56 +76,56 @@ enum ItemMenuBuilder {
         let allRegular = items.allSatisfy { $0.kind == .regular }
 
         var entries: [ItemMenuEntry] = [
-            .action(title: "打开", symbol: "arrow.up.forward.app", command: .open),
+            .action(title: String(localized: "打开"), symbol: "arrow.up.forward.app", command: .open),
         ]
         if let single, let file = defaultFile(of: single, snapshot) {
             entries.append(openWithEntry(isPDF: file.isPDF, apps: context.openWithApps))
         }
         entries += [
-            .action(title: "快速查看", symbol: "eye", command: .quickLook),
+            .action(title: String(localized: "快速查看"), symbol: "eye", command: .quickLook),
             .separator,
-            .submenu(title: "添加到", symbol: "folder.badge.plus",
+            .submenu(title: String(localized: "添加到"), symbol: "folder.badge.plus",
                      entries: groupEntries(items: items, scope: context.scope, snapshot: snapshot, groups: groups)),
-            .submenu(title: "标签", symbol: "tag", entries: tagEntries(items: items, snapshot: snapshot)),
+            .submenu(title: String(localized: "标签"), symbol: "tag", entries: tagEntries(items: items, snapshot: snapshot)),
         ]
         if allRegular {
-            entries.append(.submenu(title: "阅读状态", symbol: "book", entries: ReadStatus.allCases.map { status in
+            entries.append(.submenu(title: String(localized: "阅读状态"), symbol: "book", entries: ReadStatus.allCases.map { status in
                 .action(title: status.displayName, symbol: nil, command: .setReadStatus(status),
                         checked: items.allSatisfy { $0.readStatus == status })
             }))
-            entries.append(.submenu(title: "评分", symbol: "star", entries: (0...5).map { value in
-                .action(title: value == 0 ? "无评分" : String(repeating: "★", count: value), symbol: nil,
+            entries.append(.submenu(title: String(localized: "评分"), symbol: "star", entries: (0...5).map { value in
+                .action(title: value == 0 ? String(localized: "无评分") : String(repeating: "★", count: value), symbol: nil,
                         command: .setRating(value), checked: items.allSatisfy { $0.rating == value })
             }))
-            entries.append(.submenu(title: "复制引用", symbol: "quote.opening", entries: CitationStyleOption.allCases.map {
+            entries.append(.submenu(title: String(localized: "复制引用"), symbol: "quote.opening", entries: CitationStyleOption.allCases.map {
                 .action(title: $0.title, symbol: nil, command: .copyCitation($0))
             }))
         }
         entries.append(.separator)
         if let single {
-            entries.append(.action(title: "编辑笔记", symbol: "note.text", command: .editNote))
+            entries.append(.action(title: String(localized: "编辑笔记"), symbol: "note.text", command: .editNote))
             if snapshot.notedItems.contains(single.id) {
-                entries.append(.action(title: "导出笔记…", symbol: "square.and.arrow.up", command: .exportNote))
+                entries.append(.action(title: String(localized: "导出笔记…"), symbol: "square.and.arrow.up", command: .exportNote))
             }
             if let file = defaultFile(of: single, snapshot), file.isPDF {
                 entries.append(translateEntry(translating: context.translatingItemIds.contains(single.id)))
             }
             entries.append(.separator)
             if single.kind == .regular {
-                entries.append(.action(title: "添加文件…", symbol: "paperclip", command: .addFiles))
-                entries.append(.action(title: "重新检索元数据", symbol: "arrow.clockwise", command: .retrieve))
+                entries.append(.action(title: String(localized: "添加文件…"), symbol: "paperclip", command: .addFiles))
+                entries.append(.action(title: String(localized: "重新检索元数据"), symbol: "arrow.clockwise", command: .retrieve))
             } else {
-                entries.append(.action(title: "重新检索元数据", symbol: "arrow.clockwise", command: .retrieve,
+                entries.append(.action(title: String(localized: "重新检索元数据"), symbol: "arrow.clockwise", command: .retrieve,
                                        enabled: single.metadataState != .pending && isPDF(single, snapshot)))
-                entries.append(.action(title: "手动匹配…", symbol: "magnifyingglass", command: .manualMatch))
+                entries.append(.action(title: String(localized: "手动匹配…"), symbol: "magnifyingglass", command: .manualMatch))
             }
         }
-        entries.append(.action(title: "在 Finder 中显示", symbol: "folder", command: .revealInFinder))
+        entries.append(.action(title: String(localized: "在 Finder 中显示"), symbol: "folder", command: .revealInFinder))
         entries.append(.separator)
         if context.scope.groupId != nil {
-            entries.append(.action(title: "从当前分组移除", symbol: "minus.circle", command: .removeFromGroup))
+            entries.append(.action(title: String(localized: "从当前分组移除"), symbol: "minus.circle", command: .removeFromGroup))
         }
-        entries.append(.action(title: "删除", symbol: "trash", command: .trash))
+        entries.append(.action(title: String(localized: "删除"), symbol: "trash", command: .trash))
         return entries
     }
 
@@ -133,7 +133,7 @@ enum ItemMenuBuilder {
                                      groups: [(group: LibraryGroup, depth: Int)]) -> [ItemMenuEntry] {
         let candidates = groups.filter { $0.group.id != scope.groupId }
         guard !candidates.isEmpty else {
-            return [.action(title: "没有其他分组", symbol: nil, command: .addToGroup(""), enabled: false)]
+            return [.action(title: String(localized: "没有其他分组"), symbol: nil, command: .addToGroup(""), enabled: false)]
         }
         return candidates.map { entry in
             let members = snapshot.groupItems[entry.group.id] ?? []
@@ -148,7 +148,7 @@ enum ItemMenuBuilder {
                     checked: items.allSatisfy { snapshot.itemTags[$0.id]?.contains(tag.id) ?? false })
         }
         if !entries.isEmpty { entries.append(.separator) }
-        entries.append(.action(title: "新建标签…", symbol: "plus", command: .newTag))
+        entries.append(.action(title: String(localized: "新建标签…"), symbol: "plus", command: .newTag))
         return entries
     }
 
@@ -164,8 +164,8 @@ enum ItemMenuBuilder {
     private static func openWithEntry(isPDF: Bool, apps: [(name: String, url: URL)]) -> ItemMenuEntry {
         var children: [ItemMenuEntry] = []
         if isPDF {
-            children.append(.action(title: "在 Folio 中阅读", symbol: "book.pages", command: .openInReader))
-            children.append(.action(title: "预览", symbol: nil, command: .openWithPreview))
+            children.append(.action(title: String(localized: "在 Folio 中阅读"), symbol: "book.pages", command: .openInReader))
+            children.append(.action(title: String(localized: "预览"), symbol: nil, command: .openWithPreview))
         }
         let others = apps.filter { !(isPDF && $0.url.lastPathComponent == "Preview.app") }
         if !others.isEmpty {
@@ -173,14 +173,14 @@ enum ItemMenuBuilder {
             children += others.map { .action(title: $0.name, symbol: nil, command: .openWithApp($0.url)) }
         }
         children.append(.separator)
-        children.append(.action(title: "其他应用…", symbol: nil, command: .openWithOtherApp))
-        return .submenu(title: "打开方式", symbol: "arrow.up.right.square", entries: children)
+        children.append(.action(title: String(localized: "其他应用…"), symbol: nil, command: .openWithOtherApp))
+        return .submenu(title: String(localized: "打开方式"), symbol: "arrow.up.right.square", entries: children)
     }
 
     private static func translateEntry(translating: Bool) -> ItemMenuEntry {
         translating
-            ? .action(title: "取消翻译", symbol: "xmark.circle", command: .cancelTranslation)
-            : .action(title: "翻译全文…", symbol: "character.book.closed", command: .translate)
+            ? .action(title: String(localized: "取消翻译"), symbol: "xmark.circle", command: .cancelTranslation)
+            : .action(title: String(localized: "翻译全文…"), symbol: "character.book.closed", command: .translate)
     }
 
     // MARK: NSMenu conversion

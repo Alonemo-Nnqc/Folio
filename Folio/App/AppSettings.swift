@@ -12,10 +12,10 @@ final class AppSettings {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .folio: "Folio 阅读器"
-            case .system: "系统默认应用"
-            case .preview: "预览"
-            case .custom: "指定应用…"
+            case .folio: String(localized: "Folio 阅读器")
+            case .system: String(localized: "系统默认应用")
+            case .preview: String(localized: "预览")
+            case .custom: String(localized: "指定应用…")
             }
         }
     }
@@ -26,8 +26,8 @@ final class AppSettings {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .fitWidth: "适合页宽"
-            case .actualSize: "实际大小"
+            case .fitWidth: String(localized: "适合页宽")
+            case .actualSize: String(localized: "实际大小")
             }
         }
     }
@@ -37,8 +37,8 @@ final class AppSettings {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .single: "单页连续"
-            case .twoUp: "双页连续"
+            case .single: String(localized: "单页连续")
+            case .twoUp: String(localized: "双页连续")
             }
         }
     }
@@ -49,9 +49,9 @@ final class AppSettings {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .system: "自动"
-            case .light: "浅色"
-            case .dark: "深色"
+            case .system: String(localized: "自动")
+            case .light: String(localized: "浅色")
+            case .dark: String(localized: "深色")
             }
         }
 

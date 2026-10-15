@@ -174,7 +174,7 @@ enum BrowserExtensions {
                 continuation.resume(returning: error?.localizedDescription)
             }
             let selector = NSSelectorFromString("showPreferencesForExtensionWithIdentifier:completionHandler:")
-            guard SFSafariApplication.responds(to: selector) else { return continuation.resume(returning: "无法打开 Safari 设置") }
+            guard SFSafariApplication.responds(to: selector) else { return continuation.resume(returning: String(localized: "无法打开 Safari 设置")) }
             _ = (SFSafariApplication.self as AnyObject).perform(selector, with: safariExtensionIdentifier, with: reply)
         }
     }

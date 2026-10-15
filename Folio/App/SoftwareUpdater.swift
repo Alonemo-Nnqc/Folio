@@ -64,7 +64,7 @@ final class SoftwareUpdater: NSObject, SPUUpdaterDelegate {
         #if DEBUG
         if updateCheck != .updates, UserDefaults.standard.string(forKey: "FolioUpdateFeedURL") == nil {
             throw NSError(domain: "com.nnqc.Folio.update", code: 1,
-                          userInfo: [NSLocalizedDescriptionKey: "开发版本不自动检查更新"])
+                          userInfo: [NSLocalizedDescriptionKey: String(localized: "开发版本不自动检查更新")])
         }
         #endif
     }

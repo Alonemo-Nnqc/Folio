@@ -76,12 +76,12 @@ import Testing
     }
 
     @Test func displayNames() {
-        #expect(TranslationServiceCatalog.service(id: "siliconflowfree")?.displayName == "SiliconFlow 免费")
-        #expect(TranslationServiceCatalog.service(id: "google")?.displayName == "Google（免费）")
-        #expect(TranslationServiceCatalog.service(id: "bing")?.displayName == "Bing（免费）")
-        #expect(TranslationServiceCatalog.service(id: "ollama")?.displayName == "Ollama（本地）")
-        #expect(TranslationServiceCatalog.service(id: "openaicompatible")?.displayName == "OpenAI 兼容接口")
-        #expect(TranslationServiceCatalog.service(id: "apple")?.displayName == "Apple 系统翻译（离线）")
+        #expect(TranslationServiceCatalog.service(id: "siliconflowfree")?.displayName == "SiliconFlow Free")
+        #expect(TranslationServiceCatalog.service(id: "google")?.displayName == "Google (free)")
+        #expect(TranslationServiceCatalog.service(id: "bing")?.displayName == "Bing (free)")
+        #expect(TranslationServiceCatalog.service(id: "ollama")?.displayName == "Ollama (local)")
+        #expect(TranslationServiceCatalog.service(id: "openaicompatible")?.displayName == "OpenAI-compatible API")
+        #expect(TranslationServiceCatalog.service(id: "apple")?.displayName == "Apple Translation (offline)")
         #expect(TranslationServiceCatalog.service(id: "nope") == nil)
     }
 

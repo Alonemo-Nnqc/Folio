@@ -1,0 +1,206 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "%@ %@ 失败：%@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ 失败：%3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ failed: %3$@"
+          }
+        }
+      }
+    },
+    "%@ %@ 没有在 30 秒内完成。" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ 没有在 30 秒内完成。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ didn't finish within 30 seconds."
+          }
+        }
+      }
+    },
+    "%@ 不支持 MCP。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't support MCP."
+          }
+        }
+      }
+    },
+    "%@ 不支持技能。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ doesn't support skills."
+          }
+        }
+      }
+    },
+    "%@ 不是 Folio 安装的技能，未删除。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ isn't a skill installed by Folio, so it wasn't deleted."
+          }
+        }
+      }
+    },
+    "Claude 桌面版" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Desktop"
+          }
+        }
+      }
+    },
+    "Claude 桌面版的技能需在 设置 ▸ 功能 ▸ 技能 中上传，可用下方\"导出技能包…\"生成。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skills for Claude Desktop are uploaded in its Settings ▸ Capabilities ▸ Skills; use “Export Skill Package…” below to create one."
+          }
+        }
+      }
+    },
+    "folio-cli 没有响应 MCP 握手（%@）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folio-cli didn't answer the MCP handshake (%@)."
+          }
+        }
+      }
+    },
+    "其配置文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "its configuration file"
+          }
+        }
+      }
+    },
+    "找不到 folio-cli：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "folio-cli not found: %@"
+          }
+        }
+      }
+    },
+    "握手失败：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handshake failed: %@"
+          }
+        }
+      }
+    },
+    "无法启动 folio-cli：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start folio-cli: %@"
+          }
+        }
+      }
+    },
+    "无法解析 %@（%@），为避免破坏它，请手动添加：\n%@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "无法解析 %1$@（%2$@），为避免破坏它，请手动添加：\n%3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't parse %1$@ (%2$@). To avoid damaging it, please add this by hand:\n%3$@"
+          }
+        }
+      }
+    },
+    "未能添加 %@ 的配置，请检查 %@。" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "未能添加 %1$@ 的配置，请检查 %2$@。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't add %1$@'s configuration. Please check %2$@."
+          }
+        }
+      }
+    },
+    "未能移除 %@ 的配置，请检查 %@。" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "未能移除 %1$@ 的配置，请检查 %2$@。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't remove %1$@'s configuration. Please check %2$@."
+          }
+        }
+      }
+    },
+    "超时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "timed out"
+          }
+        }
+      }
+    },
+    "进程已退出，状态 %d" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the process exited with status %d"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

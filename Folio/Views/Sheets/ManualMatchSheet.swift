@@ -28,7 +28,7 @@ struct ManualMatchSheet: View {
                 if searching {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if results.isEmpty {
-                    ContentUnavailableView(searched ? "没有找到结果" : "输入后按回车搜索", systemImage: "magnifyingglass")
+                    ContentUnavailableView(searched ? String(localized: "没有找到结果") : String(localized: "输入后按回车搜索"), systemImage: "magnifyingglass")
                 } else {
                     List(results.indices, id: \.self, selection: $selection) { index in
                         resultRow(results[index]).tag(index)

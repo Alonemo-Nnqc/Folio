@@ -62,9 +62,9 @@ final class SettingsWindowController: NSWindowController {
     /// Opens a given pane by title (preview hooks, "打开设置" buttons). Old pane names map to where
     /// their settings live now.
     func select(pane title: String) {
-        let moved = ["外观": "通用", "导入": "文献库"]
+        let moved = [String(localized: "外观"): String(localized: "通用"), String(localized: "导入"): String(localized: "文献库")]
         let target = moved[title] ?? title
-        if let pane = SettingsPane.allCases.first(where: { $0.title == target }) { navigation.pane = pane }
+        if let pane = SettingsPane.allCases.first(where: { $0.title == target || $0.rawValue == target }) { navigation.pane = pane }
     }
 }
 
@@ -75,12 +75,12 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .general: "通用"
-        case .reading: "阅读"
-        case .library: "文献库"
-        case .retrieval: "检索"
-        case .translation: "翻译"
-        case .browser: "浏览器"
+        case .general: String(localized: "通用")
+        case .reading: String(localized: "阅读")
+        case .library: String(localized: "文献库")
+        case .retrieval: String(localized: "检索")
+        case .translation: String(localized: "翻译")
+        case .browser: String(localized: "浏览器")
         case .ai: "AI"
         }
     }
@@ -162,7 +162,7 @@ struct AppearancePicker: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("外观：\(option.title)")
+                .accessibilityLabel(String(localized: "外观：\(option.title)"))
                 .accessibilityAddTraits(settings.appearance == option ? .isSelected : [])
             }
             Spacer(minLength: 0)
@@ -227,7 +227,7 @@ struct GeneralSettings: View {
                 if settings.openWith == .custom {
                     LabeledContent("应用") {
                         HStack {
-                            Text(settings.openWithAppPath.isEmpty ? "未选择"
+                            Text(settings.openWithAppPath.isEmpty ? String(localized: "未选择")
                                  : FileManager.default.displayName(atPath: settings.openWithAppPath))
                                 .foregroundStyle(.secondary)
                             Button("选择…", action: chooseApp)
@@ -241,6 +241,7 @@ struct GeneralSettings: View {
                 Toggle("父分组中显示子分组的条目", isOn: $settings.includeSubgroupItems)
                 .onChange(of: settings.includeSubgroupItems) { model.recompute() }
             }
+            LanguageSettingsSection()
             UpdateSettingsSection(updater: AppDelegate.shared.updater)
         }
         .formStyle(.grouped)
@@ -251,6 +252,59 @@ struct GeneralSettings: View {
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(filePath: "/Applications")
         if panel.runModal() == .OK, let url = panel.url { settings.openWithAppPath = url.path }
+    }
+}
+
+/// 语言: follow the system, or always Chinese / English. Stored as this app's `AppleLanguages`, which
+/// macOS reads at launch, so a change offers to restart.
+private struct LanguageSettingsSection: View {
+    enum Choice: String, CaseIterable, Identifiable {
+        case system, chinese = "zh-Hans", english = "en"
+        var id: String { rawValue }
+    }
+
+    @State private var choice: Choice = Self.stored
+    private let launchedWith = Self.stored
+
+    private static var stored: Choice {
+        let override = UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?["AppleLanguages"] as? [String]
+        return override?.first.flatMap(Choice.init(rawValue:)) ?? .system
+    }
+
+    var body: some View {
+        Section {
+            Picker("界面语言", selection: $choice) {
+                Text("跟随系统").tag(Choice.system)
+                Text(verbatim: "简体中文").tag(Choice.chinese)
+                Text(verbatim: "English").tag(Choice.english)
+            }
+            .onChange(of: choice) { save(choice) }
+            if choice != launchedWith {
+                LabeledContent("重新启动 Folio 后生效") {
+                    Button("立即重新启动", action: relaunch)
+                }
+            }
+        } header: {
+            Text("语言")
+        }
+    }
+
+    private func save(_ choice: Choice) {
+        guard !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
+        if choice == .system {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.set([choice.rawValue], forKey: "AppleLanguages")
+        }
+    }
+
+    private func relaunch() {
+        let path = Bundle.main.bundlePath
+        let process = Process()
+        process.executableURL = URL(filePath: "/bin/sh")
+        process.arguments = ["-c", "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; open \"$0\"", path]
+        try? process.run()
+        NSApp.terminate(nil)
     }
 }
 
@@ -366,8 +420,8 @@ struct LibrarySettings: View {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
-        panel.prompt = "移到这里"
-        panel.message = "选择新的文献库位置，Folio 会把整个文献库移动过去"
+        panel.prompt = String(localized: "移到这里")
+        panel.message = String(localized: "选择新的文献库位置，Folio 会把整个文献库移动过去")
         guard panel.runModal() == .OK, let parent = panel.url else { return }
         moving = true
         error = nil
@@ -376,7 +430,7 @@ struct LibrarySettings: View {
             do {
                 _ = try model.relocateLibrary(into: parent)
             } catch {
-                self.error = "无法移动文献库：\(error.localizedDescription)"
+                self.error = String(localized: "无法移动文献库：\(error.localizedDescription)")
             }
             moving = false
         }

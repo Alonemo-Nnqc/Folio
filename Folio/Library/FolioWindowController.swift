@@ -106,8 +106,8 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.application]
         panel.directoryURL = URL(filePath: "/Applications")
-        panel.prompt = "打开"
-        panel.message = "选择用来打开文件的应用"
+        panel.prompt = String(localized: "打开")
+        panel.message = String(localized: "选择用来打开文件的应用")
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let app = panel.url else { return }
             self?.open(context, with: .app(app))

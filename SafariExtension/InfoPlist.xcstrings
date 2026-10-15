@@ -1,0 +1,18 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Folio" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Folio 文献保存" } }
+      }
+    },
+    "NSHumanReadableDescription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save papers from the web to your Folio library in one click." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "一键把网页上的论文保存到 Folio 文献库。" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

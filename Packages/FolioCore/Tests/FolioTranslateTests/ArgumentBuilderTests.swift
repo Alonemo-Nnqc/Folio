@@ -86,7 +86,7 @@ import Testing
         #expect(throws: TranslationConfigurationError.missingField(service: "OpenAI", field: "API Key")) {
             try TranslationArgumentBuilder.build(.init(input: input, outputDirectory: output, serviceID: "openai"))
         }
-        #expect(throws: TranslationConfigurationError.missingField(service: "OpenAI 兼容接口", field: "Base URL")) {
+        #expect(throws: TranslationConfigurationError.missingField(service: "OpenAI-compatible API", field: "Base URL")) {
             try TranslationArgumentBuilder.build(.init(input: input, outputDirectory: output, serviceID: "openaicompatible",
                                                        secrets: ["--openai-compatible-api-key": "k"]))
         }

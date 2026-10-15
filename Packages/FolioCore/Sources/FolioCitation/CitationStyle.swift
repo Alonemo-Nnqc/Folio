@@ -15,10 +15,10 @@ public enum CitationStyle: String, CaseIterable, Sendable {
         switch self {
         case .bibtex: "BibTeX"
         case .gbt7714: "GB/T 7714-2015"
-        case .apa: "APA 第 7 版"
+        case .apa: String(localized: "APA 第 7 版", bundle: .module)
         case .ieee: "IEEE"
-        case .mla: "MLA 第 9 版"
-        case .chicago: "Chicago 第 18 版（作者-日期）"
+        case .mla: String(localized: "MLA 第 9 版", bundle: .module)
+        case .chicago: String(localized: "Chicago 第 18 版（作者-日期）", bundle: .module)
         case .harvard: "Harvard"
         case .vancouver: "Vancouver"
         case .nature: "Nature"

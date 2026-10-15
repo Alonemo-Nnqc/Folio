@@ -5,7 +5,7 @@ import Foundation
 import PDFKit
 
 // Seeds a Folio library for screenshots and performance checks.
-//   swift run folio-seed demo <libraryDir> [--pdfs <dir with real PDFs>]
+//   swift run folio-seed demo <libraryDir> [--pdfs <dir with real PDFs>] [--english]
 //   swift run folio-seed bulk <libraryDir> <count>
 
 struct Paper {
@@ -66,18 +66,22 @@ func makePDF(at url: URL, lines: [String]) throws {
 }
 
 /// Adds a yellow highlight and a note so the 标注 tab has something to show.
+/// Group, tag and note names: Chinese by default, English with `--english` (README screenshots).
+let english = CommandLine.arguments.contains("--english")
+func name(_ chinese: String, _ englishName: String) -> String { english ? englishName : chinese }
+
 func annotate(_ url: URL) {
     guard let document = PDFDocument(url: url), let page = document.page(at: 0) else { return }
     let bounds = page.bounds(for: .mediaBox)
     if let selection = page.selection(for: CGRect(x: 30, y: bounds.height - 90, width: bounds.width - 60, height: 50)) {
         let highlight = PDFAnnotation(bounds: selection.bounds(for: page), forType: .highlight, withProperties: nil)
         highlight.color = NSColor.systemYellow.withAlphaComponent(0.5)
-        highlight.contents = "核心贡献：动态光谱注意力"
+        highlight.contents = name("核心贡献：动态光谱注意力", "Key idea: dynamic spectral attention")
         page.addAnnotation(highlight)
     }
     let note = PDFAnnotation(bounds: CGRect(x: bounds.width - 36, y: bounds.height * 0.45, width: 20, height: 20), forType: .text, withProperties: nil)
     note.color = .systemYellow
-    note.contents = "对比实验可以复现 Table 2"
+    note.contents = name("对比实验可以复现 Table 2", "Reproduce the comparison in Table 2")
     page.addAnnotation(note)
     document.write(to: url)
 }
@@ -100,18 +104,18 @@ func demo(root: URL, realPDFs: URL?) throws {
     let real = realPDFs.flatMap { try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil) }?
         .filter { $0.pathExtension == "pdf" }.sorted { $0.path < $1.path } ?? []
 
-    let mcm = try library.createGroup(name: "2026美赛B题")
-    let refs = try library.createGroup(name: "参考文献", parentId: mcm.id)
-    let data = try library.createGroup(name: "数据集", parentId: mcm.id)
-    let night = try library.createGroup(name: "夜间场景")
-    let seg = try library.createGroup(name: "医学图像分割")
-    try library.createGroup(name: "论文辅导")
+    let mcm = try library.createGroup(name: name("2026美赛B题", "Thesis Project"))
+    let refs = try library.createGroup(name: name("参考文献", "References"), parentId: mcm.id)
+    let data = try library.createGroup(name: name("数据集", "Datasets"), parentId: mcm.id)
+    let night = try library.createGroup(name: name("夜间场景", "Night Scenes"))
+    let seg = try library.createGroup(name: name("医学图像分割", "Medical Segmentation"))
+    try library.createGroup(name: name("论文辅导", "Reading Group"))
 
-    let mustRead = try library.createTag(name: "必读", colorHex: "#FF3B30")
-    let reproduce = try library.createTag(name: "待复现", colorHex: "#FF9500")
+    let mustRead = try library.createTag(name: name("必读", "Must Read"), colorHex: "#FF3B30")
+    let reproduce = try library.createTag(name: name("待复现", "To Reproduce"), colorHex: "#FF9500")
     let mamba = try library.createTag(name: "Mamba", colorHex: "#AF52DE")
-    let longTag = try library.createTag(name: "视网膜血管分割方法综述", colorHex: "#34C759")
-    let survey = try library.createTag(name: "综述", colorHex: "#007AFF")
+    let longTag = try library.createTag(name: name("视网膜血管分割方法综述", "Retinal Vessel Segmentation"), colorHex: "#34C759")
+    let survey = try library.createTag(name: name("综述", "Survey"), colorHex: "#007AFF")
 
     var ids: [String] = []
     for (index, paper) in papers.enumerated() {
@@ -146,8 +150,8 @@ func demo(root: URL, realPDFs: URL?) throws {
     try library.updateItem(ids[2]) { $0.readStatus = .read }
 
     // A standalone file whose retrieval failed, and one item in the trash.
-    let loose = work.appending(path: "扫描版讲义 第三章.pdf")
-    try makePDF(at: loose, lines: ["第三章 线性代数基础"])
+    let loose = work.appending(path: name("扫描版讲义 第三章.pdf", "Lecture Notes Chapter 3 (scan).pdf"))
+    try makePDF(at: loose, lines: [name("第三章 线性代数基础", "Chapter 3 Linear Algebra")])
     if case .imported(let id, _) = try library.importFiles([loose]).first {
         try library.setMetadataState(.failed, for: id)
     }

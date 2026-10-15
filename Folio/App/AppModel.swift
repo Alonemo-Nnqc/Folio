@@ -17,9 +17,9 @@ enum InspectorTab: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .metadata: "信息"
-        case .annotations: "标注"
-        case .notes: "笔记"
+        case .metadata: String(localized: "信息")
+        case .annotations: String(localized: "标注")
+        case .notes: String(localized: "笔记")
         }
     }
 }
@@ -135,7 +135,7 @@ final class AppModel {
         let destination = parent.appending(path: source.lastPathComponent, directoryHint: .isDirectory)
         guard destination.standardizedFileURL != source.standardizedFileURL else { return source }
         guard !FileManager.default.fileExists(atPath: destination.path) else {
-            throw LibraryError.invalidOperation("目标位置已存在同名文件夹")
+            throw LibraryError.invalidOperation(String(localized: "目标位置已存在同名文件夹"))
         }
         // Open papers hold paths inside the library: save and close them first.
         readers.saveAll()
@@ -244,22 +244,22 @@ final class AppModel {
     var currentSort: SortState { snapshot.sort(for: sidebarSelection) }
 
     var title: String {
-        if search.isActive { return "「\(search.text.trimmingCharacters(in: .whitespaces))」的搜索结果" }
+        if search.isActive { return String(localized: "「\(search.text.trimmingCharacters(in: .whitespaces))」的搜索结果") }
         return title(for: sidebarSelection)
     }
 
     /// Window subtitle: how many rows the list shows.
     var subtitle: String {
-        rows.isEmpty ? "" : "\(rows.count) 项"
+        rows.isEmpty ? "" : String(localized: "\(rows.count) 项")
     }
 
     func title(for scope: ViewScope) -> String {
         switch scope {
-        case .all: "所有文献"
-        case .unfiled: "未分组"
-        case .trash: "回收站"
-        case .group(let id): snapshot.groupsById[id]?.name ?? "分组"
-        case .tag(let id): "标签：\(snapshot.tagsById[id]?.name ?? "")"
+        case .all: String(localized: "所有文献")
+        case .unfiled: String(localized: "未分组")
+        case .trash: String(localized: "回收站")
+        case .group(let id): snapshot.groupsById[id]?.name ?? String(localized: "分组")
+        case .tag(let id): String(localized: "标签：\(snapshot.tagsById[id]?.name ?? "")")
         }
     }
 

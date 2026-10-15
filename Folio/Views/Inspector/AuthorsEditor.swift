@@ -47,7 +47,7 @@ struct AuthorsEditor: View {
             }
         } else {
             HStack(alignment: .firstTextBaseline) {
-                Text(authors.isEmpty ? "无作者" : authors.map(AuthorFormatter.full).joined(separator: "; "))
+                Text(authors.isEmpty ? String(localized: "无作者") : authors.map(AuthorFormatter.full).joined(separator: "; "))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                 Spacer(minLength: 4)

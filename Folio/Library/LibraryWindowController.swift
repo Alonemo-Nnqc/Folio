@@ -21,7 +21,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
         window.contentViewController = splitViewController
-        window.title = "所有文献"
+        window.title = String(localized: "所有文献")
         window.minSize = NSSize(width: 900, height: 560)
         window.tabbingIdentifier = Self.tabbingIdentifier
         window.tabbingMode = .preferred
@@ -55,7 +55,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             guard let self, let window = self.window else { return }
             window.title = self.model.title
             window.subtitle = self.model.subtitle
-            window.tab.title = "文献库"
+            window.tab.title = String(localized: "文献库")
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -79,16 +79,16 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             self.shownLoadError = message
             let alert = NSAlert()
             alert.alertStyle = .critical
-            alert.messageText = "无法打开文献库"
-            alert.informativeText = message + "\n\n可以在 设置 ▸ 文献库 中查看或更改文献库位置。"
-            alert.addButton(withTitle: "好")
-            alert.addButton(withTitle: "打开设置…")
+            alert.messageText = String(localized: "无法打开文献库")
+            alert.informativeText = message + String(localized: "\n\n可以在 设置 ▸ 文献库 中查看或更改文献库位置。")
+            alert.addButton(withTitle: String(localized: "好"))
+            alert.addButton(withTitle: String(localized: "打开设置…"))
             DispatchQueue.main.async {
                 guard let window = self.window else { return }
                 alert.beginSheetModal(for: window) { response in
                     if response == .alertSecondButtonReturn {
                         AppDelegate.shared.showSettings(nil)
-                        AppDelegate.shared.settingsWindow?.select(pane: "文献库")
+                        AppDelegate.shared.settingsWindow?.select(pane: String(localized: "文献库"))
                     }
                 }
             }
@@ -158,7 +158,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard (sender.tabGroup?.windows.count ?? 1) > 1 else { return true }
         NSSound.beep()
-        model.toasts.show("文献库标签不能关闭，可以关闭论文标签", systemImage: "books.vertical")
+        model.toasts.show(String(localized: "文献库标签不能关闭，可以关闭论文标签"), systemImage: "books.vertical")
         return false
     }
 
@@ -215,41 +215,41 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         switch id {
         case .folioAdd:
             let menu = NSMenu()
-            menu.addItem(withTitle: "添加文件…", action: #selector(addFiles(_:)), keyEquivalent: "")
-            menu.addItem(withTitle: "通过标识符添加…", action: #selector(addByIdentifier(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: String(localized: "添加文件…"), action: #selector(addFiles(_:)), keyEquivalent: "")
+            menu.addItem(withTitle: String(localized: "通过标识符添加…"), action: #selector(addByIdentifier(_:)), keyEquivalent: "")
             menu.items[0].image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: nil)
             menu.items[1].image = NSImage(systemSymbolName: "number", accessibilityDescription: nil)
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
             item.showsIndicator = false
             item.action = #selector(addFiles(_:))
-            return configure(item, label: "添加", symbol: "plus", tip: "添加文献（按住可选择添加方式）")
+            return configure(item, label: String(localized: "添加"), symbol: "plus", tip: String(localized: "添加文献（按住可选择添加方式）"))
         case .folioRead:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(openInReader(_:))
-            return configure(item, label: "阅读", symbol: "book.pages", tip: "在 Folio 中阅读所选文献")
+            return configure(item, label: String(localized: "阅读"), symbol: "book.pages", tip: String(localized: "在 Folio 中阅读所选文献"))
         case .folioTranslate:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(translateDocument(_:))
-            return configure(item, label: "翻译", symbol: "character.book.closed", tip: "保留排版翻译全文")
+            return configure(item, label: String(localized: "翻译"), symbol: "character.book.closed", tip: String(localized: "保留排版翻译全文"))
         case .folioExport:
             let menu = NSMenu()
-            let export = menu.addItem(withTitle: "导出参考文献…", action: #selector(exportBibTeX(_:)), keyEquivalent: "")
+            let export = menu.addItem(withTitle: String(localized: "导出参考文献…"), action: #selector(exportBibTeX(_:)), keyEquivalent: "")
             export.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: nil)
             menu.addItem(.separator())
             for (index, style) in CitationStyleOption.allCases.enumerated() {
-                let item = menu.addItem(withTitle: "拷贝 \(style.title) 引用", action: #selector(copyCitation(_:)), keyEquivalent: "")
+                let item = menu.addItem(withTitle: String(localized: "拷贝 \(style.title) 引用"), action: #selector(copyCitation(_:)), keyEquivalent: "")
                 item.tag = index
             }
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
             item.showsIndicator = false
-            return configure(item, label: "导出", symbol: "square.and.arrow.up", tip: "导出 BibTeX 或拷贝引用")
+            return configure(item, label: String(localized: "导出"), symbol: "square.and.arrow.up", tip: String(localized: "导出 BibTeX 或拷贝引用"))
         case .folioSearch:
             let item = NSSearchToolbarItem(itemIdentifier: id)
-            item.label = "搜索"
-            item.paletteLabel = "搜索"
-            item.searchField.placeholderString = "搜索文献"
+            item.label = String(localized: "搜索")
+            item.paletteLabel = String(localized: "搜索")
+            item.searchField.placeholderString = String(localized: "搜索文献")
             item.searchField.delegate = self
             item.searchField.sendsSearchStringImmediately = true
             item.searchField.setAccessibilityIdentifier("searchField")
@@ -261,15 +261,15 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         case .folioNote:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(editNote(_:))
-            return configure(item, label: "笔记", symbol: "note.text", tip: "编辑所选条目的笔记")
+            return configure(item, label: String(localized: "笔记"), symbol: "note.text", tip: String(localized: "编辑所选条目的笔记"))
         case .folioReveal:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(revealInFinder(_:))
-            return configure(item, label: "在 Finder 中显示", symbol: "folder", tip: "在 Finder 中显示")
+            return configure(item, label: String(localized: "在 Finder 中显示"), symbol: "folder", tip: String(localized: "在 Finder 中显示"))
         case .folioRetrieve:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(retrieveMetadata(_:))
-            return configure(item, label: "检索元数据", symbol: "arrow.clockwise", tip: "重新检索元数据")
+            return configure(item, label: String(localized: "检索元数据"), symbol: "arrow.clockwise", tip: String(localized: "重新检索元数据"))
         default:
             return nil
         }

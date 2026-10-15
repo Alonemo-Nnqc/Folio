@@ -80,7 +80,7 @@ final class TranslationProgressHUD: NSView {
         stage.stringValue = text
         TranslationProgressBar.apply(fraction, to: bar)
         percent.stringValue = fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? ""
-        setAccessibilityLabel("翻译：\(text)")
+        setAccessibilityLabel(String(localized: "翻译：\(text)"))
         setAccessibilityValue(percent.stringValue)
     }
 }

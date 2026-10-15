@@ -8,23 +8,23 @@ enum ItemColumn: String, CaseIterable {
 
     var header: String {
         switch self {
-        case .title: "标题"
-        case .source: "来源"
-        case .authors: "作者"
-        case .year: "年份"
-        case .tags: "标签"
-        case .dateAdded: "添加日期"
-        case .type: "类型"
-        case .dateModified: "修改日期"
+        case .title: String(localized: "标题")
+        case .source: String(localized: "来源")
+        case .authors: String(localized: "作者")
+        case .year: String(localized: "年份")
+        case .tags: String(localized: "标签")
+        case .dateAdded: String(localized: "添加日期")
+        case .type: String(localized: "类型")
+        case .dateModified: String(localized: "修改日期")
         case .doi: "DOI"
-        case .publisher: "出版社"
-        case .volume: "卷"
-        case .issue: "期"
-        case .pages: "页码"
-        case .readStatus: "阅读状态"
-        case .rating: "评分"
-        case .fileCount: "文件数"
-        case .citationKey: "引用键"
+        case .publisher: String(localized: "出版社")
+        case .volume: String(localized: "卷")
+        case .issue: String(localized: "期")
+        case .pages: String(localized: "页码")
+        case .readStatus: String(localized: "阅读状态")
+        case .rating: String(localized: "评分")
+        case .fileCount: String(localized: "文件数")
+        case .citationKey: String(localized: "引用键")
         }
     }
 

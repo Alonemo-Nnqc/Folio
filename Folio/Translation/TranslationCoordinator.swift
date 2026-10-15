@@ -68,7 +68,7 @@ final class TranslationCoordinator {
     func requestTranslation(fileId: String) {
         guard let model, let file = model.snapshot.files[fileId], file.isPDF else { return }
         guard jobs[file.itemId] == nil else {
-            model.toasts.show("这篇论文正在翻译", systemImage: "character.book.closed")
+            model.toasts.show(String(localized: "这篇论文正在翻译"), systemImage: "character.book.closed")
             return
         }
         switch engineStatus {
@@ -77,8 +77,8 @@ final class TranslationCoordinator {
         case .notInstalled:
             offerInstall(then: fileId)
         case .broken(let reason):
-            alert("翻译组件无法使用", reason + "\n\n可以在 设置 ▸ 翻译 中重新安装，或改用自己安装的 pdf2zh_next。",
-                  primary: "打开设置") { self.openSettings() }
+            alert(String(localized: "翻译组件无法使用"), reason + String(localized: "\n\n可以在 设置 ▸ 翻译 中重新安装，或改用自己安装的 pdf2zh_next。"),
+                  primary: String(localized: "打开设置")) { self.openSettings() }
         }
     }
 
@@ -87,7 +87,7 @@ final class TranslationCoordinator {
         guard let model, let file = model.snapshot.files[fileId] else { return }
         let service = model.settings.translationService
         if let problem = configurationProblem(serviceID: service) {
-            alert("翻译服务还没有配置好", problem, primary: "打开设置") { self.openSettings() }
+            alert(String(localized: "翻译服务还没有配置好"), problem, primary: String(localized: "打开设置")) { self.openSettings() }
             return
         }
         if service == TranslationServiceCatalog.appleServiceID {
@@ -96,10 +96,10 @@ final class TranslationCoordinator {
                 switch await AppleSystemTranslator.availability(from: options.langIn, to: options.langOut) {
                 case .installed: self.enqueue(itemId: file.itemId, fileId: fileId)
                 case .needsDownload:
-                    self.alert("需要先下载语言包", "Apple 系统翻译需要先下载所选语言的离线语言包。可以在 设置 ▸ 翻译 中点击\"下载语言包\"。",
-                               primary: "打开设置") { self.openSettings() }
+                    self.alert(String(localized: "需要先下载语言包"), String(localized: "Apple 系统翻译需要先下载所选语言的离线语言包。可以在 设置 ▸ 翻译 中点击\"下载语言包\"。"),
+                               primary: String(localized: "打开设置")) { self.openSettings() }
                 case .unsupported:
-                    self.alert("Apple 系统翻译不支持这组语言", "请在 设置 ▸ 翻译 中换用其他翻译服务。", primary: "打开设置") { self.openSettings() }
+                    self.alert(String(localized: "Apple 系统翻译不支持这组语言"), String(localized: "请在 设置 ▸ 翻译 中换用其他翻译服务。"), primary: String(localized: "打开设置")) { self.openSettings() }
                 }
             }
             return
@@ -134,7 +134,7 @@ final class TranslationCoordinator {
         _ = engineRevision
         if let model, !model.settings.translatorCustomPath.isEmpty {
             return FileManager.default.isExecutableFile(atPath: model.settings.translatorCustomPath)
-                ? .ready : .broken("找不到 \(model.settings.translatorCustomPath)")
+                ? .ready : .broken(String(localized: "找不到 \(model.settings.translatorCustomPath)"))
         }
         switch installation.status() {
         case .installed: return .ready
@@ -151,9 +151,9 @@ final class TranslationCoordinator {
     }
 
     private func offerInstall(then fileId: String) {
-        alert("需要下载翻译组件",
-              "保留排版的翻译由开源引擎 pdf2zh_next（BabelDOC）完成。首次使用需要下载 Python、引擎和版面模型，约占 1.4 GB 磁盘空间，通常需要几分钟。\n\n组件安装在 ~/Library/Application Support/Folio/Translator，不会改动系统里的其他 Python。",
-              primary: "下载并安装") {
+        alert(String(localized: "需要下载翻译组件"),
+              String(localized: "保留排版的翻译由开源引擎 pdf2zh_next（BabelDOC）完成。首次使用需要下载 Python、引擎和版面模型，约占 1.4 GB 磁盘空间，通常需要几分钟。\n\n组件安装在 ~/Library/Application Support/Folio/Translator，不会改动系统里的其他 Python。"),
+              primary: String(localized: "下载并安装")) {
             self.waitingForInstall.append(fileId)
             self.install()
             self.openSettings()
@@ -173,7 +173,7 @@ final class TranslationCoordinator {
                 }
                 installState = .idle
                 engineRevision += 1
-                model?.toasts.show("翻译组件已安装", systemImage: "checkmark.circle")
+                model?.toasts.show(String(localized: "翻译组件已安装"), systemImage: "checkmark.circle")
                 let waiting = waitingForInstall
                 waitingForInstall = []
                 for fileId in waiting { requestTranslation(fileId: fileId) }
@@ -196,23 +196,23 @@ final class TranslationCoordinator {
     func uninstall() {
         do {
             try installation.uninstall()
-            model?.toasts.show("已卸载翻译组件", systemImage: "trash")
+            model?.toasts.show(String(localized: "已卸载翻译组件"), systemImage: "trash")
         } catch {
-            model?.toasts.show("无法卸载：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            model?.toasts.show(String(localized: "无法卸载：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
         }
         engineRevision += 1
     }
 
     /// What is missing before `serviceID` can run, in words for the user; nil when ready.
     func configurationProblem(serviceID: String) -> String? {
-        guard let service = TranslationServiceCatalog.service(id: serviceID) else { return "请在设置中选择翻译服务。" }
+        guard let service = TranslationServiceCatalog.service(id: serviceID) else { return String(localized: "请在设置中选择翻译服务。") }
         let values = model?.settings.translationFields[serviceID] ?? [:]
         for field in service.requiredFields {
             let value = field.isSecret
                 ? (try? secrets.get(serviceID: serviceID, option: field.option)) ?? nil
                 : values[field.option]
             if (value ?? "").trimmingCharacters(in: .whitespaces).isEmpty && field.defaultValue == nil {
-                return "\(service.displayName) 需要填写\"\(field.title)\"。"
+                return String(localized: "\(service.displayName) 需要填写\"\(field.title)\"。")
             }
         }
         return nil
@@ -222,7 +222,7 @@ final class TranslationCoordinator {
 
     private func enqueue(itemId: String, fileId: String) {
         guard jobs[itemId] == nil else { return }
-        jobs[itemId] = JobState(fileId: fileId, fraction: nil, stage: running == nil ? "正在启动翻译" : "等待翻译")
+        jobs[itemId] = JobState(fileId: fileId, fraction: nil, stage: running == nil ? String(localized: "正在启动翻译") : String(localized: "等待翻译"))
         queue.append((itemId, fileId))
         pump()
     }
@@ -243,7 +243,7 @@ final class TranslationCoordinator {
         } ?? TranslationNaming.Provider(name: serviceID, model: nil)
         let source = model.fileURL(file)
         let output = installation.layout.base.appending(path: "output/\(UUID().uuidString)", directoryHint: .isDirectory)
-        jobs[next.itemId] = JobState(fileId: next.fileId, fraction: nil, stage: "正在启动翻译")
+        jobs[next.itemId] = JobState(fileId: next.fileId, fraction: nil, stage: String(localized: "正在启动翻译"))
         let current = Running(itemId: next.itemId)
         running = current
         current.task = Task { [weak self] in
@@ -281,7 +281,7 @@ final class TranslationCoordinator {
             jobs[itemId]?.stage = stage
         case .progress(let fraction):
             jobs[itemId]?.fraction = fraction
-            if jobs[itemId]?.stage == "正在启动翻译" { jobs[itemId]?.stage = "正在翻译" }
+            if jobs[itemId]?.stage == String(localized: "正在启动翻译") { jobs[itemId]?.stage = String(localized: "正在翻译") }
         case .finished(let mono, let dual):
             jobs[itemId] = nil
             file(mono: mono, dual: dual, of: fileId, provider: provider)
@@ -289,7 +289,7 @@ final class TranslationCoordinator {
             fail(itemId: itemId, fileId: fileId, message: message, log: logURL)
         case .cancelled:
             jobs[itemId] = nil
-            model?.toasts.show("已取消翻译", systemImage: "xmark.circle")
+            model?.toasts.show(String(localized: "已取消翻译"), systemImage: "xmark.circle")
         }
     }
 
@@ -304,7 +304,7 @@ final class TranslationCoordinator {
             TranslationNaming.baseName(original: base, kind: kind, language: language, provider: provider, existing: existing)
         }
         var added: [FileRecord] = []
-        model.perform("无法保存译文") {
+        model.perform(String(localized: "无法保存译文")) {
             if let mono {
                 added.append(try model.library.addTranslatedFile(at: mono, of: fileId, kind: .mono, baseName: name(.mono)))
             }
@@ -315,7 +315,7 @@ final class TranslationCoordinator {
         guard let first = added.first else { return }
         model.importer.indexFulltext()
         let title = model.snapshot.items[source.itemId]?.title ?? base
-        model.toasts.show("「\(title)」翻译完成", systemImage: "character.book.closed.fill", actionTitle: "打开译文") {
+        model.toasts.show(String(localized: "「\(title)」翻译完成"), systemImage: "character.book.closed.fill", actionTitle: String(localized: "打开译文")) {
             model.open(fileId: first.id, mode: .reader)
         }
     }
@@ -324,11 +324,11 @@ final class TranslationCoordinator {
         jobs[itemId] = nil
         let title = model?.snapshot.items[itemId]?.title ?? ""
         let alert = NSAlert()
-        alert.messageText = "「\(title)」翻译失败"
+        alert.messageText = String(localized: "「\(title)」翻译失败")
         alert.informativeText = message
-        alert.addButton(withTitle: "重试")
-        alert.addButton(withTitle: "取消")
-        if log != nil { alert.addButton(withTitle: "查看日志") }
+        alert.addButton(withTitle: String(localized: "重试"))
+        alert.addButton(withTitle: String(localized: "取消"))
+        if log != nil { alert.addButton(withTitle: String(localized: "查看日志")) }
         present(alert) { [weak self] response in
             switch response {
             case .alertFirstButtonReturn: self?.start(fileId: fileId)
@@ -348,7 +348,7 @@ final class TranslationCoordinator {
 
     private func openSettings() {
         AppDelegate.shared.showSettings(nil)
-        AppDelegate.shared.settingsWindow?.select(pane: "翻译")
+        AppDelegate.shared.settingsWindow?.select(pane: String(localized: "翻译"))
     }
 
     private func alert(_ title: String, _ text: String, primary: String, action: @escaping () -> Void) {
@@ -356,7 +356,7 @@ final class TranslationCoordinator {
         alert.messageText = title
         alert.informativeText = text
         alert.addButton(withTitle: primary)
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: String(localized: "取消"))
         present(alert) { if $0 == .alertFirstButtonReturn { action() } }
     }
 

@@ -12,7 +12,7 @@ final class TagChipsView: NSView {
     var tags: [Tag] = [] {
         didSet {
             needsDisplay = true
-            toolTip = tags.isEmpty ? nil : tags.map(\.name).joined(separator: "、")
+            toolTip = tags.isEmpty ? nil : tags.map(\.name).joined(separator: String(localized: "、"))
             setAccessibilityValue(tags.map(\.name).joined(separator: ","))
         }
     }

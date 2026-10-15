@@ -63,9 +63,9 @@ public enum AppleSystemTranslator {
 
         public var errorDescription: String? {
             switch self {
-            case .notInstalled(let s, let t): "Apple 系统翻译尚未下载 \(s) → \(t) 的语言模型。"
-            case .unsupported(let s, let t): "Apple 系统翻译不支持 \(s) → \(t)。"
-            case .failed(let message): "Apple 系统翻译失败：\(message)"
+            case .notInstalled(let s, let t): String(localized: "Apple 系统翻译尚未下载 \(s) → \(t) 的语言模型。", bundle: .module)
+            case .unsupported(let s, let t): String(localized: "Apple 系统翻译不支持 \(s) → \(t)。", bundle: .module)
+            case .failed(let message): String(localized: "Apple 系统翻译失败：\(message)", bundle: .module)
             }
         }
 

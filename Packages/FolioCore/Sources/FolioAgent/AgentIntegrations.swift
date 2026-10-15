@@ -114,9 +114,9 @@ public struct AgentIntegrator: Sendable {
     public static let catalog: [AgentDescriptor] = [
         .init(id: "claude-code", name: "Claude Code", apps: [], commands: ["claude"],
               mcp: .claudeCode, skillFolders: [".claude/skills"], skillNote: nil),
-        .init(id: "claude-desktop", name: "Claude 桌面版", apps: ["Claude.app"], commands: [],
+        .init(id: "claude-desktop", name: String(localized: "Claude 桌面版", bundle: .module), apps: ["Claude.app"], commands: [],
               mcp: .json(path: "Library/Application Support/Claude/claude_desktop_config.json", key: "mcpServers", style: .standard),
-              skillFolders: [], skillNote: "Claude 桌面版的技能需在 设置 ▸ 功能 ▸ 技能 中上传，可用下方\"导出技能包…\"生成。"),
+              skillFolders: [], skillNote: String(localized: "Claude 桌面版的技能需在 设置 ▸ 功能 ▸ 技能 中上传，可用下方\"导出技能包…\"生成。", bundle: .module)),
         .init(id: "codex", name: "Codex", apps: ["Codex.app"], commands: ["codex"],
               mcp: .codex, skillFolders: [sharedSkillsFolder], skillNote: nil),
         .init(id: "gemini-cli", name: "Gemini CLI", apps: [], commands: ["gemini"],
@@ -217,7 +217,7 @@ public struct AgentIntegrator: Sendable {
     public func setMCP(_ enabled: Bool, for descriptor: AgentDescriptor) throws {
         switch descriptor.mcp {
         case nil:
-            throw AgentIntegrationError(message: "\(descriptor.name) 不支持 MCP。")
+            throw AgentIntegrationError(message: String(localized: "\(descriptor.name) 不支持 MCP。", bundle: .module))
         case .claudeCode:
             // The official way: Claude Code's own CLI writes its user-scope configuration.
             if enabled { try? runAgentCommand("claude", ["mcp", "remove", "--scope", "user", Self.serverName]) }
@@ -245,7 +245,10 @@ public struct AgentIntegrator: Sendable {
         }
         // Trust but verify: the agent's own tool may have written somewhere else.
         if (installedCommand(descriptor) != nil) != enabled {
-            throw AgentIntegrationError(message: "未能\(enabled ? "添加" : "移除") \(descriptor.name) 的配置，请检查 \(configPath(descriptor) ?? "其配置文件")。")
+            let file = configPath(descriptor) ?? String(localized: "其配置文件", bundle: .module)
+            throw AgentIntegrationError(message: enabled
+                ? String(localized: "未能添加 \(descriptor.name) 的配置，请检查 \(file)。", bundle: .module)
+                : String(localized: "未能移除 \(descriptor.name) 的配置，请检查 \(file)。", bundle: .module))
         }
     }
 
@@ -314,13 +317,13 @@ public struct AgentIntegrator: Sendable {
         while process.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
         if process.isRunning {
             process.terminate()
-            throw AgentIntegrationError(message: "\(name) \(arguments.prefix(2).joined(separator: " ")) 没有在 30 秒内完成。")
+            throw AgentIntegrationError(message: String(localized: "\(name) \(arguments.prefix(2).joined(separator: " ")) 没有在 30 秒内完成。", bundle: .module))
         }
         if process.terminationStatus != 0 {
             let text = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
             // "not found" when removing something absent is fine.
             if arguments.contains("remove") { return true }
-            throw AgentIntegrationError(message: "\(name) \(arguments.prefix(2).joined(separator: " ")) 失败：\(text.prefix(300))")
+            throw AgentIntegrationError(message: String(localized: "\(name) \(arguments.prefix(2).joined(separator: " ")) 失败：\(text.prefix(300))", bundle: .module))
         }
         return true
     }
@@ -345,7 +348,7 @@ public struct AgentIntegrator: Sendable {
         do {
             try document.setMember(Self.serverName, in: key, to: enabled ? entry(style) : nil)
         } catch {
-            throw AgentIntegrationError(message: "无法解析 \(url.path)（\(error.localizedDescription)），为避免破坏它，请手动添加：\n\(manualConfiguration)")
+            throw AgentIntegrationError(message: String(localized: "无法解析 \(url.path)（\(error.localizedDescription)），为避免破坏它，请手动添加：\n\(manualConfiguration)", bundle: .module))
         }
         guard document.text != existing else { return }
         if existing != nil { try backUp(url) }
@@ -439,7 +442,7 @@ public struct AgentIntegrator: Sendable {
 
     public func setSkill(_ enabled: Bool, for descriptor: AgentDescriptor) throws {
         guard let target = skillTarget(descriptor) else {
-            throw AgentIntegrationError(message: descriptor.skillNote ?? "\(descriptor.name) 不支持技能。")
+            throw AgentIntegrationError(message: descriptor.skillNote ?? String(localized: "\(descriptor.name) 不支持技能。", bundle: .module))
         }
         if enabled {
             // Already visible through a folder it shares with another agent: refresh that copy only,
@@ -453,7 +456,7 @@ public struct AgentIntegrator: Sendable {
                 // Only remove a folder Folio wrote; never the user's own skill of the same name.
                 guard isOurs(file) else {
                     if folder == target {
-                        throw AgentIntegrationError(message: "\(file.deletingLastPathComponent().path) 不是 Folio 安装的技能，未删除。")
+                        throw AgentIntegrationError(message: String(localized: "\(file.deletingLastPathComponent().path) 不是 Folio 安装的技能，未删除。", bundle: .module))
                     }
                     continue
                 }

@@ -26,7 +26,7 @@ struct StandaloneFileInspector: View {
                     }
                 }
                 if let file {
-                    InspectorSection(title: "文件") {
+                    InspectorSection(title: String(localized: "文件")) {
                         LabeledContent("大小", value: ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
                         LabeledContent("添加于", value: item.dateAdded.formatted(date: .abbreviated, time: .shortened))
                         LabeledContent("原文件名", value: file.originalName)
@@ -48,10 +48,10 @@ struct StandaloneFileInspector: View {
 
     private var status: String {
         switch item.metadataState {
-        case .pending: "正在检索元数据…"
-        case .failed: "未检索到元数据，已保留为独立文件"
-        case .networkFailed: "网络不可用，恢复后会自动重试"
-        default: "独立文件"
+        case .pending: String(localized: "正在检索元数据…")
+        case .failed: String(localized: "未检索到元数据，已保留为独立文件")
+        case .networkFailed: String(localized: "网络不可用，恢复后会自动重试")
+        default: String(localized: "独立文件")
         }
     }
 }

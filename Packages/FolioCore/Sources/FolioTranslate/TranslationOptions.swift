@@ -60,9 +60,9 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
 
     /// Common target languages offered in settings (pdf2zh code, display name).
     public static let commonLanguages: [(code: String, name: String)] = [
-        ("en", "英语"), ("zh", "简体中文"), ("zh-TW", "繁体中文"), ("ja", "日语"), ("ko", "韩语"),
-        ("fr", "法语"), ("de", "德语"), ("es", "西班牙语"), ("it", "意大利语"), ("pt", "葡萄牙语"),
-        ("ru", "俄语"), ("ar", "阿拉伯语"),
+        ("en", String(localized: "英语", bundle: .module)), ("zh", String(localized: "简体中文", bundle: .module)), ("zh-TW", String(localized: "繁体中文", bundle: .module)), ("ja", String(localized: "日语", bundle: .module)), ("ko", String(localized: "韩语", bundle: .module)),
+        ("fr", String(localized: "法语", bundle: .module)), ("de", String(localized: "德语", bundle: .module)), ("es", String(localized: "西班牙语", bundle: .module)), ("it", String(localized: "意大利语", bundle: .module)), ("pt", String(localized: "葡萄牙语", bundle: .module)),
+        ("ru", String(localized: "俄语", bundle: .module)), ("ar", String(localized: "阿拉伯语", bundle: .module)),
     ]
 }
 
@@ -97,9 +97,9 @@ public enum TranslationConfigurationError: Error, LocalizedError, Sendable, Equa
 
     public var errorDescription: String? {
         switch self {
-        case .unknownService(let id): "未知的翻译服务：\(id)"
-        case .missingField(let service, let field): "\(service) 需要填写“\(field)”，请在设置的“翻译”页补充。"
-        case .appleTranslatorUnavailable: "找不到 Apple 系统翻译组件（folio-apple-translate）。"
+        case .unknownService(let id): String(localized: "未知的翻译服务：\(id)", bundle: .module)
+        case .missingField(let service, let field): String(localized: "\(service) 需要填写“\(field)”，请在设置的“翻译”页补充。", bundle: .module)
+        case .appleTranslatorUnavailable: String(localized: "找不到 Apple 系统翻译组件（folio-apple-translate）。", bundle: .module)
         }
     }
 }

@@ -20,7 +20,7 @@ import Foundation
 ///   -FolioReaderSelfTest <log>                  with OpenReader: scripted annotation/save/position checks
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
 ///   -FolioPreviewCollapseSidebar YES            hides the sidebar
-///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
+///   -FolioPreviewSettings <pane>                opens the Settings window on that pane (general, translation, ai …)
 ///   -FolioPreviewFocusedSelection YES           list selection drawn as if the list had focus
 ///   -FolioPreviewSnapshot <png>                 draws the window into a PNG (works while the screen is locked)
 ///   -FolioPreviewSnapshotDelay <seconds>        when to draw it (default 3)

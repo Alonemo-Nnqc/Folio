@@ -40,15 +40,15 @@ import Testing
     @Test func brokenInstallations() throws {
         let unfinished = TemporaryDirectory()
         try fakeInstall(TranslatorLayout(base: unfinished.url), marker: false)
-        #expect(TranslatorInstallation(baseDirectory: unfinished.url).status() == .broken(reason: "上次安装没有完成"))
+        #expect(TranslatorInstallation(baseDirectory: unfinished.url).status() == .broken(reason: "The last installation didn't finish"))
 
         let noPython = TemporaryDirectory()
         try fakeInstall(TranslatorLayout(base: noPython.url), python: false)
-        #expect(TranslatorInstallation(baseDirectory: noPython.url).status() == .broken(reason: "Python 环境缺失"))
+        #expect(TranslatorInstallation(baseDirectory: noPython.url).status() == .broken(reason: "The Python environment is missing"))
 
         let noPackage = TemporaryDirectory()
         try fakeInstall(TranslatorLayout(base: noPackage.url), distInfo: false)
-        #expect(TranslatorInstallation(baseDirectory: noPackage.url).status() == .broken(reason: "pdf2zh_next 软件包缺失"))
+        #expect(TranslatorInstallation(baseDirectory: noPackage.url).status() == .broken(reason: "The pdf2zh_next package is missing"))
     }
 
     @Test func uninstallKeepsLogsAndHandlesReadOnlyFiles() throws {

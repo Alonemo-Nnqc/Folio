@@ -83,7 +83,7 @@ public enum TranslatorDiscovery {
     }
 
     /// Where the search looks, for messages to the user.
-    public static let searchedPlaces = "终端的 PATH、uv / pipx / conda / pyenv / Homebrew / virtualenv 的安装位置、zotero-pdf2zh 插件目录、Spotlight 以及主文件夹中的虚拟环境"
+    public static let searchedPlaces = String(localized: "终端的 PATH、uv / pipx / conda / pyenv / Homebrew / virtualenv 的安装位置、zotero-pdf2zh 插件目录、Spotlight 以及主文件夹中的虚拟环境", bundle: .module)
 
     /// Files Spotlight knows by these names (it indexes the home folder, though not hidden folders).
     static func spotlight() -> [URL] {

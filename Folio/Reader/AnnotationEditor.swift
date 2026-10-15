@@ -45,7 +45,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
             added.append(annotation)
             add(annotation, to: page)
         }
-        if added.count > 1 { undoManager?.setActionName("添加\(state.tool.title)") }
+        if added.count > 1 { undoManager?.setActionName(String(localized: "添加\(state.tool.title)")) }
     }
 
     /// Places a sticky note or a text box where the user clicked, then opens its editor.
@@ -103,7 +103,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
     func add(_ annotation: PDFAnnotation, to page: PDFPage) {
         page.addAnnotation(annotation)
         undoManager?.registerUndo(withTarget: self) { $0.remove(annotation) }
-        undoManager?.setActionName("添加批注")
+        undoManager?.setActionName(String(localized: "添加批注"))
         changed(page)
     }
 
@@ -114,7 +114,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         if let popup = annotation.popup { page.removeAnnotation(popup) }
         page.removeAnnotation(annotation)
         undoManager?.registerUndo(withTarget: self) { $0.add(annotation, to: page) }
-        undoManager?.setActionName("删除批注")
+        undoManager?.setActionName(String(localized: "删除批注"))
         changed(page)
     }
 
@@ -123,7 +123,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         let moved = annotation.bounds
         annotation.modificationDate = Date()
         undoManager?.registerUndo(withTarget: self) { $0.setBounds(annotation, original, redo: moved) }
-        undoManager?.setActionName("移动批注")
+        undoManager?.setActionName(String(localized: "移动批注"))
         if let page = annotation.page { changed(page) }
     }
 
@@ -137,7 +137,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         let old = annotation.color
         apply(newColor.nsColor, to: annotation)
         undoManager?.registerUndo(withTarget: self) { editor in editor.restoreColor(annotation, old, redo: newColor) }
-        undoManager?.setActionName("更改颜色")
+        undoManager?.setActionName(String(localized: "更改颜色"))
         if let page = annotation.page { changed(page) }
     }
 
@@ -161,7 +161,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         annotation.contents = text
         annotation.modificationDate = Date()
         undoManager?.registerUndo(withTarget: self) { $0.setContents(annotation, old) }
-        undoManager?.setActionName("编辑批注")
+        undoManager?.setActionName(String(localized: "编辑批注"))
         if let page = annotation.page { changed(page) }
     }
 
@@ -236,19 +236,19 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         })
         menu.addItem(.separator())
         let isTextual = annotation.type == "Text" || annotation.type == "FreeText"
-        menu.addItem(.closure(isTextual ? "编辑内容…" : (annotation.contents ?? "").isEmpty ? "添加评论…" : "编辑评论…") { [weak self] in
+        menu.addItem(.closure(isTextual ? String(localized: "编辑内容…") : (annotation.contents ?? "").isEmpty ? String(localized: "添加评论…") : String(localized: "编辑评论…")) { [weak self] in
             self?.edit(annotation)
         })
         if let text = Self.text(of: annotation), !text.isEmpty, let page = annotation.page,
            let index = page.document?.index(for: page) {
-            menu.addItem(.closure("添加到笔记") { [weak self] in self?.onAddToNote(text, index) })
-            menu.addItem(.closure("拷贝文字") {
+            menu.addItem(.closure(String(localized: "添加到笔记")) { [weak self] in self?.onAddToNote(text, index) })
+            menu.addItem(.closure(String(localized: "拷贝文字")) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             })
         }
         menu.addItem(.separator())
-        menu.addItem(.closure("删除批注") { [weak self] in self?.remove(annotation) })
+        menu.addItem(.closure(String(localized: "删除批注")) { [weak self] in self?.remove(annotation) })
         return menu
     }
 
@@ -256,11 +256,11 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         let menu = NSMenu()
         let text = Self.clean(selection.string ?? "")
         let index = selection.pages.first.flatMap { $0.document?.index(for: $0) } ?? 0
-        menu.addItem(.closure("拷贝") {
+        menu.addItem(.closure(String(localized: "拷贝")) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
         })
-        menu.addItem(.closure("拷贝为引用") { [weak self] in self?.onCopyAsCitation(text, index) })
+        menu.addItem(.closure(String(localized: "拷贝为引用")) { [weak self] in self?.onCopyAsCitation(text, index) })
         menu.addItem(.separator())
         for tool in [AnnotationTool.highlight, .underline, .strikeOut] {
             let item = NSMenuItem.closure(tool.title) { [weak self, weak pdfView] in
@@ -272,7 +272,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        menu.addItem(.closure("添加到笔记") { [weak self] in self?.onAddToNote(text, index) })
+        menu.addItem(.closure(String(localized: "添加到笔记")) { [weak self] in self?.onAddToNote(text, index) })
         // Keep PDFKit's own items (look up, zoom, display modes) after ours.
         let extras = base.items.filter { $0.action != #selector(NSText.copy(_:)) }
         if !extras.isEmpty {

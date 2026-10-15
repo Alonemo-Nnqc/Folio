@@ -21,7 +21,7 @@ public enum MCPSelfCheck {
         let clock = ContinuousClock()
         let start = clock.now
         guard FileManager.default.isExecutableFile(atPath: cliPath) else {
-            throw Failure(message: "找不到 folio-cli：\(cliPath)")
+            throw Failure(message: String(localized: "找不到 folio-cli：\(cliPath)", bundle: .module))
         }
         let process = Process()
         process.executableURL = URL(filePath: cliPath)
@@ -33,7 +33,7 @@ public enum MCPSelfCheck {
         do {
             try process.run()
         } catch {
-            throw Failure(message: "无法启动 folio-cli：\(error.localizedDescription)")
+            throw Failure(message: String(localized: "无法启动 folio-cli：\(error.localizedDescription)", bundle: .module))
         }
         defer {
             try? input.fileHandleForWriting.close()
@@ -66,9 +66,11 @@ public enum MCPSelfCheck {
         timer.cancel()
 
         guard let initialize = responses[1] else {
-            throw Failure(message: "folio-cli 没有响应 MCP 握手（\(process.isRunning ? "超时" : "进程已退出，状态 \(process.terminationStatus)")）。")
+            let reason = process.isRunning ? String(localized: "超时", bundle: .module)
+                : String(localized: "进程已退出，状态 \(process.terminationStatus)", bundle: .module)
+            throw Failure(message: String(localized: "folio-cli 没有响应 MCP 握手（\(reason)）。", bundle: .module))
         }
-        if let error = initialize["error"]?["message"]?.stringValue { throw Failure(message: "握手失败：\(error)") }
+        if let error = initialize["error"]?["message"]?.stringValue { throw Failure(message: String(localized: "握手失败：\(error)", bundle: .module)) }
         var report = Report()
         report.protocolVersion = initialize["result"]?["protocolVersion"]?.stringValue
         report.toolCount = responses[2]?["result"]?["tools"]?.arrayValue?.count ?? 0

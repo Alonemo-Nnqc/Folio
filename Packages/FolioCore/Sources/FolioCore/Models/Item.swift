@@ -13,9 +13,9 @@ public enum ReadStatus: Int, Codable, Sendable, CaseIterable {
 
     public var displayName: String {
         switch self {
-        case .unread: "未读"
-        case .reading: "在读"
-        case .read: "已读"
+        case .unread: String(localized: "未读", bundle: .module)
+        case .reading: String(localized: "在读", bundle: .module)
+        case .read: String(localized: "已读", bundle: .module)
         }
     }
 }

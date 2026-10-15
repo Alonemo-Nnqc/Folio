@@ -18,7 +18,7 @@ struct TagChip: View {
                 }
                 .buttonStyle(.plain)
                 .help("移除标签")
-                .accessibilityLabel("移除标签 \(tag.name)")
+                .accessibilityLabel(String(localized: "移除标签 \(tag.name)"))
             }
         }
         .help(tag.name)
@@ -28,7 +28,7 @@ struct TagChip: View {
 /// The "默认" badge after a file name in the inspector.
 struct DefaultFileBadge: View {
     var body: some View {
-        CapsuleText(text: "默认", tint: .controlAccentColor, font: CapsuleLabel.badgeFont, height: CapsuleLabel.badgeHeight,
+        CapsuleText(text: String(localized: "默认"), tint: .controlAccentColor, font: CapsuleLabel.badgeFont, height: CapsuleLabel.badgeHeight,
                     padding: CapsuleLabel.badgePadding)
     }
 }

@@ -4,11 +4,11 @@ import UniformTypeIdentifiers
 
 /// User-facing operations. Each one reports failures through a toast or alert instead of throwing.
 extension AppModel {
-    func perform(_ what: String = "操作失败", _ body: () throws -> Void) {
+    func perform(_ what: String = String(localized: "操作失败"), _ body: () throws -> Void) {
         do {
             try body()
         } catch {
-            toasts.show("\(what)：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            toasts.show(String(localized: "\(what)：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
         }
     }
 
@@ -17,13 +17,13 @@ extension AppModel {
     func createGroup(parentId: String? = nil) {
         let siblings = parentId.map { snapshot.childGroups[$0] ?? [] } ?? snapshot.topLevelGroups
         let names = Set(siblings.compactMap { snapshot.groupsById[$0]?.name.lowercased() })
-        var name = "未命名分组"
+        var name = String(localized: "未命名分组")
         var index = 2
         while names.contains(name.lowercased()) {
-            name = "未命名分组 \(index)"
+            name = String(localized: "未命名分组 \(index)")
             index += 1
         }
-        perform("无法创建分组") {
+        perform(String(localized: "无法创建分组")) {
             let group = try library.createGroup(name: name, parentId: parentId)
             groupPendingRename = group.id
             sidebarSelection = .group(group.id)
@@ -46,13 +46,13 @@ extension AppModel {
     func confirmDeleteGroup(_ id: String) {
         guard let group = snapshot.groupsById[id] else { return }
         let alert = NSAlert()
-        alert.messageText = "删除分组「\(group.name)」？"
+        alert.messageText = String(localized: "删除分组「\(group.name)」？")
         let hasChildren = !(snapshot.childGroups[id] ?? []).isEmpty
-        alert.informativeText = (hasChildren ? "其中的子分组也会一并删除。" : "")
-            + "分组中的条目会保留在文库中；如需同时删除条目，请选择「同时将条目移到回收站」。"
-        alert.addButton(withTitle: "删除分组")
-        alert.addButton(withTitle: "同时将条目移到回收站")
-        alert.addButton(withTitle: "取消")
+        alert.informativeText = (hasChildren ? String(localized: "其中的子分组也会一并删除。") : "")
+            + String(localized: "分组中的条目会保留在文库中；如需同时删除条目，请选择「同时将条目移到回收站」。")
+        alert.addButton(withTitle: String(localized: "删除分组"))
+        alert.addButton(withTitle: String(localized: "同时将条目移到回收站"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons[0].hasDestructiveAction = true
         runAlert(alert) { [weak self] response in
             guard let self else { return }
@@ -66,26 +66,26 @@ extension AppModel {
 
     /// Group icon colour (nil = accent colour).
     func setGroupColor(_ id: String, colorHex: String?) {
-        perform("无法设置颜色") { try library.setGroupColor(id, colorHex: colorHex) }
+        perform(String(localized: "无法设置颜色")) { try library.setGroupColor(id, colorHex: colorHex) }
     }
 
     func moveGroup(_ id: String, toParent parentId: String?, index: Int) {
-        perform("无法移动分组") { try library.moveGroup(id, toParent: parentId, index: index) }
+        perform(String(localized: "无法移动分组")) { try library.moveGroup(id, toParent: parentId, index: index) }
     }
 
     // MARK: Membership
 
     func addItems(_ ids: [String], toGroup groupId: String) {
         guard let group = snapshot.groupsById[groupId], !ids.isEmpty else { return }
-        perform("无法添加到分组") {
+        perform(String(localized: "无法添加到分组")) {
             let result = try library.addItems(ids, toGroup: groupId, includeSubgroups: settings.includeSubgroupItems)
             if result.added.isEmpty {
-                toasts.show("「\(group.name)」中已有该条目", systemImage: "checkmark.circle")
+                toasts.show(String(localized: "「\(group.name)」中已有该条目"), systemImage: "checkmark.circle")
             } else if !result.alreadyPresent.isEmpty {
-                toasts.show("已添加 \(result.added.count) 项到「\(group.name)」，\(result.alreadyPresent.count) 项已存在",
+                toasts.show(String(localized: "已添加 \(result.added.count) 项到「\(group.name)」，\(result.alreadyPresent.count) 项已存在"),
                             systemImage: "folder.badge.plus")
             } else {
-                toasts.show("已添加到「\(group.name)」", systemImage: "folder.badge.plus")
+                toasts.show(String(localized: "已添加到「\(group.name)」"), systemImage: "folder.badge.plus")
             }
         }
     }
@@ -99,51 +99,51 @@ extension AppModel {
 
     func trashItems(_ ids: [String]) {
         guard !ids.isEmpty else { return }
-        perform("无法删除") { try library.trashItems(ids) }
+        perform(String(localized: "无法删除")) { try library.trashItems(ids) }
     }
 
     func trashFiles(_ fileIds: [String]) {
         guard !fileIds.isEmpty else { return }
-        perform("无法删除文件") { try library.trashFiles(fileIds) }
+        perform(String(localized: "无法删除文件")) { try library.trashFiles(fileIds) }
     }
 
     func restoreItems(_ ids: [String]) {
         guard !ids.isEmpty else { return }
-        perform("无法恢复") {
+        perform(String(localized: "无法恢复")) {
             try library.restoreItems(ids)
-            toasts.show(ids.count == 1 ? "已恢复" : "已恢复 \(ids.count) 项", systemImage: "arrow.uturn.backward")
+            toasts.show(ids.count == 1 ? String(localized: "已恢复") : String(localized: "已恢复 \(ids.count) 项"), systemImage: "arrow.uturn.backward")
         }
     }
 
     func confirmPurge(_ ids: [String]) {
         guard !ids.isEmpty else { return }
         let alert = NSAlert()
-        alert.messageText = ids.count == 1 ? "彻底删除这一项？" : "彻底删除这 \(ids.count) 项？"
-        alert.informativeText = "文件会从 Folio 文献库中彻底删除，此操作无法撤销。"
-        alert.addButton(withTitle: "彻底删除")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = ids.count == 1 ? String(localized: "彻底删除这一项？") : String(localized: "彻底删除这 \(ids.count) 项？")
+        alert.informativeText = String(localized: "文件会从 Folio 文献库中彻底删除，此操作无法撤销。")
+        alert.addButton(withTitle: String(localized: "彻底删除"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons[0].hasDestructiveAction = true
         runAlert(alert) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else { return }
-            self.perform("无法删除") { try self.library.purgeItems(ids) }
+            self.perform(String(localized: "无法删除")) { try self.library.purgeItems(ids) }
         }
     }
 
     func confirmEmptyTrash() {
         let count = counts[.trash] ?? 0
         guard count > 0 else {
-            toasts.show("回收站是空的", systemImage: "trash")
+            toasts.show(String(localized: "回收站是空的"), systemImage: "trash")
             return
         }
         let alert = NSAlert()
-        alert.messageText = "清空回收站？"
-        alert.informativeText = "回收站中的 \(count) 项会被彻底删除，此操作无法撤销。"
-        alert.addButton(withTitle: "清空回收站")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = String(localized: "清空回收站？")
+        alert.informativeText = String(localized: "回收站中的 \(count) 项会被彻底删除，此操作无法撤销。")
+        alert.addButton(withTitle: String(localized: "清空回收站"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons[0].hasDestructiveAction = true
         runAlert(alert) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else { return }
-            self.perform("无法清空回收站") { try self.library.emptyTrash() }
+            self.perform(String(localized: "无法清空回收站")) { try self.library.emptyTrash() }
         }
     }
 
@@ -231,8 +231,8 @@ extension AppModel {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = true
-        panel.prompt = "添加"
-        panel.message = "选择要添加到 Folio 的文献"
+        panel.prompt = String(localized: "添加")
+        panel.message = String(localized: "选择要添加到 Folio 的文献")
         let group = sidebarSelection.groupId
         present(panel) { [weak self] in self?.importer.importFiles(panel.urls, toGroup: group) }
     }
@@ -240,8 +240,8 @@ extension AppModel {
     func chooseFilesToAttach(to itemId: String) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.prompt = "添加"
-        panel.message = "选择要添加到该条目的文件"
+        panel.prompt = String(localized: "添加")
+        panel.message = String(localized: "选择要添加到该条目的文件")
         present(panel) { [weak self] in self?.importer.attachFiles(panel.urls, to: itemId) }
     }
 
@@ -260,14 +260,14 @@ extension AppModel {
         guard let tag = snapshot.tagsById[tagId] else { return }
         let count = snapshot.tagItems[tagId]?.count ?? 0
         let alert = NSAlert()
-        alert.messageText = "删除标签「\(tag.name)」？"
-        alert.informativeText = count > 0 ? "该标签会从 \(count) 个条目中移除。" : "目前没有条目使用该标签。"
-        alert.addButton(withTitle: "删除标签")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = String(localized: "删除标签「\(tag.name)」？")
+        alert.informativeText = count > 0 ? String(localized: "该标签会从 \(count) 个条目中移除。") : String(localized: "目前没有条目使用该标签。")
+        alert.addButton(withTitle: String(localized: "删除标签"))
+        alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons[0].hasDestructiveAction = true
         runAlert(alert) { [weak self] response in
             guard let self, response == .alertFirstButtonReturn else { return }
-            self.perform("无法删除标签") { try self.library.deleteTag(tagId) }
+            self.perform(String(localized: "无法删除标签")) { try self.library.deleteTag(tagId) }
         }
     }
 
@@ -304,14 +304,14 @@ extension AppModel {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
         panel.nameFieldStringValue = FileNamer.sanitize(item.title) + ".md"
-        panel.message = "导出「\(item.title)」的笔记"
+        panel.message = String(localized: "导出「\(item.title)」的笔记")
         let save = { [weak self] (response: NSApplication.ModalResponse) in
             guard response == .OK, let url = panel.url else { return }
             do {
                 try text.write(to: url, atomically: true, encoding: .utf8)
-                self?.toasts.show("已导出笔记", systemImage: "checkmark.circle")
+                self?.toasts.show(String(localized: "已导出笔记"), systemImage: "checkmark.circle")
             } catch {
-                self?.toasts.show("导出失败：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+                self?.toasts.show(String(localized: "导出失败：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
             }
         }
         if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: save) } else { save(panel.runModal()) }

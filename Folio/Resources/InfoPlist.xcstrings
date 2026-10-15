@@ -1,0 +1,16 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "Folio 条目" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Folio Item" } }
+      }
+    },
+    "PDF 文档" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PDF Document" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

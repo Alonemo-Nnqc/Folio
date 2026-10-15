@@ -10,12 +10,12 @@ extension Notification.Name {
 extension AppModel {
     /// Appends a block to an item's note (READER-08 "添加到笔记") and tells open editors.
     func appendToNote(itemId: String, _ block: String) {
-        perform("无法保存笔记") {
+        perform(String(localized: "无法保存笔记")) {
             let current = try library.note(for: itemId)
             let separator = current.isEmpty || current.hasSuffix("\n\n") ? "" : current.hasSuffix("\n") ? "\n" : "\n\n"
             try library.setNote(current + separator + block + "\n", for: itemId)
             NotificationCenter.default.post(name: .folioNoteDidChange, object: itemId)
-            toasts.show("已添加到笔记", systemImage: "note.text.badge.plus")
+            toasts.show(String(localized: "已添加到笔记"), systemImage: "note.text.badge.plus")
         }
     }
 }
@@ -75,12 +75,12 @@ final class NoteEditorController: NSObject, NSTextViewDelegate, NSTextStorageDel
         textView.isContinuousSpellCheckingEnabled = false
         textView.setAccessibilityIdentifier("noteEditor")
         // NSTextView draws this when empty (the same property Notes-style editors use).
-        let placeholder = NSAttributedString(string: "记下想法、摘录与待办… 支持 Markdown", attributes: [
+        let placeholder = NSAttributedString(string: String(localized: "记下想法、摘录与待办… 支持 Markdown"), attributes: [
             .foregroundColor: NSColor.placeholderTextColor, .font: MarkdownHighlighter.bodyFont])
         if textView.responds(to: Selector(("setPlaceholderAttributedString:"))) {
             textView.setValue(placeholder, forKey: "placeholderAttributedString")
         }
-        textView.setAccessibilityLabel("笔记")
+        textView.setAccessibilityLabel(String(localized: "笔记"))
         NotificationCenter.default.addObserver(self, selector: #selector(noteDidChange(_:)), name: .folioNoteDidChange, object: nil)
     }
 
@@ -137,7 +137,7 @@ final class NoteEditorController: NSObject, NSTextViewDelegate, NSTextStorageDel
         guard isDirty, let itemId else { return }
         isDirty = false
         let text = textView.string
-        model.perform("无法保存笔记") { try model.library.setNote(text, for: itemId) }
+        model.perform(String(localized: "无法保存笔记")) { try model.library.setNote(text, for: itemId) }
         NotificationCenter.default.post(name: .folioNoteDidChange, object: itemId)
     }
 

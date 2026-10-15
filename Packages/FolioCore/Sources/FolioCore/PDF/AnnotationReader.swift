@@ -9,11 +9,11 @@ public struct PDFAnnotationInfo: Sendable, Hashable, Identifiable {
 
         public var displayName: String {
             switch self {
-            case .highlight: "高亮"
-            case .underline: "下划线"
-            case .strikeOut: "删除线"
-            case .note: "注释"
-            case .freeText: "文本框"
+            case .highlight: String(localized: "高亮", bundle: .module)
+            case .underline: String(localized: "下划线", bundle: .module)
+            case .strikeOut: String(localized: "删除线", bundle: .module)
+            case .note: String(localized: "注释", bundle: .module)
+            case .freeText: String(localized: "文本框", bundle: .module)
             }
         }
     }

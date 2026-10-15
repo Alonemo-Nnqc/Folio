@@ -61,7 +61,7 @@ final class SidebarCell: NSTableCellView {
         name.stringValue = title
         name.isEditable = false
         count.stringValue = value.map { $0 > 0 ? "\($0)" : "" } ?? ""
-        setAccessibilityLabel(value.map { $0 > 0 ? "\(title)，\($0) 项" : title } ?? title)
+        setAccessibilityLabel(value.map { $0 > 0 ? String(localized: "\(title)，\($0) 项") : title } ?? title)
     }
 }
 

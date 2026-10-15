@@ -32,7 +32,7 @@ enum CapsuleLabel {
     static func opticalCenter(_ font: NSFont) -> CGFloat {
         let key = "\(font.fontName)-\(font.pointSize)" as NSString
         if let cached = centerCache.object(forKey: key) { return CGFloat(cached.doubleValue) }
-        let bounds = CTLineGetImageBounds(line("H汉", font: font), nil)
+        let bounds = CTLineGetImageBounds(line(String(localized: "H汉"), font: font), nil)
         let center = bounds.isNull ? (font.capHeight / 2) : bounds.midY
         centerCache.setObject(NSNumber(value: Double(center)), forKey: key)
         return center

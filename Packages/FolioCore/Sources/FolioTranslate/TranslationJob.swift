@@ -108,7 +108,7 @@ public final class TranslationJob: Sendable {
             process = try ChildProcess.launch(spec)
         } catch {
             log.write("Launch failed: \(error)")
-            continuation.yield(.failed(message: "无法启动翻译组件（\(error.localizedDescription)），请在 设置 ▸ 翻译 中重新安装组件",
+            continuation.yield(.failed(message: String(localized: "无法启动翻译组件（\(error.localizedDescription)），请在 设置 ▸ 翻译 中重新安装组件", bundle: .module),
                                        logURL: logURL))
             return
         }
@@ -183,12 +183,12 @@ public final class TranslationJob: Sendable {
             failure = TranslationErrorClassifier.classify(message: engineError.message, details: engineError.details, logTail: tail)
         } else {
             let summary = switch termination {
-            case .exited(let code): "翻译进程意外退出（代码 \(code)）"
-            case .signaled(let signal): signal == SIGKILL ? "翻译进程被系统终止（可能内存不足）" : "翻译进程意外终止（信号 \(signal)）"
+            case .exited(let code): String(localized: "翻译进程意外退出（代码 \(code)）", bundle: .module)
+            case .signaled(let signal): signal == SIGKILL ? String(localized: "翻译进程被系统终止（可能内存不足）", bundle: .module) : String(localized: "翻译进程意外终止（信号 \(signal)）", bundle: .module)
             }
             let classified = TranslationErrorClassifier.classify(message: summary, logTail: tail)
             failure = classified.reason == .unknown
-                ? TranslationFailure(reason: .unknown, message: summary + "。", rawMessage: summary)
+                ? TranslationFailure(reason: .unknown, message: summary + String(localized: "。", bundle: .module), rawMessage: summary)
                 : classified
         }
         log.write("Failure (\(failure.reason.rawValue)): \(failure.message) — \(failure.rawMessage)")

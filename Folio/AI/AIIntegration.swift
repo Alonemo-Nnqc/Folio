@@ -31,12 +31,12 @@ final class AIIntegration {
 
     /// What each agent needs beyond Folio's configuration.
     static let hints: [String: String] = [
-        "gemini-cli": "Gemini CLI 只在受信任的文件夹中启用 MCP 服务器\n首次在某个文件夹中运行时选择信任",
-        "claude-desktop": "修改后需要完全退出并重新打开 Claude 桌面版",
-        "copilot-cli": "在 Copilot CLI 中输入 /mcp 可查看连接状态",
-        "cursor": "与 Cursor 编辑器共用 ~/.cursor/mcp.json，编辑器中也会出现 folio 服务器",
-        "kiro": "与 Kiro 编辑器共用 ~/.kiro/settings/mcp.json",
-        "antigravity": "在 Antigravity 的 设置 ▸ Customizations 中可看到 folio 服务器\n修改后重新打开 Antigravity",
+        "gemini-cli": String(localized: "Gemini CLI 只在受信任的文件夹中启用 MCP 服务器\n首次在某个文件夹中运行时选择信任"),
+        "claude-desktop": String(localized: "修改后需要完全退出并重新打开 Claude 桌面版"),
+        "copilot-cli": String(localized: "在 Copilot CLI 中输入 /mcp 可查看连接状态"),
+        "cursor": String(localized: "与 Cursor 编辑器共用 ~/.cursor/mcp.json，编辑器中也会出现 folio 服务器"),
+        "kiro": String(localized: "与 Kiro 编辑器共用 ~/.kiro/settings/mcp.json"),
+        "antigravity": String(localized: "在 Antigravity 的 设置 ▸ Customizations 中可看到 folio 服务器\n修改后重新打开 Antigravity"),
     ]
 
     /// folio-cli inside this copy of Folio.app.
@@ -68,7 +68,7 @@ final class AIIntegration {
             isDetecting = false
             guard userInitiated else { return }
             let count = result.filter(\.isDetected).count
-            detectionResult = count == 0 ? "未找到智能体" : "找到 \(count) 个智能体"
+            detectionResult = count == 0 ? String(localized: "未找到智能体") : String(localized: "找到 \(count) 个智能体")
             resultGeneration += 1
             let generation = resultGeneration
             try? await Task.sleep(for: .seconds(3))
@@ -77,7 +77,7 @@ final class AIIntegration {
     }
 
     func setMCP(_ enabled: Bool, for status: AgentStatus) {
-        run(status, enabled ? "已为 \(status.descriptor.name) 添加 Folio MCP" : "已从 \(status.descriptor.name) 移除 Folio MCP") { integrator in
+        run(status, enabled ? String(localized: "已为 \(status.descriptor.name) 添加 Folio MCP") : String(localized: "已从 \(status.descriptor.name) 移除 Folio MCP")) { integrator in
             try integrator.setMCP(enabled, for: status.descriptor)
         }
     }
@@ -89,14 +89,14 @@ final class AIIntegration {
             let losing = integrator.agentsLosingSkill(ifRemovedFor: status.descriptor).filter { detected.contains($0.id) }
             if !losing.isEmpty {
                 let alert = NSAlert()
-                alert.messageText = "同时从 \(losing.map(\.name).joined(separator: "、")) 移除 Folio 技能？"
-                alert.informativeText = "\(status.descriptor.name) 与它们共用技能文件夹 ~/\(status.skillFolder ?? "")，移除后这些智能体也将看不到 Folio 技能。"
-                alert.addButton(withTitle: "移除")
-                alert.addButton(withTitle: "取消")
+                alert.messageText = String(localized: "同时从 \(losing.map(\.name).joined(separator: "、")) 移除 Folio 技能？")
+                alert.informativeText = String(localized: "\(status.descriptor.name) 与它们共用技能文件夹 ~/\(status.skillFolder ?? "")，移除后这些智能体也将看不到 Folio 技能。")
+                alert.addButton(withTitle: String(localized: "移除"))
+                alert.addButton(withTitle: String(localized: "取消"))
                 guard alert.runModal() == .alertFirstButtonReturn else { return }
             }
         }
-        run(status, enabled ? "已为 \(status.descriptor.name) 添加 Folio 技能" : "已从 \(status.descriptor.name) 移除 Folio 技能") { integrator in
+        run(status, enabled ? String(localized: "已为 \(status.descriptor.name) 添加 Folio 技能") : String(localized: "已从 \(status.descriptor.name) 移除 Folio 技能")) { integrator in
             try integrator.setSkill(enabled, for: status.descriptor)
         }
     }
@@ -109,11 +109,11 @@ final class AIIntegration {
             do {
                 let report = try await MCPSelfCheck.run(cliPath: cli)
                 let seconds = Double(report.elapsed.components.attoseconds) / 1e18 + Double(report.elapsed.components.seconds)
-                let summary = "握手成功（MCP \(report.protocolVersion ?? "?")），\(report.toolCount) 个工具，用时 \(String(format: "%.1f", seconds)) 秒"
+                let summary = String(localized: "握手成功（MCP \(report.protocolVersion ?? "?")），\(report.toolCount) 个工具，用时 \(String(format: "%.1f", seconds)) 秒")
                 if let problem = report.libraryProblem {
-                    serverCheck = .warning(summary + "；但无法读取文献库：\(problem)")
+                    serverCheck = .warning(summary + String(localized: "；但无法读取文献库：\(problem)"))
                 } else {
-                    serverCheck = .passed(summary + "；文献库中有 \(report.itemCount ?? 0) 个条目")
+                    serverCheck = .passed(summary + String(localized: "；文献库中有 \(report.itemCount ?? 0) 个条目"))
                 }
             } catch {
                 serverCheck = .failed(error.localizedDescription)
@@ -144,11 +144,11 @@ final class AIIntegration {
             let model = AppDelegate.shared.model
             if let error {
                 let alert = NSAlert()
-                alert.messageText = "无法修改 \(status.descriptor.name) 的配置"
+                alert.messageText = String(localized: "无法修改 \(status.descriptor.name) 的配置")
                 alert.informativeText = error
                 alert.runModal()
             } else {
-                model?.toasts.show(success + "，重启该智能体或开始新会话后生效", systemImage: "checkmark.circle")
+                model?.toasts.show(success + String(localized: "，重启该智能体或开始新会话后生效"), systemImage: "checkmark.circle")
             }
         }
     }
@@ -157,7 +157,7 @@ final class AIIntegration {
     func copyManualConfiguration() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(integrator.manualConfiguration, forType: .string)
-        AppDelegate.shared.model?.toasts.show("已拷贝 MCP 配置", systemImage: "doc.on.clipboard")
+        AppDelegate.shared.model?.toasts.show(String(localized: "已拷贝 MCP 配置"), systemImage: "doc.on.clipboard")
     }
 
     /// Writes the skill folder, or a .zip of it (Claude 桌面版 uploads skills as zip files).
@@ -165,7 +165,7 @@ final class AIIntegration {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = asZip ? "\(FolioSkill.name).zip" : FolioSkill.name
         panel.allowedContentTypes = asZip ? [.zip] : [.folder]
-        panel.message = asZip ? "导出 Folio 技能包，可在 Claude 桌面版 设置 ▸ 功能 ▸ 技能 中上传" : "导出 Folio 技能文件夹（含 SKILL.md）"
+        panel.message = asZip ? String(localized: "导出 Folio 技能包，可在 Claude 桌面版 设置 ▸ 功能 ▸ 技能 中上传") : String(localized: "导出 Folio 技能文件夹（含 SKILL.md）")
         let handler = { [self] (response: NSApplication.ModalResponse) in
             guard response == .OK, let url = panel.url else { return }
             do {
@@ -186,7 +186,7 @@ final class AIIntegration {
                 }
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             } catch {
-                AppDelegate.shared.model?.toasts.show("导出失败：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+                AppDelegate.shared.model?.toasts.show(String(localized: "导出失败：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
             }
         }
         if let window { panel.beginSheetModal(for: window, completionHandler: handler) } else { handler(panel.runModal()) }

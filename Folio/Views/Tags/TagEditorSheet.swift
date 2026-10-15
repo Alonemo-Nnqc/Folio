@@ -14,7 +14,7 @@ struct TagEditorSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(tagId == nil ? "新建标签" : "编辑标签")
+            Text(tagId == nil ? String(localized: "新建标签") : String(localized: "编辑标签"))
                 .font(.headline)
             VStack(alignment: .leading, spacing: 4) {
                 TextField("标签名称", text: $name)
@@ -45,7 +45,7 @@ struct TagEditorSheet: View {
                 Spacer()
                 Button("取消", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(tagId == nil ? "创建" : "保存", action: save)
+                Button(tagId == nil ? String(localized: "创建") : String(localized: "保存"), action: save)
                     .keyboardShortcut(.defaultAction)
                     .glassProminentButtonStyle()
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)

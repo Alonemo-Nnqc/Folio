@@ -10,11 +10,11 @@ public enum LibraryError: Error, Equatable, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .emptyName: "名称不能为空"
-        case .duplicateGroupName(let name): "已存在名为「\(name)」的分组"
-        case .duplicateTagName(let name): "已存在名为「\(name)」的标签"
-        case .groupDepthExceeded: "分组最多支持两级"
-        case .notFound: "找不到该项目"
+        case .emptyName: String(localized: "名称不能为空", bundle: .module)
+        case .duplicateGroupName(let name): String(localized: "已存在名为「\(name)」的分组", bundle: .module)
+        case .duplicateTagName(let name): String(localized: "已存在名为「\(name)」的标签", bundle: .module)
+        case .groupDepthExceeded: String(localized: "分组最多支持两级", bundle: .module)
+        case .notFound: String(localized: "找不到该项目", bundle: .module)
         case .invalidOperation(let reason): reason
         }
     }

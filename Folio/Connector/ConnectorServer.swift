@@ -69,7 +69,7 @@ final class ConnectorServer {
     }
 
     private static func describe(_ error: NWError) -> String {
-        if case .posix(.EADDRINUSE) = error { return "端口 \(port) 已被占用（是否打开了另一个 Folio？）" }
+        if case .posix(.EADDRINUSE) = error { return String(localized: "端口 \(String(port)) 已被占用（是否打开了另一个 Folio？）") }
         return error.localizedDescription
     }
 
@@ -154,7 +154,7 @@ final class ConnectorServer {
     private func noteBrowser(_ userAgent: String?) {
         guard let ua = userAgent else { return }
         let name = ua.contains("Edg/") ? "Edge" : ua.contains("Firefox/") ? "Firefox" : ua.contains("OPR/") ? "Opera"
-            : ua.contains("Chrome/") ? "Chrome" : ua.contains("Safari/") ? "Safari" : "浏览器"
+            : ua.contains("Chrome/") ? "Chrome" : ua.contains("Safari/") ? "Safari" : String(localized: "浏览器")
         lastSeen[name] = Date()
     }
 
@@ -178,7 +178,7 @@ final class ConnectorServer {
 
     private func save(_ body: JSONValue, model: AppModel) async -> ConnectorProtocol.Response {
         guard let page = body["item"].flatMap(ConnectorProtocol.metadata(from:)) else {
-            return .error("没有识别到文献信息", status: 400)
+            return .error(String(localized: "没有识别到文献信息"), status: 400)
         }
         let groupId = body["groupId"]?.stringValue.flatMap { model.snapshot.groupsById[$0] != nil ? $0 : nil }
         var metadata = page
@@ -201,8 +201,8 @@ final class ConnectorServer {
             try applyTags(body["tags"]?.stringList ?? [], to: itemId, library: library)
             let title = (try? library.item(itemId))?.title ?? metadata.title
             let groupName = groupId.flatMap { model.snapshot.groupsById[$0]?.name }
-            model.toasts.show(status == "created" ? "已从浏览器保存「\(title)」" : "「\(title)」已在文献库中",
-                              systemImage: "safari", actionTitle: "显示") {
+            model.toasts.show(status == "created" ? String(localized: "已从浏览器保存「\(title)」") : String(localized: "「\(title)」已在文献库中"),
+                              systemImage: "safari", actionTitle: String(localized: "显示")) {
                 AppDelegate.shared.open(folioLink: "folio://select?item=\(itemId)")
             }
             return .json(["status": .string(status), "itemId": .string(itemId), "title": .string(title),
@@ -219,7 +219,7 @@ final class ConnectorServer {
             guard let identifier = entry["identifier"]?.stringValue?.trimmingCharacters(in: .whitespaces), !identifier.isEmpty else { return nil }
             return (identifier, entry["title"]?.stringValue)
         }
-        guard !entries.isEmpty else { return .error("没有可保存的文献", status: 400) }
+        guard !entries.isEmpty else { return .error(String(localized: "没有可保存的文献"), status: 400) }
         let groupId = body["groupId"]?.stringValue.flatMap { model.snapshot.groupsById[$0] != nil ? $0 : nil }
         let tags = body["tags"]?.stringList ?? []
         let resolver = model.importer.resolver
@@ -268,10 +268,10 @@ final class ConnectorServer {
                 }
             case .networkError?:
                 object["status"] = "failed"
-                object["error"] = "网络错误，请稍后重试"
+                object["error"] = .string(String(localized: "网络错误，请稍后重试"))
             default:
                 object["status"] = "failed"
-                object["error"] = "数据源中没有找到"
+                object["error"] = .string(String(localized: "数据源中没有找到"))
             }
             results.append(.object(object))
         }
@@ -279,8 +279,8 @@ final class ConnectorServer {
         let existing = results.filter { $0["status"]?.stringValue == "duplicate" }.count
         if !saved.isEmpty {
             let first = saved[0].id
-            model.toasts.show(existing > 0 ? "已从浏览器保存 \(created) 篇，\(existing) 篇已在文献库中" : "已从浏览器保存 \(created) 篇文献",
-                              systemImage: "safari", actionTitle: "显示") {
+            model.toasts.show(existing > 0 ? String(localized: "已从浏览器保存 \(created) 篇，\(existing) 篇已在文献库中") : String(localized: "已从浏览器保存 \(created) 篇文献"),
+                              systemImage: "safari", actionTitle: String(localized: "显示")) {
                 AppDelegate.shared.open(folioLink: "folio://select?item=\(first)")
             }
         }
@@ -306,7 +306,7 @@ final class ConnectorServer {
         }
         if attached > 0 {
             model.importer.indexFulltext()
-            model.toasts.show("已为 \(attached) 篇文献下载 PDF", systemImage: "arrow.down.doc")
+            model.toasts.show(String(localized: "已为 \(attached) 篇文献下载 PDF"), systemImage: "arrow.down.doc")
         }
     }
 
@@ -325,9 +325,9 @@ final class ConnectorServer {
     /// The browser could not download the PDF of a saved item: say why in Folio too (the popup may be closed).
     private func pdfFailed(_ request: ConnectorProtocol.Request, model: AppModel) -> ConnectorProtocol.Response {
         let body = try? JSONValue.decode(String(decoding: request.body, as: UTF8.self))
-        let reason = body?["message"]?.stringValue ?? "下载失败"
-        let title = request.query["item"].flatMap { model.snapshot.items[$0]?.title } ?? "条目"
-        model.toasts.show("「\(title)」的 PDF 未能保存：\(reason)", systemImage: "exclamationmark.triangle")
+        let reason = body?["message"]?.stringValue ?? String(localized: "下载失败")
+        let title = request.query["item"].flatMap { model.snapshot.items[$0]?.title } ?? String(localized: "条目")
+        model.toasts.show(String(localized: "「\(title)」的 PDF 未能保存：\(reason)"), systemImage: "exclamationmark.triangle")
         return .json(["status": "noted"])
     }
 
@@ -336,7 +336,7 @@ final class ConnectorServer {
         guard let itemId = request.query["item"], model.snapshot.items[itemId] != nil || (try? model.library.item(itemId)) != nil else {
             return .error("Unknown item", status: 404)
         }
-        guard Self.looksLikePDF(request.body) else { return .error("下载的文件不是 PDF（可能需要登录或订阅）", status: 400) }
+        guard Self.looksLikePDF(request.body) else { return .error(String(localized: "下载的文件不是 PDF（可能需要登录或订阅）"), status: 400) }
         do {
             let url = try Self.temporaryFile(request.body, name: request.query["filename"])
             defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -344,8 +344,8 @@ final class ConnectorServer {
             model.importer.indexFulltext()
             switch outcome {
             case .added:
-                let title = (try? model.library.item(itemId))?.title ?? "条目"
-                model.toasts.show("已为「\(title)」附加 PDF", systemImage: "doc.badge.plus")
+                let title = (try? model.library.item(itemId))?.title ?? String(localized: "条目")
+                model.toasts.show(String(localized: "已为「\(title)」附加 PDF"), systemImage: "doc.badge.plus")
                 return .json(["status": "added"])
             case .duplicate: return .json(["status": "duplicate"])
             case .failed(_, let reason): return .error(reason, status: 500)
@@ -358,7 +358,7 @@ final class ConnectorServer {
 
     /// A PDF page saved as a file; Folio retrieves its metadata like any imported PDF.
     private func savePDF(_ request: ConnectorProtocol.Request, model: AppModel) -> ConnectorProtocol.Response {
-        guard Self.looksLikePDF(request.body) else { return .error("这不是 PDF 文件", status: 400) }
+        guard Self.looksLikePDF(request.body) else { return .error(String(localized: "这不是 PDF 文件"), status: 400) }
         do {
             let url = try Self.temporaryFile(request.body, name: request.query["filename"])
             let groupId = request.query["groupId"].flatMap { model.snapshot.groupsById[$0] != nil ? $0 : nil }

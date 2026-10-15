@@ -21,7 +21,7 @@ struct TranslationProfileRow: View {
             if selected == nil { Text("未保存的设置").tag("") }
             ForEach(profiles) { Text($0.name).tag($0.id) }
             Divider()
-            Text(profiles.isEmpty ? "存为配置…" : "编辑配置…").tag(Self.editTag)
+            Text(profiles.isEmpty ? String(localized: "存为配置…") : String(localized: "编辑配置…")).tag(Self.editTag)
         }
         .help("保存多个服务商的 Base URL、API Key 和模型，在这里一键切换")
         .sheet(isPresented: $editing) {
@@ -38,7 +38,7 @@ struct TranslationProfileRow: View {
         guard let profile = profiles.all.first(where: { $0.id == id }), profile.id != profiles.selectedID else { return }
         profiles.keepUnsavedValues()
         profiles.use(profile)
-        model.toasts.show("已切换到「\(profile.name)」", systemImage: "arrow.left.arrow.right")
+        model.toasts.show(String(localized: "已切换到「\(profile.name)」"), systemImage: "arrow.left.arrow.right")
     }
 }
 
@@ -74,12 +74,12 @@ struct TranslationProfileActions {
             settings.selectedTranslationProfiles[service.id] = profile.id
             settings.translationFields[service.id] = fields
         } catch {
-            model.toasts.show("无法读取「\(profile.name)」的 API Key：\(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+            model.toasts.show(String(localized: "无法读取「\(profile.name)」的 API Key：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
         }
     }
 
     func add(copying source: TranslationProfile? = nil) -> TranslationProfile {
-        var profile = TranslationProfile(name: uniqueName(source.map { "\($0.name) 副本" } ?? "新配置"), serviceID: service.id,
+        var profile = TranslationProfile(name: uniqueName(source.map { String(localized: "\($0.name) 副本") } ?? String(localized: "新配置")), serviceID: service.id,
                                          fields: source?.fields ?? [:])
         if let source {
             for field in service.secretFields {
@@ -132,7 +132,7 @@ struct TranslationProfilesEditor: View {
                 } footer: {
                     HStack {
                         Spacer()
-                        Button("添加配置…") { editing = ProfileDraft(new: service, name: actions.uniqueName("新配置")) }
+                        Button("添加配置…") { editing = ProfileDraft(new: service, name: actions.uniqueName(String(localized: "新配置"))) }
                     }
                 }
             }
@@ -167,7 +167,7 @@ struct TranslationProfilesEditor: View {
     }
 
     private var header: some View {
-        ProfileSheetHeader(title: "\(service.displayName)配置", subtitle: "每个配置保存一个服务商的地址、API Key 和模型")
+        ProfileSheetHeader(title: String(localized: "\(service.displayName)配置"), subtitle: String(localized: "每个配置保存一个服务商的地址、API Key 和模型"))
     }
 
     private func row(_ profile: TranslationProfile) -> some View {
@@ -179,7 +179,7 @@ struct TranslationProfilesEditor: View {
                 .opacity(inUse ? 1 : 0)
                 .frame(width: 16)
                 .accessibilityHidden(!inUse)
-                .accessibilityLabel("正在使用")
+                .accessibilityLabel(String(localized: "正在使用"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(profile.name)
                 Text(summary(profile)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -199,7 +199,7 @@ struct TranslationProfilesEditor: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help("更多操作")
-            .accessibilityLabel("\(profile.name) 的更多操作")
+            .accessibilityLabel(String(localized: "\(profile.name) 的更多操作"))
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { editing = ProfileDraft(profile: profile, service: service, secrets: actions.secrets) }
@@ -209,9 +209,9 @@ struct TranslationProfilesEditor: View {
     private func summary(_ profile: TranslationProfile) -> String {
         let urlField = service.fields.first { $0.kind == .url }
         let host = urlField.flatMap { profile.fields[$0.option] }.flatMap { URL(string: $0)?.host() }
-        let model = service.fields.first { $0.title == "模型" }.flatMap { profile.fields[$0.option] }
+        let model = service.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }.flatMap { profile.fields[$0.option] }
         let parts = [host, model].compactMap { $0 }
-        return parts.isEmpty ? "未填写" : parts.joined(separator: " · ")
+        return parts.isEmpty ? String(localized: "未填写") : parts.joined(separator: " · ")
     }
 }
 
@@ -257,7 +257,7 @@ private struct ProfileDetailSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ProfileSheetHeader(title: isNew ? "新配置" : draft.name.isEmpty ? "未命名配置" : draft.name, subtitle: service.displayName)
+            ProfileSheetHeader(title: isNew ? String(localized: "新配置") : draft.name.isEmpty ? String(localized: "未命名配置") : draft.name, subtitle: service.displayName)
             Form {
                 Section {
                     TextField("名称", text: $draft.name, prompt: Text("例如 DeepSeek、Moonshot"))
@@ -282,25 +282,25 @@ private struct ProfileDetailSheet: View {
                 Spacer()
                 Button("取消", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button(isNew ? "添加" : "存储") { save() }
+                Button(isNew ? String(localized: "添加") : String(localized: "存储")) { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding([.horizontal, .bottom], 20)
         }
         .frame(width: 480, height: 460)
-        .navigationTitle(isNew ? "新配置" : draft.name)
+        .navigationTitle(isNew ? String(localized: "新配置") : draft.name)
     }
 
     @ViewBuilder
     private func row(for field: TranslationServiceField) -> some View {
-        let title = field.isRequired ? field.title : "\(field.title)（选填）"
+        let title = field.isRequired ? field.title : String(localized: "\(field.title)（选填）")
         let text = Binding(get: { draft.fields[field.option] ?? "" },
                            set: { draft.fields[field.option] = $0.isEmpty ? nil : $0 })
         switch field.kind {
         case .secret:
             SecureField(title, text: Binding(get: { draft.secrets[field.option] ?? "" }, set: { draft.secrets[field.option] = $0 }),
-                        prompt: Text(field.placeholder ?? "未填写"))
+                        prompt: Text(field.placeholder ?? String(localized: "未填写")))
         case .toggle:
             Toggle(title, isOn: Binding(get: { text.wrappedValue == "true" }, set: { text.wrappedValue = $0 ? "true" : "" }))
         default:

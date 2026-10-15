@@ -29,7 +29,7 @@ final class ColorSwatchMenuView: NSView {
         for index in swatches.indices { addToolTip(rect(at: index), owner: self, userData: nil) }
         setAccessibilityElement(false)
         setAccessibilityRole(.group)
-        setAccessibilityLabel("颜色")
+        setAccessibilityLabel(String(localized: "颜色"))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
@@ -128,7 +128,7 @@ nonisolated private final class SwatchElement: NSAccessibilityElement {
         self.index = index
         super.init()
         setAccessibilityRole(.button)
-        setAccessibilityLabel(selected ? "\(name)（当前）" : name)
+        setAccessibilityLabel(selected ? String(localized: "\(name)（当前）") : name)
         setAccessibilityParent(view)
     }
 

@@ -8,13 +8,13 @@ enum AnnotationTool: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .select: "选择"
-        case .highlight: "高亮"
-        case .underline: "下划线"
-        case .strikeOut: "删除线"
-        case .note: "便签"
-        case .text: "文本框"
-        case .ink: "手绘"
+        case .select: String(localized: "选择")
+        case .highlight: String(localized: "高亮")
+        case .underline: String(localized: "下划线")
+        case .strikeOut: String(localized: "删除线")
+        case .note: String(localized: "便签")
+        case .text: String(localized: "文本框")
+        case .ink: String(localized: "手绘")
         }
     }
 
@@ -60,10 +60,10 @@ enum ReaderSidebarTab: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .thumbnails: "缩略图"
-        case .outline: "目录"
-        case .annotations: "批注"
-        case .search: "查找结果"
+        case .thumbnails: String(localized: "缩略图")
+        case .outline: String(localized: "目录")
+        case .annotations: String(localized: "批注")
+        case .search: String(localized: "查找结果")
         }
     }
 

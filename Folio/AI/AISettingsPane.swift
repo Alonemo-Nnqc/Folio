@@ -62,7 +62,7 @@ struct AISettingsPane: View {
                     Text("这台 Mac 上的智能体")
                     Spacer()
                     RedetectButton(isChecking: integration.isDetecting, result: integration.detectionResult,
-                                   help: "重新查找已安装的智能体（安装或卸载后使用）") {
+                                   help: String(localized: "重新查找已安装的智能体（安装或卸载后使用）")) {
                         integration.detect(userInitiated: true)
                     }
                 }
@@ -131,11 +131,11 @@ private struct AgentRow: View {
                     ProgressView().controlSize(.small)
                 }
                 toggle("MCP", isOn: status.mcpInstalled, available: descriptor.mcp != nil,
-                       help: status.mcpInstalled ? "Folio 已添加到 \(descriptor.name) 的 MCP 服务器" : "为 \(descriptor.name) 添加 Folio MCP 服务器") {
+                       help: status.mcpInstalled ? String(localized: "Folio 已添加到 \(descriptor.name) 的 MCP 服务器") : String(localized: "为 \(descriptor.name) 添加 Folio MCP 服务器")) {
                     integration.setMCP($0, for: status)
                 }
-                toggle("技能", isOn: status.skillInstalled, available: descriptor.supportsSkills,
-                       help: descriptor.supportsSkills ? "为 \(descriptor.name) 安装 Folio 技能" : (descriptor.skillNote ?? "不支持技能")) {
+                toggle(String(localized: "技能"), isOn: status.skillInstalled, available: descriptor.supportsSkills,
+                       help: descriptor.supportsSkills ? String(localized: "为 \(descriptor.name) 安装 Folio 技能") : (descriptor.skillNote ?? String(localized: "不支持技能"))) {
                     integration.setSkill($0, for: status)
                 }
             }
@@ -185,10 +185,10 @@ private struct AgentRow: View {
     private var details: String? {
         var parts: [String] = []
         if status.mcpInstalled, let path = status.mcpConfigPath {
-            parts.append(status.mcpNeedsUpdate ? "MCP：\(path)（指向的 folio-cli 已不存在）" : "MCP：\(path)")
+            parts.append(status.mcpNeedsUpdate ? String(localized: "MCP：\(path)（指向的 folio-cli 已不存在）") : String(localized: "MCP：\(path)"))
         }
         if let folder = status.skillFolder {
-            parts.append(folder == AgentIntegrator.sharedSkillsFolder ? "技能：~/\(folder)（共享）" : "技能：~/\(folder)")
+            parts.append(folder == AgentIntegrator.sharedSkillsFolder ? String(localized: "技能：~/\(folder)（共享）") : String(localized: "技能：~/\(folder)"))
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }

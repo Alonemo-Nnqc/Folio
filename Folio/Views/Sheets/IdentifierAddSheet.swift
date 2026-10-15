@@ -55,19 +55,19 @@ struct IdentifierAddSheet: View {
                     switch try model.library.createItem(metadata, inGroup: model.sidebarSelection.groupId) {
                     case .created(let id):
                         model.selectedItemIDs = [id]
-                        model.toasts.show("已添加「\(metadata.title)」", systemImage: "checkmark.circle")
+                        model.toasts.show(String(localized: "已添加「\(metadata.title)」"), systemImage: "checkmark.circle")
                     case .duplicate(let existing):
                         model.selectedItemIDs = [existing]
-                        model.toasts.show("已有该条目", systemImage: "doc.on.doc")
+                        model.toasts.show(String(localized: "已有该条目"), systemImage: "doc.on.doc")
                     }
                     dismiss()
                 } catch {
                     message = error.localizedDescription
                 }
             case .notFound:
-                message = "没有找到与该标识符对应的文献"
+                message = String(localized: "没有找到与该标识符对应的文献")
             case .networkError:
-                message = "网络不可用，请检查连接后重试"
+                message = String(localized: "网络不可用，请检查连接后重试")
             }
         }
     }

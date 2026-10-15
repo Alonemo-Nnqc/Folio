@@ -100,7 +100,7 @@ import Testing
         let events = await collect(job.start())
 
         let stages = events.compactMap { if case .stage(let s) = $0 { s } else { nil } }
-        #expect(stages == ["正在启动翻译引擎", "解析 PDF", "翻译段落", "保存 PDF"])
+        #expect(stages == ["Starting the translation engine", "Parse PDF", "Translate paragraphs", "Save PDF"])
         let progress = events.compactMap { if case .progress(let p) = $0 { p } else { nil } }
         #expect(progress == [0, 0.4, 1])
         let mono = temp.url.appending(path: "out/paper.no_watermark.zh.mono.pdf")
@@ -131,7 +131,7 @@ import Testing
             Issue.record("expected failure, got \(events)")
             return
         }
-        #expect(message.contains("限流"))
+        #expect(message.contains("rate limit"))
         #expect(logURL == job.logURL)
     }
 
@@ -141,7 +141,7 @@ import Testing
         let job = TranslationJob(request: .init(input: temp.url.appending(path: "a.pdf"), outputDirectory: temp.url.appending(path: "out"),
                                                 serviceID: "bing"), runtime: runtime)
         let events = await collect(job.start())
-        #expect(events.last == .failed(message: "翻译进程意外退出（代码 3）。", logURL: job.logURL))
+        #expect(events.last == .failed(message: "The translation process exited unexpectedly (code 3).", logURL: job.logURL))
     }
 
     @Test func configurationErrorFailsWithoutLaunching() async throws {
@@ -150,7 +150,7 @@ import Testing
         let job = TranslationJob(request: .init(input: temp.url.appending(path: "a.pdf"), outputDirectory: temp.url.appending(path: "out"),
                                                 serviceID: "deepl"), runtime: runtime)
         let events = await collect(job.start())
-        #expect(events == [.failed(message: "DeepL 需要填写“Auth Key”，请在设置的“翻译”页补充。", logURL: job.logURL)])
+        #expect(events == [.failed(message: "DeepL requires “Auth Key”. Please fill it in on the Translation page in Settings.", logURL: job.logURL)])
         #expect(!FileManager.default.fileExists(atPath: temp.url.appending(path: "launched").path))
     }
 

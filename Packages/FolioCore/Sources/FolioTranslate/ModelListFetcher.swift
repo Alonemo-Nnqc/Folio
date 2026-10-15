@@ -61,12 +61,12 @@ public enum ModelListFetcher {
 
         public var errorDescription: String? {
             switch self {
-            case .missingBaseURL: "请先填写服务地址（Base URL）。"
-            case .missingKey: "请先填写 API Key。"
-            case .unauthorized: "API Key 无效或没有权限（401 / 403）。"
-            case .http(let code): "服务返回错误 \(code)。"
-            case .unreadable: "无法识别服务返回的模型列表。"
-            case .empty: "服务没有返回任何模型。"
+            case .missingBaseURL: String(localized: "请先填写服务地址（Base URL）。", bundle: .module)
+            case .missingKey: String(localized: "请先填写 API Key。", bundle: .module)
+            case .unauthorized: String(localized: "API Key 无效或没有权限（401 / 403）。", bundle: .module)
+            case .http(let code): String(localized: "服务返回错误 \(code)。", bundle: .module)
+            case .unreadable: String(localized: "无法识别服务返回的模型列表。", bundle: .module)
+            case .empty: String(localized: "服务没有返回任何模型。", bundle: .module)
             }
         }
     }

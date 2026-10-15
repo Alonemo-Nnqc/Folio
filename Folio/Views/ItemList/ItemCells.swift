@@ -139,7 +139,7 @@ final class TitleCell: NSTableCellView {
         if retrieving {
             icon.isHidden = true
             spinner.startAnimation(nil)
-            label.attributedStringValue = Self.title(item.title, secondary: "正在检索元数据…")
+            label.attributedStringValue = Self.title(item.title, secondary: String(localized: "正在检索元数据…"))
         } else {
             spinner.stopAnimation(nil)
             icon.isHidden = false
@@ -151,17 +151,20 @@ final class TitleCell: NSTableCellView {
                 icon.contentTintColor = .secondaryLabelColor
             }
             if let origin {
-                label.attributedStringValue = Self.title(item.title, secondary: "来自：\(origin)")
+                label.attributedStringValue = Self.title(item.title, secondary: String(localized: "来自：\(origin)"))
             } else if hasNote {
-                label.attributedStringValue = Self.title(item.title, symbol: "note.text", label: "有笔记")
+                label.attributedStringValue = Self.title(item.title, symbol: "note.text", label: String(localized: "有笔记"))
             } else {
                 label.stringValue = item.title
             }
         }
         badge.isHidden = true
         translationBadge.isHidden = true
-        setAccessibilityLabel(item.title + (hasNote ? "（有笔记）" : "")
-                              + (translation.map { "（\($0.stage)\($0.fraction.map { " \(Int($0 * 100))%" } ?? "")）" } ?? ""))
+        setAccessibilityLabel(item.title + (hasNote ? String(localized: "（有笔记）") : "")
+                              + (translation.map { job in
+                                  let percent = job.fraction.map { " \(Int($0 * 100))%" } ?? ""
+                                  return String(localized: "（\(job.stage)\(percent)）")
+                              } ?? ""))
     }
 
     func configureFile(_ file: FileRecord, url: URL, isDefault: Bool) {
@@ -176,14 +179,14 @@ final class TitleCell: NSTableCellView {
         icon.contentTintColor = nil
         label.stringValue = file.fileName
         label.font = ItemListMetrics.bodyFont
-        let translation = file.translationOf == nil ? nil : (file.translationKind == .dual ? "双语" : "译文")
-        badge.configure("默认", tint: .controlAccentColor)
+        let translation = file.translationOf == nil ? nil : (file.translationKind == .dual ? String(localized: "双语") : String(localized: "译文"))
+        badge.configure(String(localized: "默认"), tint: .controlAccentColor)
         badge.isHidden = !isDefault
         badge.setAccessibilityIdentifier("defaultFileBadge")
         translationBadge.configure(translation ?? "", tint: .systemTeal)
         translationBadge.isHidden = translation == nil
         translationBadge.setAccessibilityIdentifier("translationBadge")
-        setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : "") + (translation.map { "（\($0)）" } ?? ""))
+        setAccessibilityLabel(file.fileName + (isDefault ? String(localized: "（默认）") : "") + (translation.map { String(localized: "（\($0)）") } ?? ""))
     }
 
     /// Title followed by a small symbol (e.g. the note indicator, NOTE-03).

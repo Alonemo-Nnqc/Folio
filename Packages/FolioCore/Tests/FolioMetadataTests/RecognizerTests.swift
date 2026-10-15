@@ -2,7 +2,7 @@ import AppKit
 import CoreText
 import FolioCore
 import Foundation
-import Synchronization
+import os
 import Testing
 @testable import FolioMetadata
 
@@ -234,8 +234,8 @@ import Testing
     static var rvsLines: [String] { EngineTests.rvsTitleLines + ["Linfeng Kong, Yun Wu"] }
 
     final class Counter: Sendable {
-        private let count = Mutex(0)
-        private let body = Mutex<Data?>(nil)
+        private let count = OSAllocatedUnfairLock(initialState: 0)
+        private let body = OSAllocatedUnfairLock<Data?>(initialState: nil)
         func record(_ data: Data) { count.withLock { $0 += 1 }; body.withLock { $0 = data } }
         var value: Int { count.withLock { $0 } }
         var lastBody: Data? { body.withLock { $0 } }

@@ -63,14 +63,14 @@ public struct UVToolchain: Sendable {
         try Self.checkHTTP(checksumResponse, url: checksumURL)
         guard let expected = String(decoding: checksumData, as: UTF8.self).split(separator: " ").first.map({ $0.lowercased() }),
               expected.count == 64 else {
-            throw TranslatorInstallError.uvDownloadFailed("无法读取 uv 的校验值")
+            throw TranslatorInstallError.uvDownloadFailed(String(localized: "无法读取 uv 的校验值", bundle: .module))
         }
         let (downloaded, response) = try await session.download(from: archiveURL)
         try Self.checkHTTP(response, url: archiveURL)
         let data = try Data(contentsOf: downloaded, options: .mappedIfSafe)
         let actual = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         guard actual == expected else {
-            throw TranslatorInstallError.uvDownloadFailed("uv 下载文件校验失败")
+            throw TranslatorInstallError.uvDownloadFailed(String(localized: "uv 下载文件校验失败", bundle: .module))
         }
 
         let fm = FileManager.default
@@ -82,22 +82,22 @@ public struct UVToolchain: Sendable {
         let untar = ProcessSpec(executable: URL(fileURLWithPath: "/usr/bin/tar"), arguments: ["-xzf", archive.path, "-C", staging.path],
                                 environment: EngineEnvironment.base(layout: nil), currentDirectory: staging)
         let result = try await ChildProcess.run(untar)
-        guard result.termination.isSuccess else { throw TranslatorInstallError.uvDownloadFailed("无法解压 uv") }
+        guard result.termination.isSuccess else { throw TranslatorInstallError.uvDownloadFailed(String(localized: "无法解压 uv", bundle: .module)) }
         let extracted = staging.appending(path: "\(Self.assetName)/uv")
-        guard fm.isExecutableFile(atPath: extracted.path) else { throw TranslatorInstallError.uvDownloadFailed("压缩包中没有 uv") }
+        guard fm.isExecutableFile(atPath: extracted.path) else { throw TranslatorInstallError.uvDownloadFailed(String(localized: "压缩包中没有 uv", bundle: .module)) }
 
         try fm.createDirectory(at: layout.uvDirectory, withIntermediateDirectories: true)
         try? fm.removeItem(at: layout.bundledUV)
         try fm.moveItem(at: extracted, to: layout.bundledUV)
         guard let runningVersion = await Self.version(of: layout.bundledUV, layout: layout) else {
-            throw TranslatorInstallError.uvDownloadFailed("下载的 uv 无法运行")
+            throw TranslatorInstallError.uvDownloadFailed(String(localized: "下载的 uv 无法运行", bundle: .module))
         }
         return (layout.bundledUV, runningVersion)
     }
 
     private static func checkHTTP(_ response: URLResponse, url: URL) throws {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw TranslatorInstallError.uvDownloadFailed("HTTP \(http.statusCode)：\(url.lastPathComponent)")
+            throw TranslatorInstallError.uvDownloadFailed(String(localized: "HTTP \(String(http.statusCode))：\(url.lastPathComponent)", bundle: .module))
         }
     }
 }
@@ -127,34 +127,34 @@ struct UVInstallProgressParser: Sendable {
         let text = line.trimmingCharacters(in: .whitespaces)
         if text.hasPrefix("Downloading cpython") {
             step = .python
-            return (0.02, "下载 Python 3.12")
+            return (0.02, String(localized: "下载 Python 3.12", bundle: .module))
         }
         if text.hasPrefix("Downloaded cpython") {
             pythonDownloaded = true
-            return (0.08, "已下载 Python 3.12")
+            return (0.08, String(localized: "已下载 Python 3.12", bundle: .module))
         }
         if text.hasPrefix("Resolved ") {
             step = .downloading
-            return (0.12, "已解析依赖：\(text.split(separator: " ").dropFirst().first ?? "") 个包")
+            return (0.12, String(localized: "已解析依赖：\(text.split(separator: " ").dropFirst().first ?? "") 个包", bundle: .module))
         }
         if text.hasPrefix("Downloading ") {
             announced += 1
-            return (fraction, "下载 \(Self.packageName(text))")
+            return (fraction, String(localized: "下载 \(Self.packageName(text))", bundle: .module))
         }
         if text.hasPrefix("Downloaded ") {
             downloaded += 1
-            return (fraction, "已下载 \(downloaded)/\(max(announced, downloaded)) 个大文件")
+            return (fraction, String(localized: "已下载 \(downloaded)/\(max(announced, downloaded)) 个大文件", bundle: .module))
         }
         if text.hasPrefix("Prepared ") {
             step = .installing
-            return (0.9, "正在安装软件包")
+            return (0.9, String(localized: "正在安装软件包", bundle: .module))
         }
         if text.hasPrefix("Installed ") && text.contains("executable") {
             step = .done
-            return (1, "软件包安装完成")
+            return (1, String(localized: "软件包安装完成", bundle: .module))
         }
         if text.hasPrefix("Installed ") {
-            return (0.95, "软件包已安装")
+            return (0.95, String(localized: "软件包已安装", bundle: .module))
         }
         return nil
     }
