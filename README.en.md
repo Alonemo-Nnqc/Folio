@@ -77,6 +77,8 @@ Folio checks for updates once a day; you can also choose **Folio ▸ Check for U
 
 ## Usage
 
+The first time you open Folio, a welcome guide walks you through a few settings (skip any step; reopen it from Help ▸ Welcome to Folio): importing from Zotero when a Zotero library is found, installing the extension in your default browser, adding the MCP server and skill to the AI agents on your Mac, and setting up translation — Folio uses an existing pdf2zh_next, downloads its built-in components, or lets an agent find yours through Folio's MCP server.
+
 - **Add papers**: drag PDFs into the window, or use File ▸ Add Files (⌘O) or Add by Identifier (DOI, arXiv ID or ISBN, ⇧⌘O)
 - **Library location**: `~/Folio` by default; change it in Settings ▸ Library
 - **Language**: follows the system; pin Simplified Chinese or English in Settings ▸ General ▸ Language (applies after a restart)
