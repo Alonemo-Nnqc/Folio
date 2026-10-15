@@ -100,7 +100,7 @@ appcast = f"""<?xml version="1.0" encoding="utf-8"?>
       <pubDate>{date}</pubDate>
       <sparkle:version>{build}</sparkle:version>
       <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <sparkle:fullReleaseNotesLink>https://github.com/{repo}/releases</sparkle:fullReleaseNotesLink>
       <description><![CDATA[{"".join(parts)}]]></description>
       <enclosure url="{html.escape(url)}" type="application/octet-stream" {signature} />
