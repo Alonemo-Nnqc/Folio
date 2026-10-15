@@ -1,7 +1,8 @@
 import AppKit
 import FolioCore
 
-/// Title column: icon (or spinner while retrieving), title, and the "默认" badge on default files.
+/// Title column: icon (or spinner while retrieving), title, and the "默认" / "译文" badges on files (a translation
+/// that is the default file shows both).
 final class TitleCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("TitleCell")
 
@@ -9,6 +10,9 @@ final class TitleCell: NSTableCellView {
     let spinner = NSProgressIndicator()
     let label = NSTextField(labelWithString: "")
     let badge = CapsuleBadge()
+    /// "译文" / "双语" on translated files, after "默认".
+    let translationBadge = CapsuleBadge()
+    private let badges = NSStackView()
     /// Translation progress of the item (TRANS-04), at the right edge of the cell.
     let progress = NSProgressIndicator()
     /// What the engine is doing ("翻译段落 34/120"), before the bar.
@@ -35,8 +39,15 @@ final class TitleCell: NSTableCellView {
         label.cell?.truncatesLastVisibleLine = true
         label.allowsExpansionToolTips = true
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        badge.setContentHuggingPriority(.required, for: .horizontal)
-        badge.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for capsule in [badge, translationBadge] {
+            capsule.setContentHuggingPriority(.required, for: .horizontal)
+            capsule.setContentCompressionResistancePriority(.required, for: .horizontal)
+        }
+        badges.orientation = .horizontal
+        badges.spacing = 4
+        badges.detachesHiddenViews = true
+        badges.addArrangedSubview(badge)
+        badges.addArrangedSubview(translationBadge)
 
         progress.style = .bar
         progress.controlSize = .small
@@ -58,7 +69,7 @@ final class TitleCell: NSTableCellView {
         progressLabel.setContentHuggingPriority(.required, for: .horizontal)
         progressLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        for view in [icon, spinner, label, badge, stageLabel, progress, progressLabel] as [NSView] {
+        for view in [icon, spinner, label, badges, stageLabel, progress, progressLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -71,9 +82,9 @@ final class TitleCell: NSTableCellView {
             spinner.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            badge.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 6),
-            badge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
-            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
+            badges.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 6),
+            badges.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            badges.centerYAnchor.constraint(equalTo: centerYAnchor),
             progressLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             progressLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             progress.trailingAnchor.constraint(equalTo: progressLabel.leadingAnchor, constant: -6),
@@ -134,6 +145,7 @@ final class TitleCell: NSTableCellView {
             }
         }
         badge.isHidden = true
+        translationBadge.isHidden = true
         setAccessibilityLabel(item.title + (hasNote ? "（有笔记）" : "")
                               + (translation.map { "（\($0.stage)\($0.fraction.map { " \(Int($0 * 100))%" } ?? "")）" } ?? ""))
     }
@@ -150,11 +162,14 @@ final class TitleCell: NSTableCellView {
         icon.contentTintColor = nil
         label.stringValue = file.fileName
         label.font = .systemFont(ofSize: NSFont.systemFontSize - 1)
-        let isTranslation = file.translationOf != nil
-        badge.configure(isDefault ? "默认" : "译文", tint: isDefault ? .controlAccentColor : .systemTeal)
-        badge.isHidden = !(isDefault || isTranslation)
-        badge.setAccessibilityIdentifier(isDefault ? "defaultFileBadge" : "translationBadge")
-        setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : isTranslation ? "（译文）" : ""))
+        let translation = file.translationOf == nil ? nil : (file.translationKind == .dual ? "双语" : "译文")
+        badge.configure("默认", tint: .controlAccentColor)
+        badge.isHidden = !isDefault
+        badge.setAccessibilityIdentifier("defaultFileBadge")
+        translationBadge.configure(translation ?? "", tint: .systemTeal)
+        translationBadge.isHidden = translation == nil
+        translationBadge.setAccessibilityIdentifier("translationBadge")
+        setAccessibilityLabel(file.fileName + (isDefault ? "（默认）" : "") + (translation.map { "（\($0)）" } ?? ""))
     }
 
     /// Title followed by a small symbol (e.g. the note indicator, NOTE-03).

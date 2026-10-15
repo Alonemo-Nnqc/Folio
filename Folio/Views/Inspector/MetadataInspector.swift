@@ -216,6 +216,10 @@ struct MetadataInspector: View {
                     if file.id == item.defaultFileId {
                         DefaultFileBadge()
                     }
+                    if file.translationOf != nil {
+                        CapsuleText(text: file.translationKind == .dual ? "双语" : "译文", tint: .systemTeal, font: CapsuleLabel.badgeFont,
+                                    height: CapsuleLabel.badgeHeight, padding: CapsuleLabel.badgePadding)
+                    }
                     Spacer()
                 }
                 .font(.callout)
