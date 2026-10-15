@@ -75,7 +75,8 @@ func annotate(_ url: URL) {
         highlight.contents = "核心贡献：动态光谱注意力"
         page.addAnnotation(highlight)
     }
-    let note = PDFAnnotation(bounds: CGRect(x: 40, y: 400, width: 20, height: 20), forType: .text, withProperties: nil)
+    let note = PDFAnnotation(bounds: CGRect(x: bounds.width - 36, y: bounds.height * 0.45, width: 20, height: 20), forType: .text, withProperties: nil)
+    note.color = .systemYellow
     note.contents = "对比实验可以复现 Table 2"
     page.addAnnotation(note)
     document.write(to: url)

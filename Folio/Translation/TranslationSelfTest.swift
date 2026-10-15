@@ -15,6 +15,10 @@ enum TranslationSelfTest {
             write("engine: \(model.translations.engineStatus)")
             let started = Date()
             model.translations.start(fileId: file.id)
+            // Apple system translation first checks its language packs, so the job appears a moment later.
+            while model.translations.jobs[itemId] == nil, Date().timeIntervalSince(started) < 10 {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
             var lastStage = ""
             while model.translations.jobs[itemId] != nil {
                 if let job = model.translations.jobs[itemId] {
