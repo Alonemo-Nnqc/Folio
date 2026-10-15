@@ -32,6 +32,25 @@ final class SettingsWindowController: NSWindowController {
     override func showWindow(_ sender: Any?) {
         if window?.isVisible == false, !(window?.setFrameUsingName("FolioSettingsWindow2") ?? false) { window?.center() }
         super.showWindow(sender)
+        DispatchQueue.main.async { [weak self] in self?.pinSidebar() }
+    }
+
+    /// The sidebar cannot be hidden, as in System Settings. The pane has no sidebar button, and SwiftUI's
+    /// split view left a sidebar dragged to the edge at zero width with no way back; its visibility
+    /// binding still reports both columns. So the AppKit split view item itself refuses to collapse.
+    private func pinSidebar() {
+        func splitViews(in view: NSView) -> [NSSplitView] {
+            (view as? NSSplitView).map { [$0] } ?? view.subviews.flatMap(splitViews)
+        }
+        guard let content = window?.contentView,
+              let controller = splitViews(in: content).lazy.compactMap({ $0.delegate as? NSSplitViewController }).first,
+              let sidebar = controller.splitViewItems.first else { return }
+        sidebar.canCollapse = false
+        sidebar.canCollapseFromWindowResize = false
+        sidebar.minimumThickness = 180
+        if sidebar.viewController.view.frame.width < sidebar.minimumThickness {
+            controller.splitView.setPosition(200, ofDividerAt: 0)
+        }
     }
 
     /// Opens a given pane by title (preview hooks, "打开设置" buttons). Old pane names map to where
