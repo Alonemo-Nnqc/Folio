@@ -334,6 +334,9 @@ private struct FieldRow: View {
     let field: TranslationServiceField
     @State private var secret = ""
     @State private var loaded = false
+    /// The key as stored, so loading it is not mistaken for an edit (which would also copy it into the
+    /// configuration in use).
+    @State private var stored = ""
 
     var body: some View {
         Group {
@@ -378,11 +381,13 @@ private struct FieldRow: View {
     private func load() {
         guard field.isSecret, !loaded else { return }
         loaded = true
-        secret = (try? model.translations.secrets.get(serviceID: serviceID, option: field.option)) ?? nil ?? ""
+        stored = (try? model.translations.secrets.get(serviceID: serviceID, option: field.option)) ?? nil ?? ""
+        secret = stored
     }
 
     private func saveSecret() {
-        guard loaded else { return }
+        guard loaded, secret != stored else { return }
+        stored = secret
         let store = model.translations.secrets
         if secret.isEmpty {
             try? store.delete(serviceID: serviceID, option: field.option)
