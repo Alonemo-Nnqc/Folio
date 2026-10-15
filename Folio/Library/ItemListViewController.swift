@@ -93,7 +93,9 @@ final class ItemListViewController: NSViewController {
 }
 
 /// A hosting view that never takes mouse events: overlays drawn over the list stay click-through.
-final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
+/// The list's overlay; clicks go through to the list. Not generic: Swift 6.3's optimizer crashes on the
+/// deinit of a generic NSHostingView subclass.
+final class PassthroughHostingView: NSHostingView<ItemListOverlay> {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
