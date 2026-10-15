@@ -1,4 +1,4 @@
-// Folio — reads the bibliographic metadata of the current page (WEB-02).
+// Folio - reads the bibliographic metadata of the current page (WEB-02).
 // Injected only when the user clicks the toolbar button; the last expression is the result.
 // Sources, best first: site rules, Highwire citation_* / Dublin Core / PRISM / bepress / eprints meta tags,
 // JSON-LD, COinS, identifiers in the URL and on the page. A page that lists several works (search results,
@@ -30,7 +30,7 @@
   // Every value of every listed name (for identifiers spread over several tags).
   const allMetas = (...names) => names.flatMap((name) => metaIndex.get(name.toLowerCase()) || []);
 
-  const doiPattern = /\b(10\.\d{4,9}\/[^\s"'<>，。；、]+)/i;
+  const doiPattern = /\b(10\.\d{4,9}\/[^\s"'<>\uFF0C\u3002\uFF1B\u3001]+)/i;
   const cleanDOI = (doi) => decodeURIComponent(doi).replace(/[.,;:)\]}>]+$/, "").replace(/\/(full|abstract|pdf|epdf|html)$/i, "");
   const findDOI = (...values) => {
     for (const value of values) {
@@ -74,7 +74,7 @@
   result.publisher = meta("citation_publisher", "dc.publisher", "dcterms.publisher", "prism.publisher", "eprints.publisher");
   result.isbn = meta("citation_isbn", "prism.isbn");
   result.abstract = meta("citation_abstract", "dc.description", "dcterms.abstract", "prism.abstract", "eprints.abstract");
-  // Generic page descriptions ("Abstract page for arXiv paper …") are not abstracts.
+  // Generic page descriptions ("Abstract page for arXiv paper ...") are not abstracts.
   if (!result.abstract) {
     const description = meta("description", "og:description");
     if (description.length > 200) result.abstract = description;
@@ -129,7 +129,7 @@
     if (!result.pdfUrl && pdfLink) result.pdfUrl = absolute(pdfLink.getAttribute("href"));
   }
 
-  // OpenReview forum pages: the PDF sits at /pdf?id=…
+  // OpenReview forum pages: the PDF sits at /pdf?id=...
   if (/(^|\.)openreview\.net$/.test(host) && !result.pdfUrl) {
     const id = new URLSearchParams(location.search).get("id");
     if (id) result.pdfUrl = `https://openreview.net/pdf?id=${id}`;
@@ -184,7 +184,7 @@
   }
   // Where the reference list begins: DOIs after it belong to cited works, not to this page.
   const referencesHeading = [...document.querySelectorAll("h1, h2, h3, h4, section > header, .section-title")]
-    .find((node) => /^(\d+\.?\s*)?(references|bibliography|literature cited|works cited|参考文献|引用文献)\s*$/i.test(clean(node.textContent)));
+    .find((node) => /^(\d+\.?\s*)?(references|bibliography|literature cited|works cited|\u53C2\u8003\u6587\u732E|\u5F15\u7528\u6587\u732E)\s*$/i.test(clean(node.textContent)));
   const beforeReferences = (node) => !referencesHeading
     || Boolean(referencesHeading.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING);
   if (!result.doi) {
@@ -197,7 +197,7 @@
     }
     if (!result.doi && document.body) {
       const text = document.body.innerText.slice(0, 20000);
-      const labelledText = text.match(/\bDOI\s*[:：]?\s*(10\.\d{4,9}\/[^\s"'<>，。；、]+)/i);
+      const labelledText = text.match(/\bDOI\s*[:\uFF1A]?\s*(10\.\d{4,9}\/[^\s"'<>\uFF0C\u3002\uFF1B\u3001]+)/i);
       if (labelledText) result.doi = cleanDOI(labelledText[1]);
     }
   }

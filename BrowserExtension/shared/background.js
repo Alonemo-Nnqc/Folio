@@ -1,4 +1,4 @@
-// Folio background worker: finishes PDF downloads even after the popup closes, and adds "保存到 Folio"
+// Folio background worker: finishes PDF downloads even after the popup closes, and adds "Save to Folio"
 // to the page and link context menus (WEB-06).
 if (typeof importScripts === "function") importScripts("connector.js");
 
@@ -15,7 +15,7 @@ runtime.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "sendPDF") return false;
   sendPDF(message.pdfUrl, message.target)
     .then((result) => {
-      flash(message.tabId, result.ok ? "✓" : "!", result.ok ? "#34C759" : "#FF9500");
+      flash(message.tabId, result.ok ? "\u2713" : "!", result.ok ? "#34C759" : "#FF9500");
       sendResponse(result);
     })
     .catch((error) => {
@@ -36,8 +36,8 @@ function createMenus() {
   if (!menus) return;
   // Promise-based in Chrome (MV3), Firefox and Safari alike; recreated so an update never duplicates them.
   Promise.resolve(menus.removeAll()).catch(() => {}).then(() => {
-    menus.create({ id: "folio-save-page", title: "保存到 Folio…", contexts: ["page", "frame", "selection"] });
-    menus.create({ id: "folio-save-link", title: "保存链接到 Folio", contexts: ["link"], targetUrlPatterns: LINK_PATTERNS });
+    menus.create({ id: "folio-save-page", title: "\u4FDD\u5B58\u5230 Folio\u2026", contexts: ["page", "frame", "selection"] });
+    menus.create({ id: "folio-save-link", title: "\u4FDD\u5B58\u94FE\u63A5\u5230 Folio", contexts: ["link"], targetUrlPatterns: LINK_PATTERNS });
   });
 }
 runtime.runtime.onInstalled.addListener(createMenus);
@@ -48,7 +48,7 @@ menus?.onClicked.addListener((info, tab) => {
     saveLink(info.linkUrl, tab?.id);
   } else if (info.menuItemId === "folio-save-page") {
     // Opening the popup from a menu needs a user gesture, which a menu click is.
-    runtime.action?.openPopup?.().catch?.(() => flash(tab?.id, "↑", "#007AFF"));
+    runtime.action?.openPopup?.().catch?.(() => flash(tab?.id, "\u2191", "#007AFF"));
   }
 });
 
@@ -67,11 +67,11 @@ async function saveLink(url, tabId) {
         method: "POST", json: { items: [{ identifier, url }], groupId: groupId || null, tags: [], pdf: Boolean(arxiv) },
       });
       const saved = response.ok && response.data?.results?.[0]?.status !== "failed";
-      flash(tabId, saved ? "✓" : "!", saved ? "#34C759" : "#FF9500");
+      flash(tabId, saved ? "\u2713" : "!", saved ? "#34C759" : "#FF9500");
       return;
     }
     const result = await sendPDF(url, { groupId });
-    flash(tabId, result.ok ? "✓" : "!", result.ok ? "#34C759" : "#FF9500");
+    flash(tabId, result.ok ? "\u2713" : "!", result.ok ? "#34C759" : "#FF9500");
   } catch (error) {
     flash(tabId, "!", "#FF3B30");
   }

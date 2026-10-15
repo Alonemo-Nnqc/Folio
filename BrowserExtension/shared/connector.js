@@ -1,5 +1,7 @@
 // Talks to Folio's local connector service (WEB-01). Safari may refuse an extension's request to
 // http://127.0.0.1, so there it falls back to the Safari extension inside Folio.app (native messaging).
+// Keep every script the background page or a tab loads pure ASCII (non-ASCII text as \u escapes): Safari's generated
+// background page declares no charset, so on a Chinese system it decodes UTF-8 as GBK and the script fails to parse.
 const api = globalThis.browser ?? globalThis.chrome;
 const FOLIO = "http://127.0.0.1:23120";
 /** Version of the conversation with Folio; Folio rejects nothing, it only reports when it is newer. */
@@ -42,11 +44,12 @@ async function folioRequest(path, { method = "GET", json, data, contentType, tim
 }
 
 /** A short reason for a failed download, for the popup and Folio's notice. */
+// Sign-in or subscription needed / link expired / download failed / the link opened a web page, not a PDF.
 function describeDownloadFailure(status, type) {
-  if (status === 401 || status === 403) return "需要登录或订阅才能下载 PDF";
-  if (status === 404) return "PDF 链接已失效（404）";
-  if (status) return `下载 PDF 失败（HTTP ${status}）`;
-  return type ? `链接打开的是网页（${type}），不是 PDF，可能需要登录或订阅` : "下载 PDF 失败";
+  if (status === 401 || status === 403) return "\u9700\u8981\u767B\u5F55\u6216\u8BA2\u9605\u624D\u80FD\u4E0B\u8F7D PDF";
+  if (status === 404) return "PDF \u94FE\u63A5\u5DF2\u5931\u6548\uFF08404\uFF09";
+  if (status) return `\u4E0B\u8F7D PDF \u5931\u8D25\uFF08HTTP ${status}\uFF09`;
+  return type ? `\u94FE\u63A5\u6253\u5F00\u7684\u662F\u7F51\u9875\uFF08${type}\uFF09\uFF0C\u4E0D\u662F PDF\uFF0C\u53EF\u80FD\u9700\u8981\u767B\u5F55\u6216\u8BA2\u9605` : "\u4E0B\u8F7D PDF \u5931\u8D25";
 }
 
 /** The PDF behind a publisher's landing or interstitial page (meta refresh, viewer frame, script redirect, PDF link). */
@@ -80,19 +83,19 @@ async function downloadPDF(pdfUrl) {
     try {
       response = await fetch(url, { credentials: "include", redirect: "follow" });
     } catch (error) {
-      throw new Error(`无法连接 ${new URL(url).hostname}`);
+      throw new Error(`\u65E0\u6CD5\u8FDE\u63A5 ${new URL(url).hostname}`);
     }
     if (!response.ok) throw new Error(describeDownloadFailure(response.status));
     const bytes = await response.arrayBuffer();
     const head = new TextDecoder("latin1").decode(new Uint8Array(bytes, 0, Math.min(1024, bytes.byteLength)));
     if (head.includes("%PDF")) return { bytes, url: response.url || url };
     const type = (response.headers.get("content-type") || "").split(";")[0];
-    if (!/html|xml|text/.test(type) || hop === 2) throw new Error(describeDownloadFailure(0, type || "未知类型"));
+    if (!/html|xml|text/.test(type) || hop === 2) throw new Error(describeDownloadFailure(0, type || "\u672A\u77E5\u7C7B\u578B"));
     const next = pdfLinkInHTML(new TextDecoder().decode(bytes), response.url || url);
     if (!next || next === url) throw new Error(describeDownloadFailure(0, type));
     url = next;
   }
-  throw new Error(describeDownloadFailure(0, "网页"));
+  throw new Error(describeDownloadFailure(0, "\u7F51\u9875"));
 }
 
 function fileNameFor(url) {
@@ -121,5 +124,5 @@ async function sendPDF(pdfUrl, target) {
     ? `/attach?item=${encodeURIComponent(target.itemId)}&filename=${name}`
     : `/savePDF?groupId=${encodeURIComponent(target.groupId || "")}&filename=${name}`;
   const response = await folioRequest(path, { method: "POST", data: download.bytes, contentType: "application/pdf", timeout: 300000 });
-  return { ok: response.ok, data: response.data, error: response.ok ? "" : response.data?.error || `Folio 返回 ${response.status}` };
+  return { ok: response.ok, data: response.data, error: response.ok ? "" : response.data?.error || `Folio \u8FD4\u56DE ${response.status}` };
 }
