@@ -18,6 +18,7 @@ enum MainMenu {
         let window = windowMenu()
         main.addItem(submenu(String(localized: "窗口"), window))
         let help = NSMenu(title: String(localized: "帮助"))
+        help.addItem(item(String(localized: "欢迎使用 Folio…"), #selector(AppDelegate.showOnboarding(_:))))
         help.addItem(item(String(localized: "在 Finder 中显示文献库"), #selector(AppDelegate.revealLibraryInFinder(_:))))
         help.addItem(.separator())
         help.addItem(item(String(localized: "Folio 主页"), #selector(AppDelegate.openProjectPage(_:))))

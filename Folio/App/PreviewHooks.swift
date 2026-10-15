@@ -20,6 +20,8 @@ import Foundation
 ///   -FolioReaderSelfTest <log>                  with OpenReader: scripted annotation/save/position checks
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
 ///   -FolioPreviewCollapseSidebar YES            hides the sidebar
+///   -FolioPreviewOnboarding <step>              opens the first-run guide on that step (welcome … done)
+///   -FolioPreviewTranslatorNotFound YES         with Onboarding translation: as if no pdf2zh_next were installed
 ///   -FolioPreviewSettings <pane>                opens the Settings window on that pane (general, translation, ai …)
 ///   -FolioPreviewFocusedSelection YES           list selection drawn as if the list had focus
 ///   -FolioPreviewSnapshot <png>                 draws the window into a PNG (works while the screen is locked)

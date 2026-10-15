@@ -22,6 +22,8 @@ struct TranslationSettingsPane: View {
         }
         .formStyle(.grouped)
     }
+
+    static func abbreviatedPath(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
 }
 
 /// "翻译全文…": confirm service, languages and outputs for this run (they become the new defaults).
@@ -247,7 +249,7 @@ private struct EngineSection: View {
 }
 
 /// The service picker and the fields the chosen service needs. Secrets go to the Keychain.
-private struct ServiceSection: View {
+struct ServiceSection: View {
     let model: AppModel
     var compact = false
     @State private var showAdvanced = false

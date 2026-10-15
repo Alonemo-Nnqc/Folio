@@ -127,16 +127,16 @@
     },
     "%@（⌃⌘%@）" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@（⌃⌘%2$@）"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ (⌃⌘%2$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@（⌃⌘%2$@）"
           }
         }
       }
@@ -179,16 +179,16 @@
     },
     "%@：%@" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@：%2$@"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@：%2$@"
           }
         }
       }
@@ -197,9 +197,59 @@
     "%lld 个文件未检索到元数据，已保留为独立文件" : {
       "localizations" : {
         "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file had no metadata found and was kept as a standalone file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files had no metadata found and were kept as standalone files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld 个智能体已添加 Folio MCP" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld agent has the Folio MCP server"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld agents have the Folio MCP server"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld 个条目 · %lld 个分组 · %lld 个标签" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld 个条目 · %2$lld 个分组 · %3$lld 个标签"
+          }
+        },
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld files had no metadata found and were kept as standalone files"
+            "value" : "%1$lld items · %2$lld collections · %3$lld tags"
           }
         }
       }
@@ -207,9 +257,21 @@
     "%lld 个模型" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld models"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld model"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld models"
+                }
+              }
+            }
           }
         }
       }
@@ -217,9 +279,21 @@
     "%lld 个浏览器已启用" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld browsers enabled"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld browser enabled"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld browsers enabled"
+                }
+              }
+            }
           }
         }
       }
@@ -227,9 +301,21 @@
     "%lld 个结果" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld results"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld result"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld results"
+                }
+              }
+            }
           }
         }
       }
@@ -237,9 +323,21 @@
     "%lld 星" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld stars"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld star"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld stars"
+                }
+              }
+            }
           }
         }
       }
@@ -247,9 +345,31 @@
     "%lld 项" : {
       "localizations" : {
         "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld items"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AI 接入" : {
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld items"
+            "value" : "AI integration"
           }
         }
       }
@@ -509,16 +629,16 @@
     "pdf2zh_next %@" : {},
     "“%@”（%@）" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "“%1$@”（%2$@）"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%1$@” (%2$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "“%1$@”（%2$@）"
           }
         }
       }
@@ -609,6 +729,16 @@
         }
       }
     },
+    "一切就绪" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You're All Set"
+          }
+        }
+      }
+    },
     "上一页" : {
       "localizations" : {
         "en" : {
@@ -635,6 +765,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Underline"
+          }
+        }
+      }
+    },
+    "下载 Folio 内置的组件，约 1.4 GB，只需一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloads Folio's built-in components, about 1.4 GB, once"
+          }
+        }
+      }
+    },
+    "下载内置组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download Built-in Components"
           }
         }
       }
@@ -739,6 +889,36 @@
         }
       }
     },
+    "为这台 Mac 上的智能体添加 Folio 的 MCP 服务器和技能，之后就能让它们查找、阅读和引用你的论文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Folio's MCP server and skill to the agents on this Mac, then ask them to find, read and cite your papers"
+          }
+        }
+      }
+    },
+    "也可以使用 Folio 内置的组件（约 1.4 GB）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Or use Folio's built-in components (about 1.4 GB)"
+          }
+        }
+      }
+    },
+    "也可以让智能体帮你找：在已添加 Folio MCP 的智能体中发送下面这句话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Or let an agent find it: send this to an agent that has Folio's MCP server"
+          }
+        }
+      }
+    },
     "仅双语对照" : {
       "localizations" : {
         "en" : {
@@ -799,12 +979,32 @@
         }
       }
     },
+    "从 Zotero 导入？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import from Zotero?"
+          }
+        }
+      }
+    },
     "从当前分组移除" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove from Current Group"
+          }
+        }
+      }
+    },
+    "从空的文献库开始；以后可以随时在 文件 ▸ 从 Zotero 导入… 中导入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start with an empty library; you can import any time with File ▸ Import from Zotero…"
           }
         }
       }
@@ -879,6 +1079,16 @@
         }
       }
     },
+    "你的默认浏览器" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your default browser"
+          }
+        }
+      }
+    },
     "使用" : {
       "localizations" : {
         "en" : {
@@ -899,6 +1109,16 @@
         }
       }
     },
+    "使用它" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use It"
+          }
+        }
+      }
+    },
     "使用所选结果" : {
       "localizations" : {
         "en" : {
@@ -915,6 +1135,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Use my own pdf2zh_next"
+          }
+        }
+      }
+    },
+    "使用这台 Mac 上的 pdf2zh_next" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using the pdf2zh_next on this Mac"
           }
         }
       }
@@ -975,6 +1205,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keeps the original layout, formulas and figures\nThe translation is added to the item as a new file"
+          }
+        }
+      }
+    },
+    "保留排版、公式和图表的全文翻译，由开源引擎 pdf2zh_next 完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full-paper translation that keeps the layout, formulas and figures, by the open-source engine pdf2zh_next"
+          }
+        }
+      }
+    },
+    "保留排版的翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layout-preserving translation"
           }
         }
       }
@@ -1129,6 +1379,16 @@
         }
       }
     },
+    "全部添加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to All"
+          }
+        }
+      }
+    },
     "全部，例如 1-3,5" : {
       "localizations" : {
         "en" : {
@@ -1255,6 +1515,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The built-in components aren't installed"
+          }
+        }
+      }
+    },
+    "内置翻译组件已安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Built-in translation components installed"
           }
         }
       }
@@ -1789,6 +2059,16 @@
         }
       }
     },
+    "启用 Folio 扩展…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable the Folio Extension…"
+          }
+        }
+      }
+    },
     "启用 Folio 文献保存" : {
       "localizations" : {
         "en" : {
@@ -1842,9 +2122,21 @@
     "回收站中的 %lld 项会被彻底删除，此操作无法撤销。" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The %lld items in the Trash will be deleted permanently. This can't be undone."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item in the Trash will be deleted permanently. This can't be undone."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The %lld items in the Trash will be deleted permanently. This can't be undone."
+                }
+              }
+            }
           }
         }
       }
@@ -2039,6 +2331,16 @@
         }
       }
     },
+    "在浏览器的论文页面按 ⌘⇧S 保存到 Folio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On a paper's page in your browser, press ⌘⇧S to save it to Folio"
+          }
+        }
+      }
+    },
     "在系统设置中更改…" : {
       "localizations" : {
         "en" : {
@@ -2049,12 +2351,32 @@
         }
       }
     },
+    "在论文页面点一下，就能把论文和 PDF 保存到 Folio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save a paper and its PDF to Folio with one click on its page"
+          }
+        }
+      }
+    },
     "在论文页面点工具栏中的 Folio 按钮或按 ⌘⇧S 保存\n也可以在链接上右键\"保存链接到 Folio\"" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "On a paper's page, click the Folio button in the toolbar or press ⌘⇧S to save it\nYou can also right-click a link and choose “Save Link to Folio”"
+          }
+        }
+      }
+    },
+    "在这台 Mac 上找到了 Zotero 文献库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found a Zotero library on this Mac"
           }
         }
       }
@@ -2189,6 +2511,16 @@
         }
       }
     },
+    "安装 Folio 扩展…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install the Folio Extension…"
+          }
+        }
+      }
+    },
     "安装…" : {
       "localizations" : {
         "en" : {
@@ -2199,12 +2531,32 @@
         }
       }
     },
+    "安装在后台进行，可以继续下一步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installation continues in the background; you can go on"
+          }
+        }
+      }
+    },
     "安装失败" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Installation Failed"
+          }
+        }
+      }
+    },
+    "安装浏览器插件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install the Browser Extension"
           }
         }
       }
@@ -2321,6 +2673,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Import Complete"
+          }
+        }
+      }
+    },
+    "导入条目、PDF、分组和标签。只读取 Zotero 数据库的副本，不会修改 Zotero，两个软件可以同时使用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imports items, PDFs, collections and tags. Folio only reads a copy of the Zotero database and never modifies Zotero; you can keep using both"
           }
         }
       }
@@ -2491,12 +2853,46 @@
         }
       }
     },
+    "已为 %lld 个智能体添加 Folio，重启智能体或开始新会话后生效" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Folio added to %lld agent; takes effect after restarting the agent or starting a new session"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Folio added to %lld agents; takes effect after restarting the agent or starting a new session"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "已为 %lld 篇文献下载 PDF" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloaded PDFs for %lld papers"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Downloaded the PDF for %lld paper"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Downloaded PDFs for %lld papers"
+                }
+              }
+            }
           }
         }
       }
@@ -2531,12 +2927,56 @@
         }
       }
     },
-    "已从浏览器保存 %lld 篇文献" : {
+    "已从 Zotero 导入" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saved %lld papers from the browser"
+            "value" : "Imported from Zotero"
+          }
+        }
+      }
+    },
+    "已从 Zotero 导入，Folio 文献库中现在有 %lld 个条目" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Imported from Zotero; your Folio library now has %lld item"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Imported from Zotero; your Folio library now has %lld items"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "已从浏览器保存 %lld 篇文献" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Saved %lld paper from the browser"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Saved %lld papers from the browser"
+                }
+              }
+            }
           }
         }
       }
@@ -2728,9 +3168,21 @@
     "已恢复 %lld 项" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restored %lld items"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Restored %lld item"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Restored %lld items"
+                }
+              }
+            }
           }
         }
       }
@@ -2838,9 +3290,21 @@
     "已添加 %lld 个文件" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Added %lld files"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Added %lld files"
+                }
+              }
+            }
           }
         }
       }
@@ -2911,12 +3375,34 @@
         }
       }
     },
-    "已选择 %lld 项" : {
+    "已经安装过，但 Folio 没找到？" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld items selected"
+            "value" : "Already installed, but Folio didn't find it?"
+          }
+        }
+      }
+    },
+    "已选择 %lld 项" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld item selected"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld items selected"
+                }
+              }
+            }
           }
         }
       }
@@ -2971,12 +3457,32 @@
         }
       }
     },
+    "开始使用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get Started"
+          }
+        }
+      }
+    },
     "开始翻译" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Translate"
+          }
+        }
+      }
+    },
+    "开始设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up"
           }
         }
       }
@@ -3044,9 +3550,21 @@
     "彻底删除这 %lld 项？" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Permanently delete these %lld items?"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Permanently delete %lld item?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Permanently delete these %lld items?"
+                }
+              }
+            }
           }
         }
       }
@@ -3341,6 +3859,16 @@
         }
       }
     },
+    "扩展尚未上架应用商店，Folio 会一步步带你完成安装，约需一分钟。之后可以在 设置 ▸ 浏览器 中管理。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The extension isn't in the web stores yet, so Folio walks you through installing it; it takes about a minute. Manage it later in Settings ▸ Browser."
+          }
+        }
+      }
+    },
     "扩展尚未上架应用商店，需要以\"开发者模式\"载入，约一分钟" : {
       "localizations" : {
         "en" : {
@@ -3411,6 +3939,16 @@
         }
       }
     },
+    "批注直接写回 PDF，与“预览”互通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annotations are saved into the PDF and work in Preview"
+          }
+        }
+      }
+    },
     "批注颜色" : {
       "localizations" : {
         "en" : {
@@ -3434,9 +3972,31 @@
     "找到 %lld 个智能体" : {
       "localizations" : {
         "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Found %lld agent"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Found %lld agents"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "找到 pdf2zh_next %@" : {
+      "localizations" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Found %lld agents"
+            "value" : "Found pdf2zh_next %@"
           }
         }
       }
@@ -3471,6 +4031,16 @@
         }
       }
     },
+    "把 PDF 拖进窗口即可添加文献" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag PDFs into the window to add papers"
+          }
+        }
+      }
+    },
     "报告问题…" : {
       "localizations" : {
         "en" : {
@@ -3487,6 +4057,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Drop PDFs here or click + to add papers"
+          }
+        }
+      }
+    },
+    "拖入 PDF，自动检索标题、作者、期刊和 DOI" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop in a PDF and Folio finds its title, authors, venue and DOI"
           }
         }
       }
@@ -3581,12 +4161,32 @@
         }
       }
     },
+    "按各智能体官方的方式写入配置，修改前会备份；重启智能体或开始新会话后生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Written the way each agent's documentation describes, with a backup first; takes effect after restarting the agent or starting a new session"
+          }
+        }
+      }
+    },
     "按自定义顺序排列" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Custom Order"
+          }
+        }
+      }
+    },
+    "接下来用一分钟完成几项设置，每一步都可以跳过，之后也能在设置中更改。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take a minute to set up a few things. You can skip any step and change everything later in Settings."
           }
         }
       }
@@ -3767,6 +4367,16 @@
         }
       }
     },
+    "整篇翻译，原文与译文并排阅读" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full-paper translation, read side by side with the original"
+          }
+        }
+      }
+    },
     "文件" : {
       "localizations" : {
         "en" : {
@@ -3833,6 +4443,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Library Location"
+          }
+        }
+      }
+    },
+    "文献库保存在 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your library is stored in %@"
           }
         }
       }
@@ -4682,9 +5302,21 @@
     "松开以添加 %lld 个文件" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Release to add %lld files"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Release to add %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Release to add %lld files"
+                }
+              }
+            }
           }
         }
       }
@@ -4889,6 +5521,26 @@
         }
       }
     },
+    "欢迎使用 Folio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to Folio"
+          }
+        }
+      }
+    },
+    "欢迎使用 Folio…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to Folio…"
+          }
+        }
+      }
+    },
     "正在使用" : {
       "localizations" : {
         "en" : {
@@ -4931,6 +5583,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Looking for pdf2zh_next…"
+          }
+        }
+      }
+    },
+    "正在查找这台 Mac 上已安装的 pdf2zh_next…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looking for a pdf2zh_next installed on this Mac…"
           }
         }
       }
@@ -5001,6 +5663,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reading the Zotero database…"
+          }
+        }
+      }
+    },
+    "正在读取 Zotero 文献库…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading the Zotero library…"
           }
         }
       }
@@ -5165,6 +5837,16 @@
         }
       }
     },
+    "没有找到已安装的 pdf2zh_next" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No installed pdf2zh_next found"
+          }
+        }
+      }
+    },
     "没有找到结果" : {
       "localizations" : {
         "en" : {
@@ -5241,6 +5923,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Browser"
+          }
+        }
+      }
+    },
+    "浏览器插件已在 %@ 中启用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Browser extension enabled in %@"
+          }
+        }
+      }
+    },
+    "浏览器插件未安装，可在 设置 ▸ 浏览器 中安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Browser extension not installed; install it in Settings ▸ Browser"
           }
         }
       }
@@ -5521,6 +6223,16 @@
         }
       }
     },
+    "现在可以开始整理你的文献了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now you can start organizing your papers"
+          }
+        }
+      }
+    },
     "生成" : {
       "localizations" : {
         "en" : {
@@ -5607,6 +6319,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "A folder with the same name already exists there"
+          }
+        }
+      }
+    },
+    "直接开始使用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Fresh"
           }
         }
       }
@@ -5863,6 +6585,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Translation and bilingual"
+          }
+        }
+      }
+    },
+    "继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
           }
         }
       }
@@ -6137,12 +6869,42 @@
         }
       }
     },
+    "翻译组件已就绪" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation components ready"
+          }
+        }
+      }
+    },
     "翻译组件无法使用" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "The translation components can't be used"
+          }
+        }
+      }
+    },
+    "翻译组件未安装，第一次翻译时会提示下载" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation components not installed; Folio offers to download them the first time you translate"
+          }
+        }
+      }
+    },
+    "翻译组件正在后台下载（%lld%%）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation components downloading in the background (%lld%%)"
           }
         }
       }
@@ -6217,6 +6979,16 @@
         }
       }
     },
+    "自动识别" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic metadata"
+          }
+        }
+      }
+    },
     "自定义工具栏…" : {
       "localizations" : {
         "en" : {
@@ -6277,6 +7049,26 @@
         }
       }
     },
+    "让 AI 智能体使用你的文献库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Let AI Agents Use Your Library"
+          }
+        }
+      }
+    },
+    "让 Claude Code、Codex 等智能体查找和引用你的文献" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Let agents such as Claude Code and Codex find and cite your papers"
+          }
+        }
+      }
+    },
     "记下想法、摘录与待办… 支持 Markdown" : {
       "localizations" : {
         "en" : {
@@ -6313,6 +7105,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Settings…"
+          }
+        }
+      }
+    },
+    "设置整篇翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up Full-Paper Translation"
           }
         }
       }
@@ -6360,9 +7162,21 @@
     "该标签会从 %lld 个条目中移除。" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The tag will be removed from %lld items."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The tag will be removed from %lld item."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The tag will be removed from %lld items."
+                }
+              }
+            }
           }
         }
       }
@@ -6407,6 +7221,16 @@
         }
       }
     },
+    "请用 Folio 的 MCP 找到我电脑上安装的 pdf2zh_next，并把它设置为 Folio 的翻译组件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Folio's MCP server to find the pdf2zh_next installed on my Mac and set it as Folio's translation engine."
+          }
+        }
+      }
+    },
     "跟随系统" : {
       "localizations" : {
         "en" : {
@@ -6443,6 +7267,16 @@
         }
       }
     },
+    "跳过设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip Setup"
+          }
+        }
+      }
+    },
     "跳过：%lld 条笔记、%lld 条 Zotero 批注、%lld 个网页快照、%lld 个回收站条目。超过两级的分组会并入第二级。" : {
       "localizations" : {
         "en" : {
@@ -6465,6 +7299,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Software Update"
+          }
+        }
+      }
+    },
+    "轻量、原生的 Mac 文献管理软件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A lightweight, native reference manager for the Mac"
           }
         }
       }
@@ -6571,6 +7415,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Running, waiting for the extension to connect"
+          }
+        }
+      }
+    },
+    "返回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        }
+      }
+    },
+    "还没有为智能体添加 Folio MCP，可在 设置 ▸ AI 中添加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No agent has the Folio MCP server yet; add it in Settings ▸ AI"
           }
         }
       }
@@ -6885,6 +7749,16 @@
         }
       }
     },
+    "部分智能体没有添加成功" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some agents couldn't be set up"
+          }
+        }
+      }
+    },
     "配置" : {
       "localizations" : {
         "en" : {
@@ -7025,6 +7899,16 @@
         }
       }
     },
+    "阅读与批注" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read and annotate"
+          }
+        }
+      }
+    },
     "阅读状态" : {
       "localizations" : {
         "en" : {
@@ -7041,6 +7925,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reader Sidebar"
+          }
+        }
+      }
+    },
+    "随时可以在 帮助 ▸ 欢迎使用 Folio 中重新打开本向导" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open this guide again any time from Help ▸ Welcome to Folio"
           }
         }
       }
@@ -7277,16 +8171,16 @@
     },
     "（%@%@）" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "（%1$@%2$@）"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : " (%1$@%2$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "（%1$@%2$@）"
           }
         }
       }
@@ -7354,9 +8248,21 @@
     "；文献库中有 %lld 个条目" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "; %lld items in the library"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "; %lld item in the library"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "; %lld items in the library"
+                }
+              }
+            }
           }
         }
       }

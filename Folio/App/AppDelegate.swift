@@ -136,6 +136,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func importFromZotero(_ sender: Any?) { showLibrary(nil); model.activeSheet = .zoteroImport }
     @objc func importReferences(_ sender: Any?) { showLibrary(nil); model.chooseReferencesToImport() }
 
+    @objc func showOnboarding(_ sender: Any?) { OnboardingWindowController.show(model: model) }
+
     static let projectURL = URL(string: "https://github.com/Alonemo-Nnqc/Folio")!
 
     @objc func openProjectPage(_ sender: Any?) { NSWorkspace.shared.open(Self.projectURL) }

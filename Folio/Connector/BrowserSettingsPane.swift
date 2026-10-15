@@ -150,7 +150,7 @@ struct BrowserSettingsPane: View {
 }
 
 /// Step-by-step installation for one browser; watches until the extension shows up.
-private struct ExtensionInstallGuide: View {
+struct ExtensionInstallGuide: View {
     let browser: BrowserInfo
     let model: AppModel
     @Environment(\.dismiss) private var dismiss

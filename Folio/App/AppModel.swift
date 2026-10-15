@@ -203,6 +203,7 @@ final class AppModel {
             importer.libraryDidLoad()
             readers.restoreTabs()
             PreviewHooks.apply(to: self)
+            OnboardingWindowController.showIfNeeded(model: self)
             // Performance runs pass -FolioPerfLog <file> to record when the first data is on screen.
             if let log = UserDefaults.standard.string(forKey: "FolioPerfLog") {
                 DispatchQueue.main.async {

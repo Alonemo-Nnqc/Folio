@@ -1364,9 +1364,21 @@
     "网络不稳定，正在重试剩余 %lld 个文件" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The network is unstable; retrying the remaining %lld files"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The network is unstable; retrying the remaining %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The network is unstable; retrying the remaining %lld files"
+                }
+              }
+            }
           }
         }
       }
@@ -1806,9 +1818,21 @@
     "需要下载 %lld 个文件" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld files to download"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file to download"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files to download"
+                }
+              }
+            }
           }
         }
       }

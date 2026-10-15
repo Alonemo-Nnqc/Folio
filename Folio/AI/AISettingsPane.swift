@@ -118,7 +118,7 @@ private struct CheckLabelStyle: LabelStyle {
     }
 }
 
-private struct AgentRow: View {
+struct AgentRow: View {
     let status: AgentStatus
     let integration: AIIntegration
 

@@ -59,6 +59,13 @@ enum BrowserExtensions {
         }
     }
 
+    /// The browser that opens web links, if Folio knows it.
+    static func defaultBrowser(among browsers: [BrowserInfo]) -> BrowserInfo? {
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.org")!) else { return nil }
+        return browsers.first { $0.appURL.standardizedFileURL.path == app.standardizedFileURL.path }
+            ?? browsers.first { $0.appURL.lastPathComponent == app.lastPathComponent }
+    }
+
     // MARK: Chromium / Firefox: an unpacked copy in a stable place
 
     static var installRoot: URL {

@@ -101,6 +101,48 @@ final class AIIntegration {
         }
     }
 
+    /// Whether some detected agent still lacks Folio's MCP server or skill.
+    var hasPendingSetup: Bool { !pendingSetup.isEmpty }
+
+    private var pendingSetup: [AgentStatus] {
+        detected.filter { ($0.descriptor.mcp != nil && !$0.mcpInstalled) || ($0.descriptor.supportsSkills && !$0.skillInstalled) }
+    }
+
+    /// 欢迎使用 ▸ 全部添加: Folio's MCP server and skill for every agent that lacks them, one after another.
+    func enableAll() {
+        let pending = pendingSetup.map(\.descriptor)
+        let installed = Dictionary(uniqueKeysWithValues: pendingSetup.map { ($0.id, ($0.mcpInstalled, $0.skillInstalled)) })
+        guard !pending.isEmpty else { return }
+        let integrator = self.integrator
+        busy.formUnion(pending.map(\.id))
+        Task {
+            let failures = await Task.detached { () -> [String] in
+                var failures: [String] = []
+                for descriptor in pending {
+                    let (mcp, skill) = installed[descriptor.id] ?? (false, false)
+                    do {
+                        if descriptor.mcp != nil, !mcp { try integrator.setMCP(true, for: descriptor) }
+                        if descriptor.supportsSkills, !skill { try integrator.setSkill(true, for: descriptor) }
+                    } catch {
+                        failures.append(String(localized: "\(descriptor.name)：\(error.localizedDescription)"))
+                    }
+                }
+                return failures
+            }.value
+            busy.subtract(pending.map(\.id))
+            statuses = await Task.detached { integrator.detect() }.value
+            if failures.isEmpty {
+                AppDelegate.shared.model?.toasts.show(String(localized: "已为 \(pending.count) 个智能体添加 Folio，重启智能体或开始新会话后生效"),
+                                                      systemImage: "checkmark.circle")
+            } else {
+                let alert = NSAlert()
+                alert.messageText = String(localized: "部分智能体没有添加成功")
+                alert.informativeText = failures.joined(separator: "\n")
+                alert.runModal()
+            }
+        }
+    }
+
     /// Starts folio-cli like an agent would and reports what it answered (设置 ▸ AI ▸ 检查).
     func checkServer() {
         serverCheck = .running
