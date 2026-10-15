@@ -124,6 +124,8 @@ public actor LibraryToolbox {
         case "move_to_trash": try trash(args)
         case "restore_from_trash": try restore(args)
         case "set_note": try setNote(args)
+        case "find_pdf2zh_next": await findPDF2zhNext()
+        case "set_pdf2zh_next_path": try await setPDF2zhNextPath(args)
         default: throw ToolError("Unknown tool \(name).")
         }
         if tool.writes { LibraryChangeSignal.post(root: try library.root) }

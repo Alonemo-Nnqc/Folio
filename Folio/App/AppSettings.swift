@@ -1,4 +1,5 @@
 import AppKit
+import FolioAgent
 import FolioTranslate
 import Foundation
 import Observation
@@ -189,6 +190,20 @@ final class AppSettings {
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String
             ?? defaults.string(forKey: Key.libraryPath)!
+        // An agent can choose the translation engine (MCP set_pdf2zh_next_path); follow it while running.
+        preferencesObserver = DistributedNotificationCenter.default().addObserver(
+            forName: AgentConfiguration.preferencesDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reloadExternalChanges() }
+        }
+    }
+
+    @ObservationIgnored private var preferencesObserver: (any NSObjectProtocol)?
+
+    /// Re-reads what other processes (folio-cli) may write.
+    private func reloadExternalChanges() {
+        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
+        let path = defaults.string(forKey: Key.translatorCustomPath) ?? ""
+        if path != translatorCustomPath { translatorCustomPath = path }
     }
 
     var libraryURL: URL { URL(filePath: (libraryPath as NSString).expandingTildeInPath, directoryHint: .isDirectory) }

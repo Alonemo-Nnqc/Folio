@@ -358,6 +358,19 @@ public enum ToolCatalog {
                 "mode": string("append (default) or replace.", enumValues: ["append", "replace"]),
             ], required: ["item", "content"]),
             writes: true, destructive: false),
+
+        // Folio's translation engine (设置 ▸ 翻译): finding the user's own pdf2zh_next.
+        ToolDefinition(
+            name: "find_pdf2zh_next", title: "Find pdf2zh_next on this Mac",
+            description: "Search this Mac for the user's own pdf2zh_next (the PDF translation engine Folio can use instead of its built-in copy) the way Folio does: shell PATH, uv / pipx / conda / pyenv / Homebrew / virtualenv locations, the zotero-pdf2zh plugin, Spotlight and virtual environments in the home folder. Runs each with --version. Returns the one Folio uses now, the working ones and those that fail. If none is found, look further with your own shell (see the skill), then call set_pdf2zh_next_path.",
+            inputSchema: schema([:]),
+            writes: false, destructive: false),
+        ToolDefinition(
+            name: "set_pdf2zh_next_path", title: "Use a pdf2zh_next for translation",
+            description: "Make Folio translate with this pdf2zh_next executable (设置 ▸ 翻译 ▸ 使用自己安装的 pdf2zh_next). Folio first runs it with --version and refuses a file that does not report a pdf2zh-next version. Takes effect immediately in the running app.",
+            inputSchema: schema(["path": string("Absolute path of the pdf2zh_next executable, e.g. ~/envs/translate/bin/pdf2zh_next.")],
+                                required: ["path"]),
+            writes: false, destructive: false),
     ]
 
     public static func tool(named name: String) -> ToolDefinition? { all.first { $0.name == name } }

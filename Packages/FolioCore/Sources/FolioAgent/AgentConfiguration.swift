@@ -6,6 +6,18 @@ public struct AgentConfiguration: Sendable {
     public static let appDefaultsDomain = "com.nnqc.Folio"
     /// 设置 ▸ AI ▸ 允许 AI 修改文献库.
     public static let allowWritesKey = "aiAllowWrites"
+    /// 设置 ▸ 翻译 ▸ 使用自己安装的 pdf2zh_next (empty: Folio's built-in engine).
+    public static let translatorPathKey = "translatorCustomPath"
+    /// Posted after an agent changed Folio's preferences (the running app re-reads them).
+    public static let preferencesDidChange = Notification.Name("com.nnqc.Folio.preferencesDidChange")
+
+    /// Folio's preferences, from the app or from folio-cli. Inside Folio.app, folio-cli shares the app's bundle
+    /// identifier, so its standard defaults already are Folio's (and macOS refuses a suite named after one's own
+    /// bundle). Elsewhere (swift run, tests) Folio's domain is read as a suite.
+    public static func preferences() -> UserDefaults? {
+        CFPreferencesAppSynchronize(appDefaultsDomain as CFString)
+        return Bundle.main.bundleIdentifier == appDefaultsDomain ? UserDefaults.standard : UserDefaults(suiteName: appDefaultsDomain)
+    }
 
     public var libraryRoot: URL
     public var allowWrites: Bool
@@ -30,12 +42,7 @@ public struct AgentConfiguration: Sendable {
     /// server follows 设置 ▸ AI and a changed library location without being restarted.
     public static func resolve(arguments: [String], environment: [String: String] = ProcessInfo.processInfo.environment)
         -> AgentConfiguration {
-        CFPreferencesAppSynchronize(appDefaultsDomain as CFString)
-        // Inside Folio.app, folio-cli shares the app's bundle identifier, so its standard defaults already
-        // are Folio's (and macOS refuses a suite named after one's own bundle). Elsewhere (swift run,
-        // tests) read Folio's domain as a suite.
-        let defaults = Bundle.main.bundleIdentifier == appDefaultsDomain ? UserDefaults.standard
-            : UserDefaults(suiteName: appDefaultsDomain)
+        let defaults = preferences()
         var path: String?
         if let index = arguments.firstIndex(of: "--library"), arguments.indices.contains(index + 1) {
             path = arguments[index + 1]

@@ -60,7 +60,7 @@ public enum FolioSkill {
         return """
         ---
         name: \(name)
-        description: Work with the user's Folio reference library (a Zotero-like app on this Mac) — find the paper the user means, read and summarise it, cite it (APA, GB/T 7714, IEEE, MLA, Chicago, Harvard, Vancouver, Nature, BibTeX) or export .bib / RIS / CSL JSON, and add or organise papers by DOI, arXiv ID or PDF. Use whenever the user mentions their papers, literature, references, citations, bibliography, reading list or Folio, asks about "that paper about …", or writes something that needs references — also for 论文、文献、参考文献、引用、文献库、读过的文章.
+        description: Work with the user's Folio reference library (a Zotero-like app on this Mac) — find the paper the user means, read and summarise it, cite it (APA, GB/T 7714, IEEE, MLA, Chicago, Harvard, Vancouver, Nature, BibTeX) or export .bib / RIS / CSL JSON, add or organise papers by DOI, arXiv ID or PDF, and set up Folio's PDF translation (pdf2zh_next). Use whenever the user mentions their papers, literature, references, citations, bibliography, reading list or Folio, asks about "that paper about …", or writes something that needs references — also for 论文、文献、参考文献、引用、文献库、读过的文章.
         allowed-tools: \(preapprovedTools.map { "mcp__folio__\($0)" }.joined(separator: " "))
         ---
         \(marker)
@@ -124,6 +124,17 @@ public enum FolioSkill {
         - Groups: `set_groups`, `create_group`, `update_group`. Tags: `set_tags`, `create_tag`, `update_tag`.
           Colours are names (red, orange, yellow, green, mint, cyan, blue, indigo, purple, pink, gray) or `#RRGGBB`.
         - Reading status (`unread` / `reading` / `read`), rating (0–5) and bibliographic fields: `update_item`.
+
+        ## Setting up translation (pdf2zh_next)
+
+        Folio translates PDFs with pdf2zh_next. When the user wants Folio to use their own copy, or Folio could not find it:
+        1. `find_pdf2zh_next`. One working result: tell the user and call `set_pdf2zh_next_path`. Several: ask which.
+        2. Nothing found: search with your shell, for example `mdfind "kMDItemFSName == 'pdf2zh_next'"`,
+           `find ~ -path '*/bin/pdf2zh_next' -not -path '*/Library/*' 2>/dev/null | head`, `uv tool list`, `pipx list`,
+           `conda env list` (then `<env>/bin/pdf2zh_next`). Check a candidate with `<path> --version`
+           (it prints "pdf2zh-next version: …").
+        3. `set_pdf2zh_next_path` with the absolute path; Folio checks it and uses it at once. Not installed at all:
+           suggest `uv tool install pdf2zh-next`, or Folio's built-in engine (Folio ▸ 设置 ▸ 翻译 ▸ 下载并安装).
 
         ## Ask first
 

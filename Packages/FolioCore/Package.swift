@@ -36,7 +36,7 @@ let package = Package(
         .executableTarget(name: "FolioAppleTranslate", dependencies: ["FolioTranslate"]),
         .testTarget(name: "FolioTranslateTests", dependencies: ["FolioTranslate"], resources: [.copy("Fixtures")]),
         // AI integration (MCP server, folio-cli, skill, agent configuration).
-        .target(name: "FolioAgent", dependencies: ["FolioCore", "FolioMetadata", "FolioCitation"]),
+        .target(name: "FolioAgent", dependencies: ["FolioCore", "FolioMetadata", "FolioCitation", "FolioTranslate"]),
         .executableTarget(name: "FolioCLI", dependencies: ["FolioAgent"]),
         .testTarget(name: "FolioAgentTests", dependencies: ["FolioAgent"]),
     ]
