@@ -273,7 +273,7 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             let cell = make(TitleCell.self, TitleCell.identifier)
             let origin = entry.originItemId.flatMap { snapshot.items[$0]?.title }
             let job = model.translations.jobs[entry.id]
-            let translation = job.map { job in job.fraction.map { "\(job.stage) \(Int($0 * 100))%" } ?? job.stage }
+            let translation = job.map { (stage: $0.stage, fraction: $0.fraction) }
             cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin,
                                hasNote: snapshot.notedItems.contains(entry.id), translation: translation)
             return cell

@@ -328,12 +328,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             state.pageIndex = index
             let label = page.label.flatMap { $0 == String(index + 1) ? nil : "（\($0)）" } ?? ""
             var subtitle = "第 \(index + 1) / \(state.pageCount) 页\(label)"
-            // Translation progress of this paper (TRANS-04).
-            if let job = model.translations.jobs[itemId] {
-                subtitle += " · \(job.stage)" + (job.fraction.map { " \(Int($0 * 100))%" } ?? "")
-            }
             window.subtitle = subtitle
         }
+        // Translation progress of this paper (TRANS-04).
+        content.showTranslation(model.translations.jobs[itemId])
         let short = item.map { $0.authors.first.map { "\($0.family) \(item?.year.map(String.init) ?? "")" } ?? $0.title } ?? fileURL.lastPathComponent
         window.tab.title = short.trimmingCharacters(in: .whitespaces)
         window.tab.toolTip = window.title
@@ -852,11 +850,46 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
+    /// Shown over the pages while this paper is being translated.
+    private let translationHUD = TranslationProgressHUD()
+
     override func loadView() {
         splitView.isVertical = true
         splitView.dividerStyle = .thin
         splitView.addArrangedSubview(pdfView)
-        view = splitView
+        let container = NSView()
+        for subview in [splitView, translationHUD] as [NSView] {
+            subview.translatesAutoresizingMaskIntoConstraints = false
+            container.addSubview(subview)
+        }
+        translationHUD.isHidden = true
+        NSLayoutConstraint.activate([
+            splitView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            splitView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            splitView.topAnchor.constraint(equalTo: container.topAnchor),
+            splitView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            translationHUD.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            translationHUD.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20),
+            translationHUD.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 20),
+        ])
+        view = container
+    }
+
+    /// The translation progress capsule: shown with a fade while `job` runs, hidden when it ends.
+    func showTranslation(_ job: TranslationCoordinator.JobState?) {
+        if let job { translationHUD.update(stage: job.stage, fraction: job.fraction) }
+        let visible = job != nil
+        guard visible == translationHUD.isHidden else { return }
+        if visible {
+            translationHUD.alphaValue = 0
+            translationHUD.isHidden = false
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.25
+            translationHUD.animator().alphaValue = visible ? 1 : 0
+        }, completionHandler: { [weak self] in
+            if !visible { self?.translationHUD.isHidden = true }
+        })
     }
 
     override func viewDidAppear() {

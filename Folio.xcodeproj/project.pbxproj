@@ -33,6 +33,7 @@
 		2C0C0790AB187596FB8E3775 /* TagPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 385B2574D6EF57FEDAA33CA9 /* TagPickerPopover.swift */; };
 		2C32A8292F0C18703A022CD2 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = F608440C6D02339C6E135A9A /* popup.js */; };
 		2D3671C31D58C75100434296 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 73252C02D629DC9A82C7BA20 /* popup.html */; };
+		316947EF98C3A56A9F1C497D /* TranslationProgressViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012419A55B3491DCBD2D0407 /* TranslationProgressViews.swift */; };
 		33B8F6AEC992419E6F92E140 /* AnnotationEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1158F075747D921B91789BA /* AnnotationEditor.swift */; };
 		36CA89AF28F8E5E6772D24B5 /* FolioCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6F8E5765AAB4BA57B5EA366C /* FolioCore */; };
 		3AE295E61B1C2EC66F7E2C08 /* popup.css in Resources */ = {isa = PBXBuildFile; fileRef = 06A299427150C3D4977F0D40 /* popup.css */; };
@@ -191,6 +192,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		012419A55B3491DCBD2D0407 /* TranslationProgressViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationProgressViews.swift; sourceTree = "<group>"; };
 		029EAFA7C40470957052F41F /* FolioLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolioLaunchTests.swift; sourceTree = "<group>"; };
 		0485AEFD783CE58C20AD2F5B /* LibraryWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryWindowController.swift; sourceTree = "<group>"; };
 		04F5E735BAE9E27102CE97FD /* ItemListUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemListUITests.swift; sourceTree = "<group>"; };
@@ -546,6 +548,7 @@
 			isa = PBXGroup;
 			children = (
 				FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */,
+				012419A55B3491DCBD2D0407 /* TranslationProgressViews.swift */,
 				D44FB12B9C9C88F976E0FCC9 /* TranslationSelfTest.swift */,
 				D803086B3D8D56E51838136C /* TranslationSettingsPane.swift */,
 			);
@@ -1059,6 +1062,7 @@
 				1A1F9A4B1838085FD82F856E /* ToastCenter.swift in Sources */,
 				229A9978BFF847CE6F097A33 /* ToastOverlay.swift in Sources */,
 				0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */,
+				316947EF98C3A56A9F1C497D /* TranslationProgressViews.swift in Sources */,
 				CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */,
 				BBC7EE9E2DA263FFDD2F7D60 /* TranslationSettingsPane.swift in Sources */,
 				CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */,

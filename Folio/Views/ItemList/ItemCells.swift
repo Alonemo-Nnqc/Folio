@@ -9,6 +9,11 @@ final class TitleCell: NSTableCellView {
     let spinner = NSProgressIndicator()
     let label = NSTextField(labelWithString: "")
     let badge = CapsuleBadge()
+    /// Translation progress of the item (TRANS-04), at the right edge of the cell.
+    let progress = NSProgressIndicator()
+    /// "42%", or the stage ("等待翻译") before the engine reports progress.
+    let progressLabel = NSTextField(labelWithString: "")
+    private var labelBeforeProgress: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -29,7 +34,19 @@ final class TitleCell: NSTableCellView {
         badge.setContentHuggingPriority(.required, for: .horizontal)
         badge.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        for view in [icon, spinner, label, badge] as [NSView] {
+        progress.style = .bar
+        progress.controlSize = .small
+        progress.minValue = 0
+        progress.maxValue = 1
+        progress.isHidden = true
+        progress.setAccessibilityIdentifier("translationProgressBar")
+        progressLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        progressLabel.textColor = .secondaryLabelColor
+        progressLabel.isHidden = true
+        progressLabel.setContentHuggingPriority(.required, for: .horizontal)
+        progressLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        for view in [icon, spinner, label, badge, progress, progressLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -45,15 +62,31 @@ final class TitleCell: NSTableCellView {
             badge.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 6),
             badge.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
             badge.centerYAnchor.constraint(equalTo: centerYAnchor),
+            progressLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            progressLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            progress.trailingAnchor.constraint(equalTo: progressLabel.leadingAnchor, constant: -6),
+            progress.centerYAnchor.constraint(equalTo: centerYAnchor),
+            progress.widthAnchor.constraint(equalToConstant: 64),
         ])
+        labelBeforeProgress = label.trailingAnchor.constraint(lessThanOrEqualTo: progress.leadingAnchor, constant: -10)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
     /// `origin` is the title of the item a trashed file was deleted from (TRASH-03); `translation` is the
-    /// progress line of a running translation (TRANS-04).
+    /// stage and progress of a running translation (TRANS-04), shown as text and a progress bar.
     func configureItem(_ item: Item, fileURL: URL?, origin: String? = nil, hasNote: Bool = false,
-                       translation: String? = nil) {
+                       translation: (stage: String, fraction: Double?)? = nil) {
+        progress.isHidden = translation == nil
+        progressLabel.isHidden = translation == nil
+        labelBeforeProgress.isActive = translation != nil
+        if let translation {
+            TranslationProgressBar.apply(translation.fraction, to: progress)
+            progressLabel.stringValue = translation.fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? translation.stage
+            progress.toolTip = translation.stage
+        } else {
+            progress.stopAnimation(nil)
+        }
         // Set the base font before any attributed text so the smaller secondary run survives.
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         let retrieving = item.kind == .standalone && item.metadataState == .pending
@@ -73,8 +106,6 @@ final class TitleCell: NSTableCellView {
             }
             if let origin {
                 label.attributedStringValue = Self.title(item.title, secondary: "来自：\(origin)")
-            } else if let translation {
-                label.attributedStringValue = Self.title(item.title, secondary: translation)
             } else if hasNote {
                 label.attributedStringValue = Self.title(item.title, symbol: "note.text", label: "有笔记")
             } else {
@@ -82,11 +113,15 @@ final class TitleCell: NSTableCellView {
             }
         }
         badge.isHidden = true
-        setAccessibilityLabel(item.title + (hasNote ? "（有笔记）" : ""))
+        setAccessibilityLabel(item.title + (hasNote ? "（有笔记）" : "")
+                              + (translation.map { "（\($0.stage)\($0.fraction.map { " \(Int($0 * 100))%" } ?? "")）" } ?? ""))
     }
 
     func configureFile(_ file: FileRecord, url: URL, isDefault: Bool) {
         spinner.stopAnimation(nil)
+        progress.isHidden = true
+        progressLabel.isHidden = true
+        labelBeforeProgress.isActive = false
         icon.isHidden = false
         icon.image = NSWorkspace.shared.icon(forFile: url.path)
         icon.contentTintColor = nil

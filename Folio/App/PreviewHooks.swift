@@ -22,6 +22,8 @@ import Foundation
 ///   -FolioPreviewSettings <pane title>          opens the Settings window on that pane (e.g. 通用)
 ///   -FolioPreviewFocusedSelection YES           list selection drawn as if the list had focus
 ///   -FolioPreviewSnapshot <png>                 draws the window into a PNG (works while the screen is locked)
+///   -FolioPreviewSnapshotDelay <seconds>        when to draw it (default 3)
+///   -FolioPreviewTranslating <title prefix>    shows that item as being translated (42%)
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -46,6 +48,10 @@ enum PreviewHooks {
             if let log = defaults.string(forKey: "FolioTranslateSelfTest") {
                 TranslationSelfTest.run(model: model, itemId: id, log: log)
             }
+        }
+        if let prefix = defaults.string(forKey: "FolioPreviewTranslating"),
+           let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
+            model.translations.previewJob(itemId: item.id, fileId: file.id, stage: "翻译段落", fraction: 0.42)
         }
         if let tab = defaults.string(forKey: "FolioPreviewTab").flatMap(InspectorTab.init(rawValue:)) { model.inspectorTab = tab }
         switch defaults.string(forKey: "FolioPreviewSheet") {
@@ -86,9 +92,11 @@ enum PreviewHooks {
             }
         }
         if let path = defaults.string(forKey: "FolioPreviewSnapshot") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                let window = defaults.string(forKey: "FolioPreviewSettings") != nil
-                    ? AppDelegate.shared.settingsWindow?.window : AppDelegate.shared.libraryWindowController.window
+            let delay = defaults.double(forKey: "FolioPreviewSnapshotDelay")
+            DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) {
+                let reader = NSApp.windows.first { $0.windowController is ReaderWindowController && $0.isVisible }
+                let window = defaults.string(forKey: "FolioPreviewSettings") != nil ? AppDelegate.shared.settingsWindow?.window
+                    : defaults.string(forKey: "FolioPreviewOpenReader") != nil ? reader : AppDelegate.shared.libraryWindowController.window
                 guard let view = window?.contentView?.superview,
                       let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
                 view.cacheDisplay(in: view.bounds, to: rep)

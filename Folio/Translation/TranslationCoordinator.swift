@@ -21,6 +21,11 @@ final class TranslationCoordinator {
     }
 
     private(set) var jobs: [String: JobState] = [:]
+
+    /// Screenshots of the progress UI without running the engine (`-FolioPreviewTranslating`).
+    func previewJob(itemId: String, fileId: String, stage: String, fraction: Double?) {
+        jobs[itemId] = JobState(fileId: fileId, fraction: fraction, stage: stage)
+    }
     private(set) var installState = InstallState.idle
     /// Bumped after installs / uninstalls so views re-read the engine status.
     private(set) var engineRevision = 0
