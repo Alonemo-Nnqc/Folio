@@ -35,6 +35,8 @@ import Testing
         #expect(result.lines.map(\.text) == ["leader-done"])
         #expect(Date().timeIntervalSince(start) < 10)
         let worker = try #require(pid_t(String(contentsOf: pidFile, encoding: .utf8)))
+        // A killed process lingers until launchd reaps it; give it a moment.
+        for _ in 0..<20 where isAlive(worker) { try await Task.sleep(for: .milliseconds(100)) }
         #expect(!isAlive(worker))
     }
 
