@@ -338,32 +338,30 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         }
     }
 
-    /// "颜色 ▸": default (accent), the tag palette, or any colour from the system colour panel.
+    /// "颜色 ▸": the default (accent) colour and the tag palette as a row of colour circles, then any colour from the
+    /// system colour panel.
     private func colorMenu(for groupId: String) -> NSMenuItem {
         let current = model?.snapshot.groupsById[groupId]?.colorHex
         let submenu = NSMenu(title: "颜色")
-        let none = NSMenuItem.closure("默认") { [weak self] in self?.model?.setGroupColor(groupId, colorHex: nil) }
-        none.image = Self.dot(.controlAccentColor)
-        none.state = current == nil ? .on : .off
-        submenu.addItem(none)
-        submenu.addItem(.separator())
-        var matched = current == nil
-        for preset in TagPalette.presets {
-            let entry = NSMenuItem.closure(preset.name) { [weak self] in self?.model?.setGroupColor(groupId, colorHex: preset.hex) }
-            entry.image = Self.dot(NSColor(hex: preset.hex))
-            if let current, current.caseInsensitiveCompare(preset.hex) == .orderedSame {
-                entry.state = .on
-                matched = true
+        let choices: [(name: String, hex: String?)] = [("默认", nil)] + TagPalette.presets.map { ($0.name, Optional($0.hex)) }
+        let selected = choices.firstIndex { choice in
+            switch (choice.hex, current) {
+            case (nil, nil): true
+            case let (hex?, current?): hex.caseInsensitiveCompare(current) == .orderedSame
+            default: false
             }
-            submenu.addItem(entry)
         }
+        submenu.addItem(.colorSwatches(choices.map { .init(name: $0.name, color: $0.hex.map(NSColor.init(hex:)) ?? .controlAccentColor) },
+                                       selected: selected) { [weak self] index in
+            self?.model?.setGroupColor(groupId, colorHex: choices[index].hex)
+        })
         submenu.addItem(.separator())
-        let custom = NSMenuItem.closure("自定义…") { [weak self] in
+        let custom = NSMenuItem.closure("自定义颜色…") { [weak self] in
             self?.colorPanel.show(initial: current.map(NSColor.init(hex:)) ?? .controlAccentColor) { color in
                 self?.model?.setGroupColor(groupId, colorHex: color.hexString)
             }
         }
-        if !matched, let current {
+        if selected == nil, let current {
             custom.image = Self.dot(NSColor(hex: current))
             custom.state = .on
         }

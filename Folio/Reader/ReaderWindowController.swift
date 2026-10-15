@@ -5,7 +5,7 @@ import SwiftUI
 
 /// One paper in its own native tab (READER-01…10). The PDF is shown with PDFKit — the engine
 /// Preview uses — and annotations are written back into the file in standard form.
-final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NSSearchFieldDelegate, PDFDocumentDelegate {
+final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NSSearchFieldDelegate, PDFDocumentDelegate, NSMenuDelegate {
     let fileId: String
     private(set) var itemId: String
     let state: ReaderState
@@ -651,9 +651,24 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     @objc func selectColor(_ sender: Any?) {
         guard let item = sender as? NSMenuItem, AnnotationColor.allCases.indices.contains(item.tag) else { return }
-        let color = AnnotationColor.allCases[item.tag]
+        choose(AnnotationColor.allCases[item.tag])
+    }
+
+    private func choose(_ color: AnnotationColor) {
         state.color = color
         if let annotation = pdfView.selectedAnnotation { editor.setColor(annotation, color) }
+    }
+
+    static let colorMenuIdentifier = NSUserInterfaceItemIdentifier("readerColorMenu")
+
+    /// The toolbar's colour menu: the annotation colours as circles, the current one checked.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu.identifier == Self.colorMenuIdentifier else { return }
+        menu.removeAllItems()
+        let colors = AnnotationColor.allCases
+        menu.addItem(.colorSwatches(colors.map { .init(name: $0.title, color: $0.nsColor) }, selected: colors.firstIndex(of: state.color)) {
+            [weak self] index in self?.choose(colors[index])
+        })
     }
 
     @objc func addSelectionToNote(_ sender: Any?) {
@@ -764,11 +779,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             return group
         case .readerColor:
             let menu = NSMenu()
-            for (index, color) in AnnotationColor.allCases.enumerated() {
-                let item = menu.addItem(withTitle: color.title, action: #selector(selectColor(_:)), keyEquivalent: "")
-                item.tag = index
-                item.image = Self.colorSwatch(color)
-            }
+            menu.delegate = self
+            menu.identifier = Self.colorMenuIdentifier
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
             item.showsIndicator = false

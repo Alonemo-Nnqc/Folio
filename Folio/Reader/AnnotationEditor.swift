@@ -230,12 +230,10 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
     func menu(for annotation: PDFAnnotation) -> NSMenu {
         let menu = NSMenu()
         let current = AnnotationColor.nearest(to: annotation.color.withAlphaComponent(1))
-        for preset in AnnotationColor.allCases {
-            let item = NSMenuItem.closure(preset.title) { [weak self] in self?.setColor(annotation, preset) }
-            item.image = .colorDot(preset.nsColor)
-            item.state = preset == current ? .on : .off
-            menu.addItem(item)
-        }
+        let colors = AnnotationColor.allCases
+        menu.addItem(.colorSwatches(colors.map { .init(name: $0.title, color: $0.nsColor) }, selected: current.flatMap { colors.firstIndex(of: $0) }) {
+            [weak self] index in self?.setColor(annotation, colors[index])
+        })
         menu.addItem(.separator())
         let isTextual = annotation.type == "Text" || annotation.type == "FreeText"
         menu.addItem(.closure(isTextual ? "编辑内容…" : (annotation.contents ?? "").isEmpty ? "添加评论…" : "编辑评论…") { [weak self] in

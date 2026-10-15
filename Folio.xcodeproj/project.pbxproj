@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0618FB25031FAD19E4F38BE1 /* ReaderSelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07F2BA805E990C1A9EDAF86 /* ReaderSelfTest.swift */; };
+		07C3BB81CCB7ABBABE169421 /* ColorSwatchMenuItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A1F0001E4BF60E89623E36 /* ColorSwatchMenuItem.swift */; };
 		0A3F072E7983DCCA9A328BF4 /* ItemMenuBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2A27867558A6BA5A3F7C39 /* ItemMenuBuilderTests.swift */; };
 		0F2633E97F5097FD35E72EEE /* TranslationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6EF6A613682A60FCA42612 /* TranslationCoordinator.swift */; };
 		10CEAA29ED2842A7238C8B93 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B299E291F200CFD09619544A /* main.swift */; };
@@ -283,6 +284,7 @@
 		C4C515588B5798D262DBE05D /* ReaderSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSidebarView.swift; sourceTree = "<group>"; };
 		C4E97D45E0A435766ED8C239 /* TagChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChipsView.swift; sourceTree = "<group>"; };
 		C51320DE63BB3819F6CFB4EB /* icon-96.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-96.png"; sourceTree = "<group>"; };
+		C5A1F0001E4BF60E89623E36 /* ColorSwatchMenuItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorSwatchMenuItem.swift; sourceTree = "<group>"; };
 		C769320D1CD58259274445D7 /* SidebarViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewController.swift; sourceTree = "<group>"; };
 		C98AAA2320C6674271F19228 /* TagPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPalette.swift; sourceTree = "<group>"; };
 		CE635178A40334BB32990CF4 /* FolioSafariExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FolioSafariExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -631,6 +633,7 @@
 			isa = PBXGroup;
 			children = (
 				5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */,
+				C5A1F0001E4BF60E89623E36 /* ColorSwatchMenuItem.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -1011,6 +1014,7 @@
 				8CFE251CDCFD60FECBF0CD13 /* CapsuleLabel.swift in Sources */,
 				84B9DB5636C0A5FCE6349D0C /* CitationService.swift in Sources */,
 				CDD874CA7CF05B1CA9F60D2E /* CitationStyleOption.swift in Sources */,
+				07C3BB81CCB7ABBABE169421 /* ColorSwatchMenuItem.swift in Sources */,
 				1A372ABA504E0E9692C890EE /* ColorSwatchRow.swift in Sources */,
 				3C461641B756CD3D1FED4769 /* ConnectorServer.swift in Sources */,
 				DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */,
