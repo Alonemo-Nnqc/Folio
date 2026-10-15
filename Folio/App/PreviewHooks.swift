@@ -27,6 +27,7 @@ import Foundation
 ///   -FolioPreviewTranslating <title prefix>    shows that item as being translated (42%)
 ///   -FolioPreviewTranslationProfiles YES        two sample translation configurations (in memory)
 ///   -FolioPreviewProfileEditor YES              with Settings 翻译: opens 编辑配置…
+///   -FolioPreviewProfileDetail YES              …and the first configuration's details sheet
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -59,9 +60,16 @@ enum PreviewHooks {
         if defaults.bool(forKey: "FolioPreviewTranslationProfiles") {
             // Two sample configurations of the current service, in memory only; the Keychain is not touched.
             let service = model.settings.translationService
-            let profiles = [TranslationProfile(name: "DeepSeek", serviceID: service), TranslationProfile(name: "Moonshot", serviceID: service)]
+            let profiles = [
+                TranslationProfile(name: "DeepSeek", serviceID: service,
+                                   fields: ["--openai-compatible-base-url": "https://api.deepseek.com/v1", "--openai-compatible-model": "deepseek-chat"]),
+                TranslationProfile(name: "Moonshot", serviceID: service,
+                                   fields: ["--openai-compatible-base-url": "https://api.moonshot.cn/v1", "--openai-compatible-model": "kimi-k2"]),
+                TranslationProfile(name: "本地 vLLM", serviceID: service,
+                                   fields: ["--openai-compatible-base-url": "http://localhost:8000/v1", "--openai-compatible-model": "qwen3-8b"]),
+            ]
             model.settings.translationProfiles = profiles
-            model.settings.selectedTranslationProfiles[service] = profiles[0].id
+            model.settings.selectedTranslationProfiles[service] = profiles[1].id
         }
         if let tab = defaults.string(forKey: "FolioPreviewTab").flatMap(InspectorTab.init(rawValue:)) { model.inspectorTab = tab }
         switch defaults.string(forKey: "FolioPreviewSheet") {
@@ -107,8 +115,10 @@ enum PreviewHooks {
                 let reader = NSApp.windows.first { $0.windowController is ReaderWindowController && $0.isVisible }
                 let window = defaults.string(forKey: "FolioPreviewSettings") != nil ? AppDelegate.shared.settingsWindow?.window
                     : defaults.string(forKey: "FolioPreviewOpenReader") != nil ? reader : AppDelegate.shared.libraryWindowController.window
-                // An open sheet (e.g. 编辑配置…) is what the window shows.
-                guard let view = (window?.attachedSheet ?? window)?.contentView?.superview,
+                // An open sheet (e.g. 编辑配置…, and a sheet on top of it) is what the window shows.
+                var shown = window
+                while let sheet = shown?.attachedSheet { shown = sheet }
+                guard let view = shown?.contentView?.superview,
                       let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
                 view.cacheDisplay(in: view.bounds, to: rep)
                 try? rep.representation(using: .png, properties: [:])?.write(to: URL(filePath: path))

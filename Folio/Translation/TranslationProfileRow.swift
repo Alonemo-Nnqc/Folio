@@ -99,21 +99,22 @@ struct TranslationProfileActions {
         if selectedID == profile.id { settings.selectedTranslationProfiles[service.id] = nil }
     }
 
-    private func uniqueName(_ base: String) -> String {
+    func uniqueName(_ base: String) -> String {
         let taken = Set(all.map(\.name))
         guard taken.contains(base) else { return base }
         return (2...).lazy.map { "\(base) \($0)" }.first { !taken.contains($0) }!
     }
 }
 
-/// "编辑配置…": the service's configurations in a list with + and −, the selected one's name, address, key and model
-/// beside it — the way macOS lists accounts. Changes are saved as they are typed; "完成" puts the configuration
-/// in use back into effect.
+/// "编辑配置…", laid out like System Settings ▸ Wi-Fi ▸ Known Networks: a header, the configurations as rows of a
+/// grouped form — a checkmark on the one in use, its server and model underneath, a ⋯ menu for the rest — and
+/// "添加配置…" below. Editing happens in `ProfileDetailSheet`, like a network's details sheet.
 struct TranslationProfilesEditor: View {
     let model: AppModel
     let service: TranslationService
     @Environment(\.dismiss) private var dismiss
-    @State private var selection: String?
+    /// The configuration being edited in the details sheet (nil id: a new one).
+    @State private var editing: ProfileDraft?
     @State private var confirmingDelete: TranslationProfile?
 
     private var actions: TranslationProfileActions { TranslationProfileActions(model: model, service: service) }
@@ -121,196 +122,241 @@ struct TranslationProfilesEditor: View {
     var body: some View {
         let profiles = actions.all
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    List(selection: $selection) {
-                        ForEach(profiles) { profile in
-                            HStack {
-                                Text(profile.name).lineLimit(1)
-                                Spacer()
-                                if profile.id == actions.selectedID {
-                                    Image(systemName: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                                        .help("正在使用")
-                                }
-                            }
-                            .tag(profile.id)
-                        }
+            header
+            Form {
+                Section {
+                    if profiles.isEmpty {
+                        Text("还没有配置").foregroundStyle(.secondary)
                     }
-                    .listStyle(.bordered(alternatesRowBackgrounds: false))
-                    listButtons(profiles)
-                }
-                .frame(width: 200)
-                .padding([.leading, .vertical], 16)
-
-                if let id = selection, let profile = profiles.first(where: { $0.id == id }) {
-                    ProfileForm(model: model, service: service, profileID: profile.id,
-                                inUse: profile.id == actions.selectedID) { actions.use(profile) }
-                        .id(profile.id)
-                } else {
-                    ContentUnavailableView("没有配置", systemImage: "server.rack",
-                                           description: Text("点 + 添加一个服务商的 Base URL、API Key 和模型"))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ForEach(profiles) { row($0) }
+                } footer: {
+                    HStack {
+                        Spacer()
+                        Button("添加配置…") { editing = ProfileDraft(new: service, name: actions.uniqueName("新配置")) }
+                    }
                 }
             }
-            Divider()
+            .formStyle(.grouped)
             HStack {
-                Text("\(service.displayName) 的配置").foregroundStyle(.secondary)
                 Spacer()
-                Button("完成") { finish() }
+                Button("完成") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
-            .padding(16)
+            .padding([.horizontal, .bottom], 20)
         }
-        .frame(width: 640, height: 420)
+        // Tall enough for the rows, like System Settings' sheets; long lists scroll.
+        .frame(width: 520, height: min(190 + CGFloat(max(profiles.count, 1)) * 52, 560))
         .onAppear {
             // Values typed before configurations existed become the first one, so nothing is lost.
             actions.keepUnsavedValues()
-            selection = actions.selectedID ?? actions.all.first?.id
+            if UserDefaults.standard.bool(forKey: "FolioPreviewProfileDetail"), let first = actions.all.first {
+                editing = ProfileDraft(profile: first, service: service, secrets: actions.secrets)
+            }
+        }
+        .sheet(item: $editing) { draft in
+            ProfileDetailSheet(model: model, service: service, draft: draft)
         }
         .confirmationDialog("删除配置「\(confirmingDelete?.name ?? "")」？", isPresented: Binding(
             get: { confirmingDelete != nil }, set: { if !$0 { confirmingDelete = nil } })) {
             Button("删除", role: .destructive) {
-                guard let profile = confirmingDelete else { return }
-                let index = profiles.firstIndex { $0.id == profile.id } ?? 0
-                actions.remove(profile)
-                let rest = actions.all
-                selection = rest.isEmpty ? nil : rest[min(index, rest.count - 1)].id
+                if let profile = confirmingDelete { actions.remove(profile) }
             }
         } message: {
-            Text("它保存的 Base URL、模型和 API Key 都会删除")
+            Text("它保存的服务地址、模型和 API Key 都会删除")
         }
     }
 
-    /// + / − / ⋯ under the list, as in macOS's account and network lists.
-    private func listButtons(_ profiles: [TranslationProfile]) -> some View {
-        HStack(spacing: 0) {
-            Button {
-                selection = actions.add().id
-            } label: {
-                Image(systemName: "plus").frame(width: 24, height: 20)
+    private var header: some View {
+        ProfileSheetHeader(title: "\(service.displayName)配置", subtitle: "每个配置保存一个服务商的地址、API Key 和模型")
+    }
+
+    private func row(_ profile: TranslationProfile) -> some View {
+        let inUse = profile.id == actions.selectedID
+        return HStack(spacing: 8) {
+            Image(systemName: "checkmark")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .opacity(inUse ? 1 : 0)
+                .frame(width: 16)
+                .accessibilityHidden(!inUse)
+                .accessibilityLabel("正在使用")
+            VStack(alignment: .leading, spacing: 2) {
+                Text(profile.name)
+                Text(summary(profile)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
-            .help("添加配置")
-            Divider().frame(height: 14)
-            Button {
-                confirmingDelete = profiles.first { $0.id == selection }
-            } label: {
-                Image(systemName: "minus").frame(width: 24, height: 20)
-            }
-            .disabled(selection == nil)
-            .help("删除配置")
-            Divider().frame(height: 14)
+            Spacer()
             Menu {
-                Button("复制配置") {
-                    if let source = profiles.first(where: { $0.id == selection }) { selection = actions.add(copying: source).id }
-                }
-                .disabled(selection == nil)
-                Button("设为当前使用") {
-                    if let profile = profiles.first(where: { $0.id == selection }) { actions.use(profile) }
-                }
-                .disabled(selection == nil || selection == actions.selectedID)
+                Button("设为当前使用") { actions.use(profile) }.disabled(inUse)
+                Button("编辑…") { editing = ProfileDraft(profile: profile, service: service, secrets: actions.secrets) }
+                Button("复制") { _ = actions.add(copying: profile) }
+                Divider()
+                Button("删除…", role: .destructive) { confirmingDelete = profile }
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "ellipsis.circle")
             }
+            .menuStyle(.button)
+            .buttonStyle(.borderless)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("更多")
-            Spacer()
+            .help("更多操作")
+            .accessibilityLabel("\(profile.name) 的更多操作")
         }
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 4)
-        .frame(height: 24)
-        .background(.quaternary.opacity(0.5))
-        .overlay(alignment: .top) { Divider() }
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { editing = ProfileDraft(profile: profile, service: service, secrets: actions.secrets) }
     }
 
-    private func finish() {
-        // The configuration in use may have been edited: put its values back into effect.
-        if let id = actions.selectedID, let profile = actions.all.first(where: { $0.id == id }) { actions.use(profile) }
-        dismiss()
+    /// "api.deepseek.com · deepseek-chat": where it sends text and with which model.
+    private func summary(_ profile: TranslationProfile) -> String {
+        let urlField = service.fields.first { $0.kind == .url }
+        let host = urlField.flatMap { profile.fields[$0.option] }.flatMap { URL(string: $0)?.host() }
+        let model = service.fields.first { $0.title == "模型" }.flatMap { profile.fields[$0.option] }
+        let parts = [host, model].compactMap { $0 }
+        return parts.isEmpty ? "未填写" : parts.joined(separator: " · ")
     }
 }
 
-/// One configuration's name and fields, saved as they are typed.
-private struct ProfileForm: View {
+/// A configuration being edited: changes stay here until 存储.
+struct ProfileDraft: Identifiable {
+    let id = UUID()
+    /// The configuration edited; nil while adding one.
+    var profileID: String?
+    var name: String
+    var fields: [String: String]
+    var secrets: [String: String]
+
+    init(new service: TranslationService, name: String) {
+        profileID = nil
+        self.name = name
+        fields = [:]
+        secrets = [:]
+    }
+
+    init(profile: TranslationProfile, service: TranslationService, secrets store: SecretStore) {
+        profileID = profile.id
+        name = profile.name
+        fields = profile.fields
+        var secrets: [String: String] = [:]
+        for field in service.secretFields {
+            secrets[field.option] = (try? store.get(serviceID: profile.secretOwner, option: field.option)) ?? nil
+        }
+        self.secrets = secrets
+    }
+}
+
+/// A configuration's details, like a Wi-Fi network's details sheet: name, connection, advanced options, and
+/// 取消 / 存储 (or 添加). Saving the configuration in use puts it into effect at once.
+private struct ProfileDetailSheet: View {
     let model: AppModel
     let service: TranslationService
-    let profileID: String
-    let inUse: Bool
-    let onUse: () -> Void
-    @State private var secrets: [String: String] = [:]
+    @State var draft: ProfileDraft
+    @Environment(\.dismiss) private var dismiss
     @State private var showAdvanced = false
 
-    private var settings: AppSettings { model.settings }
-    private var index: Int? { settings.translationProfiles.firstIndex { $0.id == profileID } }
-    private var profile: TranslationProfile? { index.map { settings.translationProfiles[$0] } }
+    private var actions: TranslationProfileActions { TranslationProfileActions(model: model, service: service) }
+    private var isNew: Bool { draft.profileID == nil }
 
     var body: some View {
-        Form {
-            Section {
-                TextField("名称", text: Binding(get: { profile?.name ?? "" }, set: { name in
-                    if let index, !name.trimmingCharacters(in: .whitespaces).isEmpty { settings.translationProfiles[index].name = name }
-                }))
-                LabeledContent("状态") {
-                    if inUse {
-                        Label("正在使用", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    } else {
-                        Button("设为当前使用", action: onUse)
+        VStack(spacing: 0) {
+            ProfileSheetHeader(title: isNew ? "新配置" : draft.name.isEmpty ? "未命名配置" : draft.name, subtitle: service.displayName)
+            Form {
+                Section {
+                    TextField("名称", text: $draft.name, prompt: Text("例如 DeepSeek、Moonshot"))
+                }
+                Section("连接") {
+                    ForEach(service.fields.filter { !$0.isAdvanced }) { row(for: $0) }
+                }
+                let advanced = service.fields.filter(\.isAdvanced)
+                if !advanced.isEmpty {
+                    Section {
+                        DisclosureGroup("高级", isExpanded: $showAdvanced) { ForEach(advanced) { row(for: $0) } }
                     }
                 }
             }
-            Section {
-                ForEach(service.fields.filter { !$0.isAdvanced }) { row(for: $0) }
-                let advanced = service.fields.filter(\.isAdvanced)
-                if !advanced.isEmpty {
-                    DisclosureGroup("高级", isExpanded: $showAdvanced) { ForEach(advanced) { row(for: $0) } }
-                }
+            .formStyle(.grouped)
+            HStack {
+                Spacer()
+                Button("取消", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(isNew ? "添加" : "存储") { save() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+            .padding([.horizontal, .bottom], 20)
         }
-        .formStyle(.grouped)
-        .onAppear(perform: loadSecrets)
+        .frame(width: 480, height: 460)
+        .navigationTitle(isNew ? "新配置" : draft.name)
     }
 
     @ViewBuilder
     private func row(for field: TranslationServiceField) -> some View {
         let title = field.isRequired ? field.title : "\(field.title)（选填）"
+        let text = Binding(get: { draft.fields[field.option] ?? "" },
+                           set: { draft.fields[field.option] = $0.isEmpty ? nil : $0 })
         switch field.kind {
         case .secret:
-            SecureField(title, text: Binding(get: { secrets[field.option] ?? "" }, set: { value in
-                secrets[field.option] = value
-                if let profile { try? TranslationProfiles.recordSecret(value, option: field.option, in: profile, secrets: model.translations.secrets) }
-            }), prompt: Text(field.placeholder ?? "未填写"))
+            SecureField(title, text: Binding(get: { draft.secrets[field.option] ?? "" }, set: { draft.secrets[field.option] = $0 }),
+                        prompt: Text(field.placeholder ?? "未填写"))
         case .toggle:
-            Toggle(title, isOn: Binding(get: { value(field) == "true" }, set: { setValue($0 ? "true" : "", field) }))
+            Toggle(title, isOn: Binding(get: { text.wrappedValue == "true" }, set: { text.wrappedValue = $0 ? "true" : "" }))
         default:
             if ModelListFetcher.supports(serviceID: service.id, modelOption: field.option) {
                 LabeledContent(title) {
                     HStack(spacing: 6) {
-                        TextField(title, text: Binding(get: { value(field) }, set: { setValue($0, field) }),
-                                  prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
+                        TextField(title, text: text, prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
                             .labelsHidden()
                             .multilineTextAlignment(.trailing)
                         ModelListButton(model: model, serviceID: service.id,
-                                        values: { (profile?.fields ?? [:], secrets.filter { !$0.value.isEmpty }) }) { setValue($0, field) }
+                                        values: { (draft.fields, draft.secrets.filter { !$0.value.isEmpty }) }) { text.wrappedValue = $0 }
                     }
                 }
             } else {
-                TextField(title, text: Binding(get: { value(field) }, set: { setValue($0, field) }),
-                          prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
+                TextField(title, text: text, prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
             }
         }
     }
 
-    private func value(_ field: TranslationServiceField) -> String { profile?.fields[field.option] ?? "" }
-
-    private func setValue(_ value: String, _ field: TranslationServiceField) {
-        guard let index else { return }
-        settings.translationProfiles[index].fields[field.option] = value.isEmpty ? nil : value
-    }
-
-    private func loadSecrets() {
-        guard let profile else { return }
-        for field in service.secretFields {
-            secrets[field.option] = (try? model.translations.secrets.get(serviceID: profile.secretOwner, option: field.option)) ?? nil
+    private func save() {
+        let settings = model.settings
+        let name = draft.name.trimmingCharacters(in: .whitespaces)
+        var profile: TranslationProfile
+        if let id = draft.profileID, let index = settings.translationProfiles.firstIndex(where: { $0.id == id }) {
+            settings.translationProfiles[index].name = name
+            settings.translationProfiles[index].fields = draft.fields
+            profile = settings.translationProfiles[index]
+        } else {
+            profile = TranslationProfile(name: name, serviceID: service.id, fields: draft.fields)
+            settings.translationProfiles.append(profile)
         }
+        for field in service.secretFields {
+            try? TranslationProfiles.recordSecret(draft.secrets[field.option] ?? "", option: field.option, in: profile,
+                                                  secrets: actions.secrets)
+        }
+        // The configuration in use takes effect at once.
+        if profile.id == actions.selectedID { actions.use(profile) }
+        dismiss()
+    }
+}
+
+/// Icon and title at the top of the configuration sheets, as at the top of a System Settings pane.
+private struct ProfileSheetHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "server.rack")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 34, height: 34)
+                .background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline).lineLimit(1)
+                Text(subtitle).font(.callout).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding([.horizontal, .top], 20)
+        .padding(.bottom, 4)
     }
 }
