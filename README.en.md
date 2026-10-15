@@ -10,17 +10,14 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 
 [![Latest release](https://img.shields.io/github/v/release/Alonemo-Nnqc/Folio)](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 [![CI](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml/badge.svg)](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml)
-[![Platform](https://img.shields.io/badge/macOS-26%2B-blue?logo=apple)](#installation)
+[![Platform](https://img.shields.io/badge/macOS-14%2B-blue?logo=apple)](#installation)
 [![License](https://img.shields.io/github/license/Alonemo-Nnqc/Folio)](LICENSE)
 
 [简体中文](README.md) | English
 
-<img src="assets/screenshots/library.jpg" alt="Folio library window" width="900">
+<img src="assets/screenshots/en/library.jpg" alt="Folio library window" width="900">
 
 </div>
-
-> [!NOTE]
-> Folio's interface is currently available in Simplified Chinese only.
 
 ## Features
 
@@ -33,24 +30,38 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 - **AI integration**: a built-in MCP server and the `folio-cli` command line tool. Settings ▸ AI connects Folio to 11 agents, including Claude Code, Codex, Gemini CLI, Copilot CLI and Cursor CLI, in one click
 - **Browser extensions**: Safari, Chrome, Edge, Brave, Arc, Firefox and more. Save the paper you're viewing (optionally with its PDF), or several papers at once from a results page
 - **Zotero import**: items, PDFs, collections and tags, read from a copy of the database (Zotero is never modified)
+- **English and Chinese**: follows your system language, or pick one in Settings ▸ General
 - **Automatic updates**: checks for updates in the app, downloads in the background and installs on relaunch
 - **Fast**: about 0.35 s cold start and 110–130 MB of memory with 1,000 items
 
 ## Screenshots
 
-| Reading and annotating | Original and translation side by side |
-| :---: | :---: |
-| <img src="assets/screenshots/reader.jpg" alt="Reader"> | <img src="assets/screenshots/parallel.jpg" alt="Side-by-side translation"> |
-| **Dark mode, multiple files and annotations** | |
-| <img src="assets/screenshots/dark.jpg" alt="Dark mode"> | |
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/en/reader.jpg" alt="Reader"></td>
+    <td width="50%"><img src="assets/screenshots/en/parallel.jpg" alt="Side-by-side translation"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Read and annotate</b>: highlights and notes are saved into the PDF</td>
+    <td align="center"><b>Side-by-side reading</b>: layout-preserving translation next to the original</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/en/dark.jpg" alt="Dark mode"></td>
+    <td width="50%"><img src="assets/screenshots/en/ai.jpg" alt="AI settings"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Dark mode</b>: several files per item, annotations at a glance</td>
+    <td align="center"><b>AI integration</b>: add the MCP server and skill to your agents in one click</td>
+  </tr>
+</table>
 
 ## Installation
 
-Requires macOS 26 or later (Apple silicon or Intel).
+Requires macOS 14 Sonoma or later (Apple silicon or Intel). On macOS 26 Folio uses the Liquid Glass design.
 
 1. Download the latest `Folio-x.y.z.dmg` from [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 2. Open the disk image and drag **Folio** into Applications
-3. First launch: Folio is not notarized by Apple yet, so macOS says it can't verify the developer. Open **System Settings ▸ Privacy & Security**, scroll down and click **Open Anyway**, then confirm.
+3. First launch: Folio is not notarized by Apple yet, so macOS says it can't verify the developer. Open **System Settings ▸ Privacy & Security**, scroll down and click **Open Anyway**, then confirm. (On macOS 14 you can also Control-click Folio in Finder and choose Open.)
 
    Alternatively, remove the quarantine attribute in Terminal:
 
@@ -62,13 +73,14 @@ Later versions install through the in-app updater, so you only need to do this o
 
 ### Updates
 
-Folio checks for updates once a day; you can also choose **Folio ▸ 检查更新…** (Check for Updates) at any time. **Settings ▸ 通用 ▸ 软件更新** controls automatic checks and background downloads (installed when you quit). Updates are downloaded from GitHub Releases and verified with an EdDSA signature before they are installed.
+Folio checks for updates once a day; you can also choose **Folio ▸ Check for Updates…** at any time. **Settings ▸ General ▸ Software Update** controls automatic checks and background downloads (installed when you quit). Updates are downloaded from GitHub Releases and verified with an EdDSA signature before they are installed.
 
 ## Usage
 
 - **Add papers**: drag PDFs into the window, or use File ▸ Add Files (⌘O) or Add by Identifier (DOI, arXiv ID or ISBN, ⇧⌘O)
 - **Library location**: `~/Folio` by default; change it in Settings ▸ Library
-- **Translation**: right-click an item ▸ 翻译全文… (Translate). The first time, Folio offers to download the translation engine (a few hundred MB, stored in `~/Library/Application Support/Folio/Translator`); pick a service in Settings ▸ Translation
+- **Language**: follows the system; pin Simplified Chinese or English in Settings ▸ General ▸ Language (applies after a restart)
+- **Translation**: right-click an item ▸ Translate Paper…. The first time, Folio offers to download the translation engine (about 1.4 GB, stored in `~/Library/Application Support/Folio/Translator`); pick a service in Settings ▸ Translation. Apple's offline translation needs macOS 26
 
 ### AI integration
 
@@ -78,14 +90,14 @@ Folio checks for updates once a day; you can also choose **Folio ▸ 检查更�
 - `folio-cli search | get | cite | export | add | open` for agents that can only run commands; `folio-cli status` checks the library and permissions
 - The Folio skill (`SKILL.md`) teaches agents how to find papers from a description, cite them accurately and when to ask you first
 
-**Settings ▸ AI** lists only the agents available on your Mac, each with an MCP and a skill switch that installs or removes Folio the way that agent's documentation describes. Turn off "允许 AI 修改文献库" to give agents read-only access. Editors such as VS Code, Zed and Windsurf can use "拷贝 MCP 配置" (Copy MCP Configuration).
+**Settings ▸ AI** lists only the agents available on your Mac, each with an MCP and a skill switch that installs or removes Folio the way that agent's documentation describes. Turn off “Allow AI to modify the library” to give agents read-only access. Editors such as VS Code, Zed and Windsurf can use “Copy MCP Configuration”.
 
 ### Browser extensions
 
 While Folio runs, it serves a local connector at `127.0.0.1:23120` that only accepts requests from the extension (it can be turned off in Settings ▸ Browser). Click the Folio toolbar button (or press ⌘⇧S) on a paper's page to save it. Settings ▸ Browser walks you through installation:
 
 - **Safari**: the extension ships inside Folio.app. Because Folio isn't notarized, enable "Show features for web developers" in Safari Settings ▸ Advanced, then "Allow unsigned extensions" in the Developer menu (needed again after Safari restarts), and enable the Folio extension under Extensions
-- **Chrome / Edge / Brave / Arc**: click "安装…" in Settings, enable Developer mode on the browser's extensions page and "Load unpacked" the folder Folio prepares. The extension updates itself with Folio
+- **Chrome / Edge / Brave / Arc**: click “Install…” in Settings, enable Developer mode on the browser's extensions page and "Load unpacked" the folder Folio prepares. The extension updates itself with Folio
 - **Firefox**: "Load Temporary Add-on" from `about:debugging`
 
 Each release also includes the extension as a `.zip` (Chromium) and an `.xpi` (Firefox).

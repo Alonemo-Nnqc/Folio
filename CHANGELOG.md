@@ -21,6 +21,8 @@
 - 两级分组、彩色标签、回收站、全文搜索、阅读状态与星级评分
 - 9 种引用格式（含 GB/T 7714-2015），导出 BibTeX / RIS / CSL JSON；从 Zotero 一键导入
 - 应用内检查更新：自动下载并在重新启动后完成安装
+- 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
+- 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
 [Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/Alonemo-Nnqc/Folio/releases/tag/v1.0.0

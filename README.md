@@ -10,7 +10,7 @@
 
 [![最新版本](https://img.shields.io/github/v/release/Alonemo-Nnqc/Folio?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 [![CI](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml/badge.svg)](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml)
-[![平台](https://img.shields.io/badge/macOS-26%2B-blue?logo=apple)](#安装)
+[![平台](https://img.shields.io/badge/macOS-14%2B-blue?logo=apple)](#安装)
 [![许可证](https://img.shields.io/github/license/Alonemo-Nnqc/Folio)](LICENSE)
 
 简体中文 | [English](README.en.md)
@@ -30,24 +30,38 @@
 - **AI 接入**：内置 MCP 服务器和命令行工具 `folio-cli`，在 设置 ▸ AI 中一键为 Claude Code、Codex、Gemini CLI、Copilot CLI、Cursor CLI 等 11 种智能体添加
 - **浏览器插件**：Safari、Chrome、Edge、Brave、Arc、Firefox 等，在论文页面一键保存到 Folio（可同时保存 PDF），搜索结果页可批量保存
 - **从 Zotero 迁移**：一键导入条目、PDF、分组和标签（只读取数据库副本，不会修改 Zotero）
+- **中英双语**：界面支持简体中文和英文，默认跟随系统语言，也可以在 设置 ▸ 通用 中切换
 - **自动更新**：应用内检查更新，后台下载，重新启动即完成安装
 - **轻快**：1000 个条目时冷启动约 0.35 秒，内存约 110–130 MB
 
 ## 截图
 
-| 阅读与批注 | 原文 / 译文对照阅读 |
-| :---: | :---: |
-| <img src="assets/screenshots/reader.jpg" alt="阅读器"> | <img src="assets/screenshots/parallel.jpg" alt="对照阅读"> |
-| **深色模式、多文件与标注** | |
-| <img src="assets/screenshots/dark.jpg" alt="深色模式"> | |
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/reader.jpg" alt="阅读器"></td>
+    <td width="50%"><img src="assets/screenshots/parallel.jpg" alt="对照阅读"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>阅读与批注</b>：高亮、便签直接写回 PDF</td>
+    <td align="center"><b>对照阅读</b>：保留排版的译文与原文并排</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/dark.jpg" alt="深色模式"></td>
+    <td width="50%"><img src="assets/screenshots/ai.jpg" alt="AI 设置"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>深色模式</b>：一个条目挂多个文件，标注一览</td>
+    <td align="center"><b>AI 接入</b>：一键为本机的智能体添加 MCP 与技能</td>
+  </tr>
+</table>
 
 ## 安装
 
-系统要求：macOS 26 及以上（Apple 芯片或 Intel）。
+系统要求：macOS 14 Sonoma 及以上（Apple 芯片或 Intel）。在 macOS 26 上使用 Liquid Glass 外观。
 
 1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest) 下载最新的 `Folio-x.y.z.dmg`
 2. 打开 DMG，把 **Folio** 拖到“应用程序”文件夹
-3. 首次打开：Folio 目前没有经过 Apple 公证，macOS 会提示“无法验证开发者”。请打开 **系统设置 ▸ 隐私与安全性**，在页面底部点 **仍要打开**，再确认一次即可。
+3. 首次打开：Folio 目前没有经过 Apple 公证，macOS 会提示“无法验证开发者”。请打开 **系统设置 ▸ 隐私与安全性**，在页面底部点 **仍要打开**，再确认一次即可（macOS 14 上也可以在 Finder 中按住 Control 点按 Folio，选择“打开”）。
 
    也可以在终端中移除隔离属性后直接打开：
 
@@ -65,7 +79,8 @@ Folio 每天自动检查一次更新，也可以随时点 **Folio ▸ 检查更�
 
 - **添加文献**：把 PDF 拖进窗口，或 文件 ▸ 添加文件…（⌘O）、通过 DOI / arXiv 编号 / ISBN 添加（⇧⌘O）
 - **文献库位置**：默认 `~/Folio`，可在 设置 ▸ 文献库 中更改
-- **整篇翻译**：在条目上右键 ▸ 翻译全文…。首次使用时按提示下载翻译组件（约几百 MB，存放在 `~/Library/Application Support/Folio/Translator`），在 设置 ▸ 翻译 中选择翻译服务
+- **界面语言**：默认跟随系统；在 设置 ▸ 通用 ▸ 语言 中可固定为简体中文或 English，重新启动后生效
+- **整篇翻译**：在条目上右键 ▸ 翻译全文…。首次使用时按提示下载翻译组件（约 1.4 GB，存放在 `~/Library/Application Support/Folio/Translator`），在 设置 ▸ 翻译 中选择翻译服务。离线的 Apple 系统翻译需要 macOS 26
 
 ### AI 接入
 

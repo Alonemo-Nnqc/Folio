@@ -10,7 +10,8 @@
 
 ## 开发环境
 
-- macOS 26 及以上，Xcode 27 及以上
+- 开发环境：macOS 26 及以上，Xcode 27 及以上
+- App 需要能在 macOS 14 上运行：使用 macOS 15 / 26 才有的 API（如 Liquid Glass）时请用 `if #available` 提供替代，`Folio/Support/GlassCompatibility.swift` 中有现成的写法
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)：`brew install xcodegen`
 
 `Folio.xcodeproj` 由 `project.yml` 生成，**修改工程设置请改 `project.yml`**，然后运行 `xcodegen generate`。
@@ -111,7 +112,10 @@ swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo --pd
 FOLIO_PREVIEW_FOREGROUND=1 FOLIO_PREVIEW_SHADOW=1 FOLIO_PREVIEW_WAIT=5 \
   script/preview.sh /tmp/library.png /tmp/folio-demo -appearance light -FolioPreviewSelect "Spectral" -FolioPreviewFocusedSelection YES
 swift script/compose-screenshot.swift /tmp/library.png <壁纸> assets/screenshots/library.jpg
+swift script/compose-screenshot.swift /tmp/reader.png <壁纸> assets/screenshots/reader.jpg 1600 1.5   # 网格中的图统一为 3:2
 ```
+
+英文截图放在 `assets/screenshots/en/`：演示文献库加 `--english` 生成，启动参数加 `-AppleLanguages "(en)"`。
 
 ## 提交规范
 
