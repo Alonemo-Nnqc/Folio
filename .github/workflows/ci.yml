@@ -15,6 +15,9 @@ jobs:
     name: Build and test
     runs-on: macos-26
     timeout-minutes: 45
+    env:
+      # xcodebuild passes TEST_RUNNER_* variables to the tests without the prefix (timing budgets read CI).
+      TEST_RUNNER_CI: "true"
     steps:
       - uses: actions/checkout@v5
 
