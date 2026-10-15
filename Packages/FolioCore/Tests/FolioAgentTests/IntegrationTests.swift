@@ -109,10 +109,12 @@ private func read(_ path: String, in home: URL) throws -> String {
         #expect(descriptor("cursor").skillFolders.contains(".agents/skills"))
         #expect(descriptor("kiro").skillFolders == [".kiro/skills"])
         #expect(descriptor("cline").skillFolders == [".cline/skills"])
+        #expect(descriptor("antigravity").skillFolders.first == ".gemini/config/skills")
+        #expect(descriptor("antigravity").apps == ["Antigravity.app"])
         #expect(Set(AgentIntegrator.catalog.map(\.id)).count == AgentIntegrator.catalog.count)
         #expect(AgentIntegrator.catalog.contains { $0.id == "copilot-cli" })
         // Agents only: editors (VS Code, Zed, Windsurf, Antigravity …) are configured by hand.
-        for editor in ["vscode", "zed", "windsurf", "antigravity", "lm-studio"] {
+        for editor in ["vscode", "zed", "windsurf", "lm-studio"] {
             #expect(!AgentIntegrator.catalog.contains { $0.id == editor }, "\(editor)")
         }
         #expect(AgentIntegrator.catalog.allSatisfy { !$0.apps.isEmpty || !$0.commands.isEmpty }, "every agent is detected by an app or a command")

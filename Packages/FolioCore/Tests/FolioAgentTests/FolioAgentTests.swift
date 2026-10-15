@@ -305,6 +305,24 @@ private func seed(_ library: Library) throws -> [String] {
         #expect(throws: AgentIntegrationError.self) { try agent.setSkill(true, for: descriptor("claude-desktop")) }
     }
 
+    @Test func antigravityUsesWhicheverFolderItsVersionHas() throws {
+        let home = try tempHome()
+        try FileManager.default.createDirectory(at: home.appending(path: ".gemini/config"), withIntermediateDirectories: true)
+        let agent = integrator(home)
+        try agent.setMCP(true, for: descriptor("antigravity"))
+        try agent.setSkill(true, for: descriptor("antigravity"))
+        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/mcp_config.json").path))
+        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".gemini/antigravity/mcp_config.json").path))
+        #expect(FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/skills/folio-library/SKILL.md").path))
+        let status = agent.status(of: descriptor("antigravity"))
+        #expect(status.mcpInstalled && status.skillInstalled)
+        #expect(!status.isDetected, "configuration folders alone are not an installed Antigravity")
+        try agent.setMCP(false, for: descriptor("antigravity"))
+        try agent.setSkill(false, for: descriptor("antigravity"))
+        #expect(!agent.status(of: descriptor("antigravity")).mcpInstalled)
+        #expect(!FileManager.default.fileExists(atPath: home.appending(path: ".gemini/config/skills/folio-library").path))
+    }
+
     @Test func anotherExistingCopyIsNotTakenOver() throws {
         let home = try tempHome()
         let other = home.appending(path: "Other/folio-cli")

@@ -1,7 +1,7 @@
 import Foundation
 
-/// An AI agent Folio can configure (AI-04): agents only (command-line agents and Claude 桌面版), not
-/// editors. Paths are relative to the home folder and follow each agent's official documentation
+/// An AI agent Folio can configure (AI-04): agents only (command-line agents, Claude 桌面版 and the
+/// agent-first Antigravity), not general editors. Paths are relative to the home folder and follow each agent's official documentation
 /// (checked 2026-10; see doc/开发计划-v2.6.md §2).
 public struct AgentDescriptor: Sendable, Identifiable, Hashable {
     public enum MCPTarget: Sendable, Hashable {
@@ -26,7 +26,7 @@ public struct AgentDescriptor: Sendable, Identifiable, Hashable {
     }
 
     public enum EntryStyle: Sendable, Hashable {
-        /// `{"command": …, "args": […]}` (Claude Desktop, Cursor, Gemini, Cline, Kiro, Qwen).
+        /// `{"command": …, "args": […]}` (Claude Desktop, Cursor, Gemini, Cline, Kiro, Qwen, Antigravity).
         case standard
         /// Claude Code's own entries: `{"type": "stdio", "command": …, "args": […], "env": {}}`.
         case claudeCode
@@ -142,6 +142,11 @@ public struct AgentIntegrator: Sendable {
               mcp: .jsonAny(paths: [".config/opencode/opencode.json", ".config/opencode/opencode.jsonc"], key: "mcp",
                             style: .opencode, policy: .existingFile),
               skillFolders: [sharedSkillsFolder, ".config/opencode/skills", ".claude/skills"], skillNote: nil),
+        // Google's agent-first IDE and its CLI; newer versions keep their configuration in ~/.gemini/config.
+        .init(id: "antigravity", name: "Antigravity", apps: ["Antigravity.app"], commands: ["agy", "antigravity"],
+              mcp: .jsonAny(paths: [".gemini/config/mcp_config.json", ".gemini/antigravity/mcp_config.json"], key: "mcpServers",
+                            style: .standard, policy: .existingFolder),
+              skillFolders: [".gemini/config/skills", ".gemini/antigravity/skills", ".gemini/antigravity-cli/skills"], skillNote: nil),
         .init(id: "qwen-code", name: "Qwen Code", apps: [], commands: ["qwen"],
               mcp: .json(path: ".qwen/settings.json", key: "mcpServers", style: .standard),
               skillFolders: [".qwen/skills"], skillNote: nil),

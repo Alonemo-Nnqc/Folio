@@ -33,6 +33,7 @@ final class AIIntegration {
         "copilot-cli": "在 Copilot CLI 中输入 /mcp 可查看连接状态。",
         "cursor": "与 Cursor 编辑器共用 ~/.cursor/mcp.json，编辑器中也会出现 folio 服务器。",
         "kiro": "与 Kiro 编辑器共用 ~/.kiro/settings/mcp.json。",
+        "antigravity": "在 Antigravity 的 设置 ▸ Customizations 中可看到 folio 服务器；修改后重新打开 Antigravity。",
     ]
 
     /// folio-cli inside this copy of Folio.app.
