@@ -2,6 +2,8 @@
 # Screenshot a UI state without touching mouse or keyboard:
 #   script/preview.sh <out.png> <library dir> [app launch args…]
 # The app launches in the background (open -g), only its own window is captured, then it quits.
+# FOLIO_PREVIEW_FOREGROUND=1 brings the window to the front (active title bar and selection colours).
+# FOLIO_PREVIEW_SHADOW=1 keeps the window shadow and the full Retina size (for README screenshots).
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/build/DerivedData/Build/Products/Debug/Folio.app"
@@ -9,8 +11,11 @@ OUT="$1"; LIB="$2"; shift 2
 # Only ever stop the instance this script started (matched by its library path), never the user's Folio.
 stop_mine() { pkill -f "Folio.app/Contents/MacOS/Folio -FolioLibraryPath $LIB" >/dev/null 2>&1; }
 stop_mine; sleep 0.4
-open -g -n "$APP" --args -FolioLibraryPath "$LIB" -FolioUITesting YES -ApplePersistenceIgnoreState YES "$@"
+BACKGROUND=-g; [[ "${FOLIO_PREVIEW_FOREGROUND:-0}" == "1" ]] && BACKGROUND=
+open $BACKGROUND -n "$APP" --args -FolioLibraryPath "$LIB" -FolioUITesting YES -ApplePersistenceIgnoreState YES "$@"
 sleep "${FOLIO_PREVIEW_WAIT:-2.5}"
+# A launch doesn't always get focus; opening the same bundle again activates the running copy.
+[[ -z "$BACKGROUND" ]] && { open "$APP"; sleep 1; }
 export FOLIO_PREVIEW_PID=$(pgrep -f "Folio.app/Contents/MacOS/Folio -FolioLibraryPath $LIB" | head -1)
 WID=$(swift -e '
 import CoreGraphics
@@ -25,6 +30,10 @@ let big = mine.max { a, b in
   return (x["Width"] ?? 0) * (x["Height"] ?? 0) < (y["Width"] ?? 0) * (y["Height"] ?? 0) }
 if let id = big?[kCGWindowNumber as String] as? Int { print(id) }' 2>/dev/null)
 if [[ -z "$WID" ]]; then echo "no Folio window" >&2; stop_mine; exit 1; fi
-screencapture -x -o -l "$WID" "$OUT" && sips -Z 1600 "$OUT" >/dev/null
+if [[ "${FOLIO_PREVIEW_SHADOW:-0}" == "1" ]]; then
+  screencapture -x -l "$WID" "$OUT"
+else
+  screencapture -x -o -l "$WID" "$OUT" && sips -Z 1600 "$OUT" >/dev/null
+fi
 [[ "${FOLIO_PREVIEW_KEEP:-0}" == "1" ]] || stop_mine
 echo "$OUT"
