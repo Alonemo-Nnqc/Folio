@@ -1,0 +1,215 @@
+{
+  "extName": {
+    "message": "Folio"
+  },
+  "extDescription": {
+    "message": "Save papers from the web to the Folio library on your Mac in one click: detects title, authors and DOI, lets you pick a group and tags, and saves the PDF too. Save several papers at once from list pages."
+  },
+  "actionTitle": {
+    "message": "Save to Folio"
+  },
+  "menuSavePage": {
+    "message": "Save to Folio…"
+  },
+  "menuSaveLink": {
+    "message": "Save Link to Folio"
+  },
+  "loadingPage": {
+    "message": "Reading the page…"
+  },
+  "offlineTitle": {
+    "message": "Can't Connect to Folio"
+  },
+  "offlineDetail": {
+    "message": "Open Folio first and make sure “Allow the browser extension to save papers” is on in Folio ▸ Settings ▸ Browser."
+  },
+  "retry": {
+    "message": "Retry"
+  },
+  "openFolio": {
+    "message": "Open Folio"
+  },
+  "detectedWork": {
+    "message": "Detected paper"
+  },
+  "worksOnPage": {
+    "message": "Papers on this page"
+  },
+  "group": {
+    "message": "Group"
+  },
+  "tags": {
+    "message": "Tags"
+  },
+  "tagsPlaceholder": {
+    "message": "Optional; separate tags with commas"
+  },
+  "savePDFToo": {
+    "message": "Also save the PDF"
+  },
+  "saveOpenPDFs": {
+    "message": "Also download open-access PDFs (arXiv etc.)"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "saveCount": {
+    "message": "Save {0}"
+  },
+  "saved": {
+    "message": "Saved"
+  },
+  "revealInFolio": {
+    "message": "Show in Folio"
+  },
+  "done": {
+    "message": "Done"
+  },
+  "type_journalArticle": {
+    "message": "Journal article"
+  },
+  "type_conferencePaper": {
+    "message": "Conference paper"
+  },
+  "type_preprint": {
+    "message": "Preprint"
+  },
+  "type_book": {
+    "message": "Book"
+  },
+  "type_bookChapter": {
+    "message": "Book section"
+  },
+  "type_thesis": {
+    "message": "Thesis"
+  },
+  "type_report": {
+    "message": "Report"
+  },
+  "type_webpage": {
+    "message": "Web page"
+  },
+  "type_dataset": {
+    "message": "Dataset"
+  },
+  "type_pdf": {
+    "message": "PDF file"
+  },
+  "type_reference": {
+    "message": "Reference"
+  },
+  "authorsSeparator": {
+    "message": ", "
+  },
+  "authorsEtAl": {
+    "message": "{0} et al."
+  },
+  "noGroup": {
+    "message": "No group"
+  },
+  "extensionUpdate": {
+    "message": "Folio includes a newer extension ({0}): click “Reload” on the browser's extensions page, or reinstall it in Folio ▸ Settings ▸ Browser."
+  },
+  "connected": {
+    "message": "Connected"
+  },
+  "connectedTo": {
+    "message": "Connected · {0}"
+  },
+  "untitled": {
+    "message": "(Untitled)"
+  },
+  "noteUnreadable": {
+    "message": "This page can't be read; only its title and address will be saved."
+  },
+  "noteWebpage": {
+    "message": "No paper information found; it will be saved as a web page."
+  },
+  "noteIdentifier": {
+    "message": "Folio will get the full details from its data sources using the identifier."
+  },
+  "multiCount": {
+    "message": "{0} papers on this page, {1} selected"
+  },
+  "saving": {
+    "message": "Saving…"
+  },
+  "downloadingPDF": {
+    "message": "Downloading PDF…"
+  },
+  "pdfSaveFailed": {
+    "message": "Couldn't save the PDF"
+  },
+  "saveFailedStatus": {
+    "message": "Save failed ({0})"
+  },
+  "batchSaving": {
+    "message": "Retrieving and saving {0} papers…"
+  },
+  "nothingSaved": {
+    "message": "Nothing was saved"
+  },
+  "savedTo": {
+    "message": "Saved to {0}"
+  },
+  "groupQuoted": {
+    "message": "“{0}”"
+  },
+  "theLibrary": {
+    "message": "the library"
+  },
+  "countCreated": {
+    "message": "{0} added"
+  },
+  "countDuplicate": {
+    "message": "{0} already in the library"
+  },
+  "countFailed": {
+    "message": "{0} not found"
+  },
+  "listSeparator": {
+    "message": ", "
+  },
+  "sentenceEnd": {
+    "message": "."
+  },
+  "itemError": {
+    "message": "{0}: {1}"
+  },
+  "notFound": {
+    "message": "Not found"
+  },
+  "alreadyInLibrary": {
+    "message": "Already in the library"
+  },
+  "handedToFolio": {
+    "message": "Sent to Folio"
+  },
+  "addedTo": {
+    "message": "Added to {0}."
+  },
+  "titleSavedTo": {
+    "message": "“{0}” was saved to {1}."
+  },
+  "folioRetrievesMetadata": {
+    "message": "Folio will retrieve the metadata automatically."
+  },
+  "downloadingPDFBackground": {
+    "message": "Downloading PDF… (continues if you close this window)"
+  },
+  "pdfAlreadyInLibrary": {
+    "message": "The PDF is already in the library."
+  },
+  "pdfAttached": {
+    "message": "The PDF was attached to the item."
+  },
+  "pdfNotSaved": {
+    "message": "The PDF wasn't saved: {0}. You can add it in Folio later."
+  },
+  "downloadFailed": {
+    "message": "download failed"
+  }
+}

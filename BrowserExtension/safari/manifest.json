@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Folio 文献保存",
+  "name": "__MSG_extName__",
+  "default_locale": "en",
   "short_name": "Folio",
-  "version": "1.1.2",
-  "description": "一键把网页上的论文保存到 Mac 上的 Folio 文献库：识别标题、作者、DOI，选择分组和标签，同时保存 PDF；列表页可批量保存。",
+  "version": "1.2.0",
+  "description": "__MSG_extDescription__",
   "icons": {
     "16": "icon-16.png",
     "32": "icon-32.png",
@@ -13,7 +14,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "保存到 Folio",
+    "default_title": "__MSG_actionTitle__",
     "default_icon": {
       "16": "icon-16.png",
       "19": "icon-19.png",
@@ -45,7 +46,7 @@
         "default": "Ctrl+Shift+S",
         "mac": "Command+Shift+S"
       },
-      "description": "保存到 Folio"
+      "description": "__MSG_actionTitle__"
     }
   }
 }

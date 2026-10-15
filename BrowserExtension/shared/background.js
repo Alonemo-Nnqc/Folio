@@ -36,8 +36,8 @@ function createMenus() {
   if (!menus) return;
   // Promise-based in Chrome (MV3), Firefox and Safari alike; recreated so an update never duplicates them.
   Promise.resolve(menus.removeAll()).catch(() => {}).then(() => {
-    menus.create({ id: "folio-save-page", title: "\u4FDD\u5B58\u5230 Folio\u2026", contexts: ["page", "frame", "selection"] });
-    menus.create({ id: "folio-save-link", title: "\u4FDD\u5B58\u94FE\u63A5\u5230 Folio", contexts: ["link"], targetUrlPatterns: LINK_PATTERNS });
+    menus.create({ id: "folio-save-page", title: runtime.i18n.getMessage("menuSavePage"), contexts: ["page", "frame", "selection"] });
+    menus.create({ id: "folio-save-link", title: runtime.i18n.getMessage("menuSaveLink"), contexts: ["link"], targetUrlPatterns: LINK_PATTERNS });
   });
 }
 runtime.runtime.onInstalled.addListener(createMenus);

@@ -4,10 +4,22 @@ const browserAPI = globalThis.browser ?? globalThis.chrome;
 const preview = !browserAPI?.tabs; // opened as a plain page (design preview)
 const params = new URLSearchParams(location.search);
 
-const TYPE_NAMES = {
-  journalArticle: "期刊文章", conferencePaper: "会议论文", preprint: "预印本", book: "图书", bookChapter: "图书章节",
-  thesis: "学位论文", report: "报告", webpage: "网页", dataset: "数据集",
-};
+// Text comes from _locales/<language>/messages.json; "{0}" … are filled in from the arguments.
+// A design preview opened as a plain page has no i18n API and shows the message names.
+function t(key, ...args) {
+  const text = browserAPI?.i18n?.getMessage(key) || key;
+  return text.replace(/\{(\d)\}/g, (_, i) => String(args[Number(i)] ?? ""));
+}
+
+function localizeDocument() {
+  document.documentElement.lang = browserAPI?.i18n?.getUILanguage?.() || "en";
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll("[data-i18n-aria-label]")) el.setAttribute("aria-label", t(el.dataset.i18nAriaLabel));
+}
+if (browserAPI?.i18n) localizeDocument();
+
+const typeName = (type) => (type ? browserAPI?.i18n?.getMessage(`type_${type}`) : "") || "";
 
 let page = null;
 let tab = null;
@@ -44,8 +56,8 @@ async function loadFolio() {
 function authorLine(authors) {
   const names = (authors || []).map((a) => (typeof a === "string" ? a.split(",")[0] : a.family)).filter(Boolean);
   if (names.length === 0) return "";
-  if (names.length <= 2) return names.join("、");
-  return `${names[0]} 等`;
+  if (names.length <= 2) return names.join(t("authorsSeparator"));
+  return t("authorsEtAl", names[0]);
 }
 
 function versionNumber(text) {
@@ -61,7 +73,7 @@ function render(folio) {
 
   // Groups: Folio's current group first, else the last choice, else none.
   const select = $("group");
-  select.replaceChildren(new Option("不放入分组", ""));
+  select.replaceChildren(new Option(t("noGroup"), ""));
   for (const group of folio.groups || []) {
     select.add(new Option(`${group.depth ? " " : ""}${group.name}`, group.id));
   }
@@ -76,10 +88,10 @@ function render(folio) {
   const bundled = folio.ping?.extensionVersion;
   const installed = preview ? "1.0.0" : browserAPI.runtime.getManifest().version;
   if (bundled && versionNumber(bundled) > versionNumber(installed)) {
-    $("update").textContent = `Folio 带有新版扩展（${bundled}）：请在浏览器的扩展页面点"重新加载"，或在 Folio ▸ 设置 ▸ 浏览器 中重新安装。`;
+    $("update").textContent = t("extensionUpdate", bundled);
     $("update").hidden = false;
   }
-  $("connection").textContent = folio.ping?.library ? `已连接 · ${folio.ping.library}` : "已连接";
+  $("connection").textContent = folio.ping?.library ? t("connectedTo", folio.ping.library) : t("connected");
   $("connection").hidden = false;
   show("form");
   $("save").focus();
@@ -87,26 +99,26 @@ function render(folio) {
 
 function renderSingle() {
   const year = (page.date || "").slice(0, 4);
-  const kind = page.isPDF && !page.isReference ? "PDF 文件" : TYPE_NAMES[page.type] || (page.isReference ? "文献" : "网页");
+  const kind = page.isPDF && !page.isReference ? t("type_pdf") : typeName(page.type) || (page.isReference ? t("type_reference") : t("type_webpage"));
   $("kind").textContent = kind;
-  $("title").textContent = page.title || "（无标题）";
+  $("title").textContent = page.title || t("untitled");
   $("meta").textContent = [authorLine(page.authors), year, page.venue].filter(Boolean).join(" · ")
     || [page.doi && `DOI ${page.doi}`, page.arxiv && `arXiv ${page.arxiv}`].filter(Boolean).join(" · ") || page.url || "";
   const note = $("note");
   note.hidden = true;
   if (page.unreadable) {
-    note.textContent = "此页面无法读取，将只保存标题和网址。";
+    note.textContent = t("noteUnreadable");
     note.hidden = false;
   } else if (!page.isReference && !page.isPDF) {
-    note.textContent = "没有识别到论文信息，将作为网页保存。";
+    note.textContent = t("noteWebpage");
     note.hidden = false;
   } else if (page.isReference && (page.doi || page.arxiv) && !(page.authors || []).length) {
-    note.textContent = "将按标识符从 Folio 的数据源获取完整信息。";
+    note.textContent = t("noteIdentifier");
     note.hidden = false;
   }
   $("pdf-row").hidden = !page.pdfUrl || (page.isPDF && !page.isReference);
-  $("pdf-label").textContent = "同时保存 PDF";
-  $("save").textContent = "保存";
+  $("pdf-label").textContent = t("savePDFToo");
+  $("save").textContent = t("save");
 }
 
 function renderCandidates() {
@@ -138,7 +150,7 @@ function renderCandidates() {
   const arxivOnly = page.candidates.some((c) => c.kind === "arXiv");
   $("pdf-row").hidden = false;
   $("pdf").checked = arxivOnly;
-  $("pdf-label").textContent = "同时下载可公开获取的 PDF（arXiv 等）";
+  $("pdf-label").textContent = t("saveOpenPDFs");
   updateCount();
 }
 
@@ -149,10 +161,10 @@ function chosenCandidates() {
 function updateCount() {
   const total = page.candidates.length;
   const chosen = chosenCandidates().length;
-  $("multi-count").textContent = `此页面有 ${total} 篇文献，已选 ${chosen} 篇`;
+  $("multi-count").textContent = t("multiCount", total, chosen);
   $("select-all").checked = chosen === total;
   $("select-all").indeterminate = chosen > 0 && chosen < total;
-  $("save").textContent = chosen ? `保存 ${chosen} 篇` : "保存";
+  $("save").textContent = chosen ? t("saveCount", chosen) : t("save");
   $("save").disabled = chosen === 0;
 }
 
@@ -172,20 +184,20 @@ async function save() {
   localStorage.setItem("folio.lastGroup", group.id);
   try {
     if (!$("multi").hidden) return await saveCandidates(group);
-    button.textContent = "正在保存…";
+    button.textContent = t("saving");
     if (preview) { finish("created", page.title, group.name, previewPDF()); return; }
     // A bare PDF: Folio imports the file and looks up its metadata itself.
     if (page.isPDF && !page.isReference) {
-      button.textContent = "正在下载 PDF…";
+      button.textContent = t("downloadingPDF");
       const reply = await sendMessage({ type: "sendPDF", pdfUrl: page.pdfUrl, target: { groupId: group.id }, tabId: tab?.id });
-      if (!reply?.ok) throw new Error(reply?.error || "无法保存 PDF");
+      if (!reply?.ok) throw new Error(reply?.error || t("pdfSaveFailed"));
       finish("pdf", page.title, group.name, null);
       return;
     }
     const item = { ...page, type: page.isReference ? page.type : "webpage" };
     delete item.candidates;
     const response = await folioRequest("/save", { method: "POST", json: { item, groupId: group.id || null, tags: tagsInput() } });
-    if (!response.ok) throw new Error(response.data?.error || `保存失败（${response.status}）`);
+    if (!response.ok) throw new Error(response.data?.error || t("saveFailedStatus", response.status));
     savedItemId = response.data.itemId;
     const withPDF = !$("pdf-row").hidden && $("pdf").checked;
     // The background worker keeps downloading even if this popup closes; Folio reports the result too.
@@ -195,7 +207,7 @@ async function save() {
     if (String(error.message) === "folio-offline") { show("offline"); return; }
     show("form");
     button.disabled = false;
-    button.textContent = "保存";
+    button.textContent = t("save");
     $("note").textContent = String(error.message || error);
     $("note").hidden = false;
     document.querySelector(".card").hidden = false;
@@ -204,7 +216,7 @@ async function save() {
 
 async function saveCandidates(group) {
   const chosen = chosenCandidates();
-  $("loading-text").textContent = `正在检索并保存 ${chosen.length} 篇文献…`;
+  $("loading-text").textContent = t("batchSaving", chosen.length);
   show("loading");
   const response = preview ? previewBatch(chosen)
     : await folioRequest("/saveItems", {
@@ -212,21 +224,21 @@ async function saveCandidates(group) {
       json: { items: chosen.map(({ identifier, title, url }) => ({ identifier, title, url })), groupId: group.id || null,
               tags: tagsInput(), pdf: $("pdf").checked },
     });
-  if (!response.ok) throw new Error(response.data?.error || `保存失败（${response.status}）`);
+  if (!response.ok) throw new Error(response.data?.error || t("saveFailedStatus", response.status));
   const results = response.data.results || [];
   const count = (status) => results.filter((r) => r.status === status).length;
   const failed = results.filter((r) => r.status === "failed");
   savedItemId = results.find((r) => r.itemId)?.itemId || null;
   $("done-symbol").textContent = failed.length === results.length ? "!" : "✓";
   $("done-symbol").classList.toggle("success", failed.length < results.length);
-  $("done-title").textContent = failed.length === results.length ? "没有保存任何文献" : `已保存到${group.name ? `「${group.name}」` : "文献库"}`;
-  $("done-detail").textContent = [`新增 ${count("created")} 篇`, count("duplicate") && `已有 ${count("duplicate")} 篇`,
-    failed.length && `未找到 ${failed.length} 篇`].filter(Boolean).join("，") + "。";
+  $("done-title").textContent = failed.length === results.length ? t("nothingSaved") : t("savedTo", group.name ? t("groupQuoted", group.name) : t("theLibrary"));
+  $("done-detail").textContent = [t("countCreated", count("created")), count("duplicate") && t("countDuplicate", count("duplicate")),
+    failed.length && t("countFailed", failed.length)].filter(Boolean).join(t("listSeparator")) + t("sentenceEnd");
   $("pdf-status").hidden = true;
   const failures = $("failures");
   failures.replaceChildren(...failed.slice(0, 8).map((r) => {
     const li = document.createElement("li");
-    li.textContent = `${r.title || r.identifier}：${r.error || "未找到"}`;
+    li.textContent = t("itemError", r.title || r.identifier, r.error || t("notFound"));
     return li;
   }));
   failures.hidden = failed.length === 0;
@@ -248,23 +260,23 @@ function finish(status, title, group, pdf) {
   const duplicate = status === "duplicate";
   $("done-symbol").textContent = duplicate ? "ℹ︎" : "✓";
   $("done-symbol").classList.toggle("success", !duplicate);
-  $("done-title").textContent = duplicate ? "文献库中已有这篇文献" : status === "pdf" ? "已交给 Folio 导入" : "已保存";
-  const where = group ? `「${group}」` : "文献库";
-  const parts = [duplicate ? (group ? `已加入${where}。` : "") : `「${title}」已保存到${where}。`];
-  if (status === "pdf") parts.push("Folio 会自动检索元数据。");
+  $("done-title").textContent = duplicate ? t("alreadyInLibrary") : status === "pdf" ? t("handedToFolio") : t("saved");
+  const where = group ? t("groupQuoted", group) : t("theLibrary");
+  const parts = [duplicate ? (group ? t("addedTo", where) : "") : t("titleSavedTo", title, where)];
+  if (status === "pdf") parts.push(t("folioRetrievesMetadata"));
   $("done-detail").textContent = parts.filter(Boolean).join("");
   $("failures").hidden = true;
   const pdfStatus = $("pdf-status");
   pdfStatus.hidden = !pdf;
   if (pdf) {
     pdfStatus.className = "pdf-status pending";
-    pdfStatus.textContent = "正在下载 PDF…（关闭此窗口也会继续）";
+    pdfStatus.textContent = t("downloadingPDFBackground");
     Promise.resolve(pdf).then((reply) => {
       const ok = reply?.ok && reply?.data?.status !== "failed";
       pdfStatus.className = `pdf-status ${ok ? "ok" : "failed"}`;
       pdfStatus.textContent = ok
-        ? reply.data?.status === "duplicate" ? "PDF 已在文献库中。" : "PDF 已附加到条目。"
-        : `PDF 未保存：${reply?.error || "下载失败"}。可以稍后在 Folio 中手动添加。`;
+        ? reply.data?.status === "duplicate" ? t("pdfAlreadyInLibrary") : t("pdfAttached")
+        : t("pdfNotSaved", reply?.error || t("downloadFailed"));
     });
   }
   $("reveal").hidden = !savedItemId && !preview;
@@ -288,7 +300,7 @@ async function reveal() {
 
 async function start() {
   show("loading");
-  $("loading-text").textContent = "正在读取页面…";
+  $("loading-text").textContent = t("loadingPage");
   try {
     page = await readPage();
     render(await loadFolio());

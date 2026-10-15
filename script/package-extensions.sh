@@ -10,7 +10,7 @@ VERSION=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['versi
 mkdir -p "$OUT"
 for family in chromium firefox; do
   STAGE=$(mktemp -d)
-  cp "$SRC"/shared/* "$STAGE"/
+  cp -R "$SRC"/shared/. "$STAGE"/
   # The store assigns its own ID; the fixed development key only matters for unpacked installs.
   python3 - "$SRC/$family/manifest.json" "$STAGE/manifest.json" <<'PY'
 import json, sys

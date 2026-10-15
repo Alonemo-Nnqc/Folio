@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="color-scheme" content="light dark">
-  <title>保存到 Folio</title>
+  <title data-i18n="actionTitle">Save to Folio</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <header>
     <img src="icon-32.png" alt="" width="20" height="20">
-    <h1>保存到 Folio</h1>
+    <h1 data-i18n="actionTitle">Save to Folio</h1>
     <span id="connection" class="connection" hidden></span>
   </header>
 
@@ -17,28 +17,28 @@
 
   <main id="loading" class="state">
     <div class="spinner" aria-hidden="true"></div>
-    <p class="secondary" id="loading-text">正在读取页面…</p>
+    <p class="secondary" id="loading-text" data-i18n="loadingPage">Reading the page…</p>
   </main>
 
   <main id="offline" class="state" hidden>
     <div class="symbol">⚠︎</div>
-    <h2>无法连接 Folio</h2>
-    <p class="secondary">请先打开 Folio，并在 Folio ▸ 设置 ▸ 浏览器 中确认"允许浏览器插件保存文献"已打开。</p>
+    <h2 data-i18n="offlineTitle">Can't Connect to Folio</h2>
+    <p class="secondary" data-i18n="offlineDetail"></p>
     <div class="buttons centered">
-      <button id="retry" type="button">重试</button>
-      <button id="launch" type="button" class="primary">打开 Folio</button>
+      <button id="retry" type="button" data-i18n="retry">Retry</button>
+      <button id="launch" type="button" class="primary" data-i18n="openFolio">Open Folio</button>
     </div>
   </main>
 
   <main id="form" hidden>
-    <section class="card" aria-label="识别到的文献">
+    <section class="card" data-i18n-aria-label="detectedWork">
       <div class="kind" id="kind"></div>
       <div class="title" id="title"></div>
       <div class="meta secondary" id="meta"></div>
       <div class="note" id="note" hidden></div>
     </section>
 
-    <section id="multi" class="multi" aria-label="页面中的文献" hidden>
+    <section id="multi" class="multi" data-i18n-aria-label="worksOnPage" hidden>
       <div class="multi-header">
         <label class="check"><input id="select-all" type="checkbox" checked><span id="multi-count"></span></label>
       </div>
@@ -46,36 +46,36 @@
     </section>
 
     <label class="field">
-      <span>分组</span>
+      <span data-i18n="group">Group</span>
       <select id="group"></select>
     </label>
 
     <label class="field">
-      <span>标签</span>
-      <input id="tags" type="text" placeholder="可选，多个标签用逗号分隔" list="tag-list" autocomplete="off">
+      <span data-i18n="tags">Tags</span>
+      <input id="tags" type="text" data-i18n-placeholder="tagsPlaceholder" list="tag-list" autocomplete="off">
       <datalist id="tag-list"></datalist>
     </label>
 
     <label class="check indented" id="pdf-row" hidden>
       <input id="pdf" type="checkbox" checked>
-      <span id="pdf-label">同时保存 PDF</span>
+      <span id="pdf-label" data-i18n="savePDFToo">Also save the PDF</span>
     </label>
 
     <div class="buttons">
-      <button id="cancel" type="button">取消</button>
-      <button id="save" type="button" class="primary">保存</button>
+      <button id="cancel" type="button" data-i18n="cancel">Cancel</button>
+      <button id="save" type="button" class="primary" data-i18n="save">Save</button>
     </div>
   </main>
 
   <main id="done" class="state" hidden>
     <div class="symbol success" id="done-symbol">✓</div>
-    <h2 id="done-title">已保存</h2>
+    <h2 id="done-title" data-i18n="saved">Saved</h2>
     <p class="secondary" id="done-detail"></p>
     <p class="pdf-status" id="pdf-status" hidden></p>
     <ul class="failures" id="failures" hidden></ul>
     <div class="buttons centered">
-      <button id="reveal" type="button">在 Folio 中显示</button>
-      <button id="close" type="button" class="primary">完成</button>
+      <button id="reveal" type="button" data-i18n="revealInFolio">Show in Folio</button>
+      <button id="close" type="button" class="primary" data-i18n="done">Done</button>
     </div>
   </main>
 

@@ -1,0 +1,215 @@
+{
+  "extName": {
+    "message": "Folio 文献保存"
+  },
+  "extDescription": {
+    "message": "一键把网页上的论文保存到 Mac 上的 Folio 文献库：识别标题、作者、DOI，选择分组和标签，同时保存 PDF；列表页可批量保存。"
+  },
+  "actionTitle": {
+    "message": "保存到 Folio"
+  },
+  "menuSavePage": {
+    "message": "保存到 Folio…"
+  },
+  "menuSaveLink": {
+    "message": "保存链接到 Folio"
+  },
+  "loadingPage": {
+    "message": "正在读取页面…"
+  },
+  "offlineTitle": {
+    "message": "无法连接 Folio"
+  },
+  "offlineDetail": {
+    "message": "请先打开 Folio，并在 Folio ▸ 设置 ▸ 浏览器 中确认\"允许浏览器插件保存文献\"已打开。"
+  },
+  "retry": {
+    "message": "重试"
+  },
+  "openFolio": {
+    "message": "打开 Folio"
+  },
+  "detectedWork": {
+    "message": "识别到的文献"
+  },
+  "worksOnPage": {
+    "message": "页面中的文献"
+  },
+  "group": {
+    "message": "分组"
+  },
+  "tags": {
+    "message": "标签"
+  },
+  "tagsPlaceholder": {
+    "message": "可选，多个标签用逗号分隔"
+  },
+  "savePDFToo": {
+    "message": "同时保存 PDF"
+  },
+  "saveOpenPDFs": {
+    "message": "同时下载可公开获取的 PDF（arXiv 等）"
+  },
+  "cancel": {
+    "message": "取消"
+  },
+  "save": {
+    "message": "保存"
+  },
+  "saveCount": {
+    "message": "保存 {0} 篇"
+  },
+  "saved": {
+    "message": "已保存"
+  },
+  "revealInFolio": {
+    "message": "在 Folio 中显示"
+  },
+  "done": {
+    "message": "完成"
+  },
+  "type_journalArticle": {
+    "message": "期刊文章"
+  },
+  "type_conferencePaper": {
+    "message": "会议论文"
+  },
+  "type_preprint": {
+    "message": "预印本"
+  },
+  "type_book": {
+    "message": "图书"
+  },
+  "type_bookChapter": {
+    "message": "图书章节"
+  },
+  "type_thesis": {
+    "message": "学位论文"
+  },
+  "type_report": {
+    "message": "报告"
+  },
+  "type_webpage": {
+    "message": "网页"
+  },
+  "type_dataset": {
+    "message": "数据集"
+  },
+  "type_pdf": {
+    "message": "PDF 文件"
+  },
+  "type_reference": {
+    "message": "文献"
+  },
+  "authorsSeparator": {
+    "message": "、"
+  },
+  "authorsEtAl": {
+    "message": "{0} 等"
+  },
+  "noGroup": {
+    "message": "不放入分组"
+  },
+  "extensionUpdate": {
+    "message": "Folio 带有新版扩展（{0}）：请在浏览器的扩展页面点\"重新加载\"，或在 Folio ▸ 设置 ▸ 浏览器 中重新安装。"
+  },
+  "connected": {
+    "message": "已连接"
+  },
+  "connectedTo": {
+    "message": "已连接 · {0}"
+  },
+  "untitled": {
+    "message": "（无标题）"
+  },
+  "noteUnreadable": {
+    "message": "此页面无法读取，将只保存标题和网址。"
+  },
+  "noteWebpage": {
+    "message": "没有识别到论文信息，将作为网页保存。"
+  },
+  "noteIdentifier": {
+    "message": "将按标识符从 Folio 的数据源获取完整信息。"
+  },
+  "multiCount": {
+    "message": "此页面有 {0} 篇文献，已选 {1} 篇"
+  },
+  "saving": {
+    "message": "正在保存…"
+  },
+  "downloadingPDF": {
+    "message": "正在下载 PDF…"
+  },
+  "pdfSaveFailed": {
+    "message": "无法保存 PDF"
+  },
+  "saveFailedStatus": {
+    "message": "保存失败（{0}）"
+  },
+  "batchSaving": {
+    "message": "正在检索并保存 {0} 篇文献…"
+  },
+  "nothingSaved": {
+    "message": "没有保存任何文献"
+  },
+  "savedTo": {
+    "message": "已保存到{0}"
+  },
+  "groupQuoted": {
+    "message": "「{0}」"
+  },
+  "theLibrary": {
+    "message": "文献库"
+  },
+  "countCreated": {
+    "message": "新增 {0} 篇"
+  },
+  "countDuplicate": {
+    "message": "已有 {0} 篇"
+  },
+  "countFailed": {
+    "message": "未找到 {0} 篇"
+  },
+  "listSeparator": {
+    "message": "，"
+  },
+  "sentenceEnd": {
+    "message": "。"
+  },
+  "itemError": {
+    "message": "{0}：{1}"
+  },
+  "notFound": {
+    "message": "未找到"
+  },
+  "alreadyInLibrary": {
+    "message": "文献库中已有这篇文献"
+  },
+  "handedToFolio": {
+    "message": "已交给 Folio 导入"
+  },
+  "addedTo": {
+    "message": "已加入{0}。"
+  },
+  "titleSavedTo": {
+    "message": "「{0}」已保存到{1}。"
+  },
+  "folioRetrievesMetadata": {
+    "message": "Folio 会自动检索元数据。"
+  },
+  "downloadingPDFBackground": {
+    "message": "正在下载 PDF…（关闭此窗口也会继续）"
+  },
+  "pdfAlreadyInLibrary": {
+    "message": "PDF 已在文献库中。"
+  },
+  "pdfAttached": {
+    "message": "PDF 已附加到条目。"
+  },
+  "pdfNotSaved": {
+    "message": "PDF 未保存：{0}。可以稍后在 Folio 中手动添加。"
+  },
+  "downloadFailed": {
+    "message": "下载失败"
+  }
+}
