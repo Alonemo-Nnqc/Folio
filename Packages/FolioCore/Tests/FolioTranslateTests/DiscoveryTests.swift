@@ -34,11 +34,29 @@ import Testing
         let good = try temp.script("home/.local/bin/pdf2zh_next", ok)
         let installation = TranslatorInstallation(baseDirectory: temp.url.appending(path: "base"))
         let result = await TranslatorDiscovery.discover(installation: installation, home: home,
-                                                        pathFolders: [temp.url.appending(path: "first").path])
+                                                        pathFolders: [temp.url.appending(path: "first").path], spotlight: false)
         #expect(result?.executable == good && result?.version == "2.9.0")
         let none = await TranslatorDiscovery.discover(installation: installation, home: temp.url.appending(path: "empty"),
-                                                      pathFolders: [temp.url.appending(path: "first").path])
+                                                      pathFolders: [temp.url.appending(path: "first").path], spotlight: false)
         #expect(none == nil || none?.executable.path.hasPrefix("/opt/homebrew") == true || none?.executable.path.hasPrefix("/usr/local") == true,
                 "only a real system-wide install could be found")
+    }
+
+    @Test func findsTheZoteroPluginServerAndVirtualEnvironmentsAnywhere() throws {
+        let temp = TemporaryDirectory()
+        let home = temp.url.appending(path: "home")
+        let zotero = try temp.script("home/zotero-pdf2zh/server/zotero-pdf2zh-next-venv/bin/pdf2zh_next", ok)
+        #expect(TranslatorDiscovery.candidates(home: home, pathFolders: []).map { $0.resolvingSymlinksInPath().path }
+            .contains(zotero.resolvingSymlinksInPath().path), "a usual place, found without the deep search")
+        // A project's own environment: only the scan of the home folder finds it.
+        try temp.script("home/code/paper-tools/.venv/pyvenv.cfg", "")
+        let project = try temp.script("home/code/paper-tools/.venv/bin/pdf2zh_next", ok)
+        // Not under Library or a hidden non-environment folder.
+        try temp.script("home/Library/stuff/env/pyvenv.cfg", "")
+        try temp.script("home/Library/stuff/env/bin/pdf2zh_next", ok)
+        try temp.script("home/.hidden/env/pyvenv.cfg", "")
+        try temp.script("home/.hidden/env/bin/pdf2zh_next", ok)
+        let scanned = TranslatorDiscovery.scanHome(home).map { $0.resolvingSymlinksInPath().path }
+        #expect(scanned == [project.resolvingSymlinksInPath().path])
     }
 }

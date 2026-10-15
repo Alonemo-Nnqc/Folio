@@ -112,7 +112,11 @@ private struct EngineSection: View {
             switch custom {
             case .success(let version)?: Text("pdf2zh_next \(version)")
             case .failure?: Label("无法运行", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            case nil: Text("pdf2zh_next")
+            case nil:
+                HStack(spacing: 6) {
+                    Text("pdf2zh_next")
+                    ProgressView().controlSize(.mini)
+                }
             }
             Text(Self.abbreviated(settings.translatorCustomPath)).textSelection(.enabled)
         }
