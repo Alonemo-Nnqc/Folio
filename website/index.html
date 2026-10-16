@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="zh-CN" class="preload">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Folio — 轻量、原生的 macOS 文献管理软件</title>
+  <meta name="description" content="Folio 是轻量、原生的 macOS 文献管理软件：拖入 PDF 自动识别元数据，内置阅读与批注，保留排版的整篇翻译，AI 智能体接入。免费开源。">
+  <meta name="theme-color" content="#fbfaf7">
+  <link rel="icon" type="image/png" href="assets/img/favicon.png">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Folio — 轻量、原生的 macOS 文献管理软件">
+  <meta property="og:description" content="拖入 PDF 自动识别元数据 · 内置阅读与批注 · 保留排版的整篇翻译 · AI 智能体接入">
+  <meta property="og:image" content="https://alonemo-nnqc.github.io/Folio/assets/img/og.jpg">
+  <meta property="og:url" content="https://alonemo-nnqc.github.io/Folio/">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <script>
+    // Hide the page until the language is applied and the intro can play, with a safety net.
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem("folio-lang"); } catch (e) {}
+      var lang = saved || ((navigator.language || "").toLowerCase().indexOf("zh") === 0 ? "zh" : "en");
+      document.documentElement.setAttribute("data-lang", lang);
+      setTimeout(function () { document.documentElement.classList.remove("preload"); }, 2500);
+    })();
+  </script>
+  <noscript><style>html.preload body { opacity: 1 !important; } .reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script src="assets/js/main.js" defer></script>
+</head>
+<body>
+
+<a class="skip" href="#main" data-i18n="skip">跳到正文</a>
+
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="#top" aria-label="Folio">
+      <img src="assets/img/icon.webp" alt="" width="28" height="28">
+      <span>Folio</span>
+    </a>
+    <nav class="nav-links" aria-label="页面导航">
+      <a href="#film" data-i18n="nav.film">宣传片</a>
+      <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="#ai" data-i18n="nav.ai">AI 接入</a>
+      <a href="#download" data-i18n="nav.download">下载</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language">EN</button>
+      <a class="nav-github" href="https://github.com/Alonemo-Nnqc/Folio" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+      <a class="nav-cta js-download" href="https://github.com/Alonemo-Nnqc/Folio/releases/latest" data-i18n="nav.cta">下载</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- Hero -->
+  <section class="hero" id="top">
+    <div class="hero-glow" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="hero-copy">
+      <div class="hero-icon">
+        <img src="assets/img/icon.webp" alt="Folio 图标" width="512" height="512">
+        <span class="hero-icon-shine" aria-hidden="true"></span>
+      </div>
+      <p class="hero-eyebrow intro" style="--i:1" data-i18n="hero.eyebrow">适用于 macOS</p>
+      <h1 class="hero-title intro" style="--i:2">Folio</h1>
+      <p class="hero-headline intro" style="--i:3" data-i18n="hero.headline">文献，各归其位。</p>
+      <p class="hero-sub intro" style="--i:4" data-i18n="hero.sub">轻量、原生的 macOS 文献管理软件。拖入 PDF 自动识别元数据，内置阅读与批注，保留排版的整篇翻译，还能让 AI 智能体帮你查文献、写引用。</p>
+      <div class="hero-cta intro" style="--i:5" id="heroCta">
+        <a class="btn btn-primary js-download" href="https://github.com/Alonemo-Nnqc/Folio/releases/latest">
+          <svg class="btn-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="cta.download">免费下载</span>
+        </a>
+        <a class="btn btn-link" href="https://github.com/Alonemo-Nnqc/Folio">
+          <span data-i18n="cta.github">在 GitHub 上查看</span>
+          <svg class="chev" viewBox="0 0 8 14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+      <p class="hero-meta intro" style="--i:6"><span class="js-version" data-i18n="hero.meta">macOS 14 及以上 · Apple 芯片与 Intel · 免费开源</span></p>
+    </div>
+    <div class="hero-stage intro" style="--i:6">
+      <div class="hero-window" id="heroWindow">
+        <div class="win">
+          <img src="assets/img/library_light.webp" alt="Folio 文献库窗口" width="2200" height="1323" fetchpriority="high">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Film -->
+  <section class="film" id="film">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="film.eyebrow">宣传片</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="film.title">两分钟，认识 Folio。</h2>
+    </div>
+    <div class="film-frame" id="filmFrame">
+      <video id="filmVideo" preload="none" playsinline poster="assets/img/poster.webp" width="1920" height="1080">
+        <source src="assets/video/folio-promo.mp4" type="video/mp4">
+      </video>
+      <button class="film-play" id="filmPlay" type="button">
+        <span class="film-play-disc">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+        </span>
+        <span class="film-play-label"><span data-i18n="film.play">播放宣传片</span><small>1:53</small></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Import: pinned, scroll-driven walkthrough -->
+  <section class="import" id="features">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="import.eyebrow">自动识别</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="import.title">拖进来，就整理好了。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="import.lede">把 PDF 拖进窗口，Folio 会在几秒内查到标题、作者、期刊、DOI 等信息并建好条目。依次查询 Zotero 识别服务、Crossref、arXiv、OpenAlex、DBLP 与 CVF，找不到时也能手动匹配。</p>
+    </div>
+    <div class="import-track" id="importTrack">
+      <div class="import-stage">
+        <ol class="import-steps" id="importSteps">
+          <li class="is-active"><b data-i18n="import.s1t">拖入 PDF</b><span data-i18n="import.s1d">从 Finder、下载文件夹，或任何地方。</span></li>
+          <li><b data-i18n="import.s2t">松手</b><span data-i18n="import.s2d">剩下的交给 Folio。</span></li>
+          <li><b data-i18n="import.s3t">正在检索元数据</b><span data-i18n="import.s3d">新条目立刻出现在列表中，识别在后台进行。</span></li>
+          <li><b data-i18n="import.s4t">识别完成</b><span data-i18n="import.s4d">从拖入到识别完成，不到 4 秒。</span></li>
+          <li><b data-i18n="import.s5t">信息齐全</b><span data-i18n="import.s5d">DOI、链接与引用键一应俱全，随时可以引用。</span></li>
+        </ol>
+        <div class="import-visual">
+          <div class="import-progress" aria-hidden="true"><span id="importBar"></span></div>
+          <div class="win win-stack" id="importStack">
+            <img class="is-on" src="assets/img/import_before.webp" alt="拖入前的文献库" width="2200" height="1323">
+            <img src="assets/img/import_drop.webp" alt="松开以添加文件" width="2200" height="1323" loading="lazy">
+            <img src="assets/img/import_progress.webp" alt="正在检索元数据" width="2200" height="1323" loading="lazy">
+            <img src="assets/img/import_done.webp" alt="识别完成" width="2200" height="1323" loading="lazy">
+            <img src="assets/img/import_selected.webp" alt="检查器中的元数据" width="2200" height="1323" loading="lazy">
+            <div class="drag-file" id="dragFile" aria-hidden="true">
+              <svg class="pdf" viewBox="0 0 64 80">
+                <path d="M6 2h36l20 20v52a4 4 0 01-4 4H6a4 4 0 01-4-4V6a4 4 0 014-4z" fill="#fff" stroke="#d6d3cc" stroke-width="1.5"/>
+                <path d="M42 2v16a4 4 0 004 4h16" fill="#f1efe9" stroke="#d6d3cc" stroke-width="1.5"/>
+                <rect x="10" y="32" width="32" height="3" rx="1.5" fill="#d9d6cf"/>
+                <rect x="10" y="40" width="40" height="3" rx="1.5" fill="#d9d6cf"/>
+                <rect x="10" y="48" width="26" height="3" rx="1.5" fill="#d9d6cf"/>
+                <rect x="8" y="58" width="30" height="14" rx="3" fill="#e5483b"/>
+                <text x="23" y="68.5" text-anchor="middle" font-size="9" font-weight="700" fill="#fff" font-family="-apple-system, Helvetica, sans-serif">PDF</text>
+              </svg>
+              <span class="drag-name">2604.27326v1.pdf</span>
+              <svg class="cursor" viewBox="0 0 24 24"><path d="M5 2.5v17.2l4.6-4.4 3 6.6 3-1.3-3-6.5h6.3z" fill="#111" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Organize -->
+  <section class="organize">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="org.eyebrow">整理</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="org.title">井井有条，一搜即得。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="org.lede">两级分组、可自定义颜色的标签、回收站、阅读状态与星级评分。搜索可以覆盖 PDF 全文，一个条目也能挂多个文件。</p>
+    </div>
+    <div class="duo">
+      <figure class="duo-item reveal" style="--d:1">
+        <div class="win"><img src="assets/img/tag_mustread.webp" alt="按标签筛选" width="2200" height="1323" loading="lazy"></div>
+        <figcaption><b data-i18n="org.c1t">彩色标签</b><span data-i18n="org.c1d">点一下「必读」，相关论文立刻归拢。</span></figcaption>
+      </figure>
+      <figure class="duo-item reveal" style="--d:3">
+        <div class="win"><img src="assets/img/search.webp" alt="搜索结果" width="2200" height="1323" loading="lazy"></div>
+        <figcaption><b data-i18n="org.c2t">全文搜索</b><span data-i18n="org.c2d">标题、作者、标签，甚至 PDF 正文。</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- Reader -->
+  <section class="reader">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="reader.eyebrow">阅读与批注</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="reader.title">与「预览」同一引擎。<br>批注写回 PDF。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="reader.lede">论文以原生标签页打开。高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF 文件，在「预览」中同样可见。Folio 会记住每篇论文读到哪里，旁边还有一篇 Markdown 笔记。</p>
+    </div>
+    <div class="reader-stage reveal-scale" id="readerStage">
+      <div class="win"><img src="assets/img/reader.webp" alt="Folio 阅读器" width="2200" height="1323" loading="lazy"></div>
+      <span class="callout" style="--x:57.5%;--y:3.4%;--k:0" data-i18n="reader.p1">批注工具栏</span>
+      <span class="callout" style="--x:47.5%;--y:22.6%;--k:1" data-i18n="reader.p2">高亮写回 PDF</span>
+      <span class="callout" style="--x:76.1%;--y:83%;--k:2" data-i18n="reader.p3">便签</span>
+      <span class="callout" style="--x:89.5%;--y:9.4%;--k:3" data-i18n="reader.p4">Markdown 笔记</span>
+    </div>
+  </section>
+
+  <!-- Translate -->
+  <section class="translate">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="tr.eyebrow">整篇翻译</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="tr.title">整篇翻译，<br>排版原封不动。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="tr.lede">基于 pdf2zh_next / BabelDOC，公式、图表与版式原样保留。支持 20 多种翻译服务，也可以使用离线的 Apple 系统翻译。译文与原文并排，逐段对照阅读。</p>
+    </div>
+    <div class="translate-stage">
+      <div class="win win-parallel reveal-scale"><img src="assets/img/parallel.webp" alt="原文与译文对照阅读" width="1264" height="760" loading="lazy"></div>
+      <div class="translate-chip reveal" style="--d:4" role="img" aria-label="翻译进度 42%">
+        <span class="translate-chip-img"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cite -->
+  <section class="cite">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="cite.eyebrow">引用</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="cite.title">一键复制引用。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="cite.lede">右键 ▸ 复制引用。内置 citeproc-js 与 CSL 样式，支持 9 种格式，也能导出 BibTeX、RIS 与 CSL JSON。</p>
+    </div>
+    <div class="cite-box reveal" style="--d:2" id="citeBox">
+      <div class="cite-tabs" role="tablist" id="citeTabs"></div>
+      <div class="cite-card" id="citeCard" aria-live="polite"></div>
+      <p class="cite-more" data-i18n="cite.more">以及 MLA、Chicago、Harvard、Vancouver、Nature。以上均为 Folio 实际生成的引用文本。</p>
+    </div>
+  </section>
+
+  <!-- Dark mode: scroll-driven wipe -->
+  <section class="theme" id="themeTrack">
+    <div class="theme-stage" id="themeStage">
+      <div class="theme-copy">
+        <p class="eyebrow" data-i18n="theme.eyebrow">深色模式</p>
+        <h2 class="headline" data-i18n="theme.title">白天黑夜，一样好看。</h2>
+        <p class="lede" data-i18n="theme.lede">完整支持深色模式。在 macOS 26 上，Folio 使用全新的 Liquid Glass 外观。</p>
+      </div>
+      <div class="theme-window">
+        <div class="win win-stack">
+          <img src="assets/img/library_light.webp" alt="浅色外观" width="2200" height="1323" loading="lazy">
+          <img class="theme-dark" id="themeDark" src="assets/img/library_dark.webp" alt="深色外观" width="2200" height="1323" loading="lazy">
+          <span class="theme-line" id="themeLine" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI (dark) -->
+  <section class="ai" id="ai">
+    <div class="section-head">
+      <p class="eyebrow eyebrow-ai reveal" data-i18n="ai.eyebrow">AI 接入</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="ai.title">让智能体，<br>读懂你的文献库。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="ai.lede">内置 MCP 服务器与命令行工具 folio-cli。在 设置 ▸ AI 中，一键为 Claude Code、Codex、Gemini CLI、Copilot CLI、Cursor CLI 等 11 种智能体添加。也可以关闭「允许 AI 修改文献库」，只让 AI 读取。</p>
+    </div>
+    <div class="ai-stage">
+      <div class="win win-settings reveal" style="--d:1"><img src="assets/img/settings_ai.webp" alt="设置 ▸ AI" width="1300" height="1000" loading="lazy"></div>
+      <div class="terminal reveal" style="--d:3" id="terminal">
+        <div class="terminal-bar"><i></i><i></i><i></i><span>zsh</span></div>
+        <pre class="terminal-body" id="terminalBody"></pre>
+      </div>
+    </div>
+    <div class="ai-facts">
+      <div class="reveal" style="--d:1"><b>26</b><span data-i18n="ai.f1">个 MCP 工具</span></div>
+      <div class="reveal" style="--d:2"><b>11</b><span data-i18n="ai.f2">种智能体一键接入</span></div>
+      <div class="reveal" style="--d:3"><b>0</b><span data-i18n="ai.f3">AI 能彻底删除的内容</span></div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="stats">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="stats.eyebrow">轻快</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="stats.title">轻，本身就是一种性能。</h2>
+    </div>
+    <div class="stats-grid">
+      <div class="stat reveal" style="--d:1"><b><span class="count" data-to="0.35" data-dec="2">0.35</span><small data-i18n="unit.s">秒</small></b><span data-i18n="stats.s1">冷启动（1,000 个条目）</span></div>
+      <div class="stat reveal" style="--d:2"><b><span class="count" data-to="110" data-dec="0">110</span>–<span class="count" data-to="130" data-dec="0">130</span><small>MB</small></b><span data-i18n="stats.s2">内存占用</span></div>
+      <div class="stat reveal" style="--d:3"><b><span class="count" data-to="20" data-dec="0">20</span>+</b><span data-i18n="stats.s3">种翻译服务</span></div>
+      <div class="stat reveal" style="--d:4"><b><span class="count" data-to="9" data-dec="0">9</span></b><span data-i18n="stats.s4">种引用格式</span></div>
+    </div>
+  </section>
+
+  <!-- More -->
+  <section class="more">
+    <div class="section-head">
+      <h2 class="headline reveal" data-i18n="more.title">还有更多。</h2>
+    </div>
+    <div class="bento">
+      <article class="card reveal" style="--d:0">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c3.5 3.4 5 7.4 5 12s-1.5 8.6-5 12M16 4c-3.5 3.4-5 7.4-5 12s1.5 8.6 5 12"/></svg>
+        <h3 data-i18n="more.c1t">浏览器插件</h3>
+        <p data-i18n="more.c1d">Safari、Chrome、Edge、Brave、Arc、Firefox。在论文页面一键保存（可同时保存 PDF），搜索结果页可批量保存。</p>
+      </article>
+      <article class="card reveal" style="--d:1">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 9h14M6 9l4-4M6 9l4 4M26 23H12m14 0l-4-4m4 4l-4 4"/></svg>
+        <h3 data-i18n="more.c2t">从 Zotero 迁移</h3>
+        <p data-i18n="more.c2d">一键导入条目、PDF、分组和标签。只读取数据库副本，不会修改 Zotero。</p>
+      </article>
+      <article class="card reveal" style="--d:2">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="4" width="22" height="24" rx="4"/><path d="M10 11h12M10 16h12M10 21h7"/></svg>
+        <h3 data-i18n="more.c3t">Markdown 笔记</h3>
+        <p data-i18n="more.c3d">每个条目一篇笔记。阅读时选中文字，一键加入笔记。</p>
+      </article>
+      <article class="card reveal" style="--d:0">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8h12M10 5v3M7 8c0 5 3 9 7 11M14 8c-1 5-4 9-9 12"/><path d="M17 27l5-13 5 13M19 23h6"/></svg>
+        <h3 data-i18n="more.c4t">中英双语</h3>
+        <p data-i18n="more.c4d">界面支持简体中文和英文，默认跟随系统语言，也可以在设置中切换。</p>
+      </article>
+      <article class="card reveal" style="--d:1">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M26 16a10 10 0 11-3-7.1M26 5v6h-6"/></svg>
+        <h3 data-i18n="more.c5t">自动更新</h3>
+        <p data-i18n="more.c5d">后台下载，重新启动即完成安装。安装前校验 EdDSA 签名。</p>
+      </article>
+      <article class="card reveal" style="--d:2">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l10 4v8c0 7-4.5 11.5-10 14-5.5-2.5-10-7-10-14V7z"/><path d="M11.5 16l3 3 6-6"/></svg>
+        <h3 data-i18n="more.c6t">隐私优先</h3>
+        <p data-i18n="more.c6d">不收集任何使用数据，文献库完全保存在你的 Mac 上。API 密钥存放在系统钥匙串中。</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- Download -->
+  <section class="download" id="download">
+    <div class="download-inner">
+      <img class="download-icon reveal-scale" src="assets/img/icon.webp" alt="Folio" width="512" height="512" loading="lazy">
+      <h2 class="headline reveal" style="--d:1" data-i18n="dl.title">现在就试试 Folio。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="dl.lede">免费、开源，适用于 macOS 14 Sonoma 及以上，支持 Apple 芯片与 Intel。</p>
+      <div class="download-cta reveal" style="--d:3">
+        <a class="btn btn-primary btn-large js-download" href="https://github.com/Alonemo-Nnqc/Folio/releases/latest">
+          <svg class="btn-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="js-dl-label" data-i18n="dl.button">下载 Folio</span>
+        </a>
+        <a class="btn btn-secondary btn-large" href="https://github.com/Alonemo-Nnqc/Folio">
+          <svg class="btn-icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <span data-i18n="dl.github">GitHub 仓库</span>
+        </a>
+      </div>
+      <p class="download-meta reveal" style="--d:4" id="dlMeta">&nbsp;</p>
+
+      <div class="first-run reveal" style="--d:5">
+        <h3 data-i18n="dl.firstTitle">首次打开</h3>
+        <p data-i18n="dl.firstBody">Folio 暂未经过 Apple 公证。首次打开时，请前往 系统设置 ▸ 隐私与安全性，在页面底部点「仍要打开」。也可以在终端中运行：</p>
+        <div class="code">
+          <code id="xattrCmd">xattr -dr com.apple.quarantine /Applications/Folio.app</code>
+          <button type="button" class="copy" id="copyBtn" data-i18n="dl.copy">拷贝</button>
+        </div>
+        <p class="first-run-note" data-i18n="dl.firstNote">之后的版本会通过应用内更新自动安装，不需要重复这一步。</p>
+      </div>
+
+      <ul class="download-links reveal" style="--d:6">
+        <li><a href="https://github.com/Alonemo-Nnqc/Folio/releases" data-i18n="dl.l1">所有版本与更新日志</a></li>
+        <li><a href="https://github.com/Alonemo-Nnqc/Folio/releases/latest" data-i18n="dl.l2">浏览器扩展安装包</a></li>
+        <li><a href="https://github.com/Alonemo-Nnqc/Folio#从源码构建" data-href-en="https://github.com/Alonemo-Nnqc/Folio/blob/main/README.en.md#building-from-source" data-i18n="dl.l3">从源码构建</a></li>
+        <li><a href="https://github.com/Alonemo-Nnqc/Folio/issues" data-i18n="dl.l4">反馈问题</a></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand"><img src="assets/img/icon.webp" alt="" width="20" height="20" loading="lazy"> Folio</div>
+    <p data-i18n="footer.text">Folio 以 MIT 许可证开源。Mac 与 macOS 是 Apple Inc. 的商标，Folio 是独立项目，与 Apple 无关。</p>
+    <p class="footer-links">
+      <a href="https://github.com/Alonemo-Nnqc/Folio">GitHub</a>
+      <a href="https://github.com/Alonemo-Nnqc/Folio/blob/main/LICENSE" data-i18n="footer.license">许可证</a>
+      <a href="https://github.com/Alonemo-Nnqc/Folio/blob/main/SECURITY.md" data-i18n="footer.security">安全策略</a>
+      <a href="https://github.com/Alonemo-Nnqc/Folio/blob/main/CONTRIBUTING.md" data-i18n="footer.contrib">参与贡献</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

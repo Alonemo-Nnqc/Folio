@@ -13,7 +13,7 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 [![Platform](https://img.shields.io/badge/macOS-14%2B-blue?logo=apple)](#installation)
 [![License](https://img.shields.io/github/license/Alonemo-Nnqc/Folio)](LICENSE)
 
-[简体中文](README.md) | English
+[Website](https://alonemo-nnqc.github.io/Folio/) · [简体中文](README.md) | English
 
 <img src="assets/screenshots/en/library.jpg" alt="Folio library window" width="900">
 
