@@ -13,7 +13,7 @@
 [![平台](https://img.shields.io/badge/macOS-14%2B-blue?logo=apple)](#安装)
 [![许可证](https://img.shields.io/github/license/Alonemo-Nnqc/Folio)](LICENSE)
 
-简体中文 | [English](README.en.md)
+[产品主页](https://alonemo-nnqc.github.io/Folio/) · 简体中文 | [English](README.en.md)
 
 <img src="assets/screenshots/library.jpg" alt="Folio 文献库窗口" width="900">
 
