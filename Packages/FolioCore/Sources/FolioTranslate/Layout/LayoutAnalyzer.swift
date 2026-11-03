@@ -391,6 +391,16 @@ struct LayoutAnalyzer {
                 if isWord { for k in start...i { chars[k].isMath = true } }
             }
         }
+        // A single letter touching the start of a formula ("D" of DEC set apart from E and C) is part of it.
+        for i in chars.indices.dropLast() where !chars[i].isMath && !chars[i].isSpace && chars[i].text.first?.isLetter == true {
+            let next = chars[i + 1]
+            let before = i > 0 ? chars[i - 1] : nil
+            let alone = before == nil || before!.isSpace || before!.text.first.map { !$0.isLetter && !$0.isNumber } == true
+            if alone, next.isMath, next.text.first?.isLetter == true, abs(next.size - chars[i].size) < chars[i].size * 0.1,
+               next.rect.minX - chars[i].rect.maxX < chars[i].size * 0.15 {
+                chars[i].isMath = true
+            }
+        }
         line.chars = chars
         return line
     }
@@ -655,6 +665,10 @@ struct LayoutAnalyzer {
         // An equation number at the end: "… = … (11)".
         let numbered = text.range(of: #"\(\d+[a-z]?\)\s*$"#, options: .regularExpression) != nil
         if numbered, ratio >= 0.2 || text.contains("=") { return true }
+        // A line starting with a word in lower case continues a sentence ("of queries as ŷ = …").
+        if let first = line.chars.first(where: { !$0.isSpace }), !first.isMath, first.text.first?.isLowercase == true, Self.textWords(line) >= 1 {
+            return false
+        }
         // Words set in text type ("with … and …", "where …") make it running text with inline formulas.
         let words = Self.textWords(line)
         if words >= 2 && ratio < 0.85 { return false }
@@ -827,7 +841,9 @@ struct LayoutAnalyzer {
         for i in blocks.indices where blocks[i].translate {
             let words = blocks[i].lines.reduce(0) { $0 + Self.textWords($1) }
             let mathHeavy = blocks[i].lines.reduce(0.0) { $0 + $1.mathRatio } / Double(blocks[i].lines.count) > 0.3
-            let needed = blocks[i].kind == .paragraph && mathHeavy ? 2 : 1
+            let first = blocks[i].lines[0].chars.first { !$0.isSpace }
+            let continues = first.map { !$0.isMath && $0.text.first?.isLowercase == true } ?? false
+            let needed = blocks[i].kind == .paragraph && mathHeavy && !continues ? 2 : 1
             let text = blocks[i].text.trimmingCharacters(in: .whitespaces)
             let url = text.range(of: #"^(https?://|www\.|doi:|arXiv:)\S+$"#, options: [.regularExpression, .caseInsensitive]) != nil
                 || text.range(of: #"^\S+@\S+\.\S+$"#, options: .regularExpression) != nil

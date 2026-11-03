@@ -1519,6 +1519,16 @@
         }
       }
     },
+    "其他模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other model"
+          }
+        }
+      }
+    },
     "兼容模式" : {
       "localizations" : {
         "en" : {
@@ -3745,6 +3755,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Restore"
+          }
+        }
+      }
+    },
+    "恢复默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reset to Default"
+          }
+        }
+      }
+    },
+    "我的服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "My Services"
           }
         }
       }
@@ -7649,6 +7679,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter the password to open “%@”."
+          }
+        }
+      }
+    },
+    "输入模型名称" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model name"
           }
         }
       }
