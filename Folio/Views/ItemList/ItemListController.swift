@@ -31,6 +31,22 @@ final class ItemOutlineView: NSOutlineView {
         }
     }
 
+    /// Three-finger tap or force click (系统设置 ▸ 触控板 ▸ 查询与数据检测器): Quick Look the row under the
+    /// pointer, as in Finder. On another row while the panel is open, the panel follows the new selection.
+    override func quickLook(with event: NSEvent) {
+        let row = row(at: convert(event.locationInWindow, from: nil))
+        guard row >= 0 else { return super.quickLook(with: event) }
+        window?.makeFirstResponder(self)
+        if selectedRowIndexes.contains(row) {
+            controller?.toggleQuickLook()
+            return
+        }
+        selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        if !(QLPreviewPanel.sharedPreviewPanelExists() && QLPreviewPanel.shared().isVisible) {
+            controller?.toggleQuickLook()
+        }
+    }
+
     override func draggingExited(_ sender: (any NSDraggingInfo)?) {
         super.draggingExited(sender)
         controller?.model?.externalDropCount = 0
@@ -264,7 +280,8 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         if let fileNode = item as? FileNode {
             guard column == .title, let file = snapshot.files[fileNode.id] else { return nil }
             let cell = make(TitleCell.self, TitleCell.identifier)
-            cell.configureFile(file, url: model.fileURL(file), isDefault: snapshot.items[fileNode.itemId]?.defaultFileId == file.id)
+            cell.configureFile(file, label: model.label(of: file), url: model.fileURL(file),
+                               isDefault: snapshot.items[fileNode.itemId]?.defaultFileId == file.id)
             return cell
         }
         guard let node = item as? ItemNode, let entry = snapshot.items[node.id] else { return nil }
