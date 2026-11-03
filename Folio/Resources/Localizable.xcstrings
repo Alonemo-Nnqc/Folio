@@ -1969,6 +1969,16 @@
         }
       }
     },
+    "可以随时在 帮助 ▸ 欢迎使用 Folio 中继续设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can finish setting up anytime from Help ▸ Welcome to Folio"
+          }
+        }
+      }
+    },
     "可在 openalex.org 免费申请，用于提高 OpenAlex 的访问额度" : {
       "localizations" : {
         "en" : {
@@ -7115,6 +7125,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Set Up Full-Paper Translation"
+          }
+        }
+      }
+    },
+    "设置还没有完成，下次打开 Folio 时会继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup isn't finished yet. It will continue the next time you open Folio"
           }
         }
       }

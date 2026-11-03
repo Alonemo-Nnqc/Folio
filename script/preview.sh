@@ -24,7 +24,8 @@ import Foundation
 let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
 let title = ProcessInfo.processInfo.environment["FOLIO_PREVIEW_WINDOW"] ?? ""
 let pid = Int(ProcessInfo.processInfo.environment["FOLIO_PREVIEW_PID"] ?? "") ?? -1
-let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int) == 0
+// Layer 0: normal windows; 3: floating ones (the welcome guide).
+let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && [0, 3].contains($0[kCGWindowLayer as String] as? Int)
   && (title.isEmpty || (($0[kCGWindowName as String] as? String) ?? "").contains(title)) }
 let big = mine.max { a, b in
   let x = a[kCGWindowBounds as String] as? [String: Double] ?? [:], y = b[kCGWindowBounds as String] as? [String: Double] ?? [:]
