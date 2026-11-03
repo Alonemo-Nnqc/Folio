@@ -23,7 +23,7 @@
 
 - **自动识别**：拖入 PDF 后几秒内识别标题、作者、期刊、DOI 等元数据并创建条目（Zotero 识别服务 + Crossref / arXiv / OpenAlex / DBLP / CVF），找不到时可手动匹配
 - **内置阅读器**：与“预览”同一引擎（PDFKit），论文以原生标签页打开；高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，与“预览”互通；记住每篇论文的阅读位置
-- **整篇翻译**：保留排版的全文翻译（[pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next)），支持 20 多种翻译服务，译文与原文可并排对照阅读
+- **整篇翻译**：内置原生翻译引擎，保留原文排版、公式和图表（图内文字不动，表格逐格翻译），翻译过程中即可并排对照阅读；支持免费服务、Apple 离线翻译、20 多家大模型和机器翻译 API，也可以直接调用这台 Mac 上已登录的 Claude Code、Codex、Gemini CLI 等智能体
 - **笔记**：每个条目一篇 Markdown 笔记，阅读时可把选中的文字一键加入笔记
 - **整理**：两级分组（可自定义颜色）、彩色标签、回收站、全文搜索、阅读状态与星级评分；一个条目可挂多个文件
 - **引用与导出**：复制 GB/T 7714-2015、APA、IEEE、MLA、Chicago、Harvard、Vancouver、Nature 和 BibTeX 引用，导出 BibTeX / RIS / CSL JSON
@@ -82,7 +82,7 @@ Folio 每天自动检查一次更新，也可以随时点 **Folio ▸ 检查更�
 - **添加文献**：把 PDF 拖进窗口，或 文件 ▸ 添加文件…（⌘O）、通过 DOI / arXiv 编号 / ISBN 添加（⇧⌘O）
 - **文献库位置**：默认 `~/Folio`，可在 设置 ▸ 文献库 中更改
 - **界面语言**：默认跟随系统；在 设置 ▸ 通用 ▸ 语言 中可固定为简体中文或 English，重新启动后生效
-- **整篇翻译**：在条目上右键 ▸ 翻译全文…。首次使用时按提示下载翻译组件（约 1.4 GB，存放在 `~/Library/Application Support/Folio/Translator`），在 设置 ▸ 翻译 中选择翻译服务。离线的 Apple 系统翻译需要 macOS 26
+- **整篇翻译**：在条目上右键 ▸ 翻译全文…。引擎内置，无需下载；在 设置 ▸ 翻译 中选择翻译服务（免费服务、本机智能体或自己的 API Key）。离线的 Apple 系统翻译需要 macOS 26
 
 ### AI 接入
 
@@ -140,7 +140,6 @@ Folio 使用了以下开源项目和服务：
 | [Sparkle](https://github.com/sparkle-project/Sparkle) | 应用内更新 | MIT |
 | [citeproc-js](https://github.com/Juris-M/citeproc-js) | 引用格式生成（随 App 打包） | CPAL-1.0 / AGPL-1.0 |
 | [CSL 样式与 locale](https://citationstyles.org) | 引用样式 | CC BY-SA 3.0 |
-| [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next) | 整篇翻译（不随 App 打包，首次使用时按需下载） | AGPL-3.0 |
 | [Zotero 识别服务](https://www.zotero.org) | PDF 元数据识别 | — |
 
 资源文件的详细出处见 [`LICENSES.md`](Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md)。

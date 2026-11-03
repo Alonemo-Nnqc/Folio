@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+### 变更
+- 整篇翻译改用 Folio 内置的原生翻译引擎，不再需要下载约 1.4 GB 的 pdf2zh_next 组件：直接解析 PDF 版面，图内文字保持原样、表格逐格翻译、行内公式原样保留，译文绝不压到其他内容；14 页论文用免费服务约 40 秒（原来约 3 分钟），内存约 0.3–0.6 GB（原来约 2 GB）。
+- 翻译时先从标题、摘要和小节标题提取术语表，并带上论文标题和摘要，专有名词前后一致；已翻译的段落会缓存，重试不重复翻译。
+- 翻译进行中即可打开“对照阅读”，已译完的页先显示，随翻译推进自动刷新。
+- 新增翻译服务：Anthropic Claude、LM Studio，以及本机智能体 Claude Code、Codex、Gemini CLI、Qwen Code、opencode、Cursor CLI（使用你自己的登录，无需 Key）；Bing 改为 Microsoft 免费接口。
+- 设置 ▸ 翻译 可删除早期版本下载的旧翻译组件。移除 SiliconFlow 免费、AnythingLLM、Dify、Xinference（原来选择它们的会自动改用替代服务）以及 MCP 的 pdf2zh 查找工具。
+
 ## [1.0.1] - 2026-11-03
 
 ### 新增

@@ -64,7 +64,7 @@
     "tr.eyebrow": "Full-paper translation",
     "tr.title": "Translate the whole paper.<br>Keep every layout.",
     "tr.lede":
-      "Built on pdf2zh_next / BabelDOC, translation keeps formulas, figures and layout exactly where they were. Choose from 20+ translation services, or Apple’s on-device translation. Read the translation side by side with the original.",
+      "A built-in native engine, nothing to download: formulas, figures and layout stay exactly where they were, and you can read side by side while it translates. Free services, Apple’s on-device translation, 20+ LLM and translation APIs, or the Claude Code and Codex already on your Mac.",
     "cite.eyebrow": "Citations",
     "cite.title": "Copy a citation in one click.",
     "cite.lede":

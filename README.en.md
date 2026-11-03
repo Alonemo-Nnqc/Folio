@@ -23,7 +23,7 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 
 - **Automatic metadata**: drop a PDF and Folio identifies its title, authors, venue and DOI within seconds (Zotero recognizer + Crossref / arXiv / OpenAlex / DBLP / CVF), with manual matching as a fallback
 - **Built-in reader**: PDFKit, the same engine as Preview. Papers open in native tabs; highlights, underlines, strike-throughs, notes, text boxes and ink are written back into the PDF and stay compatible with Preview. Folio remembers where you stopped reading
-- **Full-paper translation**: layout-preserving translation with [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next) and 20+ translation services, read side by side with the original
+- **Full-paper translation**: a built-in native engine keeps the layout, formulas and figures (text inside figures untouched, tables translated cell by cell); read side by side while it translates. Free services, Apple's offline translation, 20+ LLM and machine translation APIs, or the Claude Code, Codex or Gemini CLI already signed in on your Mac
 - **Notes**: one Markdown note per item; send selected text from the reader to the note in one click
 - **Organization**: two-level colored groups, colored tags, trash, full-text search, reading status and ratings; several files per item
 - **Citations and export**: copy GB/T 7714-2015, APA, IEEE, MLA, Chicago, Harvard, Vancouver, Nature or BibTeX citations; export BibTeX / RIS / CSL JSON
@@ -82,7 +82,7 @@ The first time you open Folio, a welcome guide walks you through a few settings 
 - **Add papers**: drag PDFs into the window, or use File ▸ Add Files (⌘O) or Add by Identifier (DOI, arXiv ID or ISBN, ⇧⌘O)
 - **Library location**: `~/Folio` by default; change it in Settings ▸ Library
 - **Language**: follows the system; pin Simplified Chinese or English in Settings ▸ General ▸ Language (applies after a restart)
-- **Translation**: right-click an item ▸ Translate Paper…. The first time, Folio offers to download the translation engine (about 1.4 GB, stored in `~/Library/Application Support/Folio/Translator`); pick a service in Settings ▸ Translation. Apple's offline translation needs macOS 26
+- **Translation**: right-click an item ▸ Translate Paper…. The engine is built in, nothing to download; pick a service in Settings ▸ Translation (a free service, an agent on your Mac or your own API key). Apple's offline translation needs macOS 26
 
 ### AI integration
 
@@ -138,7 +138,6 @@ No Apple Developer account is needed. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 | [Sparkle](https://github.com/sparkle-project/Sparkle) | In-app updates | MIT |
 | [citeproc-js](https://github.com/Juris-M/citeproc-js) | Citation formatting (bundled) | CPAL-1.0 / AGPL-1.0 |
 | [CSL styles and locales](https://citationstyles.org) | Citation styles | CC BY-SA 3.0 |
-| [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next) | Full-paper translation (not bundled; downloaded on first use) | AGPL-3.0 |
 | [Zotero recognizer](https://www.zotero.org) | PDF metadata recognition | — |
 
 See [`LICENSES.md`](Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) for the bundled resources.
