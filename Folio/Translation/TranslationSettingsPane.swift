@@ -9,16 +9,9 @@ struct TranslationSettingsPane: View {
 
     var body: some View {
         Form {
-            EngineSection(coordinator: model.translations, settings: model.settings)
             ServiceSection(model: model)
             OptionsSection(settings: model.settings)
-            Section {
-                Button("打开翻译日志文件夹") {
-                    let logs = model.translations.installation.layout.logsDirectory
-                    try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
-                    NSWorkspace.shared.open(logs)
-                }
-            }
+            EngineSection(coordinator: model.translations)
         }
         .formStyle(.grouped)
     }
@@ -51,7 +44,7 @@ struct TranslateSheet: View {
             .formStyle(.grouped)
             .frame(minHeight: 360)
             HStack {
-                Text("保留原文排版、公式和图表\n译文会作为新文件加入该条目")
+                Text("保留原文排版、公式和图表，翻译时就可以对照阅读\n译文会作为新文件加入该条目")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -70,181 +63,46 @@ struct TranslateSheet: View {
     }
 }
 
+/// The engine: built in, nothing to install; the logs; and the old pdf2zh_next engine, if it is still on disk.
 private struct EngineSection: View {
     let coordinator: TranslationCoordinator
-    @Bindable var settings: AppSettings
-    @State private var usage: Int64 = 0
-    @State private var searching = false
-    /// The user's own pdf2zh_next: its version, or why it does not run.
-    @State private var custom: Result<String, CustomError>?
-
-    struct CustomError: Error { let message: String }
+    @State private var legacySize: Int64?
 
     var body: some View {
         Section {
-            Toggle("使用自己安装的 pdf2zh_next", isOn: Binding(get: { usesOwn || searching },
-                                                         set: { $0 ? findOwn() : (settings.translatorCustomPath = "") }))
-                .disabled(searching)
-            if searching {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("正在查找 pdf2zh_next…").foregroundStyle(.secondary)
+            LabeledContent("翻译日志") {
+                Button("在 Finder 中显示") {
+                    let logs = TranslationCoordinator.logsDirectory
+                    try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+                    NSWorkspace.shared.open(logs)
                 }
-            } else if usesOwn {
-                ownRow
-            } else {
-                builtIn
+            }
+            if let legacySize {
+                LabeledContent {
+                    Button("删除…", role: .destructive, action: confirmRemove)
+                } label: {
+                    Text("旧版翻译组件（pdf2zh_next）")
+                    Text("已不再使用，占用 \(ByteCountFormatter.string(fromByteCount: legacySize, countStyle: .file))")
+                }
             }
         } header: {
-            Text("翻译组件")
+            Text("翻译引擎")
         } footer: {
-            Text("由 pdf2zh_next（BabelDOC，AGPL-3.0）完成保留排版的翻译\n内置组件首次使用时下载，约 1.4 GB")
+            Text("Folio 内置的翻译引擎直接解析 PDF 版面并按原样排入译文，图表内文字和公式保持原样，无需下载任何组件")
         }
-        .task(id: coordinator.engineRevision) { refresh() }
-        .task(id: settings.translatorCustomPath) { await checkOwn() }
-    }
-
-    private var usesOwn: Bool { !settings.translatorCustomPath.isEmpty }
-
-    @ViewBuilder
-    private var ownRow: some View {
-        LabeledContent {
-            Button("更改…", action: chooseExecutable)
-        } label: {
-            switch custom {
-            case .success(let version)?: Text("pdf2zh_next \(version)")
-            case .failure?: Label("无法运行", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            case nil:
-                HStack(spacing: 6) {
-                    Text("pdf2zh_next")
-                    ProgressView().controlSize(.mini)
-                }
-            }
-            Text(Self.abbreviated(settings.translatorCustomPath)).textSelection(.enabled)
-        }
-        if case .failure(let error)? = custom {
-            Text(error.message).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+        .task(id: coordinator.legacyRevision) {
+            legacySize = LegacyTranslator.exists ? await Task.detached { LegacyTranslator.size() }.value : nil
         }
     }
 
-    @ViewBuilder
-    private var builtIn: some View {
-        switch coordinator.installState {
-        case .installing(let progress):
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(progress.phase.title)
-                    Spacer()
-                    Button("取消安装") { coordinator.cancelInstall() }
-                }
-                ProgressView(value: progress.fractionCompleted)
-                if let detail = progress.detail {
-                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-        case .failed(let message):
-            LabeledContent("安装失败") {
-                Button("重试") { coordinator.install() }
-            }
-            Text(message).font(.caption).foregroundStyle(.red)
-        case .idle:
-            switch coordinator.installation.status() {
-            case .installed(let installed, _):
-                LabeledContent("内置组件 pdf2zh_next \(installed)") {
-                    HStack {
-                        Text(ByteCountFormatter.string(fromByteCount: usage, countStyle: .file)).foregroundStyle(.secondary)
-                        Button("在 Finder 中显示") { NSWorkspace.shared.open(coordinator.installation.baseDirectory) }
-                        Button("卸载…", role: .destructive, action: confirmUninstall)
-                    }
-                }
-            case .notInstalled:
-                LabeledContent("内置组件未安装") {
-                    Button("下载并安装") { coordinator.install() }
-                        .glassProminentButtonStyle()
-                }
-            case .broken(let reason):
-                LabeledContent("内置组件已损坏") {
-                    Button("重新安装") { coordinator.install() }
-                }
-                Text(reason).font(.caption).foregroundStyle(.red)
-            }
-        }
-    }
-
-    private func refresh() {
-        let installation = coordinator.installation
-        Task.detached { let size = installation.diskUsage(); await MainActor.run { usage = size } }
-    }
-
-    /// Runs the configured pdf2zh_next once to show its version (or why it cannot be used).
-    private func checkOwn() async {
-        custom = nil
-        guard usesOwn else { return }
-        do {
-            custom = .success(try await coordinator.installation.customRuntime(executable: URL(filePath: settings.translatorCustomPath)).version)
-        } catch {
-            custom = .failure(CustomError(message: error.localizedDescription))
-        }
-    }
-
-    /// First use: look for the user's pdf2zh_next and configure it; say so plainly when there is none.
-    private func findOwn() {
-        searching = true
-        let installation = coordinator.installation
-        Task {
-            let found = await Task.detached {
-                await TranslatorDiscovery.discover(installation: installation, pathFolders: ShellEnvironment.loginPATH())
-            }.value
-            searching = false
-            if let found {
-                settings.translatorCustomPath = found.executable.path
-                AppDelegate.shared.model?.toasts.show(String(localized: "已找到 pdf2zh_next \(found.version)，翻译将使用它"), systemImage: "checkmark.circle")
-            } else {
-                let alert = NSAlert()
-                alert.messageText = String(localized: "没有在这台 Mac 上找到 pdf2zh_next")
-                alert.informativeText = String(localized: "已查找\(TranslatorDiscovery.searchedPlaces)。\n\n可以在终端运行 uv tool install pdf2zh-next 安装后再打开此开关，或手动选择它的位置；也可以让智能体通过 Folio 的 MCP 帮你查找。不开启时，Folio 使用内置的翻译组件。")
-                alert.addButton(withTitle: String(localized: "手动选择…"))
-                alert.addButton(withTitle: String(localized: "好"))
-                if alert.runModal() == .alertFirstButtonReturn { chooseExecutable() }
-            }
-        }
-    }
-
-    private func confirmUninstall() {
+    private func confirmRemove() {
         let alert = NSAlert()
-        alert.messageText = String(localized: "卸载翻译组件？")
-        alert.informativeText = String(localized: "会删除 Python、pdf2zh_next 和版面模型（\(ByteCountFormatter.string(fromByteCount: usage, countStyle: .file))）。已翻译好的 PDF 不受影响，之后需要时可以重新下载。")
-        alert.addButton(withTitle: String(localized: "卸载"))
+        alert.messageText = String(localized: "删除旧版翻译组件？")
+        alert.informativeText = String(localized: "会删除早期版本下载的 Python、pdf2zh_next 和版面模型，翻译已改用内置引擎。已翻译好的 PDF 不受影响。")
+        alert.addButton(withTitle: String(localized: "删除"))
         alert.addButton(withTitle: String(localized: "取消"))
         alert.buttons[0].hasDestructiveAction = true
-        if alert.runModal() == .alertFirstButtonReturn { coordinator.uninstall() }
-    }
-
-    /// Picks the file by hand; it is used only if it runs.
-    private func chooseExecutable() {
-        let panel = NSOpenPanel()
-        panel.message = String(localized: "选择 pdf2zh_next 可执行文件")
-        panel.prompt = String(localized: "使用")
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin")
-        panel.showsHiddenFiles = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let installation = coordinator.installation
-        Task {
-            do {
-                _ = try await installation.customRuntime(executable: url)
-                settings.translatorCustomPath = url.path
-            } catch {
-                let alert = NSAlert()
-                alert.messageText = String(localized: "无法使用这个文件")
-                alert.informativeText = error.localizedDescription
-                alert.runModal()
-            }
-        }
-    }
-
-    static func abbreviated(_ path: String) -> String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return path.hasPrefix(home + "/") ? "~" + path.dropFirst(home.count) : path
+        if alert.runModal() == .alertFirstButtonReturn { coordinator.removeLegacyEngine() }
     }
 }
 
@@ -283,6 +141,7 @@ struct ServiceSection: View {
                     }
                 }
                 if service.id == TranslationServiceCatalog.appleServiceID { appleRow }
+                if case .agent(let agent) = service.backend { AgentStatusRow(agent: agent, settings: settings, service: service) }
             }
         } header: {
             Text("翻译服务")
@@ -323,9 +182,40 @@ struct ServiceSection: View {
         let all = TranslationServiceCatalog.all.filter {
             $0.id != TranslationServiceCatalog.appleServiceID || AppleSystemTranslator.isSupportedOnThisSystem
         }
-        return [(String(localized: "免费"), all.filter { $0.isFree && !$0.isLocal }),
-                (String(localized: "本地 / 离线"), all.filter(\.isLocal)),
-                (String(localized: "需要 API Key"), all.filter { !$0.isFree && !$0.isLocal })].filter { !$0.services.isEmpty }
+        return [(String(localized: "免费"), all.filter { $0.category == .free }),
+                (String(localized: "本机"), all.filter { $0.category == .local }),
+                (String(localized: "本机智能体（无需 Key）"), all.filter { $0.category == .agent }),
+                (String(localized: "大模型 API"), all.filter { $0.category == .llm }),
+                (String(localized: "机器翻译 API"), all.filter { $0.category == .machine })].filter { !$0.services.isEmpty }
+    }
+}
+
+/// Whether the chosen agent is on this Mac, and where.
+private struct AgentStatusRow: View {
+    let agent: LocalAgent
+    let settings: AppSettings
+    let service: TranslationService
+    @State private var location: URL??
+
+    var body: some View {
+        Group {
+            switch location {
+            case .some(.some(let url)):
+                Label("已找到 \(TranslationSettingsPane.abbreviatedPath(url.path))", systemImage: "checkmark.circle").foregroundStyle(.secondary)
+            case .some(.none):
+                Label("没有在这台 Mac 上找到 \(agent.command)，请先安装并登录", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+            case .none:
+                ProgressView().controlSize(.small)
+            }
+        }
+        .task(id: pathValue) {
+            let path = pathValue
+            location = .some(await Task.detached { agent.locate(customPath: path) }.value)
+        }
+    }
+
+    private var pathValue: String {
+        service.fields.first { $0.option.hasSuffix("-path") }.flatMap { settings.translationFields[service.id]?[$0.option] } ?? ""
     }
 }
 
@@ -429,10 +319,11 @@ private struct OptionsSection: View {
             TextField("页码范围（选填）", text: Binding(get: { settings.translationOptions.pages ?? "" },
                                                 set: { settings.translationOptions.pages = $0.isEmpty ? nil : $0 }),
                       prompt: Text("全部，例如 1-3,5"))
+            Toggle("翻译表格", isOn: $settings.translationOptions.translateTables)
+                .help("逐格翻译表格中的文字；数字和符号保持原样")
             if !compact {
-                Toggle("翻译表格中的文字", isOn: $settings.translationOptions.translateTableText)
-                Toggle("兼容模式", isOn: $settings.translationOptions.enhanceCompatibility)
-                    .help("译文 PDF 在部分阅读器中显示异常时打开")
+                Toggle("翻译参考文献", isOn: $settings.translationOptions.translateReferences)
+                    .help("默认保留参考文献列表的原文")
                 LabeledContent("术语表（选填）") {
                     HStack {
                         Text(settings.translationOptions.glossaryFile?.lastPathComponent ?? String(localized: "未选择"))
@@ -443,11 +334,14 @@ private struct OptionsSection: View {
                         Button("选择…", action: chooseGlossary)
                     }
                 }
-                Stepper(value: Binding(get: { settings.translationOptions.qps ?? 4 },
-                                       set: { settings.translationOptions.qps = $0 }), in: 1...50) {
-                    Text("每秒请求数：\(settings.translationOptions.qps ?? 4)")
+                Picker("同时请求数", selection: Binding(get: { settings.translationOptions.concurrency ?? 0 },
+                                                   set: { settings.translationOptions.concurrency = $0 == 0 ? nil : $0 })) {
+                    Text("自动").tag(0)
+                    ForEach([1, 2, 4, 8, 12, 16], id: \.self) { Text("\($0)").tag($0) }
                 }
-                .help("付费接口额度较高时可以调大以加快速度；免费服务请保持较低")
+                .help("同时发出的翻译请求数。付费接口额度较高时调大可以更快；遇到限流时调小")
+                Toggle("重新翻译（不使用缓存）", isOn: $settings.translationOptions.ignoreCache)
+                    .help("默认会复用同一篇论文用同一服务翻译过的段落，重试时更快、更省")
             }
         } header: {
             Text(compact ? String(localized: "选项") : String(localized: "默认选项"))

@@ -1,5 +1,6 @@
 import AppKit
 import FolioAgent
+import FolioTranslate
 import SwiftUI
 
 /// The guide's pages and the bar under them (page dots, 返回, 继续). It fills the window below the title
@@ -403,14 +404,28 @@ private struct TranslationPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PageHeader(title: "设置整篇翻译", subtitle: "保留排版、公式和图表的全文翻译，由开源引擎 pdf2zh_next 完成") {
+            PageHeader(title: "设置整篇翻译", subtitle: "保留排版、公式和图表的全文翻译，引擎内置，无需下载") {
                 SymbolIcon(symbol: "translate", tint: .orange)
             }
             Form {
-                Section {
-                    engine
-                } header: {
-                    Text("翻译组件")
+                if let agents = state.translationAgents, !agents.isEmpty {
+                    Section {
+                        ForEach(agents, id: \.self) { agent in
+                            let service = TranslationServiceCatalog.service(id: agent.serviceID)
+                            LabeledContent {
+                                if state.model.settings.translationService == agent.serviceID {
+                                    Label("正在使用", systemImage: "checkmark").foregroundStyle(.secondary)
+                                } else {
+                                    Button("用它翻译") { state.useAgent(agent) }
+                                }
+                            } label: {
+                                Text(service?.displayName ?? agent.command)
+                                Text("已在这台 Mac 上找到，使用你自己的账户，无需在 Folio 中配置 Key")
+                            }
+                        }
+                    } header: {
+                        Text("这台 Mac 上的智能体")
+                    }
                 }
                 ServiceSection(model: state.model, compact: true)
             }
@@ -419,87 +434,6 @@ private struct TranslationPage: View {
             .frame(maxWidth: 620)
         }
         .padding(.horizontal, 30)
-    }
-
-    @ViewBuilder
-    private var engine: some View {
-        let coordinator = state.model.translations
-        if case .installing(let progress) = coordinator.installState {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(progress.phase.title)
-                    Spacer()
-                    Button("取消安装") { coordinator.cancelInstall() }
-                }
-                ProgressView(value: progress.fractionCompleted)
-                Text("安装在后台进行，可以继续下一步").font(.caption).foregroundStyle(.secondary)
-            }
-        } else if state.usesOwnTranslator {
-            Label {
-                Text("使用这台 Mac 上的 pdf2zh_next")
-                Text(TranslationSettingsPane.abbreviatedPath(state.model.settings.translatorCustomPath))
-            } icon: {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-            }
-        } else if state.builtInInstalled {
-            Label("内置翻译组件已安装", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-        } else {
-            discovery
-            if case .failed(let message) = coordinator.installState {
-                Text(message).font(.caption).foregroundStyle(.red)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var discovery: some View {
-        let coordinator = state.model.translations
-        switch state.discovery {
-        case .idle, .searching:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("正在查找这台 Mac 上已安装的 pdf2zh_next…").foregroundStyle(.secondary)
-            }
-        case .found(let url, let version):
-            LabeledContent {
-                Button("使用它", action: state.useFoundTranslator).glassProminentButtonStyle()
-            } label: {
-                Text("找到 pdf2zh_next \(version)")
-                Text(TranslationSettingsPane.abbreviatedPath(url.path))
-            }
-            LabeledContent("也可以使用 Folio 内置的组件（约 1.4 GB）") {
-                Button("下载内置组件") { coordinator.install() }
-            }
-        case .notFound:
-            LabeledContent {
-                Button("下载并安装") { coordinator.install() }.glassProminentButtonStyle()
-            } label: {
-                Text("没有找到已安装的 pdf2zh_next")
-                Text("下载 Folio 内置的组件，约 1.4 GB，只需一次")
-            }
-            LabeledContent("已经安装过，但 Folio 没找到？") {
-                Button("手动选择…", action: state.chooseTranslator)
-            }
-            if !state.integration.detected.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("也可以让智能体帮你找：在已添加 Folio MCP 的智能体中发送下面这句话")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    HStack(alignment: .top) {
-                        Text(OnboardingState.agentPrompt)
-                            .font(.callout)
-                            .textSelection(.enabled)
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-                        Button("拷贝") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(OnboardingState.agentPrompt, forType: .string)
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -550,13 +484,10 @@ private struct DonePage: View {
             : String(localized: "\(count) 个智能体已添加 Folio MCP")
     }
 
-    private var translationDone: Bool { state.usesOwnTranslator || state.builtInInstalled }
+    private var translationDone: Bool { true }
     private var translationText: String {
-        if case .installing(let progress) = state.model.translations.installState {
-            return String(localized: "翻译组件正在后台下载（\(Int(progress.fractionCompleted * 100))%）")
-        }
-        if translationDone { return String(localized: "翻译组件已就绪") }
-        return String(localized: "翻译组件未安装，第一次翻译时会提示下载")
+        let service = TranslationServiceCatalog.resolve(state.model.settings.translationService)
+        return String(localized: "翻译服务：\(service.displayName)")
     }
 
     private func summaryRow(_ done: Bool, _ text: String) -> some View {

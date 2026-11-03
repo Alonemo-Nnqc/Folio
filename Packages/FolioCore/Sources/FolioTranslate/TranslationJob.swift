@@ -1,259 +1,530 @@
+import CoreGraphics
+import CryptoKit
 import Foundation
+import PDFKit
 
-/// Runs one PDF translation in a separate process group.
-///
-/// ```swift
-/// let job = TranslationJob(request: request, runtime: try installation.runtime())
-/// for await event in job.start() { … }   // .stage / .progress / .finished / .failed / .cancelled
-/// job.cancel()                            // from anywhere; kills the whole process group
-/// ```
-///
-/// The full stdout/stderr of the engine is written to `logURL` (secrets are
-/// passed through the environment and redacted from the log).
-public final class TranslationJob: Sendable {
+/// Translates one PDF with the native engine: layout analysis, a glossary of the paper's terms, batched
+/// requests to the chosen service, and the translated PDFs set in the original layout.
+public final class TranslationJob: @unchecked Sendable {
     public let request: TranslationRequest
-    public let runtime: TranslatorRuntime
     public let logURL: URL
-    private let appleTranslatorCommand: [String]?
-    private let state = Mutex(State())
+    private let lock = NSLock()
+    private var task: Task<Void, Never>?
+    private var cancelled = false
 
-    private struct State {
-        var started = false
-        var cancelled = false
-        var process: ChildProcess?
-    }
+    /// Where translations are cached, logs written. Tests point them at scratch folders.
+    nonisolated(unsafe) public static var supportDirectory: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return base.appending(path: "Folio/Translation", directoryHint: .isDirectory)
+    }()
 
-    /// - Parameters:
-    ///   - logURL: defaults to `<translator>/logs/translate-<date>-<uuid>.log`.
-    ///   - appleTranslatorCommand: executable (+ leading arguments) of the Apple
-    ///     translation helper; required when `request.serviceID == "apple"`.
-    public init(request: TranslationRequest, runtime: TranslatorRuntime, logURL: URL? = nil,
-                appleTranslatorCommand: [String]? = nil) {
+    public init(request: TranslationRequest, logURL: URL? = nil) {
         self.request = request
-        self.runtime = runtime
-        self.appleTranslatorCommand = appleTranslatorCommand
-        self.logURL = logURL ?? runtime.layout.logsDirectory.appending(
-            path: "translate-\(Self.timestamp())-\(UUID().uuidString.prefix(8)).log")
-    }
-
-    /// Starts the job. Call once; later calls return a stream that finishes immediately.
-    public func start() -> AsyncStream<TranslationEvent> {
-        let (stream, continuation) = AsyncStream<TranslationEvent>.makeStream(bufferingPolicy: .unbounded)
-        let alreadyStarted = state.withLock { state -> Bool in
-            defer { state.started = true }
-            return state.started
-        }
-        if alreadyStarted {
-            continuation.finish()
-            return stream
-        }
-        let task = Task.detached { [self] in
-            await run(continuation)
-            continuation.finish()
-        }
-        continuation.onTermination = { [weak self] termination in
-            if case .cancelled = termination {
-                self?.cancel()
-                task.cancel()
-            }
-        }
-        return stream
-    }
-
-    /// Cancels the job: SIGTERM to the whole process group, SIGKILL after 3 s.
-    public func cancel() {
-        let process = state.withLock { state -> ChildProcess? in
-            state.cancelled = true
-            return state.process
-        }
-        process?.terminateGroup(grace: 3)
-    }
-
-    public var isCancelled: Bool { state.withLock { $0.cancelled } }
-
-    /// PID (= process group ID) of the engine process while it runs.
-    public var processIdentifier: pid_t? { state.withLock { $0.process?.pid } }
-
-    // MARK: - Running
-
-    private func run(_ continuation: AsyncStream<TranslationEvent>.Continuation) async {
-        let log = LogWriter(url: logURL, redacting: Array(request.secrets.values))
-        defer { log.close() }
-
-        let commandLine: TranslationCommandLine
-        let spec: ProcessSpec
-        do {
-            commandLine = try TranslationArgumentBuilder.build(request, appleTranslatorCommand: appleTranslatorCommand)
-            try FileManager.default.createDirectory(at: request.outputDirectory, withIntermediateDirectories: true)
-            spec = try runtime.spec(driverCommand: "translate", arguments: commandLine.arguments,
-                                    extraEnvironment: commandLine.environment)
-        } catch {
-            log.write("Configuration error: \(error)")
-            continuation.yield(.failed(message: error.localizedDescription, logURL: logURL))
-            return
-        }
-
-        log.write("Folio translation job — \(Date())")
-        log.write("Executable: \(spec.executable.path)")
-        log.write("Arguments: \(spec.arguments.joined(separator: " "))")
-        log.write("Environment keys: \(spec.environment.keys.sorted().joined(separator: ", "))")
-        log.write("---")
-
-        if isCancelled {
-            continuation.yield(.cancelled)
-            return
-        }
-        let process: ChildProcess
-        do {
-            process = try ChildProcess.launch(spec)
-        } catch {
-            log.write("Launch failed: \(error)")
-            continuation.yield(.failed(message: String(localized: "无法启动翻译组件（\(error.localizedDescription)），请在 设置 ▸ 翻译 中重新安装组件", bundle: .module),
-                                       logURL: logURL))
-            return
-        }
-        let cancelledBeforeStore = state.withLock { state -> Bool in
-            state.process = process
-            return state.cancelled
-        }
-        if cancelledBeforeStore { process.terminateGroup(grace: 3) }
-
-        var tracker = ProgressTracker()
-        if let stage = tracker.stage("starting") { continuation.yield(.stage(stage)) }
-        continuation.yield(.progress(0))
-        var finish: (mono: String?, dual: String?)?
-        var engineError: (message: String, details: String?)?
-        var tail: [String] = []
-
-        for await line in process.output {
-            log.write(line.text)
-            if let event = DriverEvent.parse(line.text) {
-                switch event.kind {
-                case .stage(let name):
-                    if let stage = tracker.stage(name) { continuation.yield(.stage(stage)) }
-                case .progress(let stage, let overall, let current, let total):
-                    if let stage, let display = tracker.stage(stage, current: current, total: total) { continuation.yield(.stage(display)) }
-                    if let overall, let value = tracker.progress(overall / 100) { continuation.yield(.progress(value)) }
-                case .finish(let mono, let dual, _):
-                    finish = (mono, dual)
-                case .error(let message, _, let details):
-                    engineError = (message, details)
-                default:
-                    break
-                }
-            } else {
-                tail.append(line.text)
-                if tail.count > 400 { tail.removeFirst(tail.count - 400) }
-            }
-        }
-        let termination = await process.waitUntilExit()
-        // Reap any stray worker that outlived the leader.
-        process.killGroup()
-        log.write("--- process ended: \(termination)")
-
-        if isCancelled {
-            continuation.yield(.cancelled)
-            return
-        }
-
-        let fm = FileManager.default
-        func existing(_ path: String?) -> URL? {
-            guard let path, fm.fileExists(atPath: path) else { return nil }
-            return URL(fileURLWithPath: path)
-        }
-        if let finish, termination.isSuccess || existing(finish.mono) != nil || existing(finish.dual) != nil {
-            let mono = existing(finish.mono), dual = existing(finish.dual)
-            if mono != nil || dual != nil {
-                if tracker.lastProgress < 1 { continuation.yield(.progress(1)) }
-                continuation.yield(.finished(mono: mono, dual: dual))
-                return
-            }
-        }
-        if case .cli = runtime.mode, termination.isSuccess {
-            let found = Self.scanOutputs(in: request.outputDirectory, input: request.input)
-            if found.mono != nil || found.dual != nil {
-                continuation.yield(.progress(1))
-                continuation.yield(.finished(mono: found.mono, dual: found.dual))
-                return
-            }
-        }
-
-        let failure: TranslationFailure
-        if let engineError {
-            failure = TranslationErrorClassifier.classify(message: engineError.message, details: engineError.details, logTail: tail)
-        } else {
-            let summary = switch termination {
-            case .exited(let code): String(localized: "翻译进程意外退出（代码 \(code)）", bundle: .module)
-            case .signaled(let signal): signal == SIGKILL ? String(localized: "翻译进程被系统终止（可能内存不足）", bundle: .module) : String(localized: "翻译进程意外终止（信号 \(signal)）", bundle: .module)
-            }
-            let classified = TranslationErrorClassifier.classify(message: summary, logTail: tail)
-            failure = classified.reason == .unknown
-                ? TranslationFailure(reason: .unknown, message: summary + String(localized: "。", bundle: .module), rawMessage: summary)
-                : classified
-        }
-        log.write("Failure (\(failure.reason.rawValue)): \(failure.message) — \(failure.rawMessage)")
-        continuation.yield(.failed(message: failure.message, logURL: logURL))
-    }
-
-    /// Finds `<stem>…mono.pdf` / `<stem>…dual.pdf` written by pdf2zh_next.
-    static func scanOutputs(in directory: URL, input: URL) -> (mono: URL?, dual: URL?) {
-        let stem = input.deletingPathExtension().lastPathComponent
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        let names = files.map(\.lastPathComponent).filter { $0.hasPrefix(stem + ".") && $0.lowercased().hasSuffix(".pdf") }.sorted()
-        return (names.first { $0.hasSuffix(".mono.pdf") }.map { directory.appending(path: $0) },
-                names.first { $0.hasSuffix(".dual.pdf") }.map { directory.appending(path: $0) })
-    }
-
-    static func timestamp() -> String {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return formatter.string(from: Date())
+        self.logURL = logURL ?? Self.supportDirectory.appending(path: "logs/translate-\(formatter.string(from: Date())).log")
+    }
+
+    public func start() -> AsyncStream<TranslationEvent> {
+        AsyncStream { continuation in
+            let work = Task.detached(priority: .userInitiated) { [self] in
+                let log = TranslationLog(url: logURL)
+                let event: TranslationEvent
+                do {
+                    event = try await run(emit: { continuation.yield($0) }, log: log)
+                } catch is CancellationError {
+                    event = .cancelled
+                } catch let error as ProviderError where error.kind == .cancelled {
+                    event = .cancelled
+                } catch {
+                    if isCancelled {
+                        event = .cancelled
+                    } else {
+                        log.write("FAILED: \(error)")
+                        let message = Self.message(for: error)
+                        event = .failed(message: message, logURL: logURL)
+                    }
+                }
+                log.write("end: \(event)")
+                continuation.yield(event)
+                continuation.finish()
+            }
+            lock.withLock { task = work }
+            continuation.onTermination = { _ in work.cancel() }
+        }
+    }
+
+    public func cancel() {
+        lock.withLock {
+            cancelled = true
+            task?.cancel()
+        }
+        LocalProcess.Running.shared.terminateAll()
+    }
+
+    public var isCancelled: Bool { lock.withLock { cancelled } }
+
+    static func message(for error: Error) -> String {
+        if let configuration = error as? TranslationConfigurationError { return configuration.errorDescription ?? "\(error)" }
+        if let engine = error as? EngineError { return engine.errorDescription ?? "\(error)" }
+        let detail = (error as? ProviderError).map { $0.detail + ($0.host.map { " https://\($0)/" } ?? "") } ?? "\(error)"
+        return TranslationErrorClassifier.classify(message: detail).message
+    }
+
+    // MARK: Run
+
+    private func run(emit: @escaping @Sendable (TranslationEvent) -> Void, log: TranslationLog) async throws -> TranslationEvent {
+        let options = request.options
+        var lastProgress = 0.0
+        func progress(_ value: Double) {
+            let clamped = min(max(value, lastProgress), 1)
+            if clamped - lastProgress >= 0.004 || clamped >= 1 {
+                lastProgress = clamped
+                emit(.progress(clamped))
+            }
+        }
+        log.write("translate \(request.input.lastPathComponent) with \(request.serviceID) \(options.langIn)→\(options.langOut)")
+        let provider = try ProviderFactory.make(serviceID: request.serviceID, fields: request.fieldValues, secrets: request.secrets,
+                                                concurrency: options.concurrency)
+
+        // 1. Layout.
+        emit(.stage(String(localized: "分析版面", bundle: .module)))
+        guard let cg = CGPDFDocument(request.input as CFURL), let document = PDFDocument(url: request.input) else {
+            throw EngineError.unreadable
+        }
+        if cg.isEncrypted && !cg.isUnlocked { throw EngineError.encrypted }
+        let started = Date()
+        let selected = options.pageNumbers(count: cg.numberOfPages)
+        var analyzer = LayoutAnalyzer(options: .init(translateTables: options.translateTables, translateReferences: options.translateReferences))
+        let analysed = analyzer.analyze(document: document, cgDocument: cg, pages: selected)
+        try Task.checkCancellation()
+        let output = options.onlyIncludeTranslatedPages || options.pages == nil ? selected : Array(1...cg.numberOfPages)
+        let byNumber = Dictionary(uniqueKeysWithValues: analysed.map { ($0.number, $0) })
+        let layouts = output.compactMap { byNumber[$0] ?? PageLayout.untouched(cg, number: $0) }
+        let segments = analysed.flatMap(SegmentBuilder.segments(for:))
+        log.write(String(format: "layout: %d pages, %d segments in %.2f s", analysed.count, segments.count, Date().timeIntervalSince(started)))
+        progress(0.04)
+        if segments.isEmpty { throw EngineError.noText }
+
+        // 2. Context and glossary.
+        var context = TranslationContext(sourceLanguage: options.langIn, targetLanguage: options.langOut,
+                                         title: segments.first { $0.kind == .title }?.source, summary: Self.summary(of: segments), glossary: [])
+        context.glossary = Self.readGlossary(options.glossaryFile)
+        // Terms are extracted while the first batches (title, abstract, introduction: where the terms come from)
+        // are already being translated; later batches get the glossary.
+        let glossary = GlossaryBox(context.glossary)
+        var termTask: Task<Void, Never>?
+        if provider.limits.usesContext {
+            let excerpt = Self.termExcerpt(segments)
+            let base = context
+            termTask = Task {
+                do {
+                    let terms = try await withTimeout(seconds: 150) { try await provider.extractTerms(from: excerpt, context: base) }
+                    glossary.add(terms)
+                    log.write("glossary: \(glossary.entries.count) terms")
+                } catch {
+                    log.write("term extraction failed, continuing without: \(error)")
+                }
+            }
+        }
+        progress(0.06)
+
+        // 3. Translations: the cache first, then the service.
+        let cache = TranslationCache(directory: Self.supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
+                                     document: request.input, signature: signature(), ignore: options.ignoreCache)
+        let state = TranslationState(segments: segments)
+        for segment in segments { if let hit = cache.lookup(segment.source) { state.store(hit, for: segment) } }
+        log.write("cache: \(state.doneCount) of \(segments.count) segments")
+        let renderer = TranslationRenderer(source: cg, language: options.langOut)
+        let previews = PreviewWriter(renderer: renderer, layouts: layouts, segments: segments,
+                                     directory: request.outputDirectory, emit: emit)
+
+        let batches = Self.batches(segments.filter { state.translation(for: $0) == nil }, limits: provider.limits)
+        let total = segments.count
+        func reportTranslation() {
+            let done = state.doneCount
+            emit(.stage(String(localized: "翻译段落 \(done)/\(total)", bundle: .module)))
+            progress(0.08 + 0.86 * state.doneFraction)
+        }
+        reportTranslation()
+        let batchContext = context
+        defer { termTask?.cancel() }
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            var pending = batches[...]
+            func startNext() {
+                guard let batch = pending.popFirst() else { return }
+                group.addTask {
+                    var context = batchContext
+                    context.glossary = glossary.entries
+                    let texts = try await self.translate(batch, provider: provider, context: context, log: log)
+                    for (segment, text) in zip(batch, texts) {
+                        state.store(text, for: segment)
+                        cache.store(text, for: segment.source)
+                    }
+                }
+            }
+            for _ in 0..<max(1, provider.limits.concurrency) { startNext() }
+            while try await group.next() != nil {
+                reportTranslation()
+                cache.saveIfNeeded()
+                previews.update(state.snapshot(), pagesDone: state.completedPages)
+                startNext()
+            }
+        }
+        cache.save()
+        try Task.checkCancellation()
+
+        // 4. The translated PDFs.
+        emit(.stage(String(localized: "排版译文", bundle: .module)))
+        progress(0.95)
+        await previews.finish()
+        let base = request.input.deletingPathExtension().lastPathComponent
+        let wantMono = options.outputs != .dual, wantDual = options.outputs != .mono
+        let result = renderer.render(layouts: layouts, segments: segments, translations: state.snapshot(), mono: wantMono, dual: wantDual,
+                                     dualLayout: options.dualLayout, title: nil)
+        try FileManager.default.createDirectory(at: request.outputDirectory, withIntermediateDirectories: true)
+        var monoURL: URL?, dualURL: URL?
+        if let mono = result.mono {
+            monoURL = request.outputDirectory.appending(path: "\(base).mono.pdf")
+            try mono.write(to: monoURL!)
+        }
+        if let dual = result.dual {
+            dualURL = request.outputDirectory.appending(path: "\(base).dual.pdf")
+            try dual.write(to: dualURL!)
+        }
+        log.write(String(format: "done in %.1f s", Date().timeIntervalSince(started)))
+        progress(1)
+        return .finished(mono: monoURL, dual: dualURL)
+    }
+
+    /// Who translates: the cache is only shared between runs of the same service, model and languages.
+    private func signature() -> String {
+        let service = TranslationServiceCatalog.service(id: request.serviceID)
+        let model = service?.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }
+            .flatMap { request.fieldValues[$0.option].flatMap { $0.isEmpty ? nil : $0 } ?? $0.defaultValue } ?? ""
+        return "\(request.serviceID)|\(model)|\(request.options.langIn)|\(request.options.langOut)|v1"
+    }
+
+    // MARK: Batches
+
+    static func batches(_ segments: [TextSegment], limits: ProviderLimits) -> [[TextSegment]] {
+        var result: [[TextSegment]] = []
+        var current: [TextSegment] = []
+        var characters = 0
+        for segment in segments {
+            let length = segment.source.count
+            if !current.isEmpty, characters + length > limits.batchCharacters || current.count >= limits.batchItems {
+                result.append(current)
+                current = []
+                characters = 0
+            }
+            current.append(segment)
+            characters += length
+        }
+        if !current.isEmpty { result.append(current) }
+        return result
+    }
+
+    /// One batch, retried on passing failures; a batch that keeps failing is split in halves.
+    private func translate(_ batch: [TextSegment], provider: TranslationProvider, context: TranslationContext,
+                           log: TranslationLog) async throws -> [String] {
+        let items = batch.map { TranslationItem(text: $0.source, kind: $0.kind) }
+        var context = context
+        if provider.limits.usesContext {
+            let text = batch.map(\.source).joined(separator: "\n").lowercased()
+            context.glossary = Array(context.glossary.filter { text.contains($0.source.lowercased()) }.prefix(80))
+        }
+        var lastError: Error?
+        for attempt in 0..<4 {
+            try Task.checkCancellation()
+            do {
+                let started = Date()
+                let texts = try await provider.translate(items, context: context)
+                log.write(String(format: "batch of %d (%d chars) in %.1f s", batch.count, batch.reduce(0) { $0 + $1.source.count },
+                                 Date().timeIntervalSince(started)))
+                return texts.map(Self.clean)
+            } catch let error as ProviderError {
+                lastError = error
+                log.write("attempt \(attempt + 1) failed: \(error.detail.prefix(500))")
+                guard error.isRetryable else { throw error }
+                let wait = error.retryAfter ?? min(30, pow(2, Double(attempt)) * 1.5)
+                try await Task.sleep(for: .seconds(wait))
+                // An unreadable reply for a big batch: try smaller ones.
+                if case .invalidResponse = error.kind, batch.count > 1, attempt >= 1 { break }
+            }
+        }
+        if batch.count > 1 {
+            let half = batch.count / 2
+            let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log)
+            let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log)
+            return first + second
+        }
+        throw lastError ?? ProviderError(kind: .invalidResponse, detail: "translation failed")
+    }
+
+    static func clean(_ text: String) -> String {
+        text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: Context
+
+    /// The abstract: the first long paragraph on the first page.
+    static func summary(of segments: [TextSegment]) -> String? {
+        let firstPage = segments.filter { $0.page == segments.first?.page && $0.kind == .paragraph }
+        let long = firstPage.first { $0.source.split(separator: " ").count >= 60 } ?? firstPage.first
+        return long.map { Placeholders.replace(in: $0.source) { _ in "…" } }
+    }
+
+    /// What terms are learnt from: title, abstract, headings and captions.
+    static func termExcerpt(_ segments: [TextSegment]) -> String {
+        var parts: [String] = []
+        if let title = segments.first(where: { $0.kind == .title }) { parts.append(title.source) }
+        if let summary = summary(of: segments) { parts.append(summary) }
+        parts += segments.filter { $0.kind == .heading }.map(\.source)
+        parts += segments.filter { $0.kind == .caption }.map(\.source)
+        parts += segments.filter { $0.kind == .paragraph }.prefix(6).map(\.source)
+        var excerpt = ""
+        for part in parts where excerpt.count + part.count < 7000 { excerpt += Placeholders.replace(in: part) { _ in "…" } + "\n" }
+        return excerpt
+    }
+
+    /// A CSV glossary: `source,target` per line (more columns are ignored).
+    static func readGlossary(_ url: URL?) -> [GlossaryEntry] {
+        guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        return text.split(whereSeparator: \.isNewline).compactMap { line in
+            let columns = line.split(separator: ",", maxSplits: 2).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \"\t")) }
+            guard columns.count >= 2, !columns[0].isEmpty, !columns[1].isEmpty, columns[0].lowercased() != "source" else { return nil }
+            return GlossaryEntry(source: columns[0], target: columns[1])
+        }
     }
 }
 
-/// Deduplicates stages and keeps progress monotonic.
-struct ProgressTracker {
-    private(set) var lastStage: String?
-    private(set) var lastProgress: Double = 0
+enum EngineError: Error, LocalizedError {
+    case unreadable, encrypted, noText
 
-    /// Returns the display text when it changed: the stage name, with "34/120" when the engine counts the
-    /// stage's units (paragraphs, pages).
-    mutating func stage(_ raw: String, current: Int? = nil, total: Int? = nil) -> String? {
-        var display = TranslationStageNames.displayName(for: raw)
-        if let current, let total, total > 1 { display += " \(min(max(current, 0), total))/\(total)" }
-        guard !raw.isEmpty, display != lastStage else { return nil }
-        lastStage = display
-        return display
-    }
-
-    /// Returns the new value when it advanced by at least 0.5 %.
-    mutating func progress(_ value: Double) -> Double? {
-        let clamped = min(max(value, 0), 1)
-        guard clamped >= lastProgress + 0.005 || (clamped == 1 && lastProgress < 1) else { return nil }
-        lastProgress = clamped
-        return clamped
+    var errorDescription: String? {
+        switch self {
+        case .unreadable: String(localized: "无法读取这个 PDF 文件。", bundle: .module)
+        case .encrypted: String(localized: "PDF 已加密或受密码保护，无法翻译。", bundle: .module)
+        case .noText: String(localized: "这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。", bundle: .module)
+        }
     }
 }
 
-/// Appends lines to a log file, redacting secrets.
-final class LogWriter: Sendable {
-    private let handle: FileHandle?
-    private let secrets: [String]
+/// The glossary, growing when extracted terms arrive.
+final class GlossaryBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: [GlossaryEntry]
 
-    init(url: URL, redacting secrets: [String]) {
+    init(_ entries: [GlossaryEntry]) { stored = entries }
+
+    var entries: [GlossaryEntry] { lock.withLock { stored } }
+
+    /// Adds terms the user's glossary does not already have.
+    func add(_ terms: [GlossaryEntry]) {
+        lock.withLock {
+            let known = Set(stored.map { $0.source.lowercased() })
+            stored += terms.filter { !known.contains($0.source.lowercased()) }
+        }
+    }
+}
+
+/// Runs `body`, failing with a timeout when it takes longer than `seconds`.
+func withTimeout<T: Sendable>(seconds: Double, _ body: @escaping @Sendable () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask { try await body() }
+        group.addTask {
+            try await Task.sleep(for: .seconds(seconds))
+            throw ProviderError(kind: .network, detail: "timed out after \(Int(seconds)) s")
+        }
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
+    }
+}
+
+// MARK: - State
+
+/// Translations so far, shared by the concurrent batches.
+final class TranslationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var translations: [String: String] = [:]
+    private let segments: [TextSegment]
+    private let totalCharacters: Int
+    private var doneCharacters = 0
+    private var remainingByPage: [Int: Int]
+
+    init(segments: [TextSegment]) {
+        self.segments = segments
+        totalCharacters = max(1, segments.reduce(0) { $0 + $1.source.count })
+        remainingByPage = Dictionary(grouping: segments, by: \.page).mapValues(\.count)
+    }
+
+    func store(_ text: String, for segment: TextSegment) {
+        lock.withLock {
+            guard translations[segment.id] == nil else { return }
+            translations[segment.id] = text
+            doneCharacters += segment.source.count
+            remainingByPage[segment.page, default: 1] -= 1
+        }
+    }
+
+    func translation(for segment: TextSegment) -> String? { lock.withLock { translations[segment.id] } }
+    func snapshot() -> [String: String] { lock.withLock { translations } }
+    var doneCount: Int { lock.withLock { translations.count } }
+    var doneFraction: Double { lock.withLock { Double(doneCharacters) / Double(totalCharacters) } }
+    var completedPages: Set<Int> { lock.withLock { Set(remainingByPage.filter { $0.value <= 0 }.keys) } }
+}
+
+/// Writes preview PDFs while the translation runs: when more pages are done, at most every few seconds, one at
+/// a time in the background.
+final class PreviewWriter: @unchecked Sendable {
+    private let renderer: TranslationRenderer
+    private let layouts: [PageLayout]
+    private let segments: [TextSegment]
+    private let directory: URL
+    private let emit: @Sendable (TranslationEvent) -> Void
+    private let lock = NSLock()
+    private var shownPages = 0
+    private var lastWrite = Date.distantPast
+    private var running: Task<Void, Never>?
+    private var counter = 0
+
+    init(renderer: TranslationRenderer, layouts: [PageLayout], segments: [TextSegment], directory: URL,
+         emit: @escaping @Sendable (TranslationEvent) -> Void) {
+        self.renderer = renderer
+        self.layouts = layouts
+        self.segments = segments
+        self.directory = directory
+        self.emit = emit
+    }
+
+    func update(_ translations: [String: String], pagesDone: Set<Int>) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard pagesDone.count > shownPages, running == nil, Date().timeIntervalSince(lastWrite) > 3,
+              pagesDone.count < Set(segments.map(\.page)).count else { return }
+        shownPages = pagesDone.count
+        lastWrite = Date()
+        counter += 1
+        let url = directory.appending(path: "preview-\(counter).pdf")
+        let previous = counter > 2 ? directory.appending(path: "preview-\(counter - 2).pdf") : nil
+        running = Task.detached(priority: .utility) { [self] in
+            let output = renderer.render(layouts: layouts, segments: segments, translations: translations, mono: true, dual: false,
+                                         dualLayout: .sideBySide, title: nil)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            if let data = output.mono, (try? data.write(to: url)) != nil, !Task.isCancelled { emit(.preview(url)) }
+            if let previous { try? FileManager.default.removeItem(at: previous) }
+            lock.withLock { running = nil }
+        }
+    }
+
+    func finish() async {
+        let task = lock.withLock { running }
+        task?.cancel()
+        await task?.value
+    }
+}
+
+/// Earlier translations of the same text, per document and translator, kept on disk.
+final class TranslationCache: @unchecked Sendable {
+    private let url: URL
+    private let ignore: Bool
+    private var entries: [String: String] = [:]
+    private var dirty = 0
+    private let lock = NSLock()
+
+    init(directory: URL, document: URL, signature: String, ignore: Bool) {
+        self.ignore = ignore
+        var hasher = SHA256()
+        hasher.update(data: Data(signature.utf8))
+        if let handle = try? FileHandle(forReadingFrom: document) {
+            hasher.update(data: (try? handle.read(upToCount: 1 << 20)) ?? Data())
+            try? handle.close()
+        }
+        let size = (try? FileManager.default.attributesOfItem(atPath: document.path)[.size] as? Int) ?? 0
+        hasher.update(data: Data(String(size).utf8))
+        let key = hasher.finalize().prefix(12).map { String(format: "%02x", $0) }.joined()
+        url = directory.appending(path: "\(key).json")
+        if let data = try? Data(contentsOf: url), let stored = try? JSONDecoder().decode([String: String].self, from: data) {
+            entries = stored
+        }
+        Self.prune(directory)
+    }
+
+    private static func key(_ text: String) -> String {
+        SHA256.hash(data: Data(text.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    func lookup(_ source: String) -> String? {
+        guard !ignore else { return nil }
+        return lock.withLock { entries[Self.key(source)] }
+    }
+
+    func store(_ text: String, for source: String) {
+        lock.withLock {
+            entries[Self.key(source)] = text
+            dirty += 1
+        }
+    }
+
+    func saveIfNeeded() { if lock.withLock({ dirty >= 20 }) { save() } }
+
+    func save() {
+        let data: Data? = lock.withLock {
+            dirty = 0
+            return try? JSONEncoder().encode(entries)
+        }
+        guard let data else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// Caches unused for 60 days go.
+    private static func prune(_ directory: URL) {
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let files = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        let limit = Date().addingTimeInterval(-60 * 24 * 3600)
+        for file in files where (try? file.resourceValues(forKeys: Set(keys)).contentModificationDate).flatMap({ $0 }).map({ $0 < limit }) == true {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+}
+
+/// The job's log: what was sent, how long it took, what failed (never keys).
+final class TranslationLog: @unchecked Sendable {
+    private let url: URL
+    private let lock = NSLock()
+    private let formatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm:ss.SSS"
+        return f
+    }()
+
+    init(url: URL) {
+        self.url = url
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: url.path, contents: nil)
-        handle = try? FileHandle(forWritingTo: url)
-        _ = try? handle?.seekToEnd()
-        self.secrets = secrets.filter { $0.count >= 4 }
     }
 
     func write(_ line: String) {
-        var text = line
-        for secret in secrets { text = text.replacingOccurrences(of: secret, with: "••••") }
-        try? handle?.write(contentsOf: Data((text + "\n").utf8))
+        lock.withLock {
+            guard let handle = try? FileHandle(forWritingTo: url) else { return }
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data("\(formatter.string(from: Date())) \(line)\n".utf8))
+        }
     }
+}
 
-    func close() { try? handle?.close() }
+extension PageLayout {
+    /// A page kept as it is (outside the selected pages).
+    static func untouched(_ document: CGPDFDocument, number: Int) -> PageLayout? {
+        guard let page = document.page(at: number) else { return nil }
+        let media = page.getBoxRect(.mediaBox)
+        var crop = page.getBoxRect(.cropBox).intersection(media)
+        if crop.isNull || crop.width < 1 { crop = media }
+        return PageLayout(number: number, mediaBox: media, cropBox: crop, blocks: [], figures: [], tables: [], graphics: [], runs: [])
+    }
 }

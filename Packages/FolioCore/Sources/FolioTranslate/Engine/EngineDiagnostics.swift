@@ -286,3 +286,13 @@ extension EngineDiagnostics {
         return out
     }
 }
+
+extension EngineDiagnostics {
+    public static func bing(_ text: String) async -> String {
+        do {
+            let session = try await BingWebProvider.fetchSession()
+            let result = try await BingWebProvider().translateOne(text, context: TranslationContext(sourceLanguage: "en", targetLanguage: "zh", glossary: []))
+            return "\(session)\n\(result)"
+        } catch { return "\(error)" }
+    }
+}

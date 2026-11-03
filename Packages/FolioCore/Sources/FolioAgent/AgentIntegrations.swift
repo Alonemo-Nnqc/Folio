@@ -1,4 +1,5 @@
 import Foundation
+import FolioTranslate
 
 /// An AI agent Folio can configure (AI-04): agents only (command-line agents, Claude 桌面版 and the
 /// agent-first Antigravity), not general editors. Paths are relative to the home folder and follow each agent's official documentation

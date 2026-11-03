@@ -1,4 +1,6 @@
 import AppKit
+import FolioCore
+import FolioTranslate
 
 /// Owns the app-wide objects: the model, the library window, the reader tabs and the settings window.
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
@@ -12,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     static var shared: AppDelegate { NSApp.delegate as! AppDelegate }
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // The translation engine reads PDF text with PDFKit too: take turns with the rest of the app.
+        PDFKitAccess.serialize = { body in PDFKitSerial.run(body) }
         // Full Screen is in our own View menu; don't let AppKit add a second one.
         UserDefaults.standard.set(false, forKey: "NSFullScreenMenuItemEverywhere")
         model = AppModel()

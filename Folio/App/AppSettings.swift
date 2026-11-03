@@ -83,7 +83,6 @@ final class AppSettings {
         static let translationOptions = "translationOptions"
         static let translationProfiles = "translationProfiles"
         static let selectedTranslationProfiles = "selectedTranslationProfiles"
-        static let translatorCustomPath = "translatorCustomPath"
         static let appearance = "appearance"
         static let markReadingOnOpen = "markReadingOnOpen"
         static let readerPageShadows = "readerPageShadows"
@@ -162,8 +161,6 @@ final class AppSettings {
     var aiAllowWrites: Bool { didSet { save(aiAllowWrites, Key.aiAllowWrites) } }
     /// 设置 ▸ 浏览器: the local service the browser extension saves through (WEB-01).
     var browserConnectorEnabled: Bool { didSet { save(browserConnectorEnabled, Key.browserConnectorEnabled) } }
-    /// A user-installed `pdf2zh_next`; empty = the copy Folio manages (TRANS-02).
-    var translatorCustomPath: String { didSet { save(translatorCustomPath, Key.translatorCustomPath) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -197,14 +194,14 @@ final class AppSettings {
         reopenReaderTabs = defaults.bool(forKey: Key.reopenReaderTabs)
         highlightColor = defaults.string(forKey: Key.highlightColor) ?? "yellow"
         useZoteroRecognizer = defaults.bool(forKey: Key.useZoteroRecognizer)
-        translationService = defaults.string(forKey: Key.translationService) ?? TranslationServiceCatalog.defaultServiceID
+        // Services of the old pdf2zh_next engine that are gone map to their replacement.
+        translationService = TranslationServiceCatalog.resolve(defaults.string(forKey: Key.translationService) ?? TranslationServiceCatalog.defaultServiceID).id
         translationFields = defaults.dictionary(forKey: Key.translationFields) as? [String: [String: String]] ?? [:]
         translationOptions = defaults.data(forKey: Key.translationOptions)
             .flatMap { try? JSONDecoder().decode(TranslationOptions.self, from: $0) } ?? TranslationOptions()
         translationProfiles = defaults.data(forKey: Key.translationProfiles)
             .flatMap { try? JSONDecoder().decode([TranslationProfile].self, from: $0) } ?? []
         selectedTranslationProfiles = defaults.dictionary(forKey: Key.selectedTranslationProfiles) as? [String: String] ?? [:]
-        translatorCustomPath = defaults.string(forKey: Key.translatorCustomPath) ?? ""
         markReadingOnOpen = defaults.bool(forKey: Key.markReadingOnOpen)
         readerPageShadows = defaults.bool(forKey: Key.readerPageShadows)
         annotationAuthor = defaults.string(forKey: Key.annotationAuthor) ?? NSFullUserName()
@@ -215,20 +212,6 @@ final class AppSettings {
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String
             ?? defaults.string(forKey: Key.libraryPath)!
-        // An agent can choose the translation engine (MCP set_pdf2zh_next_path); follow it while running.
-        preferencesObserver = DistributedNotificationCenter.default().addObserver(
-            forName: AgentConfiguration.preferencesDidChange, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reloadExternalChanges() }
-        }
-    }
-
-    @ObservationIgnored private var preferencesObserver: (any NSObjectProtocol)?
-
-    /// Re-reads what other processes (folio-cli) may write.
-    private func reloadExternalChanges() {
-        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
-        let path = defaults.string(forKey: Key.translatorCustomPath) ?? ""
-        if path != translatorCustomPath { translatorCustomPath = path }
     }
 
     var libraryURL: URL { URL(filePath: (libraryPath as NSString).expandingTildeInPath, directoryHint: .isDirectory) }

@@ -119,7 +119,9 @@ struct LayoutAnalyzer {
             }
         }
         if let block = current { textBlocks.append(block) }
-        classify(&textBlocks, page: number, crop: crop)
+        // Shaded boxes (a journal's banner) do not hold the paper's title.
+        let boxes = marks.filter { $0.kind == .fill && $0.rect.width * $0.rect.height > 3000 }.map(\.rect)
+        classify(&textBlocks, page: number, crop: crop, boxes: boxes)
         blocks.append(contentsOf: textBlocks)
 
         Self.absorbStrays(&blocks)
@@ -336,8 +338,10 @@ struct LayoutAnalyzer {
         let main = reference.filter { abs($0.size - size) < size * 0.1 }
         let baselines = (main.isEmpty ? reference : main).map(\.baseline).sorted()
         let font = fontCounts.max { $0.value < $1.value }!.key
+        // The colour of the words: links and citations are often coloured, the text around them is not.
         var colorCounts: [RGBColor: Int] = [:]
-        for c in visible { colorCounts[c.color, default: 0] += 1 }
+        for c in visible where c.text.first?.isLetter == true { colorCounts[c.color, default: 0] += 1 }
+        if colorCounts.isEmpty { for c in visible { colorCounts[c.color, default: 0] += 1 } }
         let color = colorCounts.max { $0.value < $1.value }!.key
         return LayoutLine(chars: chars, inkRect: ink, baseline: baselines[baselines.count / 2], size: max(size, 1),
                           font: font, color: color,
@@ -586,7 +590,9 @@ struct LayoutAnalyzer {
             let bullet = line.text.trimmingCharacters(in: .whitespaces).first.map { "•▪◦●○■□‣∙·-–—*".contains($0) } ?? false
             if bullet || last.maxX < r.maxX - size * 2 { return false }
         }
-        if abs(line.color.r - block.color.r) + abs(line.color.g - block.color.g) + abs(line.color.b - block.color.b) > 0.6 { return false }
+        // A line in another colour is another element (a coloured heading or note), unless it is mostly citations.
+        if abs(line.color.r - block.color.r) + abs(line.color.g - block.color.g) + abs(line.color.b - block.color.b) > 0.6,
+           Self.textWords(line) >= 3 || isHeadingLike(line) { return false }
         // A new paragraph: the line is indented from the block's left edge …
         let left = block.lines.count > 1 ? block.lines.dropFirst().map(\.minX).min()! : last.minX
         let hanging = block.lines.count == 1 && Self.isListItem(last.text)
@@ -628,12 +634,14 @@ struct LayoutAnalyzer {
         text.range(of: #"\p{L}{2,}"#, options: .regularExpression) != nil
     }
 
-    mutating func classify(_ blocks: inout [LayoutBlock], page: Int, crop: CGRect) {
+    mutating func classify(_ blocks: inout [LayoutBlock], page: Int, crop: CGRect, boxes: [CGRect] = []) {
         // Title: the largest text near the top of the first page.
         var titleIndex: Int?
         if page == 1 {
-            let candidates = blocks.indices.filter {
-                blocks[$0].rect.minY > crop.midY - crop.height * 0.1 && blocks[$0].size >= bodySize * 1.25 && Self.hasWords(blocks[$0].text)
+            let candidates = blocks.indices.filter { i in
+                let rect = blocks[i].rect
+                return rect.minY > crop.midY - crop.height * 0.1 && blocks[i].size >= bodySize * 1.25 && Self.textWords(blocks[i].lines[0]) >= 2
+                    && !boxes.contains { $0.insetBy(dx: -2, dy: -2).contains(rect) }
             }
             titleIndex = candidates.max { blocks[$0].size < blocks[$1].size }
         }

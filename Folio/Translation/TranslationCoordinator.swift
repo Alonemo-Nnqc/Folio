@@ -4,7 +4,7 @@ import FolioTranslate
 import Observation
 
 /// Queues whole-document translations (one at a time), shows their progress in the list and files
-/// the results under their items (TRANS-01…06). Also owns installing the engine (TRANS-02).
+/// the results under their items (TRANS-01…06). The engine is built in: nothing to install.
 @Observable
 final class TranslationCoordinator {
     /// Progress of a queued or running translation, keyed by item id.
@@ -12,12 +12,8 @@ final class TranslationCoordinator {
         var fileId: String
         var fraction: Double?
         var stage: String
-    }
-
-    enum InstallState: Equatable {
-        case idle
-        case installing(TranslatorInstallProgress)
-        case failed(String)
+        /// The translation so far (pages done translated, the rest original), for reading while it runs.
+        var preview: URL?
     }
 
     private(set) var jobs: [String: JobState] = [:]
@@ -26,18 +22,12 @@ final class TranslationCoordinator {
     func previewJob(itemId: String, fileId: String, stage: String, fraction: Double?) {
         jobs[itemId] = JobState(fileId: fileId, fraction: fraction, stage: stage)
     }
-    private(set) var installState = InstallState.idle
-    /// Bumped after installs / uninstalls so views re-read the engine status.
-    private(set) var engineRevision = 0
+    /// Bumped when the old engine is deleted, so settings re-read its size.
+    private(set) var legacyRevision = 0
 
     @ObservationIgnored private weak var model: AppModel?
-    /// `-FolioTranslatorDirectory <dir>` points tests at a scratch install instead of Application Support.
-    @ObservationIgnored let installation = TranslatorInstallation(
-        baseDirectory: UserDefaults.standard.string(forKey: "FolioTranslatorDirectory").map { URL(filePath: $0) }
-            ?? TranslatorInstallation.defaultBaseDirectory)
     @ObservationIgnored let secrets = SecretStore()
     @ObservationIgnored private var queue: [(itemId: String, fileId: String)] = []
-    /// The translation in progress. `job` is nil while the engine is still being located.
     private final class Running {
         let itemId: String
         var job: TranslationJob?
@@ -52,9 +42,6 @@ final class TranslationCoordinator {
     }
 
     @ObservationIgnored private var running: Running?
-    @ObservationIgnored private var installTask: Task<Void, Never>?
-    /// Translations asked for before the engine was installed; started when the install finishes.
-    @ObservationIgnored private var waitingForInstall: [String] = []
 
     init(model: AppModel) {
         self.model = model
@@ -62,24 +49,18 @@ final class TranslationCoordinator {
 
     var activeItemIds: Set<String> { Set(jobs.keys) }
 
+    static var logsDirectory: URL { TranslationJob.supportDirectory.appending(path: "logs", directoryHint: .isDirectory) }
+
     // MARK: Requests
 
-    /// "翻译全文…": checks the engine and the service, then asks for this run's options.
+    /// "翻译全文…": asks for this run's options.
     func requestTranslation(fileId: String) {
         guard let model, let file = model.snapshot.files[fileId], file.isPDF else { return }
         guard jobs[file.itemId] == nil else {
             model.toasts.show(String(localized: "这篇论文正在翻译"), systemImage: "character.book.closed")
             return
         }
-        switch engineStatus {
-        case .ready:
-            model.activeSheet = .translate(fileId: fileId)
-        case .notInstalled:
-            offerInstall(then: fileId)
-        case .broken(let reason):
-            alert(String(localized: "翻译组件无法使用"), reason + String(localized: "\n\n可以在 设置 ▸ 翻译 中重新安装，或改用自己安装的 pdf2zh_next。"),
-                  primary: String(localized: "打开设置")) { self.openSettings() }
-        }
+        model.activeSheet = .translate(fileId: fileId)
     }
 
     /// Starts (or queues) a translation with the current settings — called by the options sheet.
@@ -121,86 +102,19 @@ final class TranslationCoordinator {
     func cancelAll() {
         queue.removeAll()
         running?.cancel()
-        installTask?.cancel()
     }
 
-    // MARK: Engine
+    // MARK: Old engine
 
-    enum EngineStatus: Equatable {
-        case ready, notInstalled, broken(String)
-    }
-
-    var engineStatus: EngineStatus {
-        _ = engineRevision
-        if let model, !model.settings.translatorCustomPath.isEmpty {
-            return FileManager.default.isExecutableFile(atPath: model.settings.translatorCustomPath)
-                ? .ready : .broken(String(localized: "找不到 \(model.settings.translatorCustomPath)"))
-        }
-        switch installation.status() {
-        case .installed: return .ready
-        case .notInstalled: return .notInstalled
-        case .broken(let reason): return .broken(reason)
-        }
-    }
-
-    private func runtime() async throws -> TranslatorRuntime {
-        if let path = model?.settings.translatorCustomPath, !path.isEmpty {
-            return try await installation.customRuntime(executable: URL(filePath: path)).runtime
-        }
-        return try installation.runtime()
-    }
-
-    private func offerInstall(then fileId: String) {
-        alert(String(localized: "需要下载翻译组件"),
-              String(localized: "保留排版的翻译由开源引擎 pdf2zh_next（BabelDOC）完成。首次使用需要下载 Python、引擎和版面模型，约占 1.4 GB 磁盘空间，通常需要几分钟。\n\n组件安装在 ~/Library/Application Support/Folio/Translator，不会改动系统里的其他 Python。"),
-              primary: String(localized: "下载并安装")) {
-            self.waitingForInstall.append(fileId)
-            self.install()
-            self.openSettings()
-        }
-    }
-
-    func install() {
-        guard installTask == nil else { return }
-        installState = .installing(TranslatorInstallProgress(phase: .preparing, fractionCompleted: 0, detail: nil))
-        let installation = self.installation
-        installTask = Task {
-            do {
-                try await installation.install { progress in
-                    Task { @MainActor [weak self] in
-                        if case .installing = self?.installState { self?.installState = .installing(progress) }
-                    }
-                }
-                installState = .idle
-                engineRevision += 1
-                model?.toasts.show(String(localized: "翻译组件已安装"), systemImage: "checkmark.circle")
-                let waiting = waitingForInstall
-                waitingForInstall = []
-                for fileId in waiting { requestTranslation(fileId: fileId) }
-            } catch is CancellationError {
-                installState = .idle
-                engineRevision += 1
-            } catch {
-                installState = .failed(error.localizedDescription)
-                engineRevision += 1
-            }
-            installTask = nil
-        }
-    }
-
-    func cancelInstall() {
-        installTask?.cancel()
-        waitingForInstall = []
-    }
-
-    func uninstall() {
+    /// Deletes the pdf2zh_next engine earlier versions downloaded.
+    func removeLegacyEngine() {
         do {
-            try installation.uninstall()
-            model?.toasts.show(String(localized: "已卸载翻译组件"), systemImage: "trash")
+            try LegacyTranslator.remove()
+            model?.toasts.show(String(localized: "已删除旧翻译组件"), systemImage: "trash")
         } catch {
-            model?.toasts.show(String(localized: "无法卸载：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
+            model?.toasts.show(String(localized: "无法删除：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
         }
-        engineRevision += 1
+        legacyRevision += 1
     }
 
     /// What is missing before `serviceID` can run, in words for the user; nil when ready.
@@ -213,6 +127,12 @@ final class TranslationCoordinator {
                 : values[field.option]
             if (value ?? "").trimmingCharacters(in: .whitespaces).isEmpty && field.defaultValue == nil {
                 return String(localized: "\(service.displayName) 需要填写\"\(field.title)\"。")
+            }
+        }
+        if case .agent(let agent) = service.backend {
+            let path = service.fields.first { $0.option.hasSuffix("-path") }.flatMap { values[$0.option] }
+            if agent.locate(customPath: path) == nil {
+                return String(localized: "在这台 Mac 上找不到 \(agent.command)。请先安装并登录 \(service.displayName)，或在设置中填写它的路径。")
             }
         }
         return nil
@@ -242,7 +162,7 @@ final class TranslationCoordinator {
             TranslationNaming.Provider(service: $0, fields: settings.translationFields[serviceID] ?? [:], profileName: profileName)
         } ?? TranslationNaming.Provider(name: serviceID, model: nil)
         let source = model.fileURL(file)
-        let output = installation.layout.base.appending(path: "output/\(UUID().uuidString)", directoryHint: .isDirectory)
+        let output = TranslationJob.supportDirectory.appending(path: "output/\(UUID().uuidString)", directoryHint: .isDirectory)
         jobs[next.itemId] = JobState(fileId: next.fileId, fraction: nil, stage: String(localized: "正在启动翻译"))
         let current = Running(itemId: next.itemId)
         running = current
@@ -256,10 +176,8 @@ final class TranslationCoordinator {
                     fieldValues: settings.translationFields[serviceID] ?? [:],
                     secrets: service.map { (try? self.secrets.secrets(for: $0)) ?? [:] } ?? [:],
                     options: settings.translationOptions)
-                let runtime = try await self.runtime()
                 if !current.cancelled {
-                    let job = TranslationJob(request: request, runtime: runtime,
-                                             appleTranslatorCommand: Self.appleHelper.map { [$0.path] })
+                    let job = TranslationJob(request: request)
                     current.job = job
                     for await event in job.start() {
                         self.handle(event, itemId: next.itemId, fileId: next.fileId, provider: provider)
@@ -282,6 +200,8 @@ final class TranslationCoordinator {
         case .progress(let fraction):
             jobs[itemId]?.fraction = fraction
             if jobs[itemId]?.stage == String(localized: "正在启动翻译") { jobs[itemId]?.stage = String(localized: "正在翻译") }
+        case .preview(let url):
+            jobs[itemId]?.preview = url
         case .finished(let mono, let dual):
             jobs[itemId] = nil
             file(mono: mono, dual: dual, of: fileId, provider: provider)
@@ -339,12 +259,6 @@ final class TranslationCoordinator {
     }
 
     // MARK: Helpers
-
-    /// `folio-apple-translate`, embedded next to the app's executable.
-    static var appleHelper: URL? {
-        let url = Bundle.main.bundleURL.appending(path: "Contents/MacOS/folio-apple-translate")
-        return FileManager.default.isExecutableFile(atPath: url.path) ? url : nil
-    }
 
     private func openSettings() {
         AppDelegate.shared.showSettings(nil)

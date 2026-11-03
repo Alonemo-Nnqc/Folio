@@ -122,7 +122,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                 self.itemId = file.itemId
                 self.notesHost.rootView = ReaderNotesPanel(model: self.model, itemId: file.itemId, focusRequest: self.notesFocusRequest)
             }
-            _ = self.model.translations.jobs[file.itemId]
+            let job = self.model.translations.jobs[file.itemId]
+            self.followTranslation(job, finished: self.translationFile)
             let url = self.model.fileURL(file)
             if url != self.fileURL {
                 self.fileURL = url
@@ -574,10 +575,38 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         if sidebarItem.isCollapsed { sidebarItem.animator().isCollapsed = false }
     }
 
+    /// 边翻边看: while this paper is being translated, 对照阅读 shows the pages done so far and follows new ones;
+    /// when the translation is filed it switches to it.
+    private func followTranslation(_ job: TranslationCoordinator.JobState?, finished: FileRecord?) {
+        guard let shown = previewShown else { return }
+        if let preview = job?.preview {
+            if preview != shown {
+                previewShown = preview
+                content.replaceParallel(with: preview)
+            }
+        } else if job == nil {
+            previewShown = nil
+            if let finished {
+                state.parallelFileId = finished.id
+                content.replaceParallel(with: model.fileURL(finished))
+            }
+        }
+    }
+
+    /// The preview shown in 对照阅读 while the translation runs.
+    private var previewShown: URL?
+
     @objc func toggleParallelReading(_ sender: Any?) {
-        if state.parallelFileId != nil {
+        if state.parallelFileId != nil || previewShown != nil {
             state.parallelFileId = nil
+            previewShown = nil
             content.showParallel(nil)
+            return
+        }
+        if translationFile == nil, let preview = model.translations.jobs[itemId]?.preview {
+            previewShown = preview
+            content.showParallel(preview)
+            content.syncParallel(from: pdfView)
             return
         }
         guard let translation = translationFile else {
@@ -719,8 +748,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             menuItem.state = state.sidebarTab.rawValue == menuItem.tag && !sidebarItem.isCollapsed ? .on : .off
             return true
         case #selector(toggleParallelReading(_:)):
-            menuItem.state = state.parallelFileId != nil ? .on : .off
-            return state.parallelFileId != nil || translationFile != nil
+            menuItem.state = state.parallelFileId != nil || previewShown != nil ? .on : .off
+            return state.parallelFileId != nil || previewShown != nil || translationFile != nil || model.translations.jobs[itemId]?.preview != nil
         case #selector(addSelectionToNote(_:)):
             return !(pdfView.currentSelection?.string ?? "").isEmpty || pdfView.selectedAnnotation != nil
         case #selector(deleteSelectedAnnotation(_:)), #selector(delete(_:)):
@@ -925,6 +954,20 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
         splitView.setPosition(splitView.bounds.width / 2, ofDividerAt: 0)
         parallelView = view
         NotificationCenter.default.addObserver(self, selector: #selector(parallelPageChanged(_:)), name: .PDFViewPageChanged, object: view)
+    }
+
+    /// Shows another version of the translation in the open pane, on the same page and at the same place.
+    func replaceParallel(with url: URL) {
+        guard let parallelView else { return showParallel(url) }
+        guard let data = try? Data(contentsOf: url, options: .alwaysMapped), let document = PDFDocument(data: data) else { return }
+        let destination = parallelView.currentDestination
+        let index = destination?.page.flatMap { parallelView.document?.index(for: $0) }
+        isSyncing = true
+        parallelView.document = document
+        if let index, let page = document.page(at: index), let point = destination?.point {
+            parallelView.go(to: PDFDestination(page: page, at: point))
+        }
+        isSyncing = false
     }
 
     /// Keeps both sides on the same page index.

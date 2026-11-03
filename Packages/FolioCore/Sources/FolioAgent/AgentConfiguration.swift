@@ -6,8 +6,6 @@ public struct AgentConfiguration: Sendable {
     public static let appDefaultsDomain = "com.nnqc.Folio"
     /// 设置 ▸ AI ▸ 允许 AI 修改文献库.
     public static let allowWritesKey = "aiAllowWrites"
-    /// 设置 ▸ 翻译 ▸ 使用自己安装的 pdf2zh_next (empty: Folio's built-in engine).
-    public static let translatorPathKey = "translatorCustomPath"
     /// Posted after an agent changed Folio's preferences (the running app re-reads them).
     public static let preferencesDidChange = Notification.Name("com.nnqc.Folio.preferencesDidChange")
 

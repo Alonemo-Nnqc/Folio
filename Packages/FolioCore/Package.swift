@@ -12,7 +12,6 @@ let package = Package(
         .library(name: "FolioZotero", targets: ["FolioZotero"]),
         .executable(name: "folio-seed", targets: ["FolioSeed"]),
         .library(name: "FolioTranslate", targets: ["FolioTranslate"]),
-        .executable(name: "folio-apple-translate", targets: ["FolioAppleTranslate"]),
         .executable(name: "folio-translate", targets: ["FolioTranslateCLI"]),
         .library(name: "FolioAgent", targets: ["FolioAgent"]),
         .executable(name: "folio-cli", targets: ["FolioCLI"]),
@@ -31,13 +30,11 @@ let package = Package(
         .testTarget(name: "FolioMetadataTests", dependencies: ["FolioMetadata"], resources: [.copy("Fixtures")]),
         .testTarget(name: "FolioCitationTests", dependencies: ["FolioCitation"]),
         .testTarget(name: "FolioZoteroTests", dependencies: ["FolioZotero", "FolioTranslate"]),
-        // Layout-preserving PDF translation (pdf2zh_next / BabelDOC engine management).
+        // Native layout-preserving PDF translation: layout analysis, translation services, typesetting.
         .target(name: "FolioTranslate", resources: [.process("Resources")]),
-        // `--clitranslator` helper that translates stdin with Apple's offline Translation framework.
-        .executableTarget(name: "FolioAppleTranslate", dependencies: ["FolioTranslate"]),
         // Developer tool: runs the native engine's stages on a PDF (layout debug images, round trips, translation).
         .executableTarget(name: "FolioTranslateCLI", dependencies: ["FolioTranslate"]),
-        .testTarget(name: "FolioTranslateTests", dependencies: ["FolioTranslate"], resources: [.copy("Fixtures")]),
+        .testTarget(name: "FolioTranslateTests", dependencies: ["FolioTranslate"]),
         // AI integration (MCP server, folio-cli, skill, agent configuration).
         .target(name: "FolioAgent", dependencies: ["FolioCore", "FolioMetadata", "FolioCitation", "FolioTranslate"], resources: [.process("Resources")]),
         .executableTarget(name: "FolioCLI", dependencies: ["FolioAgent"]),

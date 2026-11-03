@@ -125,16 +125,11 @@ public enum FolioSkill {
           Colours are names (red, orange, yellow, green, mint, cyan, blue, indigo, purple, pink, gray) or `#RRGGBB`.
         - Reading status (`unread` / `reading` / `read`), rating (0–5) and bibliographic fields: `update_item`.
 
-        ## Setting up translation (pdf2zh_next)
+        ## Translation
 
-        Folio translates PDFs with pdf2zh_next. When the user wants Folio to use their own copy, or Folio could not find it:
-        1. `find_pdf2zh_next`. One working result: tell the user and call `set_pdf2zh_next_path`. Several: ask which.
-        2. Nothing found: search with your shell, for example `mdfind "kMDItemFSName == 'pdf2zh_next'"`,
-           `find ~ -path '*/bin/pdf2zh_next' -not -path '*/Library/*' 2>/dev/null | head`, `uv tool list`, `pipx list`,
-           `conda env list` (then `<env>/bin/pdf2zh_next`). Check a candidate with `<path> --version`
-           (it prints "pdf2zh-next version: …").
-        3. `set_pdf2zh_next_path` with the absolute path; Folio checks it and uses it at once. Not installed at all:
-           suggest `uv tool install pdf2zh-next`, or Folio's built-in engine (Folio ▸ 设置 ▸ 翻译 ▸ 下载并安装).
+        Folio translates whole PDFs itself, keeping the layout (item ▸ 翻译全文…); nothing needs installing. It can
+        translate with free services, API keys the user configured, or a coding agent on this Mac such as Claude Code
+        or Codex (设置 ▸ 翻译). Translations are filed under the item as "<file>（简体中文译文 · …）.pdf".
 
         ## Ask first
 

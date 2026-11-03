@@ -63,7 +63,10 @@ struct Typesetter {
                 let lineIndent = k == 0 ? indent * scale : 0
                 let available = frame.width - lineIndent
                 let isLast = k == ctLines.count - 1
-                if alignment == .justified, !isLast, let justified = CTLineCreateJustifiedLine(line, 1.0, available) { line = justified }
+                // Justify full lines only: stretching a short one (before an unbreakable citation list) leaves holes.
+                let natural = CTLineGetTypographicBounds(line, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth(line)
+                if alignment == .justified, !isLast, natural > available * 0.86,
+                   let justified = CTLineCreateJustifiedLine(line, 1.0, available) { line = justified }
                 let width = CTLineGetTypographicBounds(line, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth(line)
                 var x = frame.minX + lineIndent
                 if alignment == .center { x = frame.minX + max(0, (frame.width - width) / 2) }

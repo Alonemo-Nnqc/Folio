@@ -146,9 +146,8 @@ final class OnboardingState {
     private(set) var defaultBrowser: BrowserInfo?
     private(set) var enabledBrowsers: Set<String> = []
 
-    // pdf2zh_next already on this Mac
-    enum Discovery: Equatable { case idle, searching, found(URL, String), notFound }
-    private(set) var discovery = Discovery.idle
+    // Coding agents on this Mac that can translate
+    private(set) var translationAgents: [LocalAgent]?
 
     @ObservationIgnored private var activation: NSObjectProtocol?
 
@@ -233,60 +232,15 @@ final class OnboardingState {
 
     // MARK: Translation
 
-    var usesOwnTranslator: Bool { !model.settings.translatorCustomPath.isEmpty }
-
-    var builtInInstalled: Bool {
-        if case .installed = model.translations.installation.status() { true } else { false }
-    }
-
-    /// Looks for a pdf2zh_next the user installed (uv, pipx, conda, the Zotero plugin …), unless one is set up.
+    /// Finds the coding agents that can translate without a key (Claude Code, Codex …).
     func discoverTranslator() {
-        guard !usesOwnTranslator, !builtInInstalled, discovery != .searching else { return }
-        // Screenshots of the "not found" page on a Mac that has one.
-        if UserDefaults.standard.bool(forKey: "FolioPreviewTranslatorNotFound") {
-            discovery = .notFound
-            return
-        }
-        discovery = .searching
-        let installation = model.translations.installation
+        guard translationAgents == nil else { return }
         Task {
-            let found = await Task.detached {
-                await TranslatorDiscovery.discover(installation: installation, pathFolders: ShellEnvironment.loginPATH())
-            }.value
-            discovery = found.map { .found($0.executable, $0.version) } ?? .notFound
+            translationAgents = await Task.detached { LocalAgent.installed() }.value
         }
     }
 
-    func useFoundTranslator() {
-        guard case .found(let url, _) = discovery else { return }
-        model.settings.translatorCustomPath = url.path
-    }
-
-    /// Picks the executable by hand; it is used only if it runs.
-    func chooseTranslator() {
-        let panel = NSOpenPanel()
-        panel.message = String(localized: "选择 pdf2zh_next 可执行文件")
-        panel.prompt = String(localized: "使用")
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin")
-        panel.showsHiddenFiles = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let installation = model.translations.installation
-        Task {
-            do {
-                let runtime = try await installation.customRuntime(executable: url)
-                model.settings.translatorCustomPath = url.path
-                discovery = .found(url, runtime.version)
-            } catch {
-                let alert = NSAlert()
-                alert.messageText = String(localized: "无法使用这个文件")
-                alert.informativeText = error.localizedDescription
-                alert.runModal()
-            }
-        }
-    }
-
-    /// What to ask an agent when Folio cannot find the user's pdf2zh_next itself.
-    static var agentPrompt: String {
-        String(localized: "请用 Folio 的 MCP 找到我电脑上安装的 pdf2zh_next，并把它设置为 Folio 的翻译组件。")
+    func useAgent(_ agent: LocalAgent) {
+        model.settings.translationService = agent.serviceID
     }
 }

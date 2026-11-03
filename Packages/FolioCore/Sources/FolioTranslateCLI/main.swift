@@ -28,6 +28,46 @@ case "segments":
     print(EngineDiagnostics.segments(input: url(arguments[1]), page: Int(arguments[2]) ?? 1, containing: arguments.count > 3 ? arguments[3] : ""))
 case "lines":
     print(EngineDiagnostics.lines(input: url(arguments[1]), page: Int(arguments[2]) ?? 1, minY: Double(arguments[3]) ?? 0, maxY: Double(arguments[4]) ?? 1000))
+case "translate":
+    // translate <pdf> <output dir> <service> [--pages 1-3] [--to zh] [--field key=value]… [--secret key=value]… [--mono|--dual] [--fresh]
+    var fields: [String: String] = [:], secrets: [String: String] = [:]
+    var options = TranslationOptions()
+    var i = 4
+    while i < arguments.count {
+        let a = arguments[i]
+        func next() -> String { i += 1; return arguments[i] }
+        switch a {
+        case "--pages": options.pages = next()
+        case "--to": options.langOut = next()
+        case "--from": options.langIn = next()
+        case "--mono": options.outputs = .mono
+        case "--dual": options.outputs = .dual
+        case "--fresh": options.ignoreCache = true
+        case "--concurrency": options.concurrency = Int(next())
+        case "--field": let kv = next().split(separator: "=", maxSplits: 1).map(String.init); fields[kv[0]] = kv[1]
+        case "--secret": let kv = next().split(separator: "=", maxSplits: 1).map(String.init); secrets[kv[0]] = kv[1]
+        default: break
+        }
+        i += 1
+    }
+    let request = TranslationRequest(input: url(arguments[1]), outputDirectory: url(arguments[2]), serviceID: arguments[3],
+                                     fieldValues: fields, secrets: secrets, options: options)
+    let job = TranslationJob(request: request)
+    let start = Date()
+    var lastStage = ""
+    for await event in job.start() {
+        let t = String(format: "%6.1fs", Date().timeIntervalSince(start))
+        switch event {
+        case .stage(let s): if s != lastStage { lastStage = s; if !s.hasPrefix("翻译段落") || s.hasSuffix("0") { print(t, "stage", s) } }
+        case .progress: break
+        case .preview(let u): print(t, "preview", u.lastPathComponent)
+        case .finished(let m, let d): print(t, "finished", m?.path ?? "-", d?.path ?? "-")
+        case .failed(let message, let log): print(t, "FAILED", message, log.path)
+        case .cancelled: print(t, "cancelled")
+        }
+    }
+case "bing":
+    print(await EngineDiagnostics.bing(arguments[1]))
 default:
     print("usage: folio-translate roundtrip|compare …")
 }

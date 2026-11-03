@@ -18,32 +18,32 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
         case alternatingPages
     }
 
-    /// pdf2zh_next language code of the source, e.g. `en`.
+    /// Language code of the source, e.g. `en`.
     public var langIn: String = "en"
-    /// pdf2zh_next language code of the target, e.g. `zh` (Simplified Chinese).
+    /// Language code of the target, e.g. `zh` (Simplified Chinese).
     public var langOut: String = "zh"
     public var outputs: Outputs = .both
     public var dualLayout: DualLayout = .sideBySide
-    /// Page selection in pdf2zh syntax (`1,3,5-7`); nil = all pages.
+    /// Page selection (`1,3,5-7`); nil = all pages.
     public var pages: String?
     /// With `pages`, drop untranslated pages from the output.
     public var onlyIncludeTranslatedPages: Bool = false
-    /// Optional glossary CSV (`source,target[,tgt_lng]`).
+    /// Optional glossary CSV (`source,target`).
     public var glossaryFile: URL?
-    public var translateTableText: Bool = false
-    public var enhanceCompatibility: Bool = false
-    /// Requests per second; nil = pdf2zh_next default (4).
-    public var qps: Int?
-    /// Ignore pdf2zh_next's translation cache.
+    /// Translate table cells in place.
+    public var translateTables: Bool = true
+    /// Translate the reference list too.
+    public var translateReferences: Bool = false
+    /// Parallel requests; nil = the service's own.
+    public var concurrency: Int?
+    /// Translate again instead of reusing earlier translations of the same text.
     public var ignoreCache: Bool = false
-    /// Additional raw arguments, appended last (for diagnostics).
-    public var extraArguments: [String] = []
 
     public init(langIn: String = "en", langOut: String = "zh", outputs: Outputs = .both,
                 dualLayout: DualLayout = .sideBySide, pages: String? = nil,
                 onlyIncludeTranslatedPages: Bool = false, glossaryFile: URL? = nil,
-                translateTableText: Bool = false, enhanceCompatibility: Bool = false,
-                qps: Int? = nil, ignoreCache: Bool = false, extraArguments: [String] = []) {
+                translateTables: Bool = true, translateReferences: Bool = false,
+                concurrency: Int? = nil, ignoreCache: Bool = false) {
         self.langIn = langIn
         self.langOut = langOut
         self.outputs = outputs
@@ -51,19 +51,55 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
         self.pages = pages
         self.onlyIncludeTranslatedPages = onlyIncludeTranslatedPages
         self.glossaryFile = glossaryFile
-        self.translateTableText = translateTableText
-        self.enhanceCompatibility = enhanceCompatibility
-        self.qps = qps
+        self.translateTables = translateTables
+        self.translateReferences = translateReferences
+        self.concurrency = concurrency
         self.ignoreCache = ignoreCache
-        self.extraArguments = extraArguments
     }
 
-    /// Common target languages offered in settings (pdf2zh code, display name).
+    private enum CodingKeys: String, CodingKey {
+        case langIn, langOut, outputs, dualLayout, pages, onlyIncludeTranslatedPages, glossaryFile
+        case translateTables, translateReferences, concurrency, ignoreCache
+    }
+
+    /// Reads settings saved by any version: missing keys keep their defaults.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = TranslationOptions()
+        langIn = try c.decodeIfPresent(String.self, forKey: .langIn) ?? defaults.langIn
+        langOut = try c.decodeIfPresent(String.self, forKey: .langOut) ?? defaults.langOut
+        outputs = (try? c.decodeIfPresent(Outputs.self, forKey: .outputs)) ?? defaults.outputs
+        dualLayout = (try? c.decodeIfPresent(DualLayout.self, forKey: .dualLayout)) ?? defaults.dualLayout
+        pages = try c.decodeIfPresent(String.self, forKey: .pages)
+        onlyIncludeTranslatedPages = try c.decodeIfPresent(Bool.self, forKey: .onlyIncludeTranslatedPages) ?? false
+        glossaryFile = try? c.decodeIfPresent(URL.self, forKey: .glossaryFile)
+        translateTables = try c.decodeIfPresent(Bool.self, forKey: .translateTables) ?? true
+        translateReferences = try c.decodeIfPresent(Bool.self, forKey: .translateReferences) ?? false
+        concurrency = try c.decodeIfPresent(Int.self, forKey: .concurrency)
+        ignoreCache = try c.decodeIfPresent(Bool.self, forKey: .ignoreCache) ?? false
+    }
+
+    /// Common target languages offered in settings (code, display name).
     public static let commonLanguages: [(code: String, name: String)] = [
         ("en", String(localized: "英语", bundle: .module)), ("zh", String(localized: "简体中文", bundle: .module)), ("zh-TW", String(localized: "繁体中文", bundle: .module)), ("ja", String(localized: "日语", bundle: .module)), ("ko", String(localized: "韩语", bundle: .module)),
         ("fr", String(localized: "法语", bundle: .module)), ("de", String(localized: "德语", bundle: .module)), ("es", String(localized: "西班牙语", bundle: .module)), ("it", String(localized: "意大利语", bundle: .module)), ("pt", String(localized: "葡萄牙语", bundle: .module)),
         ("ru", String(localized: "俄语", bundle: .module)), ("ar", String(localized: "阿拉伯语", bundle: .module)),
     ]
+
+    /// Page numbers (1-based) selected by `pages` within a document of `count` pages; all pages when unset.
+    public func pageNumbers(count: Int) -> [Int] {
+        guard let pages = pages?.replacingOccurrences(of: " ", with: ""), !pages.isEmpty else { return Array(1...max(count, 1)) }
+        var result: Set<Int> = []
+        for part in pages.split(separator: ",") {
+            let bounds = part.split(separator: "-", omittingEmptySubsequences: false).map { Int($0) }
+            if bounds.count == 1, let n = bounds[0] { result.insert(n) }
+            else if bounds.count == 2 {
+                let lo = bounds[0] ?? 1, hi = bounds[1] ?? count
+                if lo <= hi { result.formUnion(lo...hi) }
+            }
+        }
+        return result.filter { $0 >= 1 && $0 <= count }.sorted()
+    }
 }
 
 /// Everything needed to translate one PDF.
@@ -72,10 +108,9 @@ public struct TranslationRequest: Sendable, Hashable {
     /// Directory receiving the translated PDFs (created if needed).
     public var outputDirectory: URL
     public var serviceID: String
-    /// Non-secret field values keyed by CLI option (`--openai-model` → `gpt-4o`).
-    /// Toggle fields use "true" / "false".
+    /// Non-secret field values keyed by field option (`--openai-model` → `gpt-5`).
     public var fieldValues: [String: String]
-    /// Secret field values keyed by CLI option, normally read from `SecretStore`.
+    /// Secret field values keyed by option, normally read from `SecretStore`.
     public var secrets: [String: String]
     public var options: TranslationOptions
 
@@ -87,109 +122,5 @@ public struct TranslationRequest: Sendable, Hashable {
         self.fieldValues = fieldValues
         self.secrets = secrets
         self.options = options
-    }
-}
-
-public enum TranslationConfigurationError: Error, LocalizedError, Sendable, Equatable {
-    case unknownService(String)
-    case missingField(service: String, field: String)
-    case appleTranslatorUnavailable
-
-    public var errorDescription: String? {
-        switch self {
-        case .unknownService(let id): String(localized: "未知的翻译服务：\(id)", bundle: .module)
-        case .missingField(let service, let field): String(localized: "\(service) 需要填写“\(field)”，请在设置的“翻译”页补充。", bundle: .module)
-        case .appleTranslatorUnavailable: String(localized: "找不到 Apple 系统翻译组件（folio-apple-translate）。", bundle: .module)
-        }
-    }
-}
-
-/// Command line for one translation: arguments for pdf2zh_next (after the
-/// driver's `translate` subcommand) plus extra environment (secrets).
-public struct TranslationCommandLine: Sendable, Hashable {
-    public var arguments: [String]
-    /// `PDF2ZH_*` variables carrying secret values.
-    public var environment: [String: String]
-}
-
-public enum TranslationArgumentBuilder {
-    /// Builds pdf2zh_next arguments for `request`.
-    ///
-    /// - Parameter appleTranslatorCommand: command line of the Apple translation
-    ///   helper (executable + leading arguments), required for the Apple service.
-    public static func build(_ request: TranslationRequest, appleTranslatorCommand: [String]? = nil) throws -> TranslationCommandLine {
-        guard let service = TranslationServiceCatalog.service(id: request.serviceID) else {
-            throw TranslationConfigurationError.unknownService(request.serviceID)
-        }
-        let options = request.options
-        var args: [String] = [service.cliSwitch]
-        var env: [String: String] = [:]
-
-        if service.id == TranslationServiceCatalog.appleServiceID {
-            guard let command = appleTranslatorCommand, !command.isEmpty else {
-                throw TranslationConfigurationError.appleTranslatorUnavailable
-            }
-            let full = command + ["--from", options.langIn, "--to", options.langOut]
-            args += ["--clitranslator-command", full.map(shellQuote).joined(separator: " ")]
-            args += ["--clitranslator-timeout", "120"]
-        }
-
-        // Reasoning effort is stored as one choice; expand it into the options and "send" switches.
-        let fieldValues = ReasoningEffort.apply(serviceID: service.id, to: request.fieldValues)
-        for field in service.fields {
-            let raw = field.isSecret ? request.secrets[field.option] : fieldValues[field.option]
-            let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            switch field.kind {
-            case .toggle:
-                if value == "true" || value == "1" { args.append(field.option) }
-            case .secret:
-                if value.isEmpty {
-                    if field.isRequired { throw TranslationConfigurationError.missingField(service: service.displayName, field: field.title) }
-                } else {
-                    env[field.environmentName] = value
-                }
-            default:
-                if value.isEmpty {
-                    if field.isRequired && field.defaultValue == nil {
-                        throw TranslationConfigurationError.missingField(service: service.displayName, field: field.title)
-                    }
-                } else {
-                    // A bare host means its /v1, as when listing models (OpenAIBaseURL).
-                    args += [field.option, OpenAIBaseURL.options.contains(field.option) ? OpenAIBaseURL.normalized(value) : value]
-                }
-            }
-        }
-
-        args += ["--lang-in", options.langIn, "--lang-out", options.langOut]
-        args += ["--output", request.outputDirectory.path]
-        args += ["--watermark-output-mode", "no_watermark"]
-        switch options.outputs {
-        case .mono: args.append("--no-dual")
-        case .dual: args.append("--no-mono")
-        case .both: break
-        }
-        if options.outputs != .mono, options.dualLayout == .alternatingPages {
-            args.append("--use-alternating-pages-dual")
-        }
-        if let pages = options.pages?.replacingOccurrences(of: " ", with: ""), !pages.isEmpty {
-            args += ["--pages", pages]
-            if options.onlyIncludeTranslatedPages { args.append("--only-include-translated-page") }
-        }
-        if let glossary = options.glossaryFile { args += ["--glossaries", glossary.path] }
-        if options.translateTableText { args.append("--translate-table-text") }
-        if options.enhanceCompatibility { args.append("--enhance-compatibility") }
-        if let qps = options.qps, qps > 0 { args += ["--qps", String(qps)] }
-        if options.ignoreCache { args.append("--ignore-cache") }
-        args += ["--report-interval", "0.5"]
-        args += options.extraArguments
-        args.append(request.input.path)
-        return TranslationCommandLine(arguments: args, environment: env)
-    }
-
-    /// POSIX shell quoting compatible with Python's `shlex.split`.
-    static func shellQuote(_ value: String) -> String {
-        let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@%_-+=:,./")
-        if !value.isEmpty, value.unicodeScalars.allSatisfy({ safe.contains($0) }) { return value }
-        return "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
     }
 }
