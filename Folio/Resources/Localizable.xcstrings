@@ -624,6 +624,16 @@
         }
       }
     },
+    "Safari 还没有列出 Folio 扩展：请先完成第 2 步，勾选后会自动跳到扩展设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari doesn't list the Folio extension yet: finish step 2 first, and its settings will open by themselves"
+          }
+        }
+      }
+    },
     "Zotero" : {},
     "pdf2zh_next" : {},
     "pdf2zh_next %@" : {},

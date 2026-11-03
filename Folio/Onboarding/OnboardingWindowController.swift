@@ -9,9 +9,9 @@ import SwiftUI
 /// from Zotero, the browser extension, Folio's MCP server and skill for the agents on this Mac, and the
 /// translation engine. Every step can be skipped; 帮助 ▸ 欢迎使用 Folio… opens it again.
 ///
-/// The guide floats above Folio's other windows (and hides while Folio is in the background), so the
-/// library window opening at launch can't cover it. Only 跳过设置 and 开始使用 finish it: closed or quit
-/// half way, the first-run guide comes back once, at the next launch, on the page it was left on.
+/// An ordinary window of its own, opened in front of the library window once that is up (so it can't open
+/// behind it). Only 跳过设置 and 开始使用 finish it: closed or quit half way, the first-run guide comes back
+/// once, at the next launch, on the page it was left on.
 ///
 ///   -FolioPreviewOnboarding <step>   opens the guide on that step (welcome, zotero, browser, agents, translation, done)
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
@@ -20,6 +20,16 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     static let resumeStepKey = "onboardingResumeStep"
     static let size = NSSize(width: 720, height: 700)
     private static var current: OnboardingWindowController?
+    /// A guide asked for before the library window is on screen waits for it.
+    private static var libraryShown = false
+    private static var waiting: (() -> Void)?
+
+    /// Called once the library window is on screen at launch.
+    static func libraryWindowShown() {
+        libraryShown = true
+        waiting?()
+        waiting = nil
+    }
 
     /// At first launch with an empty library, or where an unfinished guide was left. A library that already
     /// has papers and no unfinished guide (an update from an earlier version) only marks the guide as seen.
@@ -43,6 +53,10 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     /// `comesBack`: closing it before the end leaves it to reopen at the next launch (the first showing only).
     static func show(model: AppModel, step: OnboardingStep = .welcome, comesBack: Bool = false) {
+        guard libraryShown else {
+            waiting = { show(model: model, step: step, comesBack: comesBack) }
+            return
+        }
         if current == nil { current = OnboardingWindowController(model: model, step: step, comesBack: comesBack) }
         current?.showWindow(nil)
         current?.window?.makeKeyAndOrderFront(nil)
@@ -62,9 +76,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
         window.title = String(localized: "欢迎使用 Folio")
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-        // Above the library window, but not above other apps: it hides while Folio is in the background.
-        window.level = .floating
-        window.hidesOnDeactivate = true
         window.setAccessibilityIdentifier("onboardingWindow")
         super.init(window: window)
         let host = NSHostingController(rootView: OnboardingView(state: state, finish: { [weak self] in self?.finish() }))

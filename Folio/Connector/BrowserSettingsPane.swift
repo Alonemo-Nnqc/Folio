@@ -244,7 +244,7 @@ struct ExtensionInstallGuide: View {
         }
         step(3, String(localized: "启用 Folio 文献保存"), detail: String(localized: "Safari ▸ 设置 ▸ 扩展，勾选\"Folio 文献保存\"，并允许它在所有网站上使用（读取论文页面时需要）")) {
             Button("打开扩展设置") {
-                Task { problem = await BrowserExtensions.openSafariSettings().map { String(localized: "Safari 还没有列出 Folio 扩展，请先完成第 2 步（\($0)）") } }
+                Task { problem = await BrowserExtensions.openSafariSettings().map { _ in String(localized: "Safari 还没有列出 Folio 扩展：请先完成第 2 步，勾选后会自动跳到扩展设置") } }
             }
         }
     }
@@ -320,7 +320,8 @@ struct ExtensionInstallGuide: View {
         copied = label
     }
 
-    /// Prepares the folder (path copied), opens the first step, then checks every 1.5 s until done.
+    /// Prepares the folder (path copied), opens the first step, then checks every 1.5 s until done. Safari lists
+    /// an unsigned extension only once 允许未签名的扩展 is on; when it appears, its settings open by themselves.
     private func prepareAndWatch() async {
         if browser.family != .safari {
             do {
@@ -334,7 +335,12 @@ struct ExtensionInstallGuide: View {
         while !Task.isCancelled {
             switch browser.family {
             case .chromium: state = BrowserExtensions.installState(in: browser)
-            case .safari: safariEnabled = await BrowserExtensions.safariState()
+            case .safari:
+                let listedBefore = safariEnabled != nil
+                safariEnabled = await BrowserExtensions.safariState()
+                if !listedBefore, safariEnabled == false {
+                    problem = await BrowserExtensions.openSafariSettings()
+                }
             case .firefox: break
             }
             try? await Task.sleep(for: .seconds(1.5))
