@@ -1,7 +1,7 @@
 import AppKit
 import CoreText
 
-/// Tinted capsules with optically centred text: tag chips (TAG-05) and the "默认" / "译文" file badges.
+/// Tinted capsules with optically centred text: tag chips (TAG-05) and the "默认" file badge.
 ///
 /// Text is laid out with Core Text and drawn at an explicit baseline. AppKit's string drawing puts the
 /// baseline below the top of the line box, and Chinese text falls back to PingFang, whose taller line

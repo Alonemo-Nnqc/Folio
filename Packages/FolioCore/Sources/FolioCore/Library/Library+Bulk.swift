@@ -67,6 +67,42 @@ extension Library {
         return ids
     }
 
+    /// For an entry already in the library: its translations imported before Folio knew pdf2zh's files (as plain
+    /// files named "Paper 2.pdf") learn what they are and who made them, and are renamed after it. Importing
+    /// from Zotero again so repairs them. Returns how many changed.
+    private func recognizeTranslations(_ hashed: [(PreparedFile, String)], autoRename: Bool) throws -> Int {
+        let originalHashes = hashed.filter { $0.0.translationKind == nil }.map(\.1)
+        var changed = 0
+        for (prepared, hash) in hashed {
+            guard let kind = prepared.translationKind,
+                  var file = try writer.read({ db in
+                      try FileRecord.filter((Column("sha256") == hash || Column("originalSha256") == hash)
+                                            && Column("translationKind") == nil).fetchOne(db)
+                  }) else { continue }
+            let original = try writer.read { db in
+                try FileRecord.filter(Column("itemId") == file.itemId && Column("translationKind") == nil
+                                      && (originalHashes.contains(Column("sha256")) || originalHashes.contains(Column("originalSha256"))))
+                    .fetchOne(db)
+            }
+            file.translationKind = kind
+            file.translatedBy = prepared.translatedBy
+            file.translationOf = original?.id
+            let suffix = FileNamer.translationSuffix(kind: kind, translatedBy: prepared.translatedBy)
+            let base: String
+            if autoRename, let item = try item(file.itemId), item.kind == .regular {
+                base = FileNamer.baseName(for: item.metadata)
+            } else {
+                // The name it was given, without the number ("Paper 2" → "Paper").
+                let stem = (file.fileName as NSString).deletingPathExtension
+                base = stem.replacingOccurrences(of: #" \d+$"#, with: "", options: .regularExpression)
+            }
+            file.relativePath = try store.rename(file.relativePath, toBaseName: base + suffix)
+            try writer.write { try file.update($0) }
+            changed += 1
+        }
+        return changed
+    }
+
     private func importEntry(_ entry: PreparedEntry, groupIds: [String: String], tagIds: [String: String],
                              autoRename: Bool, summary: inout BulkImportSummary) throws {
         var hashed: [(PreparedFile, String)] = []
@@ -88,6 +124,7 @@ extension Library {
             return nil
         }
         if existingOwner != nil {
+            summary.translationsRecognized += try recognizeTranslations(hashed, autoRename: autoRename)
             summary.duplicatesSkipped += 1
             return
         }
@@ -108,14 +145,24 @@ extension Library {
         var copied: [FileRecord] = []
         for (file, hash) in hashed {
             let url = file.sourceURL
-            let base = baseName ?? FileNamer.sanitize(url.deletingPathExtension().lastPathComponent)
+            var base = baseName ?? FileNamer.sanitize(url.deletingPathExtension().lastPathComponent)
+            if let kind = file.translationKind {
+                base += FileNamer.translationSuffix(kind: kind, translatedBy: file.translatedBy)
+            }
             let relative = try store.copyIn(url, baseName: base, ext: url.pathExtension)
             let attributes = try FileManager.default.attributesOfItem(atPath: store.url(for: relative).path)
             let isPDF = url.pathExtension.lowercased() == "pdf"
-            copied.append(FileRecord(itemId: item.id, relativePath: relative, originalName: file.originalName,
-                                     size: (attributes[.size] as? NSNumber)?.int64Value ?? 0, sha256: hash,
-                                     modifiedAt: attributes[.modificationDate] as? Date ?? Date(),
-                                     dateAdded: file.dateAdded, fulltextState: isPDF ? .pending : .notApplicable))
+            var record = FileRecord(itemId: item.id, relativePath: relative, originalName: file.originalName,
+                                    size: (attributes[.size] as? NSNumber)?.int64Value ?? 0, sha256: hash,
+                                    modifiedAt: attributes[.modificationDate] as? Date ?? Date(),
+                                    dateAdded: file.dateAdded, fulltextState: isPDF ? .pending : .notApplicable)
+            if let kind = file.translationKind {
+                record.translationKind = kind
+                record.translatedBy = file.translatedBy
+                // Translated from the entry's original, which comes first.
+                record.translationOf = copied.first { $0.translationKind == nil }?.id
+            }
+            copied.append(record)
         }
         if item.kind == .standalone && copied.isEmpty { return }
         item.defaultFileId = copied.first?.id

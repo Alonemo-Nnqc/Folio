@@ -210,15 +210,12 @@ struct MetadataInspector: View {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: model.fileURL(file).path))
                         .resizable()
                         .frame(width: 16, height: 16)
-                    Text(file.fileName)
+                    Text(model.label(of: file))
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .help(file.fileName)
                     if file.id == item.defaultFileId {
                         DefaultFileBadge()
-                    }
-                    if file.translationOf != nil {
-                        CapsuleText(text: file.translationKind == .dual ? String(localized: "双语") : String(localized: "译文"), tint: .systemTeal, font: CapsuleLabel.badgeFont,
-                                    height: CapsuleLabel.badgeHeight, padding: CapsuleLabel.badgePadding)
                     }
                     Spacer()
                 }

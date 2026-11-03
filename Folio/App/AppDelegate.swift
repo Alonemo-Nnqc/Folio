@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         libraryWindowController = LibraryWindowController(model: model)
         model.libraryWindow = libraryWindowController.window
         libraryWindowController.showWindow(nil)
+        OnboardingWindowController.libraryWindowShown()
         didFinishLaunching = true
         flushPendingOpens()
         AIIntegration.repairAfterLaunch()

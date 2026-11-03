@@ -51,6 +51,26 @@
         }
       }
     },
+    "原文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original"
+          }
+        }
+      }
+    },
+    "双语对照" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilingual"
+          }
+        }
+      }
+    },
     "名称不能为空" : {
       "localizations" : {
         "en" : {
@@ -221,6 +241,16 @@
         }
       }
     },
+    "译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation"
+          }
+        }
+      }
+    },
     "预印本" : {
       "localizations" : {
         "en" : {
@@ -237,6 +267,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Highlight"
+          }
+        }
+      }
+    },
+    "（%@ · %@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (%1$@ · %2$@)"
+          }
+        }
+      }
+    },
+    "（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (%@)"
           }
         }
       }

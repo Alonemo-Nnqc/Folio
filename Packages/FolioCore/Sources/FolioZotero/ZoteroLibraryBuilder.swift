@@ -46,7 +46,10 @@ enum ZoteroLibraryBuilder {
                 dataDirectory: dataDirectory, key: attachment.key,
                 path: attachment.path, baseAttachmentPath: baseAttachmentPath
             )
-            return PreparedFile(sourceURL: url, originalName: url.lastPathComponent, dateAdded: attachment.dateAdded)
+            let translation = ZoteroAttachmentResolver.translation(fileName: url.lastPathComponent,
+                                                                   title: raw.fieldsByItem[attachment.itemID]?["title"])
+            return PreparedFile(sourceURL: url, originalName: url.lastPathComponent, dateAdded: attachment.dateAdded,
+                                translationKind: translation?.kind, translatedBy: translation?.service)
         }
 
         // Attachments: sort into kept files (by parent, or standalone) vs. skip reasons.

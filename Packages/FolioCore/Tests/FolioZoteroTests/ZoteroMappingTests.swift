@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import FolioCore
+import FolioTranslate
 @testable import FolioZotero
 
 @Suite struct ZoteroDateTests {
@@ -158,10 +159,27 @@ import FolioCore
     }
 
     @Test func nonComparePDFOrdersBeforeCompareRegardlessOfDate() {
-        let earlierCompare = PreparedFile(sourceURL: URL(fileURLWithPath: "/a.compare.pdf"), originalName: "a.compare.pdf", dateAdded: Date(timeIntervalSince1970: 0))
+        let earlierCompare = PreparedFile(sourceURL: URL(fileURLWithPath: "/a.compare.pdf"), originalName: "a.compare.pdf", dateAdded: Date(timeIntervalSince1970: 0),
+                                          translationKind: .dual)
         let laterOriginal = PreparedFile(sourceURL: URL(fileURLWithPath: "/a.pdf"), originalName: "a.pdf", dateAdded: Date(timeIntervalSince1970: 1000))
         let ordered = ZoteroAttachmentResolver.order([earlierCompare, laterOriginal])
         #expect(ordered.first?.originalName == "a.pdf")
+    }
+
+    @Test func readsPdf2zhTranslationsFromFileNameAndTitle() {
+        let google = ZoteroAttachmentResolver.translation(fileName: "Lei 等 - 2024 - ConDSeg.compare.pdf", title: "ConDSeg-google-compare")
+        #expect(google?.kind == .dual)
+        #expect(google?.service == "Google")
+        #expect(ZoteroAttachmentResolver.translation(fileName: "P.compare.pdf", title: "RWKV-UNet-siliconflowfree-compare")?.service == "SiliconFlow Free")
+        #expect(ZoteroAttachmentResolver.translation(fileName: "P.compare.pdf", title: "deepseek-compare")?.service == "DeepSeek")
+        #expect(ZoteroAttachmentResolver.translation(fileName: "P.compare.pdf", title: "openailiked-compare")?.service
+                == TranslationNaming.serviceName(id: "openaicompatible"))
+        #expect(ZoteroAttachmentResolver.translation(fileName: "P.zh.mono.pdf", title: "P")?.kind == .mono)
+        // A mode without a known service, or no title: a translation by an unknown service.
+        let unnamed = ZoteroAttachmentResolver.translation(fileName: "P.compare.pdf", title: "ConDSeg-compare")
+        #expect(unnamed?.kind == .dual && unnamed?.service == nil)
+        #expect(ZoteroAttachmentResolver.translation(fileName: "P.pdf", title: "Preprint PDF") == nil)
+        #expect(ZoteroAttachmentResolver.translation(fileName: "Compare-dual-models.pdf", title: "PDF") == nil)
     }
 
     @Test func fallsBackToEarliestDateAddedWhenNoCompareVariant() {

@@ -15,8 +15,7 @@ enum ItemListMetrics {
     static let secondaryFont = NSFont.systemFont(ofSize: 12)
 }
 
-/// Title column: icon (or spinner while retrieving), title, and the "默认" / "译文" badges on files (a translation
-/// that is the default file shows both).
+/// Title column: icon (or spinner while retrieving), title, and the "默认" badge on the default file.
 final class TitleCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("TitleCell")
 
@@ -24,8 +23,6 @@ final class TitleCell: NSTableCellView {
     let spinner = NSProgressIndicator()
     let label = NSTextField(labelWithString: "")
     let badge = CapsuleBadge()
-    /// "译文" / "双语" on translated files, after "默认".
-    let translationBadge = CapsuleBadge()
     private let badges = NSStackView()
     /// Translation progress of the item (TRANS-04), at the right edge of the cell.
     let progress = NSProgressIndicator()
@@ -53,15 +50,12 @@ final class TitleCell: NSTableCellView {
         label.cell?.truncatesLastVisibleLine = true
         label.allowsExpansionToolTips = true
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        for capsule in [badge, translationBadge] {
-            capsule.setContentHuggingPriority(.required, for: .horizontal)
-            capsule.setContentCompressionResistancePriority(.required, for: .horizontal)
-        }
+        badge.setContentHuggingPriority(.required, for: .horizontal)
+        badge.setContentCompressionResistancePriority(.required, for: .horizontal)
         badges.orientation = .horizontal
         badges.spacing = 4
         badges.detachesHiddenViews = true
         badges.addArrangedSubview(badge)
-        badges.addArrangedSubview(translationBadge)
 
         progress.style = .bar
         progress.controlSize = .small
@@ -159,7 +153,6 @@ final class TitleCell: NSTableCellView {
             }
         }
         badge.isHidden = true
-        translationBadge.isHidden = true
         setAccessibilityLabel(item.title + (hasNote ? String(localized: "（有笔记）") : "")
                               + (translation.map { job in
                                   let percent = job.fraction.map { " \(Int($0 * 100))%" } ?? ""
@@ -167,7 +160,8 @@ final class TitleCell: NSTableCellView {
                               } ?? ""))
     }
 
-    func configureFile(_ file: FileRecord, url: URL, isDefault: Bool) {
+    /// `label` says what the file is (原文, 双语对照 · Google …), so a translation needs no badge of its own.
+    func configureFile(_ file: FileRecord, label text: String, url: URL, isDefault: Bool) {
         spinner.stopAnimation(nil)
         progress.isHidden = true
         stageLabel.isHidden = true
@@ -177,16 +171,13 @@ final class TitleCell: NSTableCellView {
         icon.isHidden = false
         icon.image = NSWorkspace.shared.icon(forFile: url.path)
         icon.contentTintColor = nil
-        label.stringValue = file.fileName
+        label.stringValue = text
         label.font = ItemListMetrics.bodyFont
-        let translation = file.translationOf == nil ? nil : (file.translationKind == .dual ? String(localized: "双语") : String(localized: "译文"))
+        toolTip = file.fileName
         badge.configure(String(localized: "默认"), tint: .controlAccentColor)
         badge.isHidden = !isDefault
         badge.setAccessibilityIdentifier("defaultFileBadge")
-        translationBadge.configure(translation ?? "", tint: .systemTeal)
-        translationBadge.isHidden = translation == nil
-        translationBadge.setAccessibilityIdentifier("translationBadge")
-        setAccessibilityLabel(file.fileName + (isDefault ? String(localized: "（默认）") : "") + (translation.map { String(localized: "（\($0)）") } ?? ""))
+        setAccessibilityLabel(text + (isDefault ? String(localized: "（默认）") : ""))
     }
 
     /// Title followed by a small symbol (e.g. the note indicator, NOTE-03).
@@ -309,7 +300,7 @@ enum CellText {
     }
 }
 
-/// The "默认" / "译文" capsule after a file name.
+/// The "默认" capsule after a file name.
 final class CapsuleBadge: NSView {
     private(set) var text = ""
     private var tint: NSColor = .controlAccentColor

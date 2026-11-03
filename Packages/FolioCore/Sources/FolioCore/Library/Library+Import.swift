@@ -275,12 +275,18 @@ extension Library {
 
     // MARK: Helpers
 
-    /// Renames every file of a regular item to `Family_Year_Title` (STORE-03).
+    /// Renames every file of a regular item to `Family_Year_Title` (STORE-03); a translation keeps its note
+    /// ("…（双语对照 · Google）") rather than ending up as "… 2".
     func renameFiles(ofItem itemId: String) throws {
         guard let item = try self.item(itemId), item.kind == .regular else { return }
         let base = FileNamer.baseName(for: item.metadata)
         for var file in try files(ofItem: itemId) {
-            let renamed = try store.rename(file.relativePath, toBaseName: base)
+            var name = base
+            if let kind = file.translationKind {
+                let stem = (file.fileName as NSString).deletingPathExtension
+                name += FileNamer.translationSuffix(inName: stem) ?? FileNamer.translationSuffix(kind: kind, translatedBy: file.translatedBy)
+            }
+            let renamed = try store.rename(file.relativePath, toBaseName: name)
             guard renamed != file.relativePath else { continue }
             file.relativePath = renamed
             try writer.write { try file.update($0) }

@@ -35,11 +35,17 @@ public struct PreparedFile: Sendable, Hashable {
     public var sourceURL: URL
     public var originalName: String
     public var dateAdded: Date
+    /// A translation of the entry's original (e.g. made by Zotero's pdf2zh plugin), and who made it.
+    public var translationKind: TranslationKind?
+    public var translatedBy: String?
 
-    public init(sourceURL: URL, originalName: String, dateAdded: Date) {
+    public init(sourceURL: URL, originalName: String, dateAdded: Date,
+                translationKind: TranslationKind? = nil, translatedBy: String? = nil) {
         self.sourceURL = sourceURL
         self.originalName = originalName
         self.dateAdded = dateAdded
+        self.translationKind = translationKind
+        self.translatedBy = translatedBy
     }
 }
 
@@ -87,6 +93,8 @@ public struct BulkImportSummary: Sendable, Equatable {
     public var tagsCreated = 0
     public var duplicatesSkipped = 0
     public var missingFiles = 0
+    /// Translations imported earlier as plain files ("Paper 2.pdf"), now recognized and renamed.
+    public var translationsRecognized = 0
 
     public init() {}
 }

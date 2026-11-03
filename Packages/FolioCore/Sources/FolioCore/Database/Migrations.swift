@@ -1,3 +1,4 @@
+import Foundation
 import GRDB
 
 enum Migrations {
@@ -62,6 +63,16 @@ enum Migrations {
         // v2.2: per-group icon colour.
         migrator.registerMigration("v3") { db in
             try db.execute(sql: "ALTER TABLE libraryGroup ADD COLUMN colorHex TEXT")
+        }
+        // v1.0.1: who translated a file, shown under its paper; Folio's earlier translations carry it in their names.
+        migrator.registerMigration("v4") { db in
+            try db.execute(sql: "ALTER TABLE file ADD COLUMN translatedBy TEXT")
+            for row in try Row.fetchAll(db, sql: "SELECT id, relativePath FROM file WHERE translationKind IS NOT NULL") {
+                let path: String = row["relativePath"]
+                let stem = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+                guard let by = FileNamer.translatedBy(inName: stem) else { continue }
+                try db.execute(sql: "UPDATE file SET translatedBy = ? WHERE id = ?", arguments: [by, row["id"] as String])
+            }
         }
     }
 }

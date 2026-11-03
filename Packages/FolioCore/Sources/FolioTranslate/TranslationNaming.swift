@@ -16,19 +16,28 @@ public enum TranslationNaming {
 
         /// From the service, its current values and the configuration in use.
         public init(service: TranslationService, fields: [String: String], profileName: String?) {
-            // Notes such as "（免费）" / " (free)" belong to the picker, not to file names.
-            let serviceName = service.displayName.replacingOccurrences(of: #"\s*[（(][^）)]*[）)]$"#, with: "", options: .regularExpression)
-            name = profileName ?? serviceName
+            name = profileName ?? TranslationNaming.name(of: service)
             let modelField = service.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }
             model = modelField.flatMap { field in
                 (fields[field.option].flatMap { $0.isEmpty ? nil : $0 } ?? field.defaultValue)
             }
         }
 
-        var label: String {
+        /// "DeepSeek · deepseek-chat", or the name alone when there is no model.
+        public var label: String {
             guard let model, !model.isEmpty, model.caseInsensitiveCompare(name) != .orderedSame else { return name }
             return "\(name) · \(model)"
         }
+    }
+
+    /// A service's name for file names: without notes such as "（免费）" / " (free)", which belong to the picker.
+    public static func name(of service: TranslationService) -> String {
+        service.displayName.replacingOccurrences(of: #"\s*[（(][^）)]*[）)]$"#, with: "", options: .regularExpression)
+    }
+
+    /// The name of the pdf2zh service with this id ("google" → "Google"); nil for one Folio doesn't know.
+    public static func serviceName(id: String) -> String? {
+        TranslationServiceCatalog.service(id: id.lowercased()).map(name(of:))
     }
 
     /// The base name (no extension) for a translated file. `existing` are the base names of the item's files: a

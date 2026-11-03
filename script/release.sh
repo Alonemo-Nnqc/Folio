@@ -8,10 +8,14 @@
 #   appcast.xml             the update feed, attached to the GitHub release
 #   release-notes.md        this version's section of CHANGELOG.md
 #
-# The app is ad-hoc signed (no Apple Developer Program needed). The archive is signed with the Sparkle
-# EdDSA key: from $SPARKLE_ED_PRIVATE_KEY when set (CI), otherwise from the login keychain (account
-# "Folio", created by Sparkle's generate_keys). Set FOLIO_DOWNLOAD_BASE to point the feed at another
-# server when testing an update locally.
+# The app is ad-hoc signed (no Apple Developer Program needed) and built without the hardened runtime:
+# its library validation only loads code signed by the app's own team, an ad-hoc signature has no team,
+# and so on a Mac with SIP enabled Folio could not load Sparkle.framework and quit at launch.
+# (The hardened runtime is only required for notarization, which needs a Developer ID anyway.)
+#
+# The archive is signed with the Sparkle EdDSA key: from $SPARKLE_ED_PRIVATE_KEY when set (CI),
+# otherwise from the login keychain (account "Folio", created by Sparkle's generate_keys). Set
+# FOLIO_DOWNLOAD_BASE to point the feed at another server when testing an update locally.
 set -euo pipefail
 
 VERSION="${1:?usage: script/release.sh <version>}"
@@ -34,6 +38,7 @@ xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Release -derive
   -destination 'generic/platform=macOS' \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+  ENABLE_HARDENED_RUNTIME=NO \
   build > "$DERIVED.log" 2>&1 && BUILD_STATUS=0 || BUILD_STATUS=$?
 grep -E "error:|BUILD (SUCCEEDED|FAILED)" "$DERIVED.log" || true
 if [[ $BUILD_STATUS -ne 0 || ! -d "$APP" ]]; then
@@ -44,6 +49,11 @@ if [[ $BUILD_STATUS -ne 0 || ! -d "$APP" ]]; then
   exit 1
 fi
 codesign --verify --deep --strict "$APP"
+# A Mac with SIP disabled loads Sparkle either way, so check the flag rather than trusting a test launch.
+if codesign -dv "$APP" 2>&1 | grep -q "flags=.*runtime"; then
+  echo "Folio.app was signed with the hardened runtime: ad-hoc signed, it cannot load Sparkle.framework" >&2
+  exit 1
+fi
 
 SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
 rm -rf "$OUT" && mkdir -p "$OUT"

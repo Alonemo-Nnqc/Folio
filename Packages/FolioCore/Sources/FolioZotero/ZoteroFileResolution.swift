@@ -1,5 +1,6 @@
 import Foundation
 import FolioCore
+import FolioTranslate
 
 /// Zotero's fixed `itemAttachments.linkMode` values (not stored anywhere as a lookup table).
 enum ZoteroLinkMode {
@@ -51,19 +52,38 @@ enum ZoteroAttachmentResolver {
         return false
     }
 
-    /// True when `name` looks like a bilingual translation-plugin PDF (`*.compare.pdf`) —
-    /// these are ordinary attachments, just not the preferred default file.
-    static func isComparePDF(_ name: String) -> Bool {
-        name.lowercased().hasSuffix(".compare.pdf")
+    /// What Zotero's pdf2zh plugin made, read from the file name (`Paper.compare.pdf`, `Paper.zh.dual.pdf`,
+    /// `Paper-mono.pdf`) and the attachment's title, which names the service (`ConDSeg-google-compare`,
+    /// `deepseek-compare`). Several translations of one paper share a file name; only the title tells them apart.
+    /// Nil for anything else.
+    static func translation(fileName: String, title: String?) -> (kind: TranslationKind, service: String?)? {
+        let lower = fileName.lowercased()
+        let tokens = (title ?? "").lowercased().split(separator: "-").map { $0.trimmingCharacters(in: .whitespaces) }
+        let titleMode = tokens.count > 1 ? tokens.last : nil
+        let kind: TranslationKind
+        if lower.range(of: #"[.-](dual|compare)\.pdf$"#, options: .regularExpression) != nil || ["dual", "compare"].contains(titleMode) {
+            kind = .dual
+        } else if lower.range(of: #"[.-]mono\.pdf$"#, options: .regularExpression) != nil || titleMode == "mono" {
+            kind = .mono
+        } else {
+            return nil
+        }
+        // The service is the word before the mode; titles without one ("ConDSeg-compare") name none.
+        let service = titleMode != nil && ["dual", "compare", "mono"].contains(titleMode)
+            ? TranslationNaming.serviceName(id: pluginServiceIDs[tokens[tokens.count - 2]] ?? tokens[tokens.count - 2]) : nil
+        return (kind, service)
     }
 
-    /// Orders an item's kept files so the original (non-`.compare.pdf`) file comes first when
-    /// both exist; otherwise the earliest by `dateAdded`. The first file is the default.
+    /// The plugin's own names for services Folio calls otherwise.
+    private static let pluginServiceIDs = ["openailiked": "openaicompatible"]
+
+    /// Orders an item's kept files so the original (not a translation) comes first when both exist;
+    /// otherwise the earliest by `dateAdded`. The first file is the default.
     static func order(_ files: [PreparedFile]) -> [PreparedFile] {
         files.enumerated()
             .sorted { a, b in
-                let ac = isComparePDF(a.element.originalName)
-                let bc = isComparePDF(b.element.originalName)
+                let ac = a.element.translationKind != nil
+                let bc = b.element.translationKind != nil
                 if ac != bc { return !ac }
                 if a.element.dateAdded != b.element.dateAdded { return a.element.dateAdded < b.element.dateAdded }
                 return a.offset < b.offset

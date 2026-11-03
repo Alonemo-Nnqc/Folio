@@ -624,6 +624,16 @@
         }
       }
     },
+    "Safari 还没有列出 Folio 扩展：请先完成第 2 步，勾选后会自动跳到扩展设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Safari doesn't list the Folio extension yet: finish step 2 first, and its settings will open by themselves"
+          }
+        }
+      }
+    },
     "Zotero" : {},
     "pdf2zh_next" : {},
     "pdf2zh_next %@" : {},
@@ -1965,6 +1975,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Only reads a copy of the Zotero database and never modifies Zotero. PDFs are copied into the Folio library; duplicates of existing papers are skipped."
+          }
+        }
+      }
+    },
+    "可以随时在 帮助 ▸ 欢迎使用 Folio 中继续设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can finish setting up anytime from Help ▸ Welcome to Folio"
           }
         }
       }
@@ -7119,12 +7139,32 @@
         }
       }
     },
+    "设置还没有完成，下次打开 Folio 时会继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup isn't finished yet. It will continue the next time you open Folio"
+          }
+        }
+      }
+    },
     "评分" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rating"
+          }
+        }
+      }
+    },
+    "识别出之前导入的 %lld 个翻译文件，已按翻译服务重新命名。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognized %lld translations imported earlier and renamed them after their translation services."
           }
         }
       }

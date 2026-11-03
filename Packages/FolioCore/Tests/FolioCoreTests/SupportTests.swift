@@ -130,6 +130,41 @@ import Testing
     @Test func emptyTitleFallsBack() {
         #expect(FileNamer.baseName(for: Metadata(title: "  ")) == "Untitled")
     }
+
+    @Test func translationNotes() {
+        #expect(FileNamer.translationSuffix(kind: .dual, translatedBy: "Google") == " (bilingual · Google)")
+        #expect(FileNamer.translationSuffix(kind: .mono, translatedBy: "SiliconFlow · Qwen/Qwen3-8B") == " (translation · SiliconFlow · Qwen-Qwen3-8B)")
+        #expect(FileNamer.translationSuffix(kind: .mono, translatedBy: nil) == " (translation)")
+        let folio = "Zhang_2026_Paper（简体中文译文 · DeepSeek · deepseek-chat）"
+        #expect(FileNamer.translationSuffix(inName: folio) == "（简体中文译文 · DeepSeek · deepseek-chat）")
+        #expect(FileNamer.translatedBy(inName: folio) == "DeepSeek · deepseek-chat")
+        #expect(FileNamer.translatedBy(inName: "Paper (Bilingual · Google)") == "Google")
+        #expect(FileNamer.translatedBy(inName: "Zhang_2026_UNet (v2)") == nil)
+    }
+}
+
+@Suite struct FileLabelTests {
+    private func file(_ name: String, kind: TranslationKind? = nil, of source: String? = nil, by: String? = nil) -> FileRecord {
+        var file = FileRecord(id: name, itemId: "i", relativePath: "Files/\(name)", originalName: name, size: 0, sha256: name, modifiedAt: Date())
+        file.translationKind = kind
+        file.translationOf = source
+        file.translatedBy = by
+        return file
+    }
+
+    @Test func originalTranslationsAndOtherFiles() {
+        let paper = file("Zhang_2026_Paper.pdf")
+        let supplement = file("Supplement.pdf")
+        let mono = file("Zhang_2026_Paper（译文）.pdf", kind: .mono, of: paper.id, by: "DeepSeek · deepseek-chat")
+        let unnamed = file("Zhang_2026_Paper（双语对照）.pdf", kind: .dual)
+        let files = [paper, supplement, mono, unnamed]
+        #expect(files.map { FileLabel.title(of: $0, among: files, defaultFileId: paper.id) }
+                == ["Original", "Supplement.pdf", "Translation · DeepSeek · deepseek-chat", "Bilingual"])
+        // A paper's only PDF is its original, default or not; other kinds of file keep their names.
+        let notes = file("Notes.txt")
+        #expect(FileLabel.title(of: paper, among: [paper, notes], defaultFileId: notes.id) == "Original")
+        #expect(FileLabel.title(of: notes, among: [paper, notes], defaultFileId: notes.id) == "Notes.txt")
+    }
 }
 
 @Suite struct FileHasherTests {

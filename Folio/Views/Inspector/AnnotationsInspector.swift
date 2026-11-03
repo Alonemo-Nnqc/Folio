@@ -63,7 +63,8 @@ struct AnnotationsInspector: View {
     private func fileSection(_ file: FileRecord, _ annotations: [PDFAnnotationInfo]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(file.fileName)
+                Text(model.label(of: file))
+                    .help(file.fileName)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

@@ -2,10 +2,12 @@ import AppKit
 import FolioAgent
 import SwiftUI
 
-/// The guide's pages and the bar under them (page dots, 返回, 继续).
+/// The guide's pages and the bar under them (page dots, 返回, 继续). It fills the window below the title
+/// bar's safe area, so the bar is never pushed under the window's bottom edge.
 struct OnboardingView: View {
     @Bindable var state: OnboardingState
-    let close: () -> Void
+    /// 跳过设置 / 开始使用: the guide is done and closes.
+    let finish: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,13 +28,13 @@ struct OnboardingView: View {
             bottomBar
         }
         .animation(.smooth(duration: 0.2), value: state.step)
-        .frame(width: 720, height: 640)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var bottomBar: some View {
         HStack(spacing: 10) {
             if state.isFirst {
-                Button("跳过设置", action: close)
+                Button("跳过设置", action: finish)
             } else {
                 Button("返回", action: state.back)
             }
@@ -44,7 +46,7 @@ struct OnboardingView: View {
                     .keyboardShortcut(.defaultAction)
                     .glassProminentButtonStyle()
             } else if state.isLast {
-                Button("开始使用", action: close)
+                Button("开始使用", action: finish)
                     .keyboardShortcut(.defaultAction)
                     .glassProminentButtonStyle()
             } else {
@@ -54,8 +56,10 @@ struct OnboardingView: View {
             }
         }
         .controlSize(.large)
+        // Clear of the window's rounded bottom corners.
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 18)
     }
 }
 
@@ -82,8 +86,8 @@ private struct PageHeader<Icon: View>: View {
     @ViewBuilder let icon: Icon
 
     var body: some View {
-        VStack(spacing: 10) {
-            icon.frame(width: 64, height: 64)
+        VStack(spacing: 8) {
+            icon.frame(width: 56, height: 56)
             Text(title).font(.title.weight(.semibold))
             Text(subtitle)
                 .font(.title3)
@@ -92,21 +96,22 @@ private struct PageHeader<Icon: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 540)
         }
-        .padding(.top, 34)
+        // The title bar's safe area is above.
+        .padding(.top, 10)
         .padding(.bottom, 8)
     }
 }
 
-/// An SF Symbol on a tinted rounded square, for pages without an app icon to show.
-private struct SymbolTile: View {
+/// A large SF Symbol, as in the system's own setup screens, for pages without an app icon to show.
+private struct SymbolIcon: View {
     let symbol: String
     var tint: Color = .accentColor
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(tint.gradient)
-            .overlay(Image(systemName: symbol).font(.system(size: 30, weight: .medium)).foregroundStyle(.white))
-            .frame(width: 60, height: 60)
+        Image(systemName: symbol)
+            .font(.system(size: 50))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(tint)
     }
 }
 
@@ -182,6 +187,8 @@ private struct WelcomePage: View {
             Text("文献库保存在 \((state.model.library.root.path as NSString).abbreviatingWithTildeInPath)")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
                 .padding(.top, 4)
                 .padding(.bottom, 20)
         }
@@ -215,7 +222,7 @@ private struct ZoteroPage: View {
                 if let zotero = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "org.zotero.zotero") {
                     Image(nsImage: NSWorkspace.shared.icon(forFile: zotero.path)).resizable()
                 } else {
-                    SymbolTile(symbol: "books.vertical", tint: .red)
+                    SymbolIcon(symbol: "books.vertical.fill", tint: .red)
                 }
             }
             summary.padding(.bottom, 20)
@@ -266,9 +273,9 @@ private struct BrowserPage: View {
         VStack(spacing: 0) {
             PageHeader(title: "安装浏览器插件", subtitle: "在论文页面点一下，就能把论文和 PDF 保存到 Folio") {
                 if let browser = state.defaultBrowser {
-                    Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.path)).resizable()
+                    Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.resolvingSymlinksInPath().path)).resizable()
                 } else {
-                    SymbolTile(symbol: "safari")
+                    SymbolIcon(symbol: "safari.fill")
                 }
             }
             VStack(spacing: 12) {
@@ -308,7 +315,7 @@ private struct BrowserPage: View {
     private func row(_ browser: BrowserInfo, isDefault: Bool) -> some View {
         let enabled = state.enabledBrowsers.contains(browser.id)
         HStack(spacing: 12) {
-            Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.path))
+            Image(nsImage: NSWorkspace.shared.icon(forFile: browser.appURL.resolvingSymlinksInPath().path))
                 .resizable()
                 .frame(width: isDefault ? 44 : 30, height: isDefault ? 44 : 30)
             VStack(alignment: .leading, spacing: 2) {
@@ -347,7 +354,7 @@ private struct AgentsPage: View {
         VStack(spacing: 0) {
             PageHeader(title: "让 AI 智能体使用你的文献库",
                        subtitle: "为这台 Mac 上的智能体添加 Folio 的 MCP 服务器和技能，之后就能让它们查找、阅读和引用你的论文") {
-                SymbolTile(symbol: "sparkles", tint: .purple)
+                SymbolIcon(symbol: "sparkles", tint: .purple)
             }
             Form {
                 Section {
@@ -364,16 +371,26 @@ private struct AgentsPage: View {
                 } footer: {
                     Text("按各智能体官方的方式写入配置，修改前会备份；重启智能体或开始新会话后生效")
                 }
-                Section {
-                    Toggle(isOn: $settings.aiAllowWrites) {
-                        Text("允许 AI 修改文献库")
-                        Text("关闭后只能搜索、阅读和引用\nAI 不能彻底删除任何内容")
-                    }
-                }
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: 620)
+            // Below the list rather than in it, so a long list of agents can't scroll it out of sight.
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("允许 AI 修改文献库")
+                    Text("关闭后只能搜索、阅读和引用\nAI 不能彻底删除任何内容").font(.callout).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("允许 AI 修改文献库", isOn: $settings.aiAllowWrites)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(maxWidth: 580)
+            .padding(.bottom, 16)
         }
         .padding(.horizontal, 30)
     }
@@ -387,7 +404,7 @@ private struct TranslationPage: View {
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: "设置整篇翻译", subtitle: "保留排版、公式和图表的全文翻译，由开源引擎 pdf2zh_next 完成") {
-                SymbolTile(symbol: "character.book.closed", tint: .orange)
+                SymbolIcon(symbol: "translate", tint: .orange)
             }
             Form {
                 Section {
@@ -494,7 +511,7 @@ private struct DonePage: View {
     var body: some View {
         VStack(spacing: 0) {
             PageHeader(title: "一切就绪", subtitle: "现在可以开始整理你的文献了") {
-                SymbolTile(symbol: "checkmark", tint: .green)
+                SymbolIcon(symbol: "checkmark.circle.fill", tint: .green)
             }
             VStack(alignment: .leading, spacing: 12) {
                 summaryRow(browserDone, browserText)
