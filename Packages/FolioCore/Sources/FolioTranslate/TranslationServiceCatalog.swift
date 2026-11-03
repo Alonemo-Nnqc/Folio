@@ -196,7 +196,7 @@ public enum TranslationServiceCatalog {
             model("--anthropic-model", default: "claude-haiku-5-5"),
             baseURL("--anthropic-base-url", placeholder: "https://api.anthropic.com"),
         ]),
-        .init(id: "gemini", displayName: "Google Gemini", backend: .gemini, category: .llm, fields: [
+        .init(id: "gemini", displayName: "Gemini", backend: .gemini, category: .llm, fields: [
             apiKey("--gemini-api-key"),
             model("--gemini-model", default: "gemini-2.5-flash"),
         ]),

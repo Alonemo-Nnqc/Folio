@@ -2,49 +2,6 @@ import Foundation
 import Testing
 @testable import FolioTranslate
 
-@Suite struct DriverEventTests {
-    @Test func parsesRealDriverLines() {
-        // Lines captured from a real pdf2zh_next 2.9.0 run through the driver.
-        let start = DriverEvent.parse(#"@@FOLIO@@{"type": "progress_start", "stage": "Parse PDF and Create Intermediate Representation", "stage_current": 0, "stage_total": 1, "stage_progress": 0.0, "overall_progress": 0.0, "part_index": 1, "total_parts": 1}"#)
-        #expect(start?.kind == .progress(stage: "Parse PDF and Create Intermediate Representation", overall: 0, stageCurrent: 0, stageTotal: 1))
-
-        let finish = DriverEvent.parse(#"@@FOLIO@@{"type": "finish", "mono": "/o/p.no_watermark.zh.mono.pdf", "dual": "/o/p.no_watermark.zh.dual.pdf", "glossary": null, "total_seconds": 8.8, "token_usage": {}}"#)
-        #expect(finish?.kind == .finish(mono: "/o/p.no_watermark.zh.mono.pdf", dual: "/o/p.no_watermark.zh.dual.pdf", glossary: nil))
-
-        let error = DriverEvent.parse(#"@@FOLIO@@{"type": "error", "error": "Translation subprocess initialization error: Connection error.", "error_type": "SubprocessError", "details": "Traceback…"}"#)
-        #expect(error?.kind == .error(message: "Translation subprocess initialization error: Connection error.", type: "SubprocessError", details: "Traceback…"))
-
-        #expect(DriverEvent.parse(#"@@FOLIO@@{"type": "stage", "stage": "starting"}"#)?.kind == .stage("starting"))
-        #expect(DriverEvent.parse(#"@@FOLIO@@{"type": "version", "version": "2.9.0", "babeldoc": "0.6.2"}"#)?.kind == .version("2.9.0"))
-        #expect(DriverEvent.parse(#"@@FOLIO@@{"type": "warmup_progress", "done": 3, "total": 40, "file": "SourceHanSerifCN-Regular.ttf"}"#)?.kind
-                == .warmupProgress(done: 3, total: 40, file: "SourceHanSerifCN-Regular.ttf"))
-    }
-
-    @Test func ignoresLogLinesAndGarbage() {
-        #expect(DriverEvent.parse("2026-10-11 11:17:10,773 INFO babeldoc: Found title paragraph") == nil)
-        #expect(DriverEvent.parse("@@FOLIO@@{not json") == nil)
-        #expect(DriverEvent.parse(#"@@FOLIO@@{"no_type": 1}"#) == nil)
-    }
-
-    @Test func stageNamesAreChinese() {
-        #expect(TranslationStageNames.displayName(for: "Translate Paragraphs") == "Translate paragraphs")
-        #expect(TranslationStageNames.displayName(for: "Save PDF") == "Save PDF")
-        #expect(TranslationStageNames.displayName(for: "Something New") == "Something New")
-    }
-
-    @Test func progressTrackerIsMonotonicAndDeduplicates() {
-        var tracker = ProgressTracker()
-        #expect(tracker.stage("Parse Page Layout") == "Analyze page layout")
-        #expect(tracker.stage("Parse Page Layout") == nil)
-        #expect(tracker.stage("") == nil)
-        #expect(tracker.progress(0.10) == 0.10)
-        #expect(tracker.progress(0.101) == nil)
-        #expect(tracker.progress(0.05) == nil, "never goes backwards")
-        #expect(tracker.progress(2) == 1)
-        #expect(tracker.progress(1) == nil)
-    }
-}
-
 @Suite struct ErrorClassifierTests {
     @Test func rateLimitFromRealGoogleError() {
         // Real failure: Google answered 429 (message only says RetryError, details carry the HTTP status).
@@ -123,14 +80,6 @@ import Testing
             let text = TranslationErrorClassifier.text(for: reason, raw: "x", haystack: "x", original: "x")
             #expect(!text.contains("或没有权限") && !text.contains("或请求过于频繁"), "\(reason): one cause, not a list")
         }
-    }
-
-    @Test func stageShowsItsCount() {
-        var tracker = ProgressTracker()
-        #expect(tracker.stage("Translate Paragraphs", current: 34, total: 120) == "Translate paragraphs 34/120")
-        #expect(tracker.stage("Translate Paragraphs", current: 34, total: 120) == nil)
-        #expect(tracker.stage("Translate Paragraphs", current: 35, total: 120) == "Translate paragraphs 35/120")
-        #expect(tracker.stage("Save PDF", current: 1, total: 1) == "Save PDF")
     }
 
     @Test func appleTranslatorMarkerInLog() {

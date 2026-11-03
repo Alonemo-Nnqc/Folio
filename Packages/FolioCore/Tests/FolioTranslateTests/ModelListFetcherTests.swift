@@ -34,9 +34,13 @@ import Testing
     @Test func localServicesNeedNoKey() throws {
         let ollama = try ModelListFetcher.makeRequest(ModelListFetcher.endpoints["ollama"]!, fieldValues: [:], secrets: [:])
         #expect(ollama.url?.absoluteString == "http://localhost:11434/api/tags")
-        let xinference = try ModelListFetcher.makeRequest(ModelListFetcher.endpoints["xinference"]!,
-                                                          fieldValues: ["--xinference-host": "http://box:9997"], secrets: [:])
-        #expect(xinference.url?.absoluteString == "http://box:9997/v1/models")
+        let lmstudio = try ModelListFetcher.makeRequest(ModelListFetcher.endpoints["lmstudio"]!,
+                                                        fieldValues: ["--lmstudio-host": "http://box:1234"], secrets: [:])
+        #expect(lmstudio.url?.absoluteString == "http://box:1234/v1/models")
+        let anthropic = try ModelListFetcher.makeRequest(ModelListFetcher.endpoints["anthropic"]!, fieldValues: [:],
+                                                         secrets: ["--anthropic-api-key": "k"])
+        #expect(anthropic.url?.absoluteString == "https://api.anthropic.com/v1/models?limit=100")
+        #expect(anthropic.value(forHTTPHeaderField: "x-api-key") == "k")
     }
 
     @Test func parsesEachShape() throws {
@@ -84,12 +88,9 @@ import Testing
     }
 
     @Test func theEngineGetsTheSameAddress() throws {
-        let temp = FileManager.default.temporaryDirectory
-        let request = TranslationRequest(input: temp.appending(path: "a.pdf"), outputDirectory: temp, serviceID: "openaicompatible",
-                                         fieldValues: ["--openai-compatible-base-url": "https://api.x.com", "--openai-compatible-model": "m"],
-                                         secrets: ["--openai-compatible-api-key": "k"])
-        let invocation = try TranslationArgumentBuilder.build(request)
-        let index = try #require(invocation.arguments.firstIndex(of: "--openai-compatible-base-url"))
-        #expect(invocation.arguments[index + 1] == "https://api.x.com/v1")
+        let provider = try ProviderFactory.make(serviceID: "openaicompatible",
+                                                fields: ["--openai-compatible-base-url": "https://api.x.com", "--openai-compatible-model": "m"],
+                                                secrets: ["--openai-compatible-api-key": "k"], concurrency: nil)
+        #expect((provider as? OpenAIChatProvider)?.endpoint.absoluteString == "https://api.x.com/v1/chat/completions")
     }
 }

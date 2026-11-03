@@ -35,10 +35,18 @@ public enum TranslationNaming {
         service.displayName.replacingOccurrences(of: #"\s*[（(][^）)]*[）)]$"#, with: "", options: .regularExpression)
     }
 
-    /// The name of the pdf2zh service with this id ("google" → "Google"); nil for one Folio doesn't know.
+    /// The name of the service with this id ("google" → "Google"), including services of pdf2zh (whose Zotero plugin
+    /// names files by them) that Folio does not offer; nil for one Folio doesn't know.
     public static func serviceName(id: String) -> String? {
-        TranslationServiceCatalog.service(id: id.lowercased()).map(name(of:))
+        let id = id.lowercased()
+        if let service = TranslationServiceCatalog.service(id: id) { return name(of: service) }
+        return legacyNames[id]
     }
+
+    static let legacyNames: [String: String] = [
+        "siliconflowfree": String(localized: "SiliconFlow 免费", bundle: .module), "xinference": "Xinference",
+        "anythingllm": "AnythingLLM", "dify": "Dify",
+    ]
 
     /// The base name (no extension) for a translated file. `existing` are the base names of the item's files: a
     /// name already taken (the same provider and model again) gets the time of translation, not a number.

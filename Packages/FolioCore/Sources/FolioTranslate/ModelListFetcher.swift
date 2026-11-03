@@ -10,6 +10,8 @@ public enum ModelListFetcher {
         case ollama
         /// `GET …/v1beta/models?key=` → `{"models": [{"name": "models/…", "supportedGenerationMethods": […]}]}`.
         case gemini
+        /// `GET {base}/v1/models` with `x-api-key` → `{"data": [{"id": …}]}`.
+        case anthropic
     }
 
     struct Endpoint: Sendable {
@@ -45,8 +47,9 @@ public enum ModelListFetcher {
                       keyOption: "--groq-api-key"),
         "grok": .init(api: .openAI(defaultBase: "https://api.x.ai/v1"), modelOption: "--grok-model",
                       keyOption: "--grok-api-key"),
-        "xinference": .init(api: .openAI(defaultBase: "http://localhost:9997/v1"), modelOption: "--xinference-model",
-                            baseOption: "--xinference-host"),
+        "lmstudio": .init(api: .openAI(defaultBase: "http://localhost:1234"), modelOption: "--lmstudio-model",
+                          baseOption: "--lmstudio-host", keyRequired: false),
+        "anthropic": .init(api: .anthropic, modelOption: "--anthropic-model", baseOption: "--anthropic-base-url", keyOption: "--anthropic-api-key"),
         "ollama": .init(api: .ollama, modelOption: "--ollama-model", baseOption: "--ollama-host"),
         "gemini": .init(api: .gemini, modelOption: "--gemini-model", keyOption: "--gemini-api-key"),
     ]
@@ -127,8 +130,8 @@ public enum ModelListFetcher {
             guard var base = value(endpoint.baseOption) ?? defaultBase else { throw FetchError.missingBaseURL }
             if normalizing, let option = endpoint.baseOption, OpenAIBaseURL.options.contains(option) { base = OpenAIBaseURL.normalized(base) }
             while base.hasSuffix("/") { base.removeLast() }
-            // Xinference's host is given without the /v1 prefix.
-            if endpoint.baseOption == "--xinference-host", !base.hasSuffix("/v1") { base += "/v1" }
+            // Local servers are given without the /v1 prefix.
+            if endpoint.baseOption == "--lmstudio-host", !base.hasSuffix("/v1") { base += "/v1" }
             url = URL(string: base + "/models" + (query.map { "?" + $0 } ?? ""))
         case .ollama:
             var host = value(endpoint.baseOption) ?? "http://localhost:11434"
@@ -138,10 +141,18 @@ public enum ModelListFetcher {
             var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models")!
             components.queryItems = [URLQueryItem(name: "key", value: key), URLQueryItem(name: "pageSize", value: "200")]
             url = components.url
+        case .anthropic:
+            var base = value(endpoint.baseOption) ?? "https://api.anthropic.com"
+            while base.hasSuffix("/") { base.removeLast() }
+            url = URL(string: base + "/v1/models?limit=100")
         }
         guard let url else { throw FetchError.missingBaseURL }
         var request = URLRequest(url: url, timeoutInterval: 15)
         if case .openAI = endpoint.api, let key { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+        if case .anthropic = endpoint.api, let key {
+            request.setValue(key, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        }
         return request
     }
 
@@ -149,7 +160,7 @@ public enum ModelListFetcher {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw FetchError.unreadable }
         var names: [String]
         switch api {
-        case .openAI:
+        case .openAI, .anthropic:
             guard let list = object["data"] as? [[String: Any]] else { throw FetchError.unreadable }
             names = list.compactMap { $0["id"] as? String }
         case .ollama:

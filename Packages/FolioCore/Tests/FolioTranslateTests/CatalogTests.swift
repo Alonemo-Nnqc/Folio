@@ -3,58 +3,6 @@ import Testing
 @testable import FolioTranslate
 
 @Suite struct CatalogTests {
-    /// `pdf2zh_next --help` of version 2.9.0.
-    static let help: String = {
-        let url = Bundle.module.url(forResource: "Fixtures/pdf2zh_next-2.9.0-help", withExtension: "txt")!
-        return try! String(contentsOf: url, encoding: .utf8)
-    }()
-
-    /// Every `--option` mentioned in the help text.
-    static let helpOptions: Set<String> = {
-        Set(help.matches(of: /(?:^|[\s\[,(])(--[a-z][a-z0-9-]*)/.anchorsMatchLineEndings()).map { String($0.output.1) })
-    }()
-
-    static let expectedSwitches = ["--siliconflowfree", "--openai", "--aliyundashscope", "--google", "--bing", "--deepl",
-                                   "--deepseek", "--ollama", "--xinference", "--azureopenai", "--modelscope", "--zhipu",
-                                   "--siliconflow", "--tencentmechinetranslation", "--gemini", "--azure", "--anythingllm",
-                                   "--dify", "--grok", "--groq", "--qwenmt", "--openaicompatible", "--claudecode",
-                                   "--clitranslator"]
-
-    @Test func everyPDF2ZHServiceIsInTheCatalog() {
-        let switches = Set(TranslationServiceCatalog.all.map(\.cliSwitch))
-        for expected in Self.expectedSwitches {
-            #expect(switches.contains(expected), "missing \(expected)")
-        }
-        // 24 pdf2zh_next services + Apple (through --clitranslator).
-        #expect(TranslationServiceCatalog.all.count == 25)
-    }
-
-    @Test func everySwitchAndFieldExistsInHelp() {
-        #expect(Self.helpOptions.count > 150)
-        for service in TranslationServiceCatalog.all {
-            #expect(Self.helpOptions.contains(service.cliSwitch), "\(service.id): \(service.cliSwitch) not in --help")
-            for field in service.fields {
-                #expect(Self.helpOptions.contains(field.option), "\(service.id): \(field.option) not in --help")
-            }
-        }
-    }
-
-    @Test func helpServiceSwitchesAreAllCovered() {
-        // "Use X for translation" lines list the service switches.
-        let lines = Self.help.split(separator: "\n").map(String.init)
-        var helpSwitches: [String] = []
-        for (index, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("--"), !trimmed.hasPrefix("--term-") else { continue }
-            let rest = trimmed.split(separator: " ", omittingEmptySubsequences: true).dropFirst().joined(separator: " ")
-            let description = rest.isEmpty && index + 1 < lines.count ? lines[index + 1].trimmingCharacters(in: .whitespaces) : rest
-            if description.hasPrefix("Use "), description.hasSuffix(" for translation") {
-                helpSwitches.append(String(trimmed.split(separator: " ")[0]))
-            }
-        }
-        #expect(Set(helpSwitches) == Set(Self.expectedSwitches))
-    }
-
     @Test func identifiersAndOptionsAreUnique() {
         let ids = TranslationServiceCatalog.all.map(\.id)
         #expect(Set(ids).count == ids.count)
@@ -64,44 +12,147 @@ import Testing
         }
     }
 
-    @Test func freeServicesNeedNoSecrets() {
-        let free = TranslationServiceCatalog.all.filter(\.isFree).map(\.id)
-        #expect(free.contains("siliconflowfree") && free.contains("google") && free.contains("bing") && free.contains("apple"))
+    @Test func keysOfExistingSettingsAreKept() {
+        // Stored values and Keychain items of the pdf2zh_next era keep working.
+        #expect(TranslationServiceCatalog.service(id: "openai")?.secretFields.map(\.option) == ["--openai-api-key"])
+        #expect(TranslationServiceCatalog.service(id: "openaicompatible")?.fields.map(\.option).contains("--openai-compatible-base-url") == true)
+        #expect(TranslationServiceCatalog.service(id: "deepseek")?.fields.map(\.option).contains("--deepseek-model") == true)
+        #expect(TranslationServiceCatalog.service(id: "claudecode")?.fields.map(\.option).contains("--claude-code-model") == true)
+    }
+
+    @Test func removedServicesHaveReplacements() {
+        #expect(TranslationServiceCatalog.resolve("siliconflowfree").id == "google")
+        #expect(TranslationServiceCatalog.resolve("dify").id == "openaicompatible")
+        #expect(TranslationServiceCatalog.resolve("nonsense").id == TranslationServiceCatalog.defaultServiceID)
+        #expect(TranslationServiceCatalog.resolve("deepl").id == "deepl")
+    }
+
+    @Test func freeAndAgentServicesNeedNoSecrets() {
         for service in TranslationServiceCatalog.all where service.isFree {
             #expect(service.secretFields.isEmpty, "\(service.id)")
         }
-        for service in TranslationServiceCatalog.all where !service.isFree && service.id != "claudecode" && service.id != "clitranslator" {
-            #expect(!service.requiredFields.isEmpty, "\(service.id) should require something")
+        for agent in LocalAgent.allCases {
+            let service = TranslationServiceCatalog.service(id: agent.serviceID)
+            #expect(service != nil, "\(agent) has a service")
+            if case .agent(let a)? = service?.backend { #expect(a == agent) } else { Issue.record("\(agent): not an agent service") }
         }
     }
 
-    @Test func displayNames() {
-        #expect(TranslationServiceCatalog.service(id: "siliconflowfree")?.displayName == "SiliconFlow Free")
-        #expect(TranslationServiceCatalog.service(id: "google")?.displayName == "Google (free)")
-        #expect(TranslationServiceCatalog.service(id: "bing")?.displayName == "Bing (free)")
-        #expect(TranslationServiceCatalog.service(id: "ollama")?.displayName == "Ollama (local)")
-        #expect(TranslationServiceCatalog.service(id: "openaicompatible")?.displayName == "OpenAI-compatible API")
-        #expect(TranslationServiceCatalog.service(id: "apple")?.displayName == "Apple Translation (offline)")
-        #expect(TranslationServiceCatalog.service(id: "nope") == nil)
-    }
-
-    @Test func secretFieldsMapToPDF2ZHEnvironmentVariables() {
-        let openai = TranslationServiceCatalog.service(id: "openai")!
-        #expect(openai.secretFields.map(\.environmentName) == ["PDF2ZH_OPENAI_API_KEY"])
-        let tencent = TranslationServiceCatalog.service(id: "tencentmechinetranslation")!
-        #expect(tencent.secretFields.map(\.environmentName) == ["PDF2ZH_TENCENTCLOUD_SECRET_ID", "PDF2ZH_TENCENTCLOUD_SECRET_KEY"])
-        #expect(TranslationServiceCatalog.service(id: "deepl")!.secretFields.first?.environmentName == "PDF2ZH_DEEPL_AUTH_KEY")
-    }
-
-    @Test func generalOptionsUsedByTheBuilderExistInHelp() throws {
-        let request = TranslationRequest(
-            input: URL(fileURLWithPath: "/tmp/a.pdf"), outputDirectory: URL(fileURLWithPath: "/tmp/out"), serviceID: "bing",
-            options: TranslationOptions(outputs: .dual, dualLayout: .alternatingPages, pages: "1-3", onlyIncludeTranslatedPages: true,
-                                        glossaryFile: URL(fileURLWithPath: "/tmp/g.csv"), translateTableText: true,
-                                        enhanceCompatibility: true, qps: 2, ignoreCache: true))
-        let line = try TranslationArgumentBuilder.build(request)
-        for option in line.arguments where option.hasPrefix("--") {
-            #expect(Self.helpOptions.contains(option), "\(option) not in --help")
+    @Test func everyServiceBuildsAProviderFromItsValues() throws {
+        for service in TranslationServiceCatalog.all {
+            var fields: [String: String] = [:], secrets: [String: String] = [:]
+            for field in service.fields where field.isRequired || field.kind == .url {
+                switch field.kind {
+                case .secret: secrets[field.option] = "key"
+                case .url: fields[field.option] = "https://example.com/v1"
+                default: fields[field.option] = field.defaultValue ?? "value"
+                }
+            }
+            do {
+                let provider = try ProviderFactory.make(serviceID: service.id, fields: fields, secrets: secrets, concurrency: nil)
+                #expect(provider.limits.concurrency >= 1 && provider.limits.batchCharacters >= 500, "\(service.id)")
+                #expect(provider.limits.usesContext == service.isLLM || service.backend == .qwenMT, "\(service.id)")
+            } catch TranslationConfigurationError.agentNotFound, TranslationConfigurationError.appleUnavailable {
+                // Not installed on this Mac: reported, not crashed.
+            }
         }
+    }
+
+    @Test func missingValuesAreNamed() {
+        #expect(throws: TranslationConfigurationError.missingField(service: "OpenAI", field: "API Key")) {
+            _ = try ProviderFactory.make(serviceID: "openai", fields: [:], secrets: [:], concurrency: nil)
+        }
+        #expect(throws: TranslationConfigurationError.unknownService("x")) {
+            _ = try ProviderFactory.make(serviceID: "x", fields: [:], secrets: [:], concurrency: nil)
+        }
+    }
+
+    @Test func concurrencyOverride() throws {
+        let provider = try ProviderFactory.make(serviceID: "google", fields: [:], secrets: [:], concurrency: 2)
+        #expect(provider.limits.concurrency == 2)
+    }
+}
+
+@Suite struct OptionsTests {
+    @Test func settingsOfOlderVersionsStillLoad() throws {
+        // Saved by the pdf2zh_next version: other keys, some gone.
+        let old = #"{"langIn":"en","langOut":"ja","outputs":"mono","dualLayout":"alternatingPages","translateTableText":false,"enhanceCompatibility":true,"qps":4,"ignoreCache":false,"extraArguments":[]}"#
+        let options = try JSONDecoder().decode(TranslationOptions.self, from: Data(old.utf8))
+        #expect(options.langOut == "ja" && options.outputs == .mono && options.dualLayout == .alternatingPages)
+        #expect(options.translateTables, "tables are translated by default now")
+        #expect(!options.translateReferences && options.concurrency == nil)
+        let round = try JSONDecoder().decode(TranslationOptions.self, from: JSONEncoder().encode(options))
+        #expect(round == options)
+    }
+
+    @Test func pageSelection() {
+        #expect(TranslationOptions(pages: nil).pageNumbers(count: 3) == [1, 2, 3])
+        #expect(TranslationOptions(pages: "1, 3-5,9").pageNumbers(count: 6) == [1, 3, 4, 5])
+        #expect(TranslationOptions(pages: "4-").pageNumbers(count: 6) == [4, 5, 6])
+        #expect(TranslationOptions(pages: "x").pageNumbers(count: 6) == [])
+    }
+}
+
+@Suite struct BatchProtocolTests {
+    @Test func parsesRepliesWithFencesThinkingAndMissingKeys() {
+        #expect(LLMBatch.parse(#"{"1": "甲", "2": "乙"}"#, count: 2) == ["甲", "乙"])
+        #expect(LLMBatch.parse("```json\n{\"1\": \"甲\", \"2\": \"乙\"}\n```", count: 2) == ["甲", "乙"])
+        #expect(LLMBatch.parse("<think>{\"x\": 1} hmm</think>\n{\"1\": \"甲\"}", count: 1) == ["甲"])
+        #expect(LLMBatch.parse("Here you go: {\"2\": \"乙\"}", count: 2) == [nil, "乙"])
+        #expect(LLMBatch.parse("no json", count: 1) == [nil])
+        // A JSON reply whose value contains fences (Claude Code's output format).
+        let wrapped = #"{"type":"result","result":"```json\n{\"1\": \"甲\"}\n```"}"#
+        #expect(LLMBatch.jsonObject(in: wrapped)?["type"] as? String == "result")
+    }
+
+    @Test func userMessageNumbersItemsAndMarksShortOnes() throws {
+        let message = LLMBatch.userMessage([TranslationItem(text: "Introduction", kind: .heading), TranslationItem(text: "We use {v1}.", kind: .paragraph)])
+        let json = String(message.split(separator: "\n\n")[0])
+        let object = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String]
+        #expect(object == ["1": "Introduction", "2": "We use {v1}."])
+        #expect(message.contains("Short items (headings or table cells): 1"))
+    }
+
+    @Test func systemPromptCarriesContext() {
+        let context = TranslationContext(sourceLanguage: "en", targetLanguage: "zh", title: "Paper", summary: "Abstract text",
+                                         glossary: [GlossaryEntry(source: "domain generalization", target: "域泛化")])
+        let prompt = LLMBatch.systemPrompt(context)
+        #expect(prompt.contains("Simplified Chinese") && prompt.contains("Paper") && prompt.contains("domain generalization → 域泛化"))
+        #expect(prompt.contains("{v1}"))
+    }
+
+    @Test func terms() {
+        let terms = LLMBatch.parseTerms(#"{"terms": [{"source": "style mixing", "target": "风格混合"}, {"source": "", "target": "x"}]}"#)
+        #expect(terms == [GlossaryEntry(source: "style mixing", target: "风格混合")])
+    }
+
+    @Test func placeholdersSurviveMangling() {
+        #expect(Placeholders.numbers(in: "使用 { v1 } 和 ｛V2｝ 以及 {v10}") == [1, 2, 10])
+        #expect(Placeholders.replace(in: "a {v1} b", { "<x id=\"\($0)\"/>" }) == "a <x id=\"1\"/> b")
+        #expect(MicrosoftTranslatorProvider.plain(MicrosoftTranslatorProvider.html("x < {v1} & y")) == "x < {v1} & y")
+    }
+
+    @Test func longTextIsCutAtSentences() {
+        let text = String(repeating: "This is a sentence about segmentation. ", count: 40)
+        let chunks = GoogleWebProvider.chunks(text, limit: 300)
+        #expect(chunks.allSatisfy { $0.count <= 300 })
+        #expect(chunks.joined(separator: " ").replacingOccurrences(of: " ", with: "") == text.replacingOccurrences(of: " ", with: ""))
+        #expect(GoogleWebProvider.chunks("short", limit: 300) == ["short"])
+    }
+
+    @Test func batchesRespectLimits() {
+        let segments = (0..<10).map { TextSegment(page: 1, block: $0, kind: .paragraph, source: String(repeating: "a", count: 400), formulas: []) }
+        let batches = TranslationJob.batches(segments, limits: ProviderLimits(batchCharacters: 1000, batchItems: 30, concurrency: 1, usesContext: true))
+        #expect(batches.map(\.count) == [2, 2, 2, 2, 2])
+        let single = TranslationJob.batches(segments, limits: ProviderLimits(batchCharacters: 5000, batchItems: 3, concurrency: 1, usesContext: true))
+        #expect(single.map(\.count) == [3, 3, 3, 1])
+    }
+
+    @Test func glossaryCSV() throws {
+        let folder = TemporaryDirectory()
+        let file = folder.url.appending(path: "g.csv")
+        try "source,target\ndomain generalization, 域泛化\n\"mIoU\",mIoU,zh\nbroken\n".write(to: file, atomically: true, encoding: .utf8)
+        #expect(TranslationJob.readGlossary(file) == [GlossaryEntry(source: "domain generalization", target: "域泛化"),
+                                                       GlossaryEntry(source: "mIoU", target: "mIoU")])
     }
 }

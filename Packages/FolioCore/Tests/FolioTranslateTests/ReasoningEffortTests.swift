@@ -3,10 +3,10 @@ import Testing
 @testable import FolioTranslate
 
 @Suite struct ReasoningEffortTests {
-    func args(_ service: String, _ fields: [String: String], secrets: [String: String] = [:]) throws -> [String] {
-        let request = TranslationRequest(input: URL(filePath: "/tmp/a.pdf"), outputDirectory: URL(filePath: "/tmp"),
-                                         serviceID: service, fieldValues: fields, secrets: secrets)
-        return try TranslationArgumentBuilder.build(request).arguments
+    /// The extra request body the provider sends.
+    func body(_ service: String, _ fields: [String: String], secrets: [String: String] = [:]) throws -> [String: any Sendable] {
+        let provider = try ProviderFactory.make(serviceID: service, fields: fields, secrets: secrets, concurrency: nil)
+        return (provider as? OpenAIChatProvider)?.extraBody ?? [:]
     }
 
     @Test func choicesFollowTheModel() {
@@ -24,7 +24,7 @@ import Testing
             Issue.record("o3 should reason"); return
         }
         #expect(o3.map(\.value) == ["low", "medium", "high"])
-        #expect(ReasoningEffort.support(serviceID: "openai", fields: [:]) == .unsupportedModel, "default gpt-4o-mini")
+        #expect(ReasoningEffort.support(serviceID: "openai", fields: ["--openai-model": "gpt-4o-mini"]) == .unsupportedModel)
         #expect(ReasoningEffort.support(serviceID: "bing", fields: [:]) == .none)
         if case let .choices(deepseek, _) = ReasoningEffort.support(serviceID: "deepseek", fields: [:]) {
             #expect(deepseek.map(\.value) == ["", "off", "high", "max"])
@@ -32,37 +32,34 @@ import Testing
     }
 
     @Test func defaultMediumIsSentForReasoningModels() throws {
-        let line = try args("openai", ["--openai-model": "gpt-5"], secrets: ["--openai-api-key": "k"])
-        #expect(line.contains("--openai-send-reasoning-effort"))
-        #expect(line.firstIndex(of: "--openai-reasoning-effort").map { line[$0 + 1] } == "medium")
+        let extra = try body("openai", ["--openai-model": "gpt-5"], secrets: ["--openai-api-key": "k"])
+        #expect(extra["reasoning_effort"] as? String == "medium")
     }
 
     @Test func nothingIsSentForModelsThatCannotReason() throws {
-        let line = try args("openai", ["--openai-model": "gpt-4o", "--openai-reasoning-effort": "high",
-                                       "--openai-send-reasoning-effort": "true"], secrets: ["--openai-api-key": "k"])
-        #expect(!line.contains("--openai-reasoning-effort"))
-        #expect(!line.contains("--openai-send-reasoning-effort"))
+        let extra = try body("openai", ["--openai-model": "gpt-4o", "--openai-reasoning-effort": "high"], secrets: ["--openai-api-key": "k"])
+        #expect(extra["reasoning_effort"] == nil)
     }
 
     @Test func deepseekMapsToThinkingMode() throws {
         var fields: [String: String] = [:]
         ReasoningEffort.set("max", serviceID: "deepseek", fields: &fields)
-        let on = try args("deepseek", fields, secrets: ["--deepseek-api-key": "k"])
-        #expect(on.firstIndex(of: "--deepseek-thinking-mode").map { on[$0 + 1] } == "enabled")
-        #expect(on.firstIndex(of: "--deepseek-reasoning-effort").map { on[$0 + 1] } == "max")
+        let on = try body("deepseek", fields, secrets: ["--deepseek-api-key": "k"])
+        #expect((on["thinking"] as? [String: String])?["type"] == "enabled")
+        #expect(on["reasoning_effort"] as? String == "max")
         ReasoningEffort.set("off", serviceID: "deepseek", fields: &fields)
-        let off = try args("deepseek", fields, secrets: ["--deepseek-api-key": "k"])
-        #expect(off.firstIndex(of: "--deepseek-thinking-mode").map { off[$0 + 1] } == "disabled")
-        #expect(!off.contains("--deepseek-reasoning-effort"))
+        let off = try body("deepseek", fields, secrets: ["--deepseek-api-key": "k"])
+        #expect((off["thinking"] as? [String: String])?["type"] == "disabled")
+        #expect(off["reasoning_effort"] == nil)
     }
 
     @Test func compatibleEndpointsDefaultToNotSending() throws {
-        let line = try args("openaicompatible", ["--openai-compatible-base-url": "http://x/v1", "--openai-compatible-model": "qwen3"],
-                            secrets: ["--openai-compatible-api-key": "k"])
-        #expect(!line.contains("--openai-compatible-send-reasoning-effort"))
+        let plain = try body("openaicompatible", ["--openai-compatible-base-url": "http://x/v1", "--openai-compatible-model": "qwen3"],
+                             secrets: ["--openai-compatible-api-key": "k"])
+        #expect(plain["reasoning_effort"] == nil)
         var fields = ["--openai-compatible-base-url": "http://x/v1", "--openai-compatible-model": "qwen3"]
         ReasoningEffort.set("high", serviceID: "openaicompatible", fields: &fields)
-        let high = try args("openaicompatible", fields, secrets: ["--openai-compatible-api-key": "k"])
-        #expect(high.contains("--openai-compatible-send-reasoning-effort"))
+        let high = try body("openaicompatible", fields, secrets: ["--openai-compatible-api-key": "k"])
+        #expect(high["reasoning_effort"] as? String == "high")
     }
 }

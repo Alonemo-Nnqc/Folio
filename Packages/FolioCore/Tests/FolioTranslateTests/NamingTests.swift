@@ -18,7 +18,7 @@ import Testing
         #expect(google.name == "Google" && google.model == nil)
         #expect(TranslationNaming.baseName(original: "P", kind: .mono, language: "简体中文", provider: google, existing: []) == "P (简体中文 translation · Google)")
         let defaultModel = TranslationNaming.Provider(service: service("ollama"), fields: [:], profileName: nil)
-        #expect(defaultModel.name == "Ollama" && defaultModel.model == "gemma2", "the default model when none is filled in")
+        #expect(defaultModel.name == "Ollama" && defaultModel.model == "qwen3:8b", "the default model when none is filled in")
     }
 
     @Test func theSameProviderAgainGetsTheTimeNotANumber() {
