@@ -76,7 +76,23 @@ public enum ModelListFetcher {
 
     /// Whether a model field of this service can be filled from a fetched list.
     public static func supports(serviceID: String, modelOption: String) -> Bool {
-        endpoints[serviceID]?.modelOption == modelOption
+        if endpoints[serviceID]?.modelOption == modelOption { return true }
+        guard let service = TranslationServiceCatalog.service(id: serviceID), case .agent = service.backend else { return false }
+        return service.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }?.option == modelOption
+    }
+
+    /// Lists fetched before, by service and address, so a picker opens with them at once.
+    nonisolated(unsafe) private static var remembered: [String: [String]] = [:]
+    private static let rememberedLock = NSLock()
+
+    static func memoryKey(_ serviceID: String, _ fields: [String: String]) -> String {
+        serviceID + "|" + fields.filter { $0.key.contains("url") || $0.key.contains("host") || $0.key.hasSuffix("-path") }
+            .sorted { $0.key < $1.key }.map(\.value).joined(separator: "|")
+    }
+
+    /// The last list fetched for this service and address, if any.
+    public static func rememberedModels(serviceID: String, fieldValues: [String: String]) -> [String]? {
+        rememberedLock.withLock { remembered[memoryKey(serviceID, fieldValues)] }
     }
 
     /// Fetches model ids, sorted. `fieldValues` / `secrets` are keyed by CLI option, as in `TranslationRequest`.
@@ -84,6 +100,19 @@ public enum ModelListFetcher {
     /// otherwise the error of the address the engine will use is reported.
     public static func fetch(serviceID: String, fieldValues: [String: String], secrets: [String: String],
                              session: URLSession = .shared) async throws -> [String] {
+        let models = try await fetchUncached(serviceID: serviceID, fieldValues: fieldValues, secrets: secrets, session: session)
+        rememberedLock.withLock { remembered[memoryKey(serviceID, fieldValues)] = models }
+        return models
+    }
+
+    private static func fetchUncached(serviceID: String, fieldValues: [String: String], secrets: [String: String],
+                                      session: URLSession) async throws -> [String] {
+        if let service = TranslationServiceCatalog.service(id: serviceID), case .agent(let agent) = service.backend {
+            let path = service.fields.first { $0.option.hasSuffix("-path") }.flatMap { fieldValues[$0.option] }
+            let models = await AgentModels.models(for: agent, executable: agent.locate(customPath: path))
+            if models.isEmpty { throw FetchError.empty }
+            return models
+        }
         guard let endpoint = endpoints[serviceID] else { return [] }
         var firstError: Error?
         for request in try makeRequests(endpoint, fieldValues: fieldValues, secrets: secrets) {

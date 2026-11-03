@@ -95,7 +95,7 @@ struct LayoutAnalyzer {
             } else if figures.contains(where: { $0.insetBy(dx: -1, dy: -1).contains(center) }) && !Self.isCaptionStart(line.text) {
                 blocks.append(LayoutBlock(kind: .figure, lines: [line], translate: false))
             } else if tables.contains(where: { $0.insetBy(dx: -1, dy: -2).contains(center) }) {
-                let translate = options.translateTables && Self.hasWords(line.text) && !line.font.isMonospace
+                let translate = options.translateTables && Self.hasWords(line.text) && !line.font.isMonospace && Self.isCellText(line.text)
                 blocks.append(LayoutBlock(kind: .tableCell, lines: [line], translate: translate))
             } else if isMarginal(line, page: crop) {
                 blocks.append(LayoutBlock(kind: .header, lines: [line], translate: false))
@@ -124,20 +124,89 @@ struct LayoutAnalyzer {
         classify(&textBlocks, page: number, crop: crop, boxes: boxes)
         blocks.append(contentsOf: textBlocks)
 
+        Self.mergeInterleaved(&blocks)
         Self.absorbStrays(&blocks)
         let graphics = marks.map(\.rect) + figures
         return PageLayout(number: number, mediaBox: media, cropBox: crop, blocks: blocks, figures: figures, tables: tables,
                           graphics: graphics, runs: interpreter.runs)
     }
 
+    /// Paragraph blocks whose areas run through each other are one paragraph PDFKit read in pieces (stacked
+    /// scripts break its lines): their lines are joined again by baseline.
+    static func mergeInterleaved(_ blocks: inout [LayoutBlock]) {
+        var changed = true
+        while changed {
+            changed = false
+            outer: for a in blocks.indices where blocks[a].kind == .paragraph && blocks[a].translate {
+                for b in blocks.indices where b != a && blocks[b].kind == .paragraph && blocks[b].translate {
+                    let ra = blocks[a].rect.insetBy(dx: 0, dy: blocks[a].size * 0.2)
+                    let rb = blocks[b].rect.insetBy(dx: 0, dy: blocks[b].size * 0.2)
+                    let shared = ra.intersection(rb).area
+                    guard shared > min(ra.area, rb.area) * 0.25, abs(blocks[a].size - blocks[b].size) < blocks[a].size * 0.15 else { continue }
+                    let all = (blocks[a].lines + blocks[b].lines).sorted { $0.baseline > $1.baseline }
+                    var lines: [LayoutLine] = []
+                    for line in all {
+                        if let last = lines.last, abs(last.baseline - line.baseline) < min(last.size, line.size) * 0.45,
+                           let merged = makeLine(last.chars + [spacer(after: last)] + line.chars) {
+                            lines[lines.count - 1] = merged
+                        } else {
+                            lines.append(line)
+                        }
+                    }
+                    let keep = min(a, b)
+                    blocks[keep].lines = lines
+                    blocks.remove(at: max(a, b))
+                    changed = true
+                    break outer
+                }
+            }
+        }
+    }
+
+    /// A space to put between two pieces of a line.
+    static func spacer(after line: LayoutLine) -> PageChar {
+        var space = line.chars.last!
+        space.text = " "
+        space.isSpace = true
+        space.isMath = false
+        space.rect = CGRect(x: line.maxX, y: space.rect.minY, width: 0.1, height: space.rect.height)
+        return space
+    }
+
     /// Small formula pieces left inside a translated paragraph (lines PDFKit could not place) join the paragraph
     /// line they sit on, so they move with the translation instead of showing through it.
     static func absorbStrays(_ blocks: inout [LayoutBlock]) {
         var removed: Set<Int> = []
-        for (i, stray) in blocks.enumerated() where (stray.kind == .formula || stray.kind == .other) && stray.lines.count <= 2 {
+        // A drop cap: one big letter just left of a paragraph's first lines starts that paragraph.
+        for (i, cap) in blocks.enumerated() where cap.lines.count == 1 && cap.lines[0].visibleCount == 1 && !cap.translate {
+            guard let letter = cap.lines[0].chars.first(where: { !$0.isSpace }), letter.text.first?.isLetter == true else { continue }
             guard let p = blocks.indices.first(where: { j in
-                j != i && blocks[j].translate && blocks[j].kind == .paragraph && blocks[j].lines.count >= 2
-                    && blocks[j].rect.insetBy(dx: 0, dy: -1).contains(stray.rect.center) && stray.rect.width < blocks[j].rect.width * 0.5
+                j != i && blocks[j].translate && blocks[j].kind == .paragraph && letter.size > blocks[j].size * 1.8
+                    && blocks[j].lines[0].minX - cap.rect.maxX < blocks[j].size * 1.5 && blocks[j].lines[0].minX > cap.rect.minX
+                    && abs(blocks[j].lines[0].rect.maxY - cap.rect.maxY) < letter.size * 0.5
+            }) else { continue }
+            var plain = letter
+            plain.size = blocks[p].lines[0].size
+            plain.baseline = blocks[p].lines[0].baseline
+            var chars = blocks[p].lines[0].chars
+            chars.insert(plain, at: 0)
+            if let merged = makeLine(chars) {
+                blocks[p].lines[0] = merged
+                removed.insert(i)
+            }
+        }
+        for (i, stray) in blocks.enumerated() where !removed.contains(i) && (stray.kind == .formula || stray.kind == .other) && stray.lines.count <= 2 {
+            // The paragraph with a line on the stray's baseline, right beside it.
+            let line = stray.lines[0]
+            guard let p = blocks.indices.filter({ j in
+                j != i && blocks[j].translate && blocks[j].kind == .paragraph && stray.rect.width < max(blocks[j].rect.width * 0.6, 1)
+                    && blocks[j].lines.contains { host in
+                        abs(host.baseline - line.baseline) < host.size * 0.6
+                            && line.minX < host.maxX + host.size * 1.5 && line.maxX > host.minX - host.size * 1.5
+                    }
+            }).min(by: { a, b in
+                func distance(_ j: Int) -> Double { blocks[j].lines.map { abs($0.baseline - line.baseline) }.min() ?? 99 }
+                return distance(a) < distance(b)
             }) else { continue }
             for line in stray.lines {
                 guard let k = blocks[p].lines.indices.min(by: { abs(blocks[p].lines[$0].baseline - line.baseline) < abs(blocks[p].lines[$1].baseline - line.baseline) }),
@@ -252,16 +321,29 @@ struct LayoutAnalyzer {
                         line.visibleCount <= 8 && (line.mathRatio >= 0.5 || line.chars.contains { $0.isScript || $0.size < line.size * 0.85 })
                     }
                     let piece = formulaPiece(l) || formulaPiece(r)
-                    let baselineTolerance = piece ? max(l.size, r.size) * 1.2 : min(l.size, r.size) * 0.3
+                    // A piece of formula sits up to about half an em off its host line's baseline.
+                    let host = l.visibleCount >= r.visibleCount ? l : r
+                    let baselineTolerance = piece ? host.size * 0.7 : min(l.size, r.size) * 0.3
                     guard !l.isRotated, !r.isRotated, r.minX >= l.minX,
                           abs(l.baseline - r.baseline) < baselineTolerance,
                           piece || abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { continue }
                     let gap = r.minX - l.maxX
-                    // Scripts may overlap (a subscript under a superscript); full-size text may not.
-                    let lMain = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map { Double($0.rect.maxX) }.max() ?? l.maxX
-                    let rMain = r.chars.filter { !$0.isSpace && $0.size >= r.size * 0.85 }.map { Double($0.rect.minX) }.min() ?? r.minX
-                    guard rMain - lMain > -min(l.size, r.size) * 0.5, gap < max(l.size, r.size) * 1.0,
-                          !inTable(l.rect), !inTable(r.rect) else { continue }
+                    guard !inTable(l.rect), !inTable(r.rect) else { continue }
+                    if gap < -min(l.size, r.size) * 0.5 {
+                        guard abs(l.baseline - r.baseline) < min(l.size, r.size) * 0.3, abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { continue }
+                        // Interleaved pieces (accents and scripts PDFKit split off): one line if their glyphs do not collide.
+                        let lGlyphs = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map(\.rect)
+                        let collisions = r.chars.filter { c in
+                            !c.isSpace && c.size >= r.size * 0.85
+                                && lGlyphs.contains { $0.minX < c.rect.maxX - c.rect.width * 0.4 && $0.maxX > c.rect.minX + c.rect.width * 0.4 }
+                        }.count
+                        guard collisions <= max(1, r.visibleCount / 10), r.minX < l.maxX, r.maxX > l.minX else { continue }
+                    } else {
+                        // Scripts may overlap (a subscript under a superscript); full-size text may not.
+                        let lMain = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map { Double($0.rect.maxX) }.max() ?? l.maxX
+                        let rMain = r.chars.filter { !$0.isSpace && $0.size >= r.size * 0.85 }.map { Double($0.rect.minX) }.min() ?? r.minX
+                        guard rMain - lMain > -min(l.size, r.size) * 0.5, gap < max(l.size, r.size) * 1.0 else { continue }
+                    }
                     // Two lines that each fill a column are neighbouring columns, not pieces of one line.
                     if l.inkRect.width > pageWidth * 0.3, r.inkRect.width > pageWidth * 0.3 { continue }
                     var space = l.chars.last!
@@ -287,15 +369,26 @@ struct LayoutAnalyzer {
     static func markScripts(_ line: LayoutLine) -> LayoutLine {
         var line = line
         var chars = line.chars
-        for i in chars.indices where !chars[i].isSpace && (chars[i].size < line.size * 0.8 || (chars[i].isScript && chars[i].size < line.size * 0.95)) {
+        // Off the baseline: small capitals are smaller too, but sit on it.
+        for i in chars.indices where !chars[i].isSpace && chars[i].size < line.size * 0.95
+            && (chars[i].isScript || abs(chars[i].baseline - line.baseline) > line.size * 0.12) {
             chars[i].isMath = true
         }
         for i in chars.indices where !chars[i].isSpace && !chars[i].isMath && chars[i].text.first?.isLetter == true {
             let next = i + 1 < chars.count ? chars[i + 1] : nil
             let previous = i > 0 ? chars[i - 1] : nil
             let wordStart = previous == nil || previous!.isSpace || previous!.isMath
-            if wordStart, let next, next.isMath, next.size < line.size * 0.8, next.rect.minX - chars[i].rect.maxX < line.size * 0.3 {
-                chars[i].isMath = true
+            _ = wordStart
+            if let next, next.isMath, next.size < line.size * 0.95, next.isScript || abs(next.baseline - line.baseline) > line.size * 0.12,
+               next.rect.minX - chars[i].rect.maxX < line.size * 0.3 {
+                // The symbol the script belongs to: the letters touching it ("f" in fₛ, "DEC" in DECₚᵢₓ), up to six.
+                var start = i
+                while start > 0, i - start < 5, !chars[start - 1].isSpace, !chars[start - 1].isMath,
+                      chars[start - 1].text.first?.isLetter == true, chars[start].rect.minX - chars[start - 1].rect.maxX < line.size * 0.15 {
+                    start -= 1
+                }
+                let isWord = start == 0 || chars[start - 1].isSpace || chars[start - 1].isMath || chars[start - 1].text.first?.isLetter != true
+                if isWord { for k in start...i { chars[k].isMath = true } }
             }
         }
         line.chars = chars
@@ -323,9 +416,11 @@ struct LayoutAnalyzer {
         }
         let visible = chars.filter { !$0.isSpace }
         guard let first = visible.first else { return nil }
-        // Size and baseline come from the text on the baseline, not its scripts.
-        let onBaseline = visible.filter { !$0.isScript }
-        let reference = onBaseline.isEmpty ? visible : onBaseline
+        // Size and baseline come from the line's text, not its scripts: the largest size a quarter of the characters
+        // have (PDFKit's own baseline offsets are unreliable around stacked scripts).
+        let sizes = Set(visible.map { ($0.size * 4).rounded() / 4 }).sorted(by: >)
+        let mainSize = sizes.first { s in visible.filter { abs($0.size - s) < s * 0.1 }.count * 4 >= visible.count } ?? sizes.last ?? first.size
+        let reference = visible.filter { abs($0.size - mainSize) < mainSize * 0.1 }
         var ink = first.rect
         for c in visible.dropFirst() { ink = ink.union(c.rect) }
         var sizeCounts: [Double: Int] = [:]
@@ -423,10 +518,16 @@ struct LayoutAnalyzer {
         if Double(math) > Double(chars) * 0.4 { return false }
         let prose = inside.filter { Self.textWords($0) >= 6 }.reduce(0) { $0 + $1.visibleCount }
         if Double(prose) > Double(chars) * 0.5 { return false }
-        // At least two rows with two or more cells.
+        // At least two rows with two or more cells: separate lines on one baseline, or wide gaps inside a line.
         var rows: [Double: Int] = [:]
-        for line in inside { rows[(line.baseline / 3).rounded(), default: 0] += 1 }
+        for line in inside { rows[(line.baseline / 3).rounded(), default: 0] += 1 + Self.columnGaps(line) }
         return rows.values.filter { $0 >= 2 }.count >= 2 || inside.count >= 6
+    }
+
+    /// Gaps between columns inside a line: horizontal space of more than 0.8 em between two characters.
+    static func columnGaps(_ line: LayoutLine) -> Int {
+        let visible = line.chars.filter { !$0.isSpace }
+        return zip(visible, visible.dropFirst()).filter { $1.rect.minX - $0.rect.maxX > line.size * 0.8 }.count
     }
 
     /// Areas covered by drawings: images, curves, filled shapes and their axes, plus the short labels around them.
@@ -494,8 +595,11 @@ struct LayoutAnalyzer {
                     if regions[k].contains(r) || Self.isCaptionStart(line.text) { continue }
                     let inside = regions[k].contains(r.center)
                     let near = regions[k].insetBy(dx: -reach, dy: -reach).intersects(r)
-                    let labelLike = line.wordCount <= 6 || line.size < bodySize * 0.9
-                    if inside || (near && labelLike && line.size < bodySize * 0.96) {
+                    let small = line.size < bodySize * 0.96 && (line.wordCount <= 6 || line.size < bodySize * 0.9)
+                    // Axis titles in body type: a few words within the drawing's width, not the end of a paragraph.
+                    let title = line.wordCount <= 4 && r.minX >= regions[k].minX - 2 && r.maxX <= regions[k].maxX + 2
+                        && !Self.endsParagraph(line, in: lines)
+                    if inside || (near && (small || title)) {
                         let grown = regions[k].union(r)
                         if grown != regions[k] {
                             regions[k] = grown
@@ -517,6 +621,14 @@ struct LayoutAnalyzer {
             if let k = merged.firstIndex(where: { $0.intersects(region) }) { merged[k] = merged[k].union(region) } else { merged.append(region) }
         }
         return merged
+    }
+
+    /// The short last line of a paragraph: right under a long line starting at the same place.
+    static func endsParagraph(_ line: LayoutLine, in lines: [LayoutLine]) -> Bool {
+        lines.contains { other in
+            let drop = other.baseline - line.baseline
+            return drop > 0 && drop < line.size * 1.7 && abs(other.minX - line.minX) < line.size * 1.5 && other.inkRect.width > line.size * 15
+        }
     }
 
     /// A shape behind running text (a coloured box, a frame around an abstract) rather than part of a drawing.
@@ -577,6 +689,11 @@ struct LayoutAnalyzer {
         let overlap = min(r.maxX, line.maxX) - max(r.minX, line.minX)
         if overlap < min(r.width, line.inkRect.width) * 0.5 { return false }
         if Self.isCaptionStart(line.text) { return false }
+        // A paragraph set in bold (IEEE abstracts): full lines of one style belong together.
+        if last.font.isBold, line.font.isBold, abs(last.size - line.size) < size * 0.06, drop <= size * 1.45,
+           last.inkRect.width > size * 18, !Self.isListItem(line.text) {
+            return true
+        }
         // Headings stand alone, except a heading (or bold paragraph) that continues in the same style.
         let lastHeading = isHeadingLike(last), lineHeading = isHeadingLike(line)
         if lastHeading || lineHeading {
@@ -628,6 +745,22 @@ struct LayoutAnalyzer {
 
     static func isAlgorithmStart(_ text: String) -> Bool {
         text.range(of: #"^\s*(Algorithm|ALGORITHM|Procedure|Pseudocode|算法)\s*\d*"#, options: .regularExpression) != nil
+    }
+
+    /// Cell text worth translating: not an abbreviation ("AS", "mIoU", "CVPR22"), not mostly numbers.
+    static func isCellText(_ text: String) -> Bool {
+        let tokens = text.split(whereSeparator: \.isWhitespace)
+        if tokens.count == 1, text.range(of: #"^[A-Z0-9][A-Za-z0-9\-\.+/@%]{0,7}$"#, options: .regularExpression) != nil,
+           text.filter(\.isUppercase).count >= 2 || text.contains(where: \.isNumber) {
+            return false
+        }
+        let numeric = tokens.filter { $0.range(of: #"^[\d.,±%()\-–+*†‡]+$"#, options: .regularExpression) != nil }.count
+        guard numeric * 2 < tokens.count else { return false }
+        // Names of models, datasets and venues (ResNet, EVA02-L [18], DINOv2, CVPR22) stay: something must read as a word.
+        return tokens.contains { token in
+            let word = token.trimmingCharacters(in: .punctuationCharacters)
+            return word.count >= 3 && word.allSatisfy(\.isLetter) && word.dropFirst().allSatisfy(\.isLowercase)
+        }
     }
 
     static func hasWords(_ text: String) -> Bool {

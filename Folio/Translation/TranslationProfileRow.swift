@@ -306,13 +306,9 @@ private struct ProfileDetailSheet: View {
         default:
             if ModelListFetcher.supports(serviceID: service.id, modelOption: field.option) {
                 LabeledContent(title) {
-                    HStack(spacing: 6) {
-                        TextField(title, text: text, prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
-                            .labelsHidden()
-                            .multilineTextAlignment(.trailing)
-                        ModelListButton(model: model, serviceID: service.id,
-                                        values: { (draft.fields, draft.secrets.filter { !$0.value.isEmpty }) }) { text.wrappedValue = $0 }
-                    }
+                    ModelListButton(model: model, serviceID: service.id, current: text.wrappedValue,
+                                    placeholder: field.defaultValue ?? field.placeholder ?? "",
+                                    values: { (draft.fields, draft.secrets.filter { !$0.value.isEmpty }) }) { text.wrappedValue = $0 }
                 }
             } else {
                 TextField(title, text: text, prompt: Text(field.placeholder ?? field.defaultValue ?? ""))

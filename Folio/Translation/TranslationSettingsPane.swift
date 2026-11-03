@@ -113,6 +113,32 @@ struct ServiceSection: View {
     @State private var showAdvanced = false
     @State private var appleStatus: AppleSystemTranslator.Availability?
     @State private var appleDownloadRequested = false
+    @State private var configured: Set<String> = []
+
+    /// "OpenAI 兼容接口 · 老李、DeepSeek": the service and its saved configurations.
+    private func label(for service: TranslationService) -> String {
+        let names = model.settings.translationProfiles.filter { $0.serviceID == service.id }.map(\.name)
+        guard configured.contains(service.id), !names.isEmpty else { return service.displayName }
+        return service.displayName + " · " + names.prefix(3).joined(separator: "、") + (names.count > 3 ? "…" : "")
+    }
+
+    /// Services with something entered (fields, keys, saved configurations), and agents found on this Mac.
+    private func findConfigured() async -> Set<String> {
+        let settings = model.settings
+        let store = model.translations.secrets
+        var result: Set<String> = []
+        for service in TranslationServiceCatalog.all {
+            if case .agent = service.backend { continue }
+            let fields = settings.translationFields[service.id] ?? [:]
+            let hasFields = service.fields.contains { !$0.isSecret && !(fields[$0.option] ?? "").isEmpty && $0.kind != .toggle }
+            let hasKey = service.secretFields.contains { ((try? store.get(serviceID: service.id, option: $0.option)) ?? nil)?.isEmpty == false }
+            let hasProfiles = settings.translationProfiles.contains { $0.serviceID == service.id }
+            if hasKey || hasProfiles || (hasFields && service.category != .free) { result.insert(service.id) }
+        }
+        let agents = await Task.detached { LocalAgent.installed() }.value
+        for agent in agents { result.insert(agent.serviceID) }
+        return result
+    }
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -121,9 +147,12 @@ struct ServiceSection: View {
             Picker("翻译服务", selection: $settings.translationService) {
                 ForEach(groups, id: \.title) { group in
                     Section(group.title) {
-                        ForEach(group.services) { Text($0.displayName).tag($0.id) }
+                        ForEach(group.services) { Text(label(for: $0)).tag($0.id) }
                     }
                 }
+            }
+            .task(id: "\(settings.translationProfiles.count)-\(settings.translationFields.count)-\(settings.translationService)") {
+                configured = await findConfigured()
             }
             if let note = service?.note {
                 Text(note).font(.caption).foregroundStyle(.secondary)
@@ -179,10 +208,14 @@ struct ServiceSection: View {
     }
 
     private var groups: [(title: String, services: [TranslationService])] {
-        let all = TranslationServiceCatalog.all.filter {
+        let available = TranslationServiceCatalog.all.filter {
             $0.id != TranslationServiceCatalog.appleServiceID || AppleSystemTranslator.isSupportedOnThisSystem
         }
-        return [(String(localized: "免费"), all.filter { $0.category == .free }),
+        // Services set up before (a key, an address, saved configurations) and agents on this Mac come first.
+        let mine = available.filter { configured.contains($0.id) }
+        let all = available.filter { !configured.contains($0.id) }
+        return [(String(localized: "我的服务"), mine),
+                (String(localized: "免费"), all.filter { $0.category == .free }),
                 (String(localized: "本机"), all.filter { $0.category == .local }),
                 (String(localized: "本机智能体（无需 Key）"), all.filter { $0.category == .agent }),
                 (String(localized: "大模型 API"), all.filter { $0.category == .llm }),
@@ -241,13 +274,8 @@ private struct FieldRow: View {
             default:
                 if ModelListFetcher.supports(serviceID: serviceID, modelOption: field.option) {
                     LabeledContent(title) {
-                        HStack(spacing: 6) {
-                            TextField(title, text: Binding(get: { value }, set: { setValue($0) }),
-                                      prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
-                                .labelsHidden()
-                                .multilineTextAlignment(.trailing)
-                            ModelListButton(model: model, serviceID: serviceID) { setValue($0) }
-                        }
+                        ModelListButton(model: model, serviceID: serviceID, current: value,
+                                        placeholder: field.defaultValue ?? field.placeholder ?? "") { setValue($0) }
                     }
                 } else {
                     TextField(title, text: Binding(get: { value }, set: { setValue($0) }),
@@ -361,6 +389,9 @@ private struct OptionsSection: View {
 struct ModelListButton: View {
     let model: AppModel
     let serviceID: String
+    /// The model chosen now ("" = the service's default, shown as `placeholder`).
+    var current: String = ""
+    var placeholder: String = ""
     /// The values to query with (a saved configuration); nil: the service's current values.
     var values: (() -> (fields: [String: String], secrets: [String: String]))?
     let onPick: (String) -> Void
@@ -369,25 +400,30 @@ struct ModelListButton: View {
     @State private var models: [String] = []
     @State private var error: String?
     @State private var filter = ""
+    @State private var custom = ""
 
     var body: some View {
         Button {
             showing = true
             Task { await load() }
         } label: {
-            if loading {
-                ProgressView().controlSize(.small)
-            } else {
-                Image(systemName: "list.bullet")
+            HStack(spacing: 4) {
+                Text(current.isEmpty ? (placeholder.isEmpty ? String(localized: "默认") : placeholder) : current)
+                    .foregroundStyle(current.isEmpty ? .secondary : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
             }
         }
-        .help("获取模型列表")
-        .accessibilityLabel(String(localized: "获取模型列表"))
+        .buttonStyle(.borderless)
+        .help("选择模型")
+        .accessibilityLabel(String(localized: "选择模型"))
         .popover(isPresented: $showing, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("选择模型").font(.headline)
                     Spacer()
+                    if loading { ProgressView().controlSize(.small) }
                     Button {
                         Task { await load() }
                     } label: {
@@ -399,17 +435,21 @@ struct ModelListButton: View {
                 }
                 if loading && models.isEmpty {
                     ProgressView("正在获取…").frame(maxWidth: .infinity, minHeight: 120)
-                } else if let error {
+                } else if let error, models.isEmpty {
                     ContentUnavailableView("无法获取模型列表", systemImage: "exclamationmark.triangle", description: Text(error))
-                        .frame(minHeight: 160)
+                        .frame(minHeight: 140)
                 } else {
                     PopoverSearchField(prompt: String(localized: "搜索模型"), text: $filter)
                     List(filtered, id: \.self) { name in
                         Button {
-                            onPick(name)
-                            showing = false
+                            pick(name)
                         } label: {
-                            Text(name).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                            HStack {
+                                Text(name)
+                                Spacer()
+                                if name == current { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -417,13 +457,29 @@ struct ModelListButton: View {
                     // Let the popover's own glass show through, like a native menu.
                     .scrollContentBackground(.hidden)
                     .background(.clear)
-                    .frame(height: 260)
+                    .frame(height: 240)
                     Text("\(models.count) 个模型").font(.caption).foregroundStyle(.secondary)
+                }
+                Divider()
+                HStack(spacing: 6) {
+                    TextField("其他模型", text: $custom, prompt: Text("输入模型名称"))
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { if !custom.isEmpty { pick(custom) } }
+                    Button("使用") { pick(custom) }.disabled(custom.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if !current.isEmpty {
+                        Button("恢复默认") { pick("") }
+                    }
                 }
             }
             .padding(12)
-            .frame(width: 320)
+            .frame(width: 340)
         }
+    }
+
+    private func pick(_ name: String) {
+        onPick(name.trimmingCharacters(in: .whitespaces))
+        custom = ""
+        showing = false
     }
 
     private var filtered: [String] {
@@ -433,15 +489,18 @@ struct ModelListButton: View {
 
     private func load() async {
         guard let service = TranslationServiceCatalog.service(id: serviceID) else { return }
+        let current = values?() ?? (fields: model.settings.translationFields[serviceID] ?? [:],
+                                     secrets: (try? model.translations.secrets.secrets(for: service)) ?? [:])
+        // The last list at once; a fresh one follows.
+        if models.isEmpty, let remembered = ModelListFetcher.rememberedModels(serviceID: serviceID, fieldValues: current.fields) {
+            models = remembered
+        }
         loading = true
         error = nil
         defer { loading = false }
         do {
-            let current = values?() ?? (fields: model.settings.translationFields[serviceID] ?? [:],
-                                         secrets: (try? model.translations.secrets.secrets(for: service)) ?? [:])
             models = try await ModelListFetcher.fetch(serviceID: serviceID, fieldValues: current.fields, secrets: current.secrets)
         } catch {
-            models = []
             self.error = error.localizedDescription
         }
     }

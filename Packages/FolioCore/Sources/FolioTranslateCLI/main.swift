@@ -68,6 +68,12 @@ case "translate":
     }
 case "bing":
     print(await EngineDiagnostics.bing(arguments[1]))
+case "audit":
+    // audit <pdf> <service> [model] [--out file.pdf] [--verbose]
+    let out = arguments.firstIndex(of: "--out").map { url(arguments[$0 + 1]) }
+    let model = arguments.count > 3 && !arguments[3].hasPrefix("--") ? arguments[3] : ""
+    print(try EngineDiagnostics.audit(input: url(arguments[1]), serviceID: arguments[2], model: model, output: out,
+                                      verbose: arguments.contains("--verbose")))
 default:
     print("usage: folio-translate roundtrip|compare …")
 }

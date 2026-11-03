@@ -296,3 +296,118 @@ extension EngineDiagnostics {
         } catch { return "\(error)" }
     }
 }
+
+extension EngineDiagnostics {
+    /// Renders with cached translations of `serviceID` (made-up text where there are none) and checks the result:
+    /// translated lines over other content, outside their frame, shrunk type, how full paragraphs are, and
+    /// original text left behind. Writes the mono PDF to `output` when given.
+    public static func audit(input: URL, serviceID: String, model: String = "", output: URL? = nil, verbose: Bool = false) throws -> String {
+        guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { throw CocoaError(.fileReadCorruptFile) }
+        var analyzer = LayoutAnalyzer()
+        let layouts = analyzer.analyze(document: document, cgDocument: cg, pages: Array(1...cg.numberOfPages))
+        let segments = layouts.flatMap(SegmentBuilder.segments(for:))
+        let cache = TranslationCache(directory: TranslationJob.supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
+                                     document: input, signature: "\(serviceID)|\(model)|en|zh|v1", ignore: false)
+        let sample = Array("本文提出了一种简单而有效的方法，用于在未知目标域上提升语义分割模型的泛化能力。我们在多个基准数据集上进行了大量实验，结果表明该方法优于现有技术。")
+        var translations: [String: String] = [:]
+        var cached = 0
+        for segment in segments {
+            if segment.kind == .heading, let heading = StandardHeadings.translate(segment.source, to: "zh") {
+                translations[segment.id] = heading
+                continue
+            }
+            if let hit = cache.lookup(segment.source) {
+                translations[segment.id] = hit
+                cached += 1
+                continue
+            }
+            let length = max(2, Int(Double(segment.source.filter(\.isLetter).count) * 0.42))
+            var text = ""
+            for k in 0...segment.formulas.count {
+                for i in 0..<(length / (segment.formulas.count + 1)) { text.append(sample[(k * 7 + i) % sample.count]) }
+                if k < segment.formulas.count { text += "{v\(k + 1)}" }
+            }
+            translations[segment.id] = text
+        }
+        let renderer = TranslationRenderer(source: cg, language: "zh")
+        let audit = RenderAudit()
+        renderer.audit = audit
+        let rendered = renderer.render(layouts: layouts, segments: segments, translations: translations, mono: true, dual: false,
+                                       dualLayout: .sideBySide, title: nil)
+        if let output, let mono = rendered.mono { try mono.write(to: output) }
+
+        var issues: [String] = []
+        var overlaps = 0, outside = 0, shrunk = 0, unfit = 0
+        var fills: [Double] = []
+        let byPage = Dictionary(grouping: audit.entries, by: \.page)
+        for layout in layouts {
+            let entries = byPage[layout.number] ?? []
+            let translated = Set(entries.map(\.block))
+            var obstacles: [(String, CGRect)] = []
+            for (i, block) in layout.blocks.enumerated() where !translated.contains(i) {
+                obstacles.append(("\(block.kind.rawValue) \"\(block.text.prefix(24))\"", block.rect.insetBy(dx: 0.5, dy: block.size * 0.15)))
+            }
+            for figure in layout.figures { obstacles.append(("figure", figure)) }
+            for entry in entries {
+                let block = layout.blocks[entry.block]
+                let label = "p\(layout.number) \(block.kind.rawValue) \"\(block.text.prefix(30))\""
+                if entry.scale < 0.85 { shrunk += 1; if verbose { issues.append(String(format: "shrunk %.2f: ", entry.scale) + label) } }
+                if !entry.fits { unfit += 1; issues.append("does not fit: " + label) }
+                for box in entry.boxes {
+                    // The first line's ascent may reach above the original's line box; bottom and sides may not grow.
+                    let allowed = CGRect(x: entry.frame.minX - 1.5, y: entry.frame.minY - 1.5, width: entry.frame.width + 3,
+                                         height: entry.frame.height + 1.5 + entry.fontSize * 0.35)
+                    if !allowed.contains(box) {
+                        outside += 1
+                        issues.append("outside frame: " + label)
+                        break
+                    }
+                }
+                var hit = false
+                for box in entry.boxes where !hit {
+                    for (name, rect) in obstacles where rect.intersection(box).area > max(2, box.area * 0.03) {
+                        // A drawing the block sits on (a shaded box) is a background, not an obstacle.
+                        if rect.contains(block.rect.insetBy(dx: 2, dy: 2)) { continue }
+                        overlaps += 1
+                        issues.append("overlaps \(name): " + label)
+                        hit = true
+                        break
+                    }
+                    for other in entries where other.block != entry.block && !hit {
+                        if other.boxes.contains(where: { $0.intersection(box).area > max(2, box.area * 0.05) }) {
+                            overlaps += 1
+                            issues.append("overlaps translated block \(other.block): " + label)
+                            hit = true
+                        }
+                    }
+                }
+                if block.kind == .paragraph, block.lines.count >= 3, entry.lineCount >= 2 {
+                    let original = block.lines[0].baseline - block.lines.last!.baseline
+                    let drawn = entry.pitch * Double(entry.lineCount - 1)
+                    fills.append(drawn / original)
+                }
+            }
+        }
+        // Original text left on translated pages.
+        var residual = 0
+        if let mono = rendered.mono, let out = PDFDocument(data: mono) {
+            for segment in segments where translations[segment.id] != nil {
+                let words = segment.source.split(separator: " ").filter { $0.count > 3 && !$0.contains("{") }.prefix(5)
+                guard words.count == 5 else { continue }
+                let phrase = words.joined(separator: " ")
+                if out.page(at: segment.page - 1)?.string?.replacingOccurrences(of: "\n", with: " ").contains(phrase) == true,
+                   segment.source.contains(phrase) {
+                    residual += 1
+                    issues.append("original text left: p\(segment.page) \"\(phrase)\"")
+                }
+            }
+        }
+        fills.sort()
+        let fill = fills.isEmpty ? 0 : fills[fills.count / 2]
+        let low = fills.filter { $0 < 0.75 }.count
+        var report = String(format: "%@: %d segments (%d cached), overlaps %d, outside %d, unfit %d, shrunk<0.85 %d, re-drawn kept lines %d, residual %d, fill median %.2f (%d of %d under 0.75)\n",
+                            input.lastPathComponent, segments.count, cached, overlaps, outside, unfit, shrunk, audit.conflicts, residual, fill, low, fills.count)
+        for issue in issues.prefix(verbose ? 200 : 25) { report += "  " + issue + "\n" }
+        return report
+    }
+}

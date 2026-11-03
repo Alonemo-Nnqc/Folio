@@ -29,12 +29,34 @@ struct Typesetter {
         var transplants: [Transplant]
         var scale: Double
         var fits: Bool
+        var pitch: Double = 0
     }
 
     enum Alignment { case justified, left, center }
 
-    /// Lays out `text` (with `{vN}` placeholders) for `block` inside `frame`.
+    /// The lines of a translation at the size that fits, and the range of line spacing that keeps them in their
+    /// frame. The caller picks the spacing (`finish`), so paragraphs of a page can share one.
+    struct Plan {
+        var lines: [(line: CTLine, x: Double)]
+        var scale: Double
+        var fontSize: Double
+        var firstBaseline: Double
+        /// The tightest spacing used to make it fit.
+        var minPitch: Double
+        /// The widest spacing that still ends inside the frame and reads well.
+        var maxPitch: Double
+        /// The spacing that ends on the original's last line: the block looks as full as the original.
+        var fillPitch: Double
+        var fits: Bool
+    }
+
+    /// Lays out `text` (with `{vN}` placeholders) for `block` inside `frame`, filling the original's height.
     func layout(_ text: String, block: LayoutBlock, formulas: [FormulaSpan], frame: CGRect) -> Result {
+        let plan = plan(text, block: block, formulas: formulas, frame: frame)
+        return finish(plan, pitch: plan.fillPitch, formulas: formulas)
+    }
+
+    func plan(_ text: String, block: LayoutBlock, formulas: [FormulaSpan], frame: CGRect) -> Plan {
         let size = block.size
         let pitch = block.pitch
         let alignment: Alignment = switch block.kind {
@@ -46,18 +68,20 @@ struct Typesetter {
         let bold = block.kind == .title || block.kind == .heading || block.font.isBold
         let top = block.rect.maxY
         let firstBaseline = block.lines[0].baseline
+        let lastBaseline = block.lines.last!.baseline
 
-        var best: Result?
+        var best: Plan?
         var scale = 1.0
         while scale >= 0.4 {
             let fontSize = size * scale
-            let linePitch = max(pitch * min(1, scale + 0.08), fontSize * 1.12)
+            // Chinese and Japanese need a little more air than the original's Latin lines.
+            let minPitch = max(pitch * scale * 0.96, fontSize * 1.14)
             let attributed = attributedString(text, fontSize: fontSize, bold: bold, serif: block.font.isSerif || block.font.name.isEmpty,
                                               italic: false, color: block.color, formulas: formulas, scale: scale)
-            let ctLines = breakLines(attributed, width: frame.width, indent: indent * scale)
+            let ranges = breakLineRanges(attributed, width: frame.width, indent: indent * scale)
+            let ctLines = ranges.map(\.line)
             let baseline0 = top - (top - firstBaseline) * scale
-            var placed: [(CTLine, CGPoint)] = []
-            var transplants: [Transplant] = []
+            var lines: [(CTLine, Double)] = []
             for (k, raw) in ctLines.enumerated() {
                 var line = raw
                 let lineIndent = k == 0 ? indent * scale : 0
@@ -65,24 +89,48 @@ struct Typesetter {
                 let isLast = k == ctLines.count - 1
                 // Justify full lines only: stretching a short one (before an unbreakable citation list) leaves holes.
                 let natural = CTLineGetTypographicBounds(line, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth(line)
-                if alignment == .justified, !isLast, natural > available * 0.86,
-                   let justified = CTLineCreateJustifiedLine(line, 1.0, available) { line = justified }
+                if alignment == .justified, !isLast, natural > available * 0.86 {
+                    if spacesBetweenCharacters {
+                        // Chinese and Japanese justify by spacing every character a little, not by stretching spaces.
+                        line = Self.justifiedByKerning(attributed, range: ranges[k].range, extra: available - natural, fontSize: fontSize) ?? line
+                    } else if let justified = CTLineCreateJustifiedLine(line, 1.0, available) {
+                        line = justified
+                    }
+                }
                 let width = CTLineGetTypographicBounds(line, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth(line)
                 var x = frame.minX + lineIndent
                 if alignment == .center { x = frame.minX + max(0, (frame.width - width) / 2) }
-                let origin = CGPoint(x: x, y: baseline0 - Double(k) * linePitch)
-                placed.append((line, origin))
-                transplants += Self.transplants(in: line, origin: origin, formulas: formulas, scale: scale)
+                lines.append((line, x))
             }
-            let lastBaseline = baseline0 - Double(max(ctLines.count - 1, 0)) * linePitch
-            let widest = placed.map { CTLineGetTypographicBounds($0.0, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth($0.0) }.max() ?? 0
-            let fits = lastBaseline - fontSize * 0.22 >= frame.minY - 0.5 && widest <= frame.width + 0.5
-            let result = Result(lines: placed, transplants: transplants, scale: scale, fits: fits)
-            if fits { return result }
-            best = result
+            let gaps = Double(max(lines.count - 1, 0))
+            let room = baseline0 - fontSize * 0.22 - frame.minY
+            let widest = lines.map { CTLineGetTypographicBounds($0.0, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth($0.0) }.max() ?? 0
+            let fits = gaps * minPitch <= room + 0.5 && widest <= frame.width + 0.5
+            var maxPitch = minPitch, fillPitch = minPitch
+            if gaps > 0 {
+                maxPitch = max(minPitch, min(fontSize * 1.85, (room + 0.5) / gaps))
+                fillPitch = min(max((baseline0 - lastBaseline) / gaps, minPitch), maxPitch)
+            }
+            let plan = Plan(lines: lines, scale: scale, fontSize: fontSize, firstBaseline: baseline0, minPitch: minPitch,
+                            maxPitch: maxPitch, fillPitch: fillPitch, fits: fits)
+            if fits { return plan }
+            best = plan
             scale -= scale > 0.7 ? 0.04 : 0.05
         }
         return best!
+    }
+
+    /// Places the planned lines `pitch` apart and finds where their formulas go.
+    func finish(_ plan: Plan, pitch requested: Double, formulas: [FormulaSpan]) -> Result {
+        let pitch = min(max(requested, plan.minPitch), plan.maxPitch)
+        var placed: [(CTLine, CGPoint)] = []
+        var transplants: [Transplant] = []
+        for (k, entry) in plan.lines.enumerated() {
+            let origin = CGPoint(x: entry.x, y: plan.firstBaseline - Double(k) * pitch)
+            placed.append((entry.line, origin))
+            transplants += Self.transplants(in: entry.line, origin: origin, formulas: formulas, scale: plan.scale)
+        }
+        return Result(lines: placed, transplants: transplants, scale: plan.scale, fits: plan.fits, pitch: pitch)
     }
 
     func draw(_ result: Result, in context: CGContext) {
@@ -105,8 +153,10 @@ struct Typesetter {
         }
     }
 
-    func attributedString(_ text: String, fontSize: Double, bold: Bool, serif: Bool, italic: Bool, color: RGBColor,
+    func attributedString(_ raw: String, fontSize: Double, bold: Bool, serif: Bool, italic: Bool, color: RGBColor,
                           formulas: [FormulaSpan], scale: Double) -> NSAttributedString {
+        // Long citation lists ("[7,21,25,26,31]") may break after their commas.
+        let text = raw.replacingOccurrences(of: #"([,，])(?=\s?\d)"#, with: "$1\u{200B}", options: .regularExpression)
         let font = FontCatalog.font(language: language, size: fontSize, bold: bold, serif: serif)
         let cgColor = CGColor(red: color.r, green: color.g, blue: color.b, alpha: 1)
         let base: [NSAttributedString.Key: Any] = [
@@ -156,8 +206,12 @@ struct Typesetter {
     }
 
     private func breakLines(_ text: NSAttributedString, width: Double, indent: Double) -> [CTLine] {
+        breakLineRanges(text, width: width, indent: indent).map(\.line)
+    }
+
+    private func breakLineRanges(_ text: NSAttributedString, width: Double, indent: Double) -> [(line: CTLine, range: CFRange)] {
         let typesetter = CTTypesetterCreateWithAttributedString(text)
-        var lines: [CTLine] = []
+        var lines: [(line: CTLine, range: CFRange)] = []
         var start = 0
         let length = text.length
         while start < length {
@@ -166,11 +220,27 @@ struct Typesetter {
             if count <= 0 { count = 1 }
             // No line starts with a space.
             let line = CTTypesetterCreateLine(typesetter, CFRange(location: start, length: count))
-            lines.append(line)
+            lines.append((line, CFRange(location: start, length: count)))
             start += count
             while start < length, (text.string as NSString).character(at: start) == 0x20 { start += 1 }
         }
         return lines
+    }
+
+    /// Scripts set without spaces between words.
+    var spacesBetweenCharacters: Bool { ["zh", "ja"].contains { language.lowercased().hasPrefix($0) } }
+
+    /// The line again with `extra` points spread over the gaps between its characters.
+    static func justifiedByKerning(_ text: NSAttributedString, range: CFRange, extra: Double, fontSize: Double) -> CTLine? {
+        let ns = text.string as NSString
+        var length = range.length
+        while length > 0, CharacterSet.whitespaces.contains(UnicodeScalar(ns.character(at: range.location + length - 1)) ?? " ") { length -= 1 }
+        guard length > 1, extra > 0 else { return nil }
+        let kern = extra / Double(length - 1)
+        guard kern < fontSize * 0.3 else { return nil }
+        let line = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: range.location, length: range.length)))
+        line.addAttribute(NSAttributedString.Key(kCTKernAttributeName as String), value: kern, range: NSRange(location: 0, length: length - 1))
+        return CTLineCreateWithAttributedString(line)
     }
 
     static func transplants(in line: CTLine, origin: CGPoint, formulas: [FormulaSpan], scale: Double) -> [Transplant] {

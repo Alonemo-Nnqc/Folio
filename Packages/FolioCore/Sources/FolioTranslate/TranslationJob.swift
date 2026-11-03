@@ -134,7 +134,15 @@ public final class TranslationJob: @unchecked Sendable {
         let cache = TranslationCache(directory: Self.supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
                                      document: request.input, signature: signature(), ignore: options.ignoreCache)
         let state = TranslationState(segments: segments)
-        for segment in segments { if let hit = cache.lookup(segment.source) { state.store(hit, for: segment) } }
+        for segment in segments {
+            if segment.kind == .heading, let heading = StandardHeadings.translate(segment.source, to: options.langOut) {
+                state.store(heading, for: segment)
+            } else if segment.kind == .tableCell, let cell = StandardCells.translate(segment.source, to: options.langOut) {
+                state.store(cell, for: segment)
+            } else if let hit = cache.lookup(segment.source) {
+                state.store(segment.kind == .heading ? HeadingNumbers.restoreSpace(source: segment.source, translation: hit) : hit, for: segment)
+            }
+        }
         log.write("cache: \(state.doneCount) of \(segments.count) segments")
         let renderer = TranslationRenderer(source: cg, language: options.langOut)
         let previews = PreviewWriter(renderer: renderer, layouts: layouts, segments: segments,
@@ -158,7 +166,8 @@ public final class TranslationJob: @unchecked Sendable {
                     var context = batchContext
                     context.glossary = glossary.entries
                     let texts = try await self.translate(batch, provider: provider, context: context, log: log)
-                    for (segment, text) in zip(batch, texts) {
+                    for (segment, raw) in zip(batch, texts) {
+                        let text = segment.kind == .heading ? HeadingNumbers.restoreSpace(source: segment.source, translation: raw) : raw
                         state.store(text, for: segment)
                         cache.store(text, for: segment.source)
                     }
