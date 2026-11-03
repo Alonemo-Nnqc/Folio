@@ -391,6 +391,15 @@ struct LayoutAnalyzer {
                 if isWord { for k in start...i { chars[k].isMath = true } }
             }
         }
+        // An accent belongs with the letter under it (F̂): both are the formula.
+        for i in chars.indices where chars[i].text.unicodeScalars.contains(where: { (0x02C6...0x02DD).contains($0.value) || (0x0300...0x036F).contains($0.value) || $0.value == 0x00AF || $0.value == 0x00A8 }) {
+            chars[i].isMath = true
+            let accent = chars[i].rect
+            for k in chars.indices where k != i && !chars[k].isSpace && chars[k].text.first?.isLetter == true {
+                let overlap = min(chars[k].rect.maxX, accent.maxX) - max(chars[k].rect.minX, accent.minX)
+                if overlap > min(accent.width, chars[k].rect.width) * 0.3 { chars[k].isMath = true }
+            }
+        }
         // A single letter touching the start of a formula ("D" of DEC set apart from E and C) is part of it.
         for i in chars.indices.dropLast() where !chars[i].isMath && !chars[i].isSpace && chars[i].text.first?.isLetter == true {
             let next = chars[i + 1]
@@ -400,6 +409,44 @@ struct LayoutAnalyzer {
                next.rect.minX - chars[i].rect.maxX < chars[i].size * 0.15 {
                 chars[i].isMath = true
             }
+        }
+        // Pieces of one formula ("πₓ = h_θ(F̂(x))") separated only by spaces and operators are one formula.
+        let operators: Set<Character> = Set("=+-−–×·*/<>≤≥≈∈()[]{}|,")
+        var i = 0
+        while i < chars.count {
+            guard chars[i].isMath else { i += 1; continue }
+            var j = i + 1
+            while j < chars.count, !chars[j].isMath, chars[j].isSpace || (chars[j].text.count == 1 && operators.contains(chars[j].text.first!)) { j += 1 }
+            if j < chars.count, j > i + 1, chars[j].isMath, chars[(i + 1)..<j].contains(where: { !$0.isSpace }) || j - i <= 2 {
+                for k in (i + 1)..<j { chars[k].isMath = true }
+            }
+            i = j
+        }
+        // A formula with an open bracket goes on to the bracket that closes it ("F̂(" + "x))").
+        i = 0
+        while i < chars.count {
+            guard chars[i].isMath else { i += 1; continue }
+            var j = i
+            var depth = 0
+            while j < chars.count, chars[j].isMath {
+                depth += chars[j].text == "(" ? 1 : chars[j].text == ")" ? -1 : 0
+                j += 1
+            }
+            var extended = 0
+            // F̂(x): an argument list right after the formula belongs to it too.
+            if depth == 0, j < chars.count, chars[j].text == "(", chars[j].rect.minX - chars[j - 1].rect.maxX < chars[j].size * 0.2,
+               chars[j...].prefix(8).contains(where: { $0.text == ")" }) {
+                depth = 1
+                chars[j].isMath = true
+                j += 1
+            }
+            while depth > 0, j < chars.count, !chars[j].isSpace, extended < 8 {
+                depth += chars[j].text == "(" ? 1 : chars[j].text == ")" ? -1 : 0
+                chars[j].isMath = true
+                j += 1
+                extended += 1
+            }
+            i = j + 1
         }
         line.chars = chars
         return line

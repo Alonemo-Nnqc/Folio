@@ -236,10 +236,18 @@ struct Typesetter {
         var length = range.length
         while length > 0, CharacterSet.whitespaces.contains(UnicodeScalar(ns.character(at: range.location + length - 1)) ?? " ") { length -= 1 }
         guard length > 1, extra > 0 else { return nil }
-        let kern = extra / Double(length - 1)
+        // Gaps after a Chinese / Japanese character or before one; Latin words keep their letters together.
+        func isCJK(_ unit: unichar) -> Bool { (0x2E80...0x9FFF).contains(Int(unit)) || (0xFF00...0xFFEF).contains(Int(unit)) || (0x3000...0x303F).contains(Int(unit)) }
+        var gaps: [Int] = []
+        for k in 0..<(length - 1) {
+            let a = ns.character(at: range.location + k), b = ns.character(at: range.location + k + 1)
+            if isCJK(a) || isCJK(b) { gaps.append(k) }
+        }
+        if gaps.isEmpty { gaps = Array(0..<(length - 1)) }
+        let kern = extra / Double(gaps.count)
         guard kern < fontSize * 0.3 else { return nil }
         let line = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: range.location, length: range.length)))
-        line.addAttribute(NSAttributedString.Key(kCTKernAttributeName as String), value: kern, range: NSRange(location: 0, length: length - 1))
+        for k in gaps { line.addAttribute(NSAttributedString.Key(kCTKernAttributeName as String), value: kern, range: NSRange(location: k, length: 1)) }
         return CTLineCreateWithAttributedString(line)
     }
 

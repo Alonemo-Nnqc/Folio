@@ -28,7 +28,12 @@ struct PageChar: Sendable {
         let width = min(rect.width, size * 1.1)
         var box = CGRect(x: rect.minX, y: baseline - size * 0.28, width: max(width, 0.1), height: size * 1.2)
         // Big operators and delimiters reach beyond the em box.
-        if MathDetector.isMathFont(font.name), font.name.lowercased().contains("ex") { box = box.union(rect) }
+        if MathDetector.isMathFont(font.name), font.name.lowercased().contains("ex") {
+            // …but PDFKit's selection is a whole line's height: stay near this line.
+            let tall = box.union(rect)
+            let lo = baseline - size * 0.6, hi = baseline + size * 1.2
+            box = CGRect(x: tall.minX, y: max(tall.minY, lo), width: tall.width, height: min(tall.maxY, hi) - max(tall.minY, lo))
+        }
         return box
     }
 }

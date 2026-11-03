@@ -156,17 +156,21 @@ final class TranslationRenderer {
                     xobjects["E"] = edited
                     content += "q /E Do Q\n"
                 }
-                if let text = composer.foreignPageForm(overlay, page: index + 1) {
+                let debugEdited = ProcessInfo.processInfo.environment["FOLIO_DEBUG_EDITED_ONLY"] != nil
+                if !debugEdited, let text = composer.foreignPageForm(overlay, page: index + 1) {
                     xobjects["T"] = text
                     content += "q /T Do Q\n"
                 }
-                for (k, transplant) in (transplants[layout.number] ?? []).enumerated() {
-                    // Only the formula's own operators are kept, so the clip can be generous vertically (scripts,
-                    // accents, big operators) without taking in the lines above and below.
+                for (k, transplant) in (debugEdited ? [] : transplants[layout.number] ?? []).enumerated() {
+                    // Only the formula's own operators are kept.
                     let formula = transplant.formula
-                    let clip = CGRect(x: formula.rect.minX - 0.8, y: formula.rect.minY - formula.size * 0.35,
-                                      width: formula.rect.width + 1.6, height: formula.rect.height + formula.size * 0.7)
-                    let formulaEdits = Self.isolationEdits(interpreter: interpreter, keeping: formula.rect.insetBy(dx: -0.6, dy: -0.4), runs: formula.runs)
+                    // The formula's box already covers its scripts and accents; a little more, not into the lines around.
+                    let clip = CGRect(x: formula.rect.minX - 0.8, y: formula.rect.minY - formula.size * 0.1,
+                                      width: formula.rect.width + 1.6, height: formula.rect.height + formula.size * 0.2)
+                    // Operators found by position must sit on the formula's own line.
+                    let band = CGRect(x: formula.rect.minX - 0.6, y: formula.baseline - formula.size * 0.35,
+                                      width: formula.rect.width + 1.2, height: formula.size * 1.35).intersection(formula.rect.insetBy(dx: -0.6, dy: -0.4))
+                    let formulaEdits = Self.isolationEdits(interpreter: interpreter, keeping: band, runs: formula.runs)
                     guard let form = composer.pageForm(layout.number, interpreter: interpreter, edits: formulaEdits, namePrefix: "FolioF") else { continue }
                     xobjects["F\(k)"] = form
                     let t = transplant.transform
