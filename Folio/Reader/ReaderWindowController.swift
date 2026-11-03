@@ -596,6 +596,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     /// The preview shown in 对照阅读 while the translation runs.
     private var previewShown: URL?
 
+    var isShowingParallel: Bool { state.parallelFileId != nil || previewShown != nil }
+
     @objc func toggleParallelReading(_ sender: Any?) {
         if state.parallelFileId != nil || previewShown != nil {
             state.parallelFileId = nil
@@ -629,9 +631,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         SimulatedDrop.append(lines.joined(separator: "\n") + "\n", to: log)
     }
 
-    /// The translation to read side by side: a mono translation of this file, else a dual one.
+    /// The translation to read side by side: the newest mono translation of this file, else a dual one.
     private var translationFile: FileRecord? {
-        let files = model.snapshot.files.values.filter { $0.translationOf == fileId }
+        let files = model.snapshot.files.values.filter { $0.translationOf == fileId }.sorted { $0.dateAdded > $1.dateAdded }
         return files.first { $0.translationKind == .mono } ?? files.first
     }
 
