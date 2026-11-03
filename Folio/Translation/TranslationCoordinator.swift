@@ -306,10 +306,10 @@ final class TranslationCoordinator {
         var added: [FileRecord] = []
         model.perform(String(localized: "无法保存译文")) {
             if let mono {
-                added.append(try model.library.addTranslatedFile(at: mono, of: fileId, kind: .mono, baseName: name(.mono)))
+                added.append(try model.library.addTranslatedFile(at: mono, of: fileId, kind: .mono, baseName: name(.mono), translatedBy: provider.label))
             }
             if let dual {
-                added.append(try model.library.addTranslatedFile(at: dual, of: fileId, kind: .dual, baseName: name(.dual)))
+                added.append(try model.library.addTranslatedFile(at: dual, of: fileId, kind: .dual, baseName: name(.dual), translatedBy: provider.label))
             }
         }
         guard let first = added.first else { return }

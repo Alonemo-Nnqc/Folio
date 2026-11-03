@@ -7159,6 +7159,16 @@
         }
       }
     },
+    "识别出之前导入的 %lld 个翻译文件，已按翻译服务重新命名。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognized %lld translations imported earlier and renamed them after their translation services."
+          }
+        }
+      }
+    },
     "译文" : {
       "localizations" : {
         "en" : {

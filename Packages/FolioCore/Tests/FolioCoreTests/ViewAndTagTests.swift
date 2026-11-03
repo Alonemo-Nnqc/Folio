@@ -228,4 +228,64 @@ import Testing
         #expect(again.groupsCreated == 0)
         #expect(again.tagsCreated == 0)
     }
+
+    @Test func namesImportedTranslationsByWhoMadeThemNotByNumber() throws {
+        let lib = try Library.temporary()
+        let dir = try Fixture.directory()
+        let original = try Fixture.pdf(named: "w.pdf", lines: ["Original"], in: dir)
+        let gemini = try Fixture.pdf(named: "w.compare.pdf", lines: ["Gemini"], in: dir)
+        let google = try Fixture.pdf(named: "w2.compare.pdf", lines: ["Google"], in: dir)
+        let entry = PreparedEntry(kind: .regular(Fixture.metadata("Night Parsing")), files: [
+            PreparedFile(sourceURL: original, originalName: "w.pdf", dateAdded: Date()),
+            PreparedFile(sourceURL: gemini, originalName: "w.compare.pdf", dateAdded: Date(), translationKind: .dual, translatedBy: "Gemini"),
+            PreparedFile(sourceURL: google, originalName: "w.compare.pdf", dateAdded: Date(), translationKind: .dual, translatedBy: "Google"),
+        ], dateAdded: Date(), dateModified: Date())
+        try lib.importPrepared(PreparedLibrary(entries: [entry]))
+
+        let s = try lib.snapshot()
+        let item = try #require(s.items.values.first)
+        let files = s.files(of: item.id).sorted { $0.relativePath < $1.relativePath }
+        #expect(files.map(\.fileName) == ["Zhang_2026_Night Parsing (bilingual · Gemini).pdf", "Zhang_2026_Night Parsing (bilingual · Google).pdf",
+                                          "Zhang_2026_Night Parsing.pdf"])
+        let source = try #require(files.last)
+        #expect(item.defaultFileId == source.id)
+        #expect(files.dropLast().allSatisfy { $0.translationOf == source.id && $0.translationKind == .dual })
+        #expect(files.map { FileLabel.title(of: $0, among: files, defaultFileId: item.defaultFileId) }
+                == ["Bilingual · Gemini", "Bilingual · Google", "Original"])
+
+        #expect(try lib.importPrepared(PreparedLibrary(entries: [entry])).translationsRecognized == 0, "nothing left to repair")
+
+        // New metadata renames the files; the translations keep their notes instead of becoming "… 2".
+        try lib.updateMetadata(item.id, Fixture.metadata("Night Parsing Revisited"), autoRename: true)
+        #expect(Set(try lib.files(ofItem: item.id).map(\.fileName)) == [
+            "Zhang_2026_Night Parsing Revisited.pdf", "Zhang_2026_Night Parsing Revisited (bilingual · Gemini).pdf",
+            "Zhang_2026_Night Parsing Revisited (bilingual · Google).pdf"])
+    }
+
+    @Test func importingAgainRepairsTranslationsImportedAsPlainFiles() throws {
+        let lib = try Library.temporary()
+        let dir = try Fixture.directory()
+        let original = try Fixture.pdf(named: "w.pdf", lines: ["Original"], in: dir)
+        let google = try Fixture.pdf(named: "w.compare.pdf", lines: ["Google"], in: dir)
+        func entry(knowing: Bool) -> PreparedEntry {
+            PreparedEntry(kind: .regular(Fixture.metadata("Night Parsing")), files: [
+                PreparedFile(sourceURL: original, originalName: "w.pdf", dateAdded: Date()),
+                PreparedFile(sourceURL: google, originalName: "w.compare.pdf", dateAdded: Date(),
+                             translationKind: knowing ? .dual : nil, translatedBy: knowing ? "Google" : nil),
+            ], dateAdded: Date(), dateModified: Date())
+        }
+        // As Folio 1.0.0 imported it: a second plain file, "… 2.pdf".
+        try lib.importPrepared(PreparedLibrary(entries: [entry(knowing: false)]))
+        let item = try #require(try lib.snapshot().items.values.first)
+        #expect(Set(try lib.files(ofItem: item.id).map(\.fileName)) == ["Zhang_2026_Night Parsing.pdf", "Zhang_2026_Night Parsing 2.pdf"])
+
+        let summary = try lib.importPrepared(PreparedLibrary(entries: [entry(knowing: true)]))
+        #expect(summary.itemsImported == 0 && summary.translationsRecognized == 1)
+        let files = try lib.files(ofItem: item.id)
+        let source = try #require(files.first { $0.translationKind == nil })
+        let translation = try #require(files.first { $0.translationKind == .dual })
+        #expect(translation.fileName == "Zhang_2026_Night Parsing (bilingual · Google).pdf")
+        #expect(translation.translatedBy == "Google" && translation.translationOf == source.id)
+        #expect(FileManager.default.fileExists(atPath: lib.fileURL(for: translation).path))
+    }
 }

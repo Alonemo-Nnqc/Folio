@@ -54,7 +54,7 @@ extension Library {
     /// or becomes a standalone file of its own when the source is a standalone file.
     @discardableResult
     public func addTranslatedFile(at url: URL, of sourceFileId: String, kind: TranslationKind,
-                                  baseName: String) throws -> FileRecord {
+                                  baseName: String, translatedBy: String? = nil) throws -> FileRecord {
         guard let source = try writer.read({ try FileRecord.fetchOne($0, key: sourceFileId) }),
               let owner = try item(source.itemId) else { throw LibraryError.notFound }
         let hash = try FileHasher.sha256(of: url)
@@ -77,6 +77,7 @@ extension Library {
                                       modifiedAt: attributes[.modificationDate] as? Date ?? now, dateAdded: now)
                 file.translationOf = sourceFileId
                 file.translationKind = kind
+                file.translatedBy = translatedBy
                 try file.insert(db)
                 if var item = try Item.fetchOne(db, key: itemId), item.defaultFileId == nil {
                     item.defaultFileId = file.id

@@ -278,6 +278,11 @@ final class AppModel {
 
     func fileURL(_ file: FileRecord) -> URL { library.fileURL(for: file) }
 
+    /// What a file is called under its paper: 原文, 双语对照 · Google … (the file name for other files).
+    func label(of file: FileRecord) -> String {
+        FileLabel.title(of: file, among: snapshot.files(of: file.itemId), defaultFileId: snapshot.items[file.itemId]?.defaultFileId)
+    }
+
     func defaultFile(of itemId: String) -> FileRecord? {
         guard let item = snapshot.items[itemId] else { return nil }
         if let id = item.defaultFileId, let file = snapshot.files[id] { return file }

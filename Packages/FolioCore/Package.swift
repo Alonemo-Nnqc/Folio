@@ -23,13 +23,13 @@ let package = Package(
         .target(name: "FolioCore", dependencies: [.product(name: "GRDB", package: "GRDB.swift")], resources: [.process("Resources")]),
         .target(name: "FolioMetadata", dependencies: ["FolioCore"]),
         .target(name: "FolioCitation", dependencies: ["FolioCore"], resources: [.copy("Resources"), .process("Localization")]),
-        .target(name: "FolioZotero", dependencies: ["FolioCore", .product(name: "GRDB", package: "GRDB.swift")]),
+        .target(name: "FolioZotero", dependencies: ["FolioCore", "FolioTranslate", .product(name: "GRDB", package: "GRDB.swift")]),
         // Developer tool: seeds demo / performance libraries for screenshots and measurements.
         .executableTarget(name: "FolioSeed", dependencies: ["FolioCore"]),
         .testTarget(name: "FolioCoreTests", dependencies: ["FolioCore"]),
         .testTarget(name: "FolioMetadataTests", dependencies: ["FolioMetadata"], resources: [.copy("Fixtures")]),
         .testTarget(name: "FolioCitationTests", dependencies: ["FolioCitation"]),
-        .testTarget(name: "FolioZoteroTests", dependencies: ["FolioZotero"]),
+        .testTarget(name: "FolioZoteroTests", dependencies: ["FolioZotero", "FolioTranslate"]),
         // Layout-preserving PDF translation (pdf2zh_next / BabelDOC engine management).
         .target(name: "FolioTranslate", resources: [.process("Resources")]),
         // `--clitranslator` helper that translates stdin with Apple's offline Translation framework.

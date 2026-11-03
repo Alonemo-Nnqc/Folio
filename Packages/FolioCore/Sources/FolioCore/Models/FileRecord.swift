@@ -32,7 +32,10 @@ public struct FileRecord: Codable, Sendable, Hashable, Identifiable, FetchableRe
     public var fulltextState: FulltextState
     /// For a translation produced by Folio: the file it was translated from.
     public var translationOf: String?
+    /// Set for every translated file: Folio's own and those imported (from Zotero's pdf2zh plugin).
     public var translationKind: TranslationKind?
+    /// Who translated it: the service and model, e.g. "DeepSeek · deepseek-chat" or "Google".
+    public var translatedBy: String?
 
     public init(id: String = UUID().uuidString, itemId: String, relativePath: String, originalName: String,
                 size: Int64, sha256: String, modifiedAt: Date, dateAdded: Date = Date(),

@@ -16,6 +16,33 @@ public enum FileNamer {
         return parts.isEmpty ? "Untitled" : parts.joined(separator: "_")
     }
 
+    /// What a translation adds to its paper's name, instead of a number: "（双语对照 · Google）".
+    public static func translationSuffix(kind: TranslationKind, translatedBy: String?) -> String {
+        // Lowercase in English, like Folio's own translations: "Paper (bilingual · Google)".
+        let what = FileLabel.kindName(kind).lowercased()
+        // Model names such as "Qwen/Qwen3-8B" have slashes.
+        let translatedBy = translatedBy.map(sanitize)
+        guard let translatedBy, !translatedBy.isEmpty else { return String(localized: "（\(what)）", bundle: .module) }
+        return String(localized: "（\(what) · \(translatedBy)）", bundle: .module)
+    }
+
+    /// The bracketed note at the end of a translation's name — "（简体中文译文 · DeepSeek · deepseek-chat）",
+    /// " (Bilingual · Google)" — so renaming the paper keeps it. Nil when the name has none.
+    public static func translationSuffix(inName stem: String) -> String? {
+        guard let range = stem.range(of: #"\s?[（(][^（）()]+ · [^（）()]+[）)]$"#, options: .regularExpression)
+        else { return nil }
+        return String(stem[range])
+    }
+
+    /// "DeepSeek · deepseek-chat" from "论文（简体中文译文 · DeepSeek · deepseek-chat）": the note minus what kind it is.
+    public static func translatedBy(inName stem: String) -> String? {
+        guard let suffix = translationSuffix(inName: stem) else { return nil }
+        let inner = suffix.trimmingCharacters(in: CharacterSet(charactersIn: " （）()"))
+        let parts = inner.components(separatedBy: " · ")
+        guard parts.count > 1 else { return nil }
+        return parts.dropFirst().joined(separator: " · ")
+    }
+
     /// Makes text safe for macOS file names and readable in Finder.
     public static func sanitize(_ text: String) -> String {
         var result = ""

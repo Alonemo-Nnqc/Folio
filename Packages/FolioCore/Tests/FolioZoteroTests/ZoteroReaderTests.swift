@@ -105,6 +105,24 @@ import FolioCore
 
         let entry = library.entries.first!
         #expect(entry.files.map(\.originalName) == ["Paper.pdf", "Paper.compare.pdf"])
+        #expect(entry.files.map(\.translationKind) == [nil, .dual])
+    }
+
+    @Test func translationsSharingAFileNameAreToldApartByTheirTitles() throws {
+        let fixture = try ZoteroFixtureDB()
+        try fixture.addItem(id: 60, type: ZoteroFixtureDB.journalArticleType)
+        try fixture.addField(item: 60, name: "title", value: "Disentangle then Parse")
+        try fixture.addAttachment(id: 61, parent: 60, linkMode: 0, path: "storage:Wei.pdf")
+        try fixture.addField(item: 61, name: "title", value: "PDF")
+        try fixture.addAttachment(id: 62, parent: 60, linkMode: 0, path: "storage:Wei.compare.pdf")
+        try fixture.addField(item: 62, name: "title", value: "Disentangle then Parse-gemini-compare")
+        try fixture.addAttachment(id: 63, parent: 60, linkMode: 0, path: "storage:Wei.compare.pdf")
+        try fixture.addField(item: 63, name: "title", value: "Disentangle then Parse-google-compare")
+
+        let (library, _) = try ZoteroReader(dataDirectory: fixture.directory).read(options: ZoteroReadOptions())
+
+        let files = library.entries.first!.files
+        #expect(files.map(\.translatedBy) == [nil, "Gemini", "Google"])
     }
 
     @Test func appliesTagColorsAndAutomaticTagToggle() throws {

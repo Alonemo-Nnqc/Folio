@@ -74,6 +74,9 @@ struct ZoteroImportSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Label("导入完成", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("导入 \(summary.itemsImported) 个条目、\(summary.filesImported) 个文件，新建 \(summary.groupsCreated) 个分组、\(summary.tagsCreated) 个标签。")
+                if summary.translationsRecognized > 0 {
+                    Text("识别出之前导入的 \(summary.translationsRecognized) 个翻译文件，已按翻译服务重新命名。")
+                }
                 if summary.duplicatesSkipped > 0 || summary.missingFiles > 0 {
                     Text("跳过 \(summary.duplicatesSkipped) 个重复条目；\(summary.missingFiles) 个附件在 Zotero 中已找不到文件。")
                         .foregroundStyle(.secondary)
