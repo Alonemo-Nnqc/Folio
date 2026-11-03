@@ -17,9 +17,10 @@ final class PDFComposer {
     /// Unedited page forms, shared by every page that shows the original.
     private var plainForms: [Int: Int] = [:]
 
-    init(source: CGPDFDocument) {
+    init(source: CGPDFDocument, streamCache: StreamDataCache? = nil) {
         self.source = source
         copier = PDFCopier(writer: writer)
+        copier.streamCache = streamCache
         pagesNode = writer.reserve()
     }
 

@@ -160,7 +160,7 @@ public enum TranslationServiceCatalog {
         ], note: String(localized: "需要先在 LM Studio 中载入模型并启动本地服务", bundle: .module)),
         // Agents
         .init(id: "claudecode", displayName: "Claude Code", backend: .agent(.claude), category: .agent, fields: [
-            .init(option: "--claude-code-model", title: TranslationServiceCatalog.modelFieldTitle, defaultValue: "sonnet", placeholder: "sonnet / haiku / opus"),
+            .init(option: "--claude-code-model", title: TranslationServiceCatalog.modelFieldTitle, defaultValue: "haiku", placeholder: "haiku / sonnet / opus"),
             agentPath("--claude-code-path", command: "claude"),
         ], note: String(localized: "调用本机已登录的 Claude Code，无需配置 Key", bundle: .module)),
         .init(id: "codex", displayName: "Codex", backend: .agent(.codex), category: .agent, fields: [

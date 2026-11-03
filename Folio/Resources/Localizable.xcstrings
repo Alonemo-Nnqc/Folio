@@ -240,16 +240,16 @@
     },
     "%lld 个条目 · %lld 个分组 · %lld 个标签" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld 个条目 · %2$lld 个分组 · %3$lld 个标签"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$lld items · %2$lld collections · %3$lld tags"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld 个条目 · %2$lld 个分组 · %3$lld 个标签"
           }
         }
       }
@@ -440,6 +440,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Folio retrieves the metadata and creates items automatically"
+          }
+        }
+      }
+    },
+    "Folio 内置的翻译引擎直接解析 PDF 版面并按原样排入译文，图表内文字和公式保持原样，无需下载任何组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folio's built-in engine reads the PDF's layout and sets the translation in place, leaving text inside figures and formulas untouched. Nothing to download"
           }
         }
       }
@@ -1059,6 +1069,16 @@
         }
       }
     },
+    "会删除早期版本下载的 Python、pdf2zh_next 和版面模型，翻译已改用内置引擎。已翻译好的 PDF 不受影响。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deletes the Python, pdf2zh_next and layout models earlier versions downloaded; translation now uses the built-in engine. Translated PDFs are not affected."
+          }
+        }
+      }
+    },
     "会把 PDF 前 5 页的文字发送给 Zotero，无需账号" : {
       "localizations" : {
         "en" : {
@@ -1215,6 +1235,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Keeps the original layout, formulas and figures\nThe translation is added to the item as a new file"
+          }
+        }
+      }
+    },
+    "保留原文排版、公式和图表，翻译时就可以对照阅读\n译文会作为新文件加入该条目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keeps the layout, formulas and figures; read side by side while it translates\nThe translation is added to the item as a new file"
+          }
+        }
+      }
+    },
+    "保留排版、公式和图表的全文翻译，引擎内置，无需下载" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whole-paper translation that keeps layout, formulas and figures. Built in, nothing to download"
           }
         }
       }
@@ -1669,6 +1709,16 @@
         }
       }
     },
+    "删除旧版翻译组件？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete the old translation component?"
+          }
+        }
+      }
+    },
     "删除标签" : {
       "localizations" : {
         "en" : {
@@ -2019,6 +2069,16 @@
         }
       }
     },
+    "同时发出的翻译请求数。付费接口额度较高时调大可以更快；遇到限流时调小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How many translation requests run at once. Raise it for paid APIs with high limits; lower it when rate limited"
+          }
+        }
+      }
+    },
     "同时导入自动标签（%lld 个，来自出版商关键词和 arXiv 分类）" : {
       "localizations" : {
         "en" : {
@@ -2035,6 +2095,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Also move items to the Trash"
+          }
+        }
+      }
+    },
+    "同时请求数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parallel requests"
           }
         }
       }
@@ -2391,6 +2461,16 @@
         }
       }
     },
+    "在这台 Mac 上找不到 %@。请先安装并登录 %@，或在设置中填写它的路径。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ wasn't found on this Mac. Install and sign in to %2$@, or enter its path in Settings."
+          }
+        }
+      }
+    },
     "在这台 Mac 上找到了 Zotero 文献库" : {
       "localizations" : {
         "en" : {
@@ -2467,6 +2547,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Size"
+          }
+        }
+      }
+    },
+    "大模型 API" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LLM APIs"
           }
         }
       }
@@ -2853,6 +2943,16 @@
         }
       }
     },
+    "已不再使用，占用 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No longer used, takes %@"
+          }
+        }
+      }
+    },
     "已为 %@ 添加 Folio MCP" : {
       "localizations" : {
         "en" : {
@@ -3057,6 +3157,16 @@
         }
       }
     },
+    "已删除旧翻译组件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Old translation component deleted"
+          }
+        }
+      }
+    },
     "已卸载翻译组件" : {
       "localizations" : {
         "en" : {
@@ -3083,6 +3193,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "On"
+          }
+        }
+      }
+    },
+    "已在这台 Mac 上找到，使用你自己的账户，无需在 Folio 中配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found on this Mac. Uses your own account, no key needed in Folio"
           }
         }
       }
@@ -3203,6 +3323,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "已找到 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found %@"
           }
         }
       }
@@ -4707,6 +4837,16 @@
         }
       }
     },
+    "无法删除：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't delete: %@"
+          }
+        }
+      }
+    },
     "无法卸载：%@" : {
       "localizations" : {
         "en" : {
@@ -4885,6 +5025,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No Rating"
+          }
+        }
+      }
+    },
+    "旧版翻译组件（pdf2zh_next）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Old translation component (pdf2zh_next)"
           }
         }
       }
@@ -5279,12 +5429,42 @@
         }
       }
     },
+    "本机" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On This Mac"
+          }
+        }
+      }
+    },
+    "本机智能体（无需 Key）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agents on This Mac (No Key)"
+          }
+        }
+      }
+    },
     "术语表（选填）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Glossary (optional)"
+          }
+        }
+      }
+    },
+    "机器翻译 API" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Machine Translation APIs"
           }
         }
       }
@@ -5797,6 +5977,16 @@
         }
       }
     },
+    "没有在这台 Mac 上找到 %@，请先安装并登录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wasn't found on this Mac. Install it and sign in first"
+          }
+        }
+      }
+    },
     "没有在这台 Mac 上找到 pdf2zh_next" : {
       "localizations" : {
         "en" : {
@@ -6269,6 +6459,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "For apps not in the list, such as VS Code, Zed and Windsurf"
+          }
+        }
+      }
+    },
+    "用它翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use for Translation"
           }
         }
       }
@@ -6849,6 +7049,36 @@
         }
       }
     },
+    "翻译参考文献" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate references"
+          }
+        }
+      }
+    },
+    "翻译引擎" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation Engine"
+          }
+        }
+      }
+    },
+    "翻译日志" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation logs"
+          }
+        }
+      }
+    },
     "翻译服务" : {
       "localizations" : {
         "en" : {
@@ -6865,6 +7095,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The translation service isn't set up yet"
+          }
+        }
+      }
+    },
+    "翻译服务：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation service: %@"
           }
         }
       }
@@ -6925,6 +7165,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Translation components downloading in the background (%lld%%)"
+          }
+        }
+      }
+    },
+    "翻译表格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate tables"
           }
         }
       }
@@ -7749,6 +7999,16 @@
         }
       }
     },
+    "逐格翻译表格中的文字；数字和符号保持原样" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translates the text of table cells one by one; numbers and symbols stay as they are"
+          }
+        }
+      }
+    },
     "通用" : {
       "localizations" : {
         "en" : {
@@ -7905,6 +8165,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retrieve Metadata Again"
+          }
+        }
+      }
+    },
+    "重新翻译（不使用缓存）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate again (don't use cache)"
           }
         }
       }
@@ -8175,6 +8445,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Default"
+          }
+        }
+      }
+    },
+    "默认会复用同一篇论文用同一服务翻译过的段落，重试时更快、更省" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paragraphs of the same paper translated with the same service are reused by default, so retries are faster and cheaper"
+          }
+        }
+      }
+    },
+    "默认保留参考文献列表的原文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reference list stays in the original by default"
           }
         }
       }

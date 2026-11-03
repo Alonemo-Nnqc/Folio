@@ -7,8 +7,20 @@ import Foundation
 /// identify objects: shared fonts and images are written once, and cycles (outline items, annotation parents)
 /// terminate. Every dictionary and stream becomes an indirect object; arrays are copied inline. Stream data
 /// comes out decoded and is compressed again (JPEG / JPEG 2000 images stay as they are).
+/// Encoded stream data by source stream, kept across documents written from the same source (previews, then the
+/// final files): images and fonts are decoded and compressed once.
+final class StreamDataCache: @unchecked Sendable {
+    struct Entry { var payload: Data; var filter: String? }
+    private var entries: [Int: Entry] = [:]
+    private let lock = NSLock()
+
+    func entry(_ key: Int) -> Entry? { lock.withLock { entries[key] } }
+    func store(_ entry: Entry, for key: Int) { lock.withLock { entries[key] = entry } }
+}
+
 final class PDFCopier {
     let writer: PDFWriter
+    var streamCache: StreamDataCache?
     /// Object number of each copied dictionary / stream, by pointer.
     private var copied: [Int: Int] = [:]
     /// Output page object for each source page dictionary; page references elsewhere point at it.
@@ -101,11 +113,27 @@ final class PDFCopier {
         if let number = copied[key] { return .ref(number) }
         let number = writer.reserve()
         copied[key] = number
-        var format = CGPDFDataFormat.raw
-        let data = (CGPDFStreamCopyData(stream, &format) as Data?) ?? Data()
         var dict: [String: PDFValue] = [:]
         if let source = CGPDFStreamGetDictionary(stream) {
             dict = entries(of: source, skipping: ["Length", "Filter", "DecodeParms", "F", "FFilter", "FDecodeParms", "DL"])
+        }
+        if let cached = streamCache?.entry(key) {
+            if let filter = cached.filter { dict["Filter"] = .name(filter) }
+            writer.setStream(number, dict: dict, data: cached.payload, compress: false)
+            return .ref(number)
+        }
+        var format = CGPDFDataFormat.raw
+        let data = (CGPDFStreamCopyData(stream, &format) as Data?) ?? Data()
+        defer {
+            // Remember the encoded payload for the next document from this source.
+            if let streamCache, let body = writer.raw(number), let payload = Self.payload(of: body) {
+                let filter: String? = switch format {
+                case .jpegEncoded: "DCTDecode"
+                case .JPEG2000: "JPXDecode"
+                default: payload.count == data.count ? nil : "FlateDecode"
+                }
+                streamCache.store(.init(payload: payload, filter: filter), for: key)
+            }
         }
         switch format {
         case .jpegEncoded:
@@ -118,6 +146,13 @@ final class PDFCopier {
             writer.setStream(number, dict: dict, data: data)
         }
         return .ref(number)
+    }
+
+    /// The bytes between `stream\n` and `\nendstream` of a serialized stream object.
+    static func payload(of body: Data) -> Data? {
+        guard let start = body.range(of: Data("\nstream\n".utf8)), let end = body.range(of: Data("\nendstream".utf8), options: .backwards),
+              start.upperBound <= end.lowerBound else { return nil }
+        return body.subdata(in: start.upperBound..<end.lowerBound)
     }
 
     static func data(of string: CGPDFStringRef) -> Data {

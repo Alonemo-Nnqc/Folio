@@ -9,6 +9,7 @@ public final class TranslationJob: @unchecked Sendable {
     public let request: TranslationRequest
     public let logURL: URL
     private let lock = NSLock()
+    private let rateGate = RateGate()
     private var task: Task<Void, Never>?
     private var cancelled = false
 
@@ -235,8 +236,9 @@ public final class TranslationJob: @unchecked Sendable {
             context.glossary = Array(context.glossary.filter { text.contains($0.source.lowercased()) }.prefix(80))
         }
         var lastError: Error?
-        for attempt in 0..<4 {
+        for attempt in 0..<6 {
             try Task.checkCancellation()
+            try await rateGate.wait()
             do {
                 let started = Date()
                 let texts = try await provider.translate(items, context: context)
@@ -248,7 +250,12 @@ public final class TranslationJob: @unchecked Sendable {
                 log.write("attempt \(attempt + 1) failed: \(error.detail.prefix(500))")
                 guard error.isRetryable else { throw error }
                 let wait = error.retryAfter ?? min(30, pow(2, Double(attempt)) * 1.5)
-                try await Task.sleep(for: .seconds(wait))
+                if case .http(429) = error.kind {
+                    // Rate limited: every batch of this job holds back, not just this one.
+                    await rateGate.pause(for: wait)
+                } else {
+                    try await Task.sleep(for: .seconds(wait))
+                }
                 // An unreadable reply for a big batch: try smaller ones.
                 if case .invalidResponse = error.kind, batch.count > 1, attempt >= 1 { break }
             }
@@ -308,6 +315,21 @@ enum EngineError: Error, LocalizedError {
         case .unreadable: String(localized: "无法读取这个 PDF 文件。", bundle: .module)
         case .encrypted: String(localized: "PDF 已加密或受密码保护，无法翻译。", bundle: .module)
         case .noText: String(localized: "这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。", bundle: .module)
+        }
+    }
+}
+
+/// Holds every request of a job back after the service said it gets too many.
+actor RateGate {
+    private var until = Date.distantPast
+
+    func pause(for seconds: Double) {
+        until = max(until, Date().addingTimeInterval(seconds))
+    }
+
+    func wait() async throws {
+        while Date() < until {
+            try await Task.sleep(for: .seconds(until.timeIntervalSinceNow))
         }
     }
 }

@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    " %@ " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " %@"
+          }
+        }
+      }
+    },
     "%@ 需要填写“%@”，请在设置的“翻译”页补充。" : {
       "localizations" : {
         "en" : {
@@ -45,32 +55,32 @@
     },
     "%@（%@ · %@ · %@）" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@（%2$@ · %3$@ · %4$@）"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ (%2$@ · %3$@ · %4$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@（%2$@ · %3$@ · %4$@）"
           }
         }
       }
     },
     "%@（%@ · %@）" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@（%2$@ · %3$@）"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ (%2$@ · %3$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@（%2$@ · %3$@）"
           }
         }
       }
@@ -177,6 +187,16 @@
         }
       }
     },
+    "Apple 系统翻译需要 macOS 26 或更高版本。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Translation needs macOS 26 or later."
+          }
+        }
+      }
+    },
     "Apple 系统翻译（离线）" : {
       "localizations" : {
         "en" : {
@@ -229,16 +249,26 @@
     },
     "HTTP %@：%@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP %1$@: %2$@"
+          }
+        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "new",
             "value" : "HTTP %1$@：%2$@"
           }
-        },
+        }
+      }
+    },
+    "Microsoft（免费）" : {
+      "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "HTTP %1$@: %2$@"
+            "value" : "Microsoft (free)"
           }
         }
       }
@@ -289,6 +319,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The PDF is encrypted or password protected and can't be translated"
+          }
+        }
+      }
+    },
+    "PDF 已加密或受密码保护，无法翻译。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The PDF is encrypted or password-protected and can't be translated."
           }
         }
       }
@@ -553,12 +593,42 @@
         }
       }
     },
+    "使用 Google 翻译网页接口，无需 Key\n频繁使用可能被暂时限流" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Google Translate's web endpoint, no key needed\nHeavy use may be rate limited for a while"
+          }
+        }
+      }
+    },
+    "使用 Microsoft Edge 浏览器的翻译接口，无需 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Bing Translator's web endpoint, no key needed"
+          }
+        }
+      }
+    },
     "使用 macOS 自带的翻译模型，完全离线、免费\n需要先在“系统设置 › 通用 › 语言与地区 › 翻译语言”中下载对应语言" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uses the translation models built into macOS: fully offline and free\nDownload the languages first in System Settings › General › Language & Region › Translation Languages"
+          }
+        }
+      }
+    },
+    "使用 macOS 自带的翻译模型，完全离线、免费\n首次使用需要下载对应语言" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the translation models built into macOS, fully offline and free\nThe languages are downloaded on first use"
           }
         }
       }
@@ -579,6 +649,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Save PDF"
+          }
+        }
+      }
+    },
+    "免费版 Key（以 :fx 结尾）与专业版 Key 都可以" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free (ending in :fx) and Pro keys both work"
           }
         }
       }
@@ -613,12 +693,32 @@
         }
       }
     },
+    "分析版面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyze layout"
+          }
+        }
+      }
+    },
     "分析页面版面" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Analyze page layout"
+          }
+        }
+      }
+    },
+    "区域" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Region"
           }
         }
       }
@@ -673,6 +773,16 @@
         }
       }
     },
+    "可执行文件路径" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Executable path"
+          }
+        }
+      }
+    },
     "后处理命令" : {
       "localizations" : {
         "en" : {
@@ -719,6 +829,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Command"
+          }
+        }
+      }
+    },
+    "在这台 Mac 上找不到 %@。请先安装并登录，或在设置的“翻译”页填写它的路径。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wasn't found on this Mac. Install it and sign in, or enter its path in Settings ▸ Translation."
+          }
+        }
+      }
+    },
+    "地域" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Region"
           }
         }
       }
@@ -841,6 +971,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "German"
+          }
+        }
+      }
+    },
+    "思考" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thinking"
           }
         }
       }
@@ -1017,6 +1157,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn't read uv's checksum"
+          }
+        }
+      }
+    },
+    "无法读取这个 PDF 文件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF can't be read."
           }
         }
       }
@@ -1475,6 +1625,16 @@
         }
       }
     },
+    "翻译段落 %lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate paragraphs %lld/%lld"
+          }
+        }
+      }
+    },
     "翻译组件安装后无法运行：%@" : {
       "localizations" : {
         "en" : {
@@ -1561,6 +1721,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tencent Machine Translation"
+          }
+        }
+      }
+    },
+    "自动查找 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find %@ automatically"
           }
         }
       }
@@ -1675,12 +1845,12 @@
         }
       }
     },
-    "请求过于频繁，被翻译服务限流%@，请调低 设置 ▸ 翻译 ▸ 每秒请求数，稍后重试" : {
+    "请求过于频繁，被翻译服务限流%@，请调低 设置 ▸ 翻译 ▸ 同时请求数，或换用其他服务；已翻译的段落会保留，重试时不会重复翻译" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Too many requests; the translation service is rate limiting%@. Lower Settings ▸ Translation ▸ Requests per second and try again later"
+            "value" : "Too many requests; the translation service is rate limiting%@. Lower Settings ▸ Translation ▸ Parallel requests or use another service. Paragraphs already translated are kept and not translated again on retry"
           }
         }
       }
@@ -1701,6 +1871,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uses the Claude Code command line signed in on this Mac\nEntering the full path to claude is recommended"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Claude Code，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Claude Code on this Mac with your login, no key needed"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Codex CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Codex CLI on this Mac with your login, no key needed"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Cursor CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Cursor CLI on this Mac with your login, no key needed"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Gemini CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Gemini CLI on this Mac with your login, no key needed"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Qwen Code，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Qwen Code on this Mac with your login, no key needed"
+          }
+        }
+      }
+    },
+    "调用本机已配置的 opencode，无需在 Folio 中配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses opencode as configured on this Mac, no key needed in Folio"
           }
         }
       }
@@ -1745,6 +1975,16 @@
         }
       }
     },
+    "这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF has no text to translate (it may be a scan that needs text recognition first)."
+          }
+        }
+      }
+    },
     "连接服务器%@超时，网络较慢或需要代理" : {
       "localizations" : {
         "en" : {
@@ -1771,6 +2011,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Works with any service compatible with OpenAI Chat Completions (such as Moonshot, LM Studio and vLLM)"
+          }
+        }
+      }
+    },
+    "适用于任何兼容 OpenAI Chat Completions 的服务（如 Moonshot、OpenRouter、vLLM 等）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For any service compatible with OpenAI Chat Completions (Moonshot, OpenRouter, vLLM …)"
           }
         }
       }
@@ -1815,6 +2065,16 @@
         }
       }
     },
+    "阿里云百炼（通义千问）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alibaba Cloud Model Studio (Qwen)"
+          }
+        }
+      }
+    },
     "需要下载 %lld 个文件" : {
       "localizations" : {
         "en" : {
@@ -1833,6 +2093,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "需要先在 LM Studio 中载入模型并启动本地服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load a model in LM Studio and start its local server first"
           }
         }
       }
@@ -1923,16 +2193,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "; "
-          }
-        }
-      }
-    },
-    " %@ " : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : " %@"
           }
         }
       }

@@ -93,7 +93,7 @@ public enum TranslationErrorClassifier {
             return String(localized: "API Key 无效\(code([401]))，请在 设置 ▸ 翻译 中检查是否填写正确", bundle: .module)
         case .quota:
             if matches(haystack, balance) { return String(localized: "翻译服务的账户余额或额度已用完\(code([402, 429]))，请充值或换用其他服务", bundle: .module) }
-            return String(localized: "请求过于频繁，被翻译服务限流\(code([429]))，请调低 设置 ▸ 翻译 ▸ 每秒请求数，稍后重试", bundle: .module)
+            return String(localized: "请求过于频繁，被翻译服务限流\(code([429]))，请调低 设置 ▸ 翻译 ▸ 同时请求数，或换用其他服务；已翻译的段落会保留，重试时不会重复翻译", bundle: .module)
         case .modelNotFound:
             let name = model(in: original).map { " \($0)" } ?? ""
             return String(localized: "模型\(name) 不存在或无权使用，请在 设置 ▸ 翻译 中检查模型名称", bundle: .module)

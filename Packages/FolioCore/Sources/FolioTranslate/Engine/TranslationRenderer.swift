@@ -10,6 +10,8 @@ import Foundation
 final class TranslationRenderer {
     let source: CGPDFDocument
     let language: String
+    /// Images and fonts of the source, compressed once for all the documents rendered from it.
+    private let streamCache = StreamDataCache()
 
     init(source: CGPDFDocument, language: String) {
         self.source = source
@@ -53,7 +55,7 @@ final class TranslationRenderer {
         guard let overlay = CGPDFDocument(CGDataProvider(data: overlayData as CFData)!) else { return Output() }
 
         func compose(dual: Bool) -> Data {
-            let composer = PDFComposer(source: source)
+            let composer = PDFComposer(source: source, streamCache: streamCache)
             for layout in layouts { _ = composer.reserveOutputPage(forSourcePage: layout.number) }
             for (index, layout) in layouts.enumerated() {
                 guard let geometry = composer.geometry(ofSourcePage: layout.number),
