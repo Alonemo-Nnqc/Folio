@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 修复
+
+- 修复 1.0.0 在开启了系统完整性保护（SIP）的 Mac 上一启动就退出的问题（崩溃报告显示 `Library not loaded: @rpath/Sparkle.framework`）。打不开 1.0.0 的用户请从 Releases 重新下载安装
+
 ## [1.0.0] - 2026-10-15
 
 首个公开版本。
