@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-03
+
 ### 新增
 
 - 在条目上三指轻点（或用力点按，取决于 系统设置 ▸ 触控板 ▸ 查询与数据检测器）即可快速查看，和按空格一样
@@ -43,5 +45,6 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Alonemo-Nnqc/Folio/releases/tag/v1.0.0
