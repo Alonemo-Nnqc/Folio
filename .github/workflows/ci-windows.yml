@@ -3,7 +3,7 @@ name: CI (Windows)
 # Folio for Windows (windows/): core tests on Windows, and the app built for x64 and ARM64.
 on:
   push:
-    branches: [main]
+    branches: [main, feat/windows]
     paths: ['windows/**', 'BrowserExtension/**', 'macos/Folio/Resources/Localizable.xcstrings', 'macos/Packages/FolioCore/Sources/**', '.github/workflows/ci-windows.yml']
   pull_request:
     paths: ['windows/**', 'BrowserExtension/**', 'macos/Folio/Resources/Localizable.xcstrings', 'macos/Packages/FolioCore/Sources/**', '.github/workflows/ci-windows.yml']
@@ -49,3 +49,19 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Build
         run: dotnet build windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }}
+
+      # The same packaging as release-windows.yml, uploaded as a build artifact (nothing is published).
+      - name: Package (trial)
+        shell: pwsh
+        run: |
+          dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} -p:Version=0.0.0-ci -o publish
+          dotnet tool install -g vpk --version 1.2.161
+          vpk pack --packId Folio --packVersion 0.0.0-ci --packDir publish --mainExe Folio.exe --packTitle Folio --packAuthors Folio `
+            --icon windows/src/Folio.App/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --outputDir releases
+          Get-ChildItem releases
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folio-${{ matrix.rid }}-trial
+          path: releases/
+          retention-days: 7
