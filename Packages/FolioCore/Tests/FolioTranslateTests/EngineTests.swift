@@ -44,7 +44,8 @@ import Testing
         let interpreter = ContentInterpreter()
         interpreter.run(page: document.page(at: 1)!)
         #expect(interpreter.runs.count >= 2)
-        let edits = TranslationRenderer.removalEdits(runs: interpreter.runs) { $0.origin.y > 695 }
+        let removing = Set(interpreter.glyphs.indices.filter { interpreter.glyphs[$0].origin.y > 695 })
+        let edits = TranslationRenderer.glyphEdits(interpreter: interpreter, removing: removing)
         let composer = PDFComposer(source: document)
         let geometry = composer.geometry(ofSourcePage: 1)!
         let form = composer.pageForm(1, interpreter: interpreter, edits: edits)!

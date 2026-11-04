@@ -4,27 +4,31 @@ import Foundation
 
 /// Produces the translated PDFs from the analysed pages and the translations of their segments.
 ///
-/// Each output page draws: the original page with the translated text removed (form XObject), the translations
-/// set by Core Text (a page of a separate PDF, also a form), and each inline formula cut from the original and
-/// moved to its place in the translation (a form keeping only that formula, clipped to it).
-/// What to take out of a page: the operators that drew the translated blocks (known from their characters), and
-/// their lines' area for operators no character was matched to.
+/// Each output page draws: the original page with the translated text taken out glyph by glyph (form XObject),
+/// the translations set by Core Text (a page of a separate PDF, also a form), and each inline formula drawn again
+/// from its own glyphs and rules where the translation placed it.
+/// What to take out of a page: the glyphs of the translated blocks, and glyphs no character stands for (spaces,
+/// invisible text) inside their lines.
 struct PageRemoval {
-    var runs: Set<Int> = []
+    var glyphs: Set<Int> = []
     var rects: [CGRect] = []
-    /// Operators that draw text staying in the original: never removed.
+    /// Glyphs of text staying in the original: never removed.
     var kept: Set<Int> = []
 
     mutating func add(_ block: LayoutBlock) {
         for line in block.lines {
             rects.append(line.rect.insetBy(dx: -0.5, dy: -line.size * 0.1))
-            for c in line.chars { if let run = c.run { runs.insert(run) } }
+            for c in line.chars { glyphs.formUnion(c.glyphs) }
         }
     }
 
-    /// Whether run `index` (of the page's runs) goes.
-    func removes(_ run: TextRun, index: Int) -> Bool {
-        !kept.contains(index) && (runs.contains(index) || rects.contains { $0.contains(run.midpoint) })
+    /// Whether glyph `index` (of the page's glyphs) goes.
+    func removes(_ glyph: Glyph, index: Int) -> Bool {
+        guard !kept.contains(index) else { return false }
+        if glyphs.contains(index) { return true }
+        let box = glyph.box
+        let center = CGPoint(x: box.midX, y: glyph.isHorizontal ? glyph.origin.y + glyph.size * 0.3 : box.midY)
+        return rects.contains { $0.contains(center) }
     }
 }
 
@@ -42,14 +46,28 @@ final class RenderAudit: @unchecked Sendable {
     }
     private(set) var entries: [Entry] = []
     var conflicts = 0
+    /// Glyphs taken out of the original that neither the translation nor a formula stands for.
+    var lostGlyphs = 0
+    /// Glyphs drawn again in formulas.
+    var formulaGlyphs = 0
     private let lock = NSLock()
 
+    /// Measures glyph ink (image bounds need a context; nothing is drawn into it).
+    nonisolated(unsafe) private static let measuring = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+
     func record(page: Int, block: Int, frame: CGRect, result: Typesetter.Result, plan: Typesetter.Plan) {
-        let boxes = result.lines.map { line, origin -> CGRect in
-            var ascent: CGFloat = 0, descent: CGFloat = 0
-            let width = CTLineGetTypographicBounds(line, &ascent, &descent, nil) - CTLineGetTrailingWhitespaceWidth(line)
-            return CGRect(x: origin.x, y: origin.y - descent * 0.6, width: width, height: ascent * 0.9 + descent * 0.6)
+        // What is drawn: the ink of each line's glyphs, and each formula's box where it goes.
+        var boxes: [CGRect] = []
+        lock.withLock {
+            for (line, origin) in result.lines {
+                guard let context = Self.measuring else { continue }
+                context.textPosition = .zero
+                let ink = CTLineGetImageBounds(line, context)
+                if !ink.isNull, ink.width > 0 { boxes.append(ink.offsetBy(dx: origin.x, dy: origin.y)) }
+            }
         }
+        boxes += result.transplants.map { $0.formula.rect.applying($0.transform) }
         lock.withLock {
             entries.append(Entry(page: page, block: block, frame: frame, boxes: boxes, scale: result.scale, fits: result.fits,
                                  lineCount: result.lines.count, pitch: result.pitch, fontSize: plan.fontSize))
@@ -83,7 +101,6 @@ final class TranslationRenderer {
         let overlayData = NSMutableData()
         var transplants: [Int: [Transplant]] = [:]
         var removals: [Int: PageRemoval] = [:]
-        var restores: [Int: [FormulaSpan]] = [:]
         if let consumer = CGDataConsumer(data: overlayData as CFMutableData),
            let context = CGContext(consumer: consumer, mediaBox: nil, nil) {
             let typesetter = Typesetter(language: language)
@@ -96,7 +113,7 @@ final class TranslationRenderer {
                 let translatedBlocks = Set(pageSegments.map(\.block))
                 var kept: Set<Int> = []
                 for (index, block) in layout.blocks.enumerated() where !translatedBlocks.contains(index) {
-                    for line in block.lines { for c in line.chars { if let run = c.run { kept.insert(run) } } }
+                    for line in block.lines { for c in line.chars { kept.formUnion(c.glyphs) } }
                 }
                 var planned: [(segment: TextSegment, frame: CGRect, plan: Typesetter.Plan)] = []
                 for segment in pageSegments {
@@ -104,6 +121,21 @@ final class TranslationRenderer {
 
                     let frame = Self.frame(for: segment.block, in: layout)
                     planned.append((segment, frame, typesetter.plan(text, block: layout.blocks[segment.block], formulas: segment.formulas, frame: frame)))
+                }
+                // The cells of a table share one size: the size most of them fit at.
+                for table in layout.tables {
+                    let cells = planned.indices.filter { k in
+                        let block = layout.blocks[planned[k].segment.block]
+                        return block.kind == .tableCell && table.insetBy(dx: -1, dy: -2).contains(block.rect.center)
+                    }
+                    guard cells.count >= 3 else { continue }
+                    let scales = cells.map { planned[$0].plan.scale }.sorted()
+                    let common = scales[scales.count / 2]
+                    for k in cells where planned[k].plan.scale > common + 0.001 {
+                        let entry = planned[k]
+                        planned[k].plan = typesetter.plan(translations[entry.segment.id] ?? "", block: layout.blocks[entry.segment.block],
+                                                          formulas: entry.segment.formulas, frame: entry.frame, maxScale: common)
+                    }
                 }
                 let pitches = Self.harmonizedPitches(planned.map { ($0.plan, layout.blocks[$0.segment.block]) })
                 var removal = PageRemoval(kept: kept)
@@ -115,18 +147,6 @@ final class TranslationRenderer {
                     removal.add(block)
                     audit?.record(page: layout.number, block: entry.segment.block, frame: entry.frame, result: result, plan: entry.plan)
                 }
-                // Text that stays but was drawn by the same operators as translated text (pdfTeX sets a whole table
-                // row with one operator) is drawn again from the original, in place.
-                for (index, block) in layout.blocks.enumerated() where !translatedBlocks.contains(index) {
-                    let runs = Set(block.lines.flatMap { $0.chars.compactMap(\.run) })
-                    guard !runs.isDisjoint(with: removal.runs) else { continue }
-                    audit?.conflicts += 1
-                    for line in block.lines {
-                        let lineRuns = Set(line.chars.compactMap(\.run))
-                        restores[layout.number, default: []].append(FormulaSpan(rect: line.inkRect, baseline: line.baseline, runs: lineRuns, size: line.size))
-                    }
-                }
-                removal.kept = []
                 removals[layout.number] = removal
                 context.endPDFPage()
             }
@@ -143,14 +163,19 @@ final class TranslationRenderer {
                 let interpreter = ContentInterpreter()
                 interpreter.run(page: page)
                 var xobjects: [String: Int] = [:]
+                var fonts: [String: PDFValue] = [:]
                 var content = ""
                 let removal = removals[layout.number] ?? PageRemoval()
                 let rects = removal.rects
-                var edits = Self.removalEdits(runs: interpreter.runs, removing: removal.removes)
+                let removed = Set(interpreter.glyphs.indices.filter { removal.removes(interpreter.glyphs[$0], index: $0) })
+                var edits = Self.glyphEdits(interpreter: interpreter, removing: removed)
+                audit?.conflicts += edits.values.filter { if case .replace = $0 { return true } else { return false } }.count
                 // Rules that are part of formulas (fraction bars, radicals) move with the formula.
-                for mark in interpreter.marks where mark.kind != .image && !mark.isWhite
+                var droppedRules: [Int] = []
+                for (m, mark) in interpreter.marks.enumerated() where mark.kind != .image && !mark.isWhite
                     && mark.rect.height < 4 && rects.contains(where: { $0.insetBy(dx: -0.5, dy: -0.5).contains(mark.rect) }) {
                     for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+                    droppedRules.append(m)
                 }
                 if let edited = composer.pageForm(layout.number, interpreter: interpreter, edits: edits) {
                     xobjects["E"] = edited
@@ -161,40 +186,51 @@ final class TranslationRenderer {
                     xobjects["T"] = text
                     content += "q /T Do Q\n"
                 }
-                for (k, transplant) in (debugEdited ? [] : transplants[layout.number] ?? []).enumerated() {
-                    // Only the formula's own operators are kept.
-                    let formula = transplant.formula
-                    // The formula's box already covers its scripts and accents; a little more, not into the lines around.
-                    let clip = CGRect(x: formula.rect.minX - 0.8, y: formula.rect.minY - formula.size * 0.1,
-                                      width: formula.rect.width + 1.6, height: formula.rect.height + formula.size * 0.2)
-                    // Operators found by position must sit on the formula's own line.
-                    let band = CGRect(x: formula.rect.minX - 0.6, y: formula.baseline - formula.size * 0.35,
-                                      width: formula.rect.width + 1.2, height: formula.size * 1.35).intersection(formula.rect.insetBy(dx: -0.6, dy: -0.4))
-                    let formulaEdits = Self.isolationEdits(interpreter: interpreter, keeping: band, runs: formula.runs)
-                    guard let form = composer.pageForm(layout.number, interpreter: interpreter, edits: formulaEdits, namePrefix: "FolioF") else { continue }
-                    xobjects["F\(k)"] = form
-                    let t = transplant.transform
-                    content += "q \(PDFValue.format(t.a)) 0 0 \(PDFValue.format(t.d)) \(PDFValue.format(t.tx)) \(PDFValue.format(t.ty)) cm "
-                        + "\(PDFValue.format(clip.minX)) \(PDFValue.format(clip.minY)) \(PDFValue.format(clip.width)) \(PDFValue.format(clip.height)) re W n /F\(k) Do Q\n"
+                // Glyphs taken out that no character stands for, inside a formula's box, go with that formula.
+                let pageTransplants = debugEdited ? [] : transplants[layout.number] ?? []
+                let claimed = removal.glyphs.union(pageTransplants.flatMap(\.formula.glyphs))
+                let orphans = removed.subtracting(claimed).filter { interpreter.glyphs[$0].isVisible }
+                var fontNames: [Int: String] = [:]
+                var drawnOrphans = Set<Int>()
+                defer {
+                    if !debugEdited {
+                        audit?.lostGlyphs += orphans.subtracting(drawnOrphans).filter { interpreter.glyphs[$0].text.map { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? true }.count
+                    }
                 }
-                for (k, keep) in (restores[layout.number] ?? []).enumerated() {
-                    let clip = CGRect(x: keep.rect.minX - 0.8, y: keep.baseline - keep.size * 0.32, width: keep.rect.width + 1.6, height: keep.size * 1.3)
-                    let keepEdits = Self.isolationEdits(interpreter: interpreter, keeping: clip, runs: keep.runs)
-                    guard let form = composer.pageForm(layout.number, interpreter: interpreter, edits: keepEdits, namePrefix: "FolioK") else { continue }
-                    xobjects["K\(k)"] = form
-                    content += "q \(PDFValue.format(clip.minX)) \(PDFValue.format(clip.minY)) \(PDFValue.format(clip.width)) \(PDFValue.format(clip.height)) re W n /K\(k) Do Q\n"
+                for transplant in pageTransplants {
+                    let formula = transplant.formula
+                    let area = formula.rect.insetBy(dx: -0.5, dy: -formula.size * 0.15)
+                    var glyphs = formula.glyphs
+                    glyphs += orphans.filter { g in
+                        let box = interpreter.glyphs[g].box
+                        return area.contains(CGPoint(x: box.midX, y: box.midY))
+                    }
+                    drawnOrphans.formUnion(glyphs[formula.glyphs.count...])
+                    audit?.formulaGlyphs += glyphs.count
+                    let rules = droppedRules.filter { area.contains(interpreter.marks[$0].rect.insetBy(dx: 0.1, dy: 0)) }
+                    let t = transplant.transform
+                    content += "q \(PDFValue.format(t.a)) 0 0 \(PDFValue.format(t.d)) \(PDFValue.format(t.tx)) \(PDFValue.format(t.ty)) cm\n"
+                    content += Self.drawing(glyphs: glyphs.sorted(), rules: rules, interpreter: interpreter) { font in
+                        if let name = fontNames[font] { return name }
+                        let name = "FolioG\(fontNames.count)"
+                        fontNames[font] = name
+                        fonts[name] = composer.copier.copy(dictionary: interpreter.fonts[font].dict)
+                        return name
+                    }
+                    content += "Q\n"
                 }
                 let outputPage = composer.reserveOutputPage(forSourcePage: layout.number)
                 if !dual {
                     composer.addPage(object: outputPage, mediaBox: geometry.mediaBox, cropBox: geometry.cropBox, rotation: geometry.rotation,
-                                     content: Data(content.utf8), xobjects: xobjects, annotations: composer.links(ofSourcePage: layout.number))
+                                     content: Data(content.utf8), xobjects: xobjects, fonts: fonts, annotations: composer.links(ofSourcePage: layout.number))
                     continue
                 }
                 guard let original = composer.pageForm(layout.number) else { continue }
                 // The translated page as one form, so it can be placed beside or after the original.
+                var resources: [String: PDFValue] = ["XObject": .dict(xobjects.mapValues { .ref($0) })]
+                if !fonts.isEmpty { resources["Font"] = .dict(fonts) }
                 let translatedForm = composer.writer.addStream(dict: [
-                    "Type": .name("XObject"), "Subtype": .name("Form"), "BBox": .rect(geometry.mediaBox),
-                    "Resources": .dict(["XObject": .dict(xobjects.mapValues { .ref($0) })]),
+                    "Type": .name("XObject"), "Subtype": .name("Form"), "BBox": .rect(geometry.mediaBox), "Resources": .dict(resources),
                 ], data: Data(content.utf8))
                 switch dualLayout {
                 case .sideBySide:
@@ -271,7 +307,16 @@ final class TranslationRenderer {
         let maxExtension = block.kind == .tableCell ? size * 0.2 : max(block.pitch * 2, rect.height * 0.5)
         var bottom = max(min(rect.minY, belowTop + gap), rect.minY - maxExtension)
         if belowTop + gap > rect.minY { bottom = min(belowTop + gap, lastBaseline - size * 0.25) }
-        var frame = CGRect(x: rect.minX, y: bottom, width: rect.width, height: rect.maxY - bottom)
+        // Upwards: not into the descenders of the line above (rows of a table set an em apart).
+        var top = rect.maxY
+        let firstBaseline = block.lines[0].baseline
+        for (k, other) in layout.blocks.enumerated() where k != index && block.lines.count == 1 {
+            guard let low = other.lines.min(by: { $0.baseline < $1.baseline }), low.baseline > firstBaseline + size * 0.5,
+                  low.baseline < firstBaseline + size * 1.8,
+                  other.rect.maxX > horizontal.minX, other.rect.minX < horizontal.maxX else { continue }
+            top = min(top, max(low.baseline - low.size * 0.14 - size * 0.04, firstBaseline + size * 0.6))
+        }
+        var frame = CGRect(x: rect.minX, y: bottom, width: rect.width, height: top - bottom)
 
         // Sideways for single lines (headings, short captions, cells): to the next obstacle on the right.
         if block.lines.count == 1 {
@@ -297,62 +342,142 @@ final class TranslationRenderer {
 
     // MARK: Edits
 
-    /// Removes the runs `removing` selects. A removed run followed by a kept one in the same chain (positioned
-    /// relative to it) is drawn invisibly instead, so the kept text stays where it was.
-    static func removalEdits(runs: [TextRun], removing: (TextRun) -> Bool) -> [OpLocation: EditAction] {
-        removalEdits(runs: runs) { run, _ in removing(run) }
-    }
-
-    static func removalEdits(runs: [TextRun], removing: (TextRun, Int) -> Bool) -> [OpLocation: EditAction] {
-        var removed: [Int] = []
+    /// Takes the `removing` glyphs out of the page. A show operator losing all its glyphs is dropped, unless text
+    /// drawn after it in the same chain (positioned relative to it) stays; then, as when only some of its glyphs go,
+    /// it is written again with the removed glyphs replaced by their advance, so every kept glyph stays exactly
+    /// where it was.
+    static func glyphEdits(interpreter: ContentInterpreter, removing: Set<Int>) -> [OpLocation: EditAction] {
+        let runs = interpreter.runs, glyphs = interpreter.glyphs
+        var affected: [(run: Int, all: Bool)] = []
         var lastKept: [Int: Int] = [:]
-        for (i, run) in runs.enumerated() {
+        for (r, run) in runs.enumerated() {
+            let gone = run.glyphs.filter { removing.contains($0) }.count
             // Clipping text (modes 4–7) shapes other content; leave it alone.
-            if run.renderMode < 4, removing(run, i) {
-                removed.append(i)
-            } else {
+            if run.renderMode >= 4 || gone == 0 {
                 lastKept[run.chain] = max(lastKept[run.chain] ?? -1, run.location.index)
+                continue
             }
+            if gone < run.glyphs.count { lastKept[run.chain] = max(lastKept[run.chain] ?? -1, run.location.index) }
+            affected.append((r, gone == run.glyphs.count))
         }
         var edits: [OpLocation: EditAction] = [:]
-        for i in removed {
-            let run = runs[i]
-            if let kept = lastKept[run.chain], kept > run.location.index {
-                edits[run.location] = .hide(restore: run.renderMode)
-            } else {
+        for (r, all) in affected {
+            let run = runs[r]
+            if all, (lastKept[run.chain] ?? -1) <= run.location.index {
                 edits[run.location] = .drop
+            } else if let op = interpreter.streams[run.location.stream]?.ops[run.location.index],
+                      let data = rewrittenShow(op, glyphs: glyphs[run.glyphs], removing: removing, first: run.glyphs.lowerBound) {
+                edits[run.location] = .replace(data)
+            } else {
+                edits[run.location] = .hide(restore: run.renderMode)
             }
         }
         return edits
     }
 
-    /// Everything but what lies in `rect`: text outside it, drawings that do not touch it, and forms with nothing
-    /// left in them.
-    static func isolationEdits(interpreter: ContentInterpreter, keeping rect: CGRect, runs keep: Set<Int> = []) -> [OpLocation: EditAction] {
-        let indexOf = Dictionary(interpreter.runs.enumerated().map { ($0.element.location, $0.offset) }, uniquingKeysWith: { a, _ in a })
-        var edits = removalEdits(runs: interpreter.runs) { run in
-            // The formula's operators, and whatever else lies in its rectangle (glyphs no character was matched to).
-            if let index = indexOf[run.location], keep.contains(index) { return false }
-            return !rect.contains(run.midpoint) && !rect.contains(CGPoint(x: (run.origin.x + run.end.x) / 2, y: run.origin.y))
+    /// The show operator `op` as a `TJ` without the `removing` glyphs: each is replaced by an adjustment of its
+    /// own advance. `'` and `"` keep their move to the next line (and `"` its spacing).
+    static func rewrittenShow(_ op: ContentOp, glyphs: ArraySlice<Glyph>, removing: Set<Int>, first: Int) -> Data? {
+        let elements: [ContentOperand]
+        switch op.name {
+        case "TJ":
+            guard case .array(let items)? = op.operands.first else { return nil }
+            elements = items
+        case "Tj":
+            guard let s = op.operands.first else { return nil }
+            elements = [s]
+        case "'", "\"":
+            guard let s = op.operands.last else { return nil }
+            elements = [s]
+        default:
+            return nil
         }
-        var kept: Set<StreamPath> = []
-        for run in interpreter.runs where edits[run.location] == nil {
-            var path = run.location.stream
-            kept.insert(path)
-            while !path.isEmpty { path.removeLast(); kept.insert(path) }
+        var out = ""
+        if op.name == "'" { out = "T*\n" }
+        if op.name == "\"", op.operands.count == 3 {
+            out = "\(PDFValue.format(op.operands[0].number ?? 0)) Tw \(PDFValue.format(op.operands[1].number ?? 0)) Tc T*\n"
         }
-        for mark in interpreter.marks {
-            if mark.rect.insetBy(dx: -0.5, dy: -0.5).intersects(rect) {
-                var path = mark.location.stream
-                kept.insert(path)
-                while !path.isEmpty { path.removeLast(); kept.insert(path) }
-            } else {
-                for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+        var items: [String] = []
+        var pending = 0.0
+        var hex = ""
+        func flushString() {
+            if !hex.isEmpty { items.append("<\(hex)>"); hex = "" }
+        }
+        func flushNumber() {
+            if pending != 0 { items.append(PDFValue.format(pending)); pending = 0 }
+        }
+        var byElement: [Int: [(Int, Glyph)]] = [:]
+        for (offset, g) in glyphs.enumerated() { byElement[g.element, default: []].append((first + offset, g)) }
+        for (e, element) in elements.enumerated() {
+            switch element {
+            case .number(let n):
+                flushString()
+                pending += n
+            case .string(let data):
+                let bytes = [UInt8](data)
+                for (index, g) in byElement[e] ?? [] {
+                    if removing.contains(index) {
+                        guard let adjustment = g.adjustment else { return nil }
+                        flushString()
+                        pending += adjustment
+                    } else {
+                        flushNumber()
+                        guard g.offset + g.length <= bytes.count else { return nil }
+                        for b in bytes[g.offset..<(g.offset + g.length)] { hex += String(format: "%02X", b) }
+                    }
+                }
+            default:
+                break
             }
         }
-        for path in interpreter.streams.keys where !path.isEmpty && !kept.contains(path) {
-            edits[OpLocation(stream: Array(path.dropLast()), index: path.last!)] = .drop
+        flushString()
+        flushNumber()
+        out += "[" + items.joined(separator: " ") + "] TJ"
+        return Data(out.utf8)
+    }
+
+    /// Content drawing `glyphs` (of the page) exactly as they were drawn, and `rules` (fraction bars, radicals) as
+    /// filled rectangles. `fontName` names the resource for a font index.
+    static func drawing(glyphs: [Int], rules: [Int], interpreter: ContentInterpreter, fontName: (Int) -> String) -> String {
+        var out = ""
+        var font = -1
+        var color: RGBColor?
+        var mode = -1
+        let drawable = glyphs.map { interpreter.glyphs[$0] }.filter { $0.isVisible && $0.font >= 0 }
+        if !drawable.isEmpty {
+            out += "BT 0 Tc 0 Tw 100 Tz 0 Ts\n"
+            for g in drawable {
+                if g.font != font {
+                    font = g.font
+                    out += "/\(fontName(font)) 1 Tf\n"
+                }
+                if g.color != color {
+                    color = g.color
+                    let c = "\(PDFValue.format(g.color.r)) \(PDFValue.format(g.color.g)) \(PDFValue.format(g.color.b))"
+                    out += "\(c) rg \(c) RG\n"
+                }
+                let render = min(g.renderMode, 2)
+                if render != mode {
+                    mode = render
+                    out += "\(render) Tr\n"
+                }
+                let m = g.matrix
+                var code = ""
+                for k in stride(from: g.length - 1, through: 0, by: -1) { code += String(format: "%02X", (g.code >> (8 * k)) & 0xFF) }
+                out += [m.a, m.b, m.c, m.d, m.tx, m.ty].map { PDFValue.format(Double($0)) }.joined(separator: " ") + " Tm <\(code)> Tj\n"
+            }
+            out += "ET\n"
         }
-        return edits
+        for r in rules {
+            let mark = interpreter.marks[r]
+            var rect = mark.rect
+            if mark.kind == .stroke {
+                let w = max(mark.lineWidth, 0.3)
+                rect = rect.insetBy(dx: rect.height < rect.width ? 0 : -w / 2, dy: rect.height < rect.width ? -w / 2 : 0)
+            }
+            out += "\(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg "
+                + "\(PDFValue.format(rect.minX)) \(PDFValue.format(rect.minY)) \(PDFValue.format(rect.width)) \(PDFValue.format(rect.height)) re f\n"
+        }
+        return out
     }
 }

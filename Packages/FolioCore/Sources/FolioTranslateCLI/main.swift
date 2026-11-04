@@ -66,6 +66,10 @@ case "translate":
         case .cancelled: print(t, "cancelled")
         }
     }
+case "blocks":
+    print(EngineDiagnostics.blocks(input: url(arguments[1]), page: Int(arguments[2]) ?? 1, containing: arguments.count > 3 ? arguments[3] : ""))
+case "fonts":
+    print(EngineDiagnostics.fonts(input: url(arguments[1]), page: Int(arguments[2]) ?? 1))
 case "bing":
     print(await EngineDiagnostics.bing(arguments[1]))
 case "audit":

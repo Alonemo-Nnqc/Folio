@@ -2,11 +2,10 @@ import CoreGraphics
 import Foundation
 import PDFKit
 
-/// One character of a page: PDFKit's text, position, size and baseline offset, joined with the font and colour
-/// of the content-stream operator that drew it.
+/// One character of a page: a glyph drawn by the content stream, with its text, position, size, font and colour.
 struct PageChar: Sendable {
     var text: String
-    /// Selection bounds in page space: exact horizontally, a line's height vertically.
+    /// The glyph's advance horizontally, a line's height vertically (from a fifth of an em below the baseline).
     var rect: CGRect
     var isSpace: Bool
     var isNewline: Bool
@@ -18,23 +17,20 @@ struct PageChar: Sendable {
     var run: Int?
     var isRotated: Bool
     var isMath = false
-    /// Raised or lowered from the line's baseline (PDFKit's baseline offset): a superscript or subscript.
+    /// Raised or lowered from the line's baseline: a superscript or subscript.
     var isScript = false
+    /// The glyphs drawn for it (indexes into the page's glyphs): one, or more drawn on top of each other.
+    var glyphs: [Int] = []
+    /// Where the glyph's ink is, when it is not the em box on the baseline (TeX's big delimiters and operators).
+    var ink: CGRect?
 
     var center: CGPoint { CGPoint(x: rect.midX, y: baseline + size * 0.3) }
 
     /// The glyph's box from its baseline and size.
     var glyphBox: CGRect {
+        if let ink { return ink }
         let width = min(rect.width, size * 1.1)
-        var box = CGRect(x: rect.minX, y: baseline - size * 0.28, width: max(width, 0.1), height: size * 1.2)
-        // Big operators and delimiters reach beyond the em box.
-        if MathDetector.isMathFont(font.name), font.name.lowercased().contains("ex") {
-            // …but PDFKit's selection is a whole line's height: stay near this line.
-            let tall = box.union(rect)
-            let lo = baseline - size * 0.6, hi = baseline + size * 1.2
-            box = CGRect(x: tall.minX, y: max(tall.minY, lo), width: tall.width, height: min(tall.maxY, hi) - max(tall.minY, lo))
-        }
-        return box
+        return CGRect(x: rect.minX, y: baseline - size * 0.28, width: max(width, 0.1), height: size * 1.2)
     }
 }
 
@@ -49,131 +45,182 @@ public enum PDFKitAccess {
 }
 
 enum PageText {
-    private static let baselineOffsetKey = NSAttributedString.Key("CTBaselineOffset")
+    /// The characters of a page, one per glyph drawn (duplicates drawn on top of each other count once), in the
+    /// order they were drawn, with spaces where words are apart and line breaks where the drawing jumps.
+    ///
+    /// Position, size, font and colour are the glyph's own; the text is what the font says the glyph is
+    /// (ToUnicode, glyph names, its encoding). Where the font does not say, the text PDFKit reads at that
+    /// place is used; glyphs nobody can read are kept as unknown symbols (formula parts, drawn as they are).
+    static func characters(of page: PDFPage, interpreter: ContentInterpreter) -> [PageChar] {
+        let glyphs = interpreter.glyphs
+        let fonts = interpreter.fonts
+        var fallback: FallbackText?
+        if glyphs.contains(where: { $0.isVisible && !$0.reliable }) { fallback = FallbackText(page: page) }
 
-    /// The characters of `page` in PDFKit's reading order. `runs` come from interpreting the same page.
-    static func characters(of page: PDFPage, runs: [TextRun]) -> [PageChar] {
-        var string: String?
-        var attributed: NSAttributedString?
-        PDFKitAccess.serialize {
-            string = page.string
-            attributed = page.attributedString
+        // Letter-spaced runs: their usual gap between glyphs is not a word space.
+        var runSpacing: [Int: Double] = [:]
+        for (r, run) in interpreter.runs.enumerated() where run.glyphs.count > 3 {
+            var gaps: [Double] = []
+            var previous: Glyph?
+            for g in glyphs[run.glyphs] where g.isVisible && g.text != " " {
+                if let p = previous, p.size > 0 { gaps.append((g.origin.x - p.end.x) / p.size) }
+                previous = g
+            }
+            let small = gaps.filter { $0 > -0.2 && $0 < 0.5 }.sorted()
+            if small.count >= 3, small[small.count / 2] > 0.04 { runSpacing[r] = small[small.count / 2] }
         }
-        guard let string, !string.isEmpty else { return [] }
-        let ns = string as NSString
-        let index = RunIndex(runs: runs)
+
         var chars: [PageChar] = []
-        chars.reserveCapacity(ns.length)
-        // Baseline of the line being read: offsets are relative to it.
-        var lineBaseline: Double?
-        var previousLineBaseline: Double?
-        var lastRun: Int?
-        var lastFont = FontInfo.unknown
-        var lastColor = RGBColor.black
-        var i = 0
-        while i < ns.length {
-            let range = ns.rangeOfComposedCharacterSequence(at: i)
-            let text = ns.substring(with: range)
-            i = range.location + range.length
-            if text.isEmpty || text == "\u{0}" { continue }
-            // `characterBounds(at:)` drifts by one after every line break PDFKit inserts; selections are exact.
-            var rect = CGRect.zero
-            PDFKitAccess.serialize { rect = page.selection(for: range)?.bounds(for: page) ?? .zero }
-            var size = rect.height / 1.2
-            var offset = 0.0
-            if let attributed, range.location < attributed.length {
-                let attributes = attributed.attributes(at: range.location, effectiveRange: nil)
-                if let font = attributes[.font] as? NSFont, font.pointSize > 0 { size = font.pointSize }
-                if let value = attributes[baselineOffsetKey] as? NSNumber { offset = value.doubleValue }
+        chars.reserveCapacity(glyphs.count + glyphs.count / 4)
+        // Glyphs already placed, by position: a glyph drawn again on top (fake bold, fill then stroke) joins them.
+        struct Cell: Hashable { var x: Int, y: Int }
+        var placed: [Cell: [Int]] = [:]
+        func key(_ x: Double, _ y: Double) -> Cell { Cell(x: Int((x / 2).rounded(.down)), y: Int((y / 2).rounded(.down))) }
+        var anchorBaseline = 0.0
+        var anchorSize = 0.0
+        var last: PageChar?
+        var spaceSince = false
+
+        for (index, g) in glyphs.enumerated() {
+            guard g.isVisible, g.size > 0.5, g.size < 400 else { continue }
+            var text = g.text
+            if !g.reliable || text == nil {
+                if let read = fallback?.text(at: g) { text = read }
             }
-            let isNewline = text == "\n" || text == "\r" || text == "\r\n" || text == "\u{2028}"
-            let isSpace = !isNewline && text.unicodeScalars.allSatisfy { CharacterSet.whitespaces.contains($0) }
-            var char = PageChar(text: text, rect: rect, isSpace: isSpace, isNewline: isNewline, size: max(size, 1),
-                                baseline: (lineBaseline ?? rect.minY + rect.height * 0.22) + offset,
-                                font: lastFont, color: lastColor, run: nil, isRotated: false, isScript: abs(offset) > 0.01)
-            if isNewline {
-                // PDFKit sometimes breaks a line between a superscript and its subscript: offsets still refer
-                // to the line before.
-                previousLineBaseline = lineBaseline ?? previousLineBaseline
-                lineBaseline = nil
+            if let t = text, t.unicodeScalars.allSatisfy({ CharacterSet.whitespaces.contains($0) }) {
+                spaceSince = true
+                continue
             }
-            if !isSpace, !isNewline, rect.width > 0 || rect.height > 0 {
-                let reference = lineBaseline ?? (abs(offset) > 0.01 ? previousLineBaseline : nil)
-                // Without a line to refer to, the selection's bottom edge is about a fifth of an em below the baseline.
-                let expected = reference.map { $0 + offset } ?? (rect.minY + char.size * 0.22 + offset)
-                char.baseline = expected
-                if let r = index.run(for: rect, size: char.size, baseline: expected, hint: lastRun)
-                    ?? index.run(for: rect, size: char.size, baseline: nil, hint: lastRun) {
-                    let run = runs[r]
-                    char.run = r
-                    char.size = run.fontSize
-                    char.baseline = run.isHorizontal ? run.origin.y : char.baseline
-                    char.font = run.font
-                    char.color = run.color
-                    char.isRotated = !run.isHorizontal
-                    lastRun = r
-                    lastFont = run.font
-                    lastColor = run.color
-                    if abs(offset) < 0.01, run.isHorizontal { lineBaseline = run.origin.y }
-                    else if lineBaseline == nil, run.isHorizontal { lineBaseline = run.origin.y - offset }
+            let horizontal = g.isHorizontal
+            var origin = g.origin
+            let end = g.end
+            if let depth = g.depth, horizontal {
+                // A hanging glyph is centred on the maths axis, a quarter em above the baseline of its line.
+                origin.y -= ((depth - 0.04) / 2 + 0.25) * g.size
+            }
+            var rect = horizontal
+                ? CGRect(x: origin.x, y: origin.y - g.size * 0.22, width: max(end.x - origin.x, 0), height: g.size * 1.2)
+                : g.box
+            if g.depth != nil, horizontal { rect = rect.union(g.box) }
+            let label = text ?? "\u{FFFD}"
+            // The same glyph drawn again at (almost) the same place.
+            let probe = key(rect.minX, origin.y)
+            var duplicate: Int?
+            search: for dx in -1...1 {
+                for dy in -1...1 {
+                    for c in placed[Cell(x: probe.x + dx, y: probe.y + dy)] ?? [] where chars[c].text == label && abs(chars[c].rect.minX - rect.minX) < g.size * 0.15
+                        && abs(chars[c].baseline - origin.y) < g.size * 0.15 && abs(chars[c].size - g.size) < g.size * 0.1 {
+                        duplicate = c
+                        break search
+                    }
                 }
             }
+            if let duplicate {
+                chars[duplicate].glyphs.append(index)
+                continue
+            }
+            let metrics = g.font >= 0 && g.font < fonts.count ? fonts[g.font] : nil
+            var char = PageChar(text: label, rect: rect, isSpace: false, isNewline: false, size: g.size, baseline: origin.y,
+                                font: metrics?.info ?? .unknown, color: g.color, run: g.run, isRotated: !horizontal)
+            char.glyphs = [index]
+            if g.depth != nil, horizontal { char.ink = g.box }
+            // Unknown glyphs are symbols: kept as drawn.
+            if text == nil { char.isMath = true }
+
+            if let p = last {
+                let newLine: Bool
+                if p.isRotated != char.isRotated {
+                    newLine = true
+                } else if char.isRotated {
+                    newLine = hypot(rect.midX - p.rect.midX, rect.midY - p.rect.midY) > max(p.size, char.size) * 3
+                } else {
+                    let dy = abs(origin.y - anchorBaseline)
+                    // Scripts sit up to most of an em off the line (a superscript after a prime is raised further).
+                    let reach = char.size < anchorSize * 0.9 ? anchorSize * 0.95 : max(anchorSize, char.size) * 0.6
+                    newLine = dy > reach || rect.minX < p.rect.minX - max(p.size, char.size) * 1.5
+                        || rect.minX - p.rect.maxX > max(p.size, char.size) * 3
+                }
+                if newLine {
+                    var br = p
+                    br.text = "\n"
+                    br.isNewline = true
+                    br.isMath = false
+                    br.glyphs = []
+                    br.run = nil
+                    chars.append(br)
+                    anchorBaseline = origin.y
+                    anchorSize = char.size
+                } else if !char.isRotated {
+                    let gap = rect.minX - p.rect.maxX
+                    let size = min(p.size, char.size)
+                    let threshold = size * (0.15 + (p.run == char.run ? runSpacing[char.run ?? -1] ?? 0 : 0))
+                    if gap > threshold || (spaceSince && gap > size * 0.05) {
+                        var space = p
+                        space.text = " "
+                        space.isSpace = true
+                        space.isMath = false
+                        space.glyphs = []
+                        space.run = nil
+                        space.rect = CGRect(x: p.rect.maxX, y: p.rect.minY, width: max(gap, 0), height: p.rect.height)
+                        chars.append(space)
+                    }
+                    if char.size > anchorSize * 1.15 { anchorBaseline = origin.y; anchorSize = char.size }
+                }
+            } else {
+                anchorBaseline = origin.y
+                anchorSize = char.size
+            }
+            spaceSince = false
+            placed[probe, default: []].append(chars.count)
             chars.append(char)
+            last = char
         }
         return chars
     }
 
-    /// Finds the run that drew a glyph: the right size, overlapping horizontally, on the expected baseline.
-    private struct RunIndex {
-        let runs: [TextRun]
+    /// PDFKit's text and where it is, for glyphs whose font does not say what they are.
+    private struct FallbackText {
+        var items: [(text: String, rect: CGRect)] = []
         var buckets: [Int: [Int]] = [:]
-        static let bucketHeight = 8.0
+        static let bucketHeight = 6.0
 
-        init(runs: [TextRun]) {
-            self.runs = runs
-            for (i, run) in runs.enumerated() {
-                let box = run.box
-                let lo = Int((box.minY / Self.bucketHeight).rounded(.down)), hi = Int((box.maxY / Self.bucketHeight).rounded(.down))
-                guard hi - lo < 400 else { continue }
-                for b in lo...hi { buckets[b, default: []].append(i) }
+        init(page: PDFPage) {
+            var string: String?
+            PDFKitAccess.serialize { string = page.string }
+            guard let string, !string.isEmpty else { return }
+            let ns = string as NSString
+            var i = 0
+            while i < ns.length {
+                let range = ns.rangeOfComposedCharacterSequence(at: i)
+                i = range.location + range.length
+                let text = ns.substring(with: range)
+                guard !text.isEmpty, text.unicodeScalars.contains(where: { !CharacterSet.whitespacesAndNewlines.contains($0) }) else { continue }
+                var rect = CGRect.zero
+                PDFKitAccess.serialize { rect = page.selection(for: range)?.bounds(for: page) ?? .zero }
+                guard rect.width > 0 || rect.height > 0 else { continue }
+                let k = items.count
+                items.append((text, rect))
+                let b = Int((rect.midY / Self.bucketHeight).rounded(.down))
+                buckets[b, default: []].append(k)
             }
         }
 
-        func run(for rect: CGRect, size: Double, baseline: Double?, hint: Int?) -> Int? {
-            let probeY = baseline.map { $0 + size * 0.3 } ?? rect.midY
-            var candidates: Set<Int> = []
-            for b in [probeY - size, probeY, probeY + size] {
-                candidates.formUnion(buckets[Int((b / Self.bucketHeight).rounded(.down))] ?? [])
-            }
-            if let hint { candidates.insert(hint) }
-            var best: Int?
-            var bestScore = Double.infinity
-            for i in candidates {
-                let run = runs[i]
-                let box = run.box
-                // Horizontal overlap (run widths are estimates: allow a little slack).
-                let overlap = min(box.maxX + 1.5, rect.maxX) - max(box.minX - 1.5, rect.minX)
-                guard overlap > 0 || (rect.width < 0.5 && box.insetBy(dx: -1.5, dy: 0).contains(CGPoint(x: rect.midX, y: box.midY))) else { continue }
-                guard rect.minY - 1 < box.maxY, rect.maxY + 1 > box.minY else { continue }
-                var score = 0.0
-                if run.isHorizontal {
-                    let sizeDifference = abs(run.fontSize - size) / max(size, 1)
-                    if sizeDifference > 0.2 { continue }
-                    score += sizeDifference * 4
-                    if let baseline { score += abs(run.origin.y - baseline) / max(size, 1) }
-                    else { score += abs(box.midY - rect.midY) / max(box.height, 1) }
-                } else {
-                    score += 0.5
-                }
-                // Later runs draw on top; the hint is the previous glyph's run.
-                score -= Double(i) * 1e-9
-                if i == hint { score -= 0.05 }
-                if score < bestScore {
-                    bestScore = score
-                    best = i
+        /// The text PDFKit has inside the glyph's box (several characters for a ligature).
+        func text(at g: Glyph) -> String? {
+            let box = g.box
+            var found: [(Double, String)] = []
+            let lo = Int(((box.minY - 2) / Self.bucketHeight).rounded(.down)), hi = Int(((box.maxY + 2) / Self.bucketHeight).rounded(.down))
+            guard hi - lo < 200 else { return nil }
+            for b in lo...hi {
+                for k in buckets[b] ?? [] {
+                    let item = items[k]
+                    let center = CGPoint(x: item.rect.midX, y: item.rect.midY)
+                    if box.insetBy(dx: -0.3, dy: -1).contains(center) { found.append((Double(item.rect.minX), item.text)) }
                 }
             }
-            return bestScore < 1.5 ? best : nil
+            guard !found.isEmpty else { return nil }
+            let text = found.sorted { $0.0 < $1.0 }.map(\.1).joined()
+            return FontEncoding.usable(text) ? text : nil
         }
     }
 }

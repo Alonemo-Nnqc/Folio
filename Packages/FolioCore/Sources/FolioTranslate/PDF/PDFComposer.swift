@@ -115,12 +115,14 @@ final class PDFComposer {
     /// `reserveOutputPage`, or nil for a new one.
     @discardableResult
     func addPage(object: Int? = nil, mediaBox: CGRect, cropBox: CGRect? = nil, rotation: Int = 0, content: Data,
-                 xobjects: [String: Int], annotations: [PDFValue] = []) -> Int {
+                 xobjects: [String: Int], fonts: [String: PDFValue] = [:], annotations: [PDFValue] = []) -> Int {
         let page = object ?? writer.reserve()
         let contents = writer.addStream(dict: [:], data: content)
+        var resources: [String: PDFValue] = ["XObject": .dict(xobjects.mapValues { .ref($0) })]
+        if !fonts.isEmpty { resources["Font"] = .dict(fonts) }
         var dict: [String: PDFValue] = [
             "Type": .name("Page"), "Parent": .ref(pagesNode), "MediaBox": .rect(mediaBox), "Contents": .ref(contents),
-            "Resources": .dict(["XObject": .dict(xobjects.mapValues { .ref($0) })]),
+            "Resources": .dict(resources),
         ]
         if let cropBox, cropBox != mediaBox { dict["CropBox"] = .rect(cropBox) }
         if rotation % 360 != 0 { dict["Rotate"] = .int(rotation) }

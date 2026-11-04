@@ -8,6 +8,8 @@ enum EditAction: Hashable, Sendable {
     /// Draw it invisibly (`3 Tr`), so text after it on the same line keeps its position; `restore` is the
     /// rendering mode to switch back to.
     case hide(restore: Int)
+    /// Write these operators instead (a show operator with some glyphs taken out).
+    case replace(Data)
 }
 
 /// Rewrites interpreted content streams with some operators removed. Forms containing removed operators are
@@ -73,6 +75,9 @@ struct ContentEditor {
                     out.append(contentsOf: Array("3 Tr\n".utf8))
                     out.append(stream.source[op.range])
                     out.append(contentsOf: Array("\n\(restore) Tr\n".utf8))
+                case .replace(let data):
+                    out.append(data)
+                    out.append(0x0A)
                 }
                 continue
             }

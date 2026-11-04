@@ -72,3 +72,23 @@ import Testing
         #expect(abs(pitches[2] - 17.92) < 0.01)
     }
 }
+
+@Suite struct LenientReplyTests {
+    @Test func repliesWithUnescapedQuotesStillParse() {
+        let reply = "```json\n{\n  \"1\": \"即使有\"decoder warm-up\"也不行。\",\n  \"2\": \"第二段\"\n}\n```"
+        #expect(LLMBatch.parse(reply, count: 2) == ["即使有\"decoder warm-up\"也不行。", "第二段"])
+    }
+}
+
+@Suite struct PunctuationTests {
+    @Test func chineseTextGetsChinesePunctuation() {
+        let typesetter = Typesetter(language: "zh")
+        func text(_ s: String) -> String {
+            typesetter.attributedString(s, fontSize: 10, bold: false, serif: true, italic: false, color: .black, formulas: [], scale: 1)
+                .string.replacingOccurrences(of: "\u{200B}", with: "")
+        }
+        #expect(text("训练线性探针 (LP),(2) 微调") == "训练线性探针 (LP)，(2) 微调")
+        #expect(text("因此,他们提出") == "因此，他们提出")
+        #expect(text("见[7, 21]和 a, b") == "见[7, 21]和 a, b")
+    }
+}

@@ -159,7 +159,7 @@ extension EngineDiagnostics {
         guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { return "" }
         let interpreter = ContentInterpreter()
         interpreter.run(page: cg.page(at: number)!)
-        var chars = PageText.characters(of: document.page(at: number - 1)!, runs: interpreter.runs)
+        var chars = PageText.characters(of: document.page(at: number - 1)!, interpreter: interpreter)
         MathDetector.mark(&chars)
         let visible = chars.filter { !$0.isSpace && !$0.isNewline }
         var out = "runs \(interpreter.runs.count), chars \(visible.count), unmapped \(visible.filter { $0.run == nil }.count)\n"
@@ -274,7 +274,7 @@ extension EngineDiagnostics {
         guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { return "" }
         let interpreter = ContentInterpreter()
         interpreter.run(page: cg.page(at: number)!)
-        var chars = PageText.characters(of: document.page(at: number - 1)!, runs: interpreter.runs)
+        var chars = PageText.characters(of: document.page(at: number - 1)!, interpreter: interpreter)
         MathDetector.mark(&chars)
         let analyzer = LayoutAnalyzer()
         let lines = analyzer.buildLines(chars, tables: [], pageWidth: 600)
@@ -405,9 +405,49 @@ extension EngineDiagnostics {
         fills.sort()
         let fill = fills.isEmpty ? 0 : fills[fills.count / 2]
         let low = fills.filter { $0 < 0.75 }.count
-        var report = String(format: "%@: %d segments (%d cached), overlaps %d, outside %d, unfit %d, shrunk<0.85 %d, re-drawn kept lines %d, residual %d, fill median %.2f (%d of %d under 0.75)\n",
-                            input.lastPathComponent, segments.count, cached, overlaps, outside, unfit, shrunk, audit.conflicts, residual, fill, low, fills.count)
+        var report = String(format: "%@: %d segments (%d cached), overlaps %d, outside %d, unfit %d, shrunk<0.85 %d, rewritten ops %d, residual %d, lost glyphs %d, formula glyphs %d, fill median %.2f (%d of %d under 0.75)\n",
+                            input.lastPathComponent, segments.count, cached, overlaps, outside, unfit, shrunk, audit.conflicts, residual,
+                            audit.lostGlyphs, audit.formulaGlyphs, fill, low, fills.count)
         for issue in issues.prefix(verbose ? 200 : 25) { report += "  " + issue + "\n" }
         return report
+    }
+}
+
+extension EngineDiagnostics {
+    /// The fonts a page uses: name, type, vertical metrics, and glyphs drawn with each (text, reliability).
+    public static func fonts(input: URL, page number: Int) -> String {
+        guard let cg = CGPDFDocument(input as CFURL), let page = cg.page(at: number) else { return "" }
+        let interpreter = ContentInterpreter()
+        interpreter.run(page: page)
+        var out = ""
+        for (k, font) in interpreter.fonts.enumerated() {
+            let descriptor = PDFDictionary.dict(font.dict, "FontDescriptor")
+            let ascent = descriptor.flatMap { PDFDictionary.number($0, "Ascent") } ?? .nan
+            let descent = descriptor.flatMap { PDFDictionary.number($0, "Descent") } ?? .nan
+            let bbox = descriptor.flatMap { PDFDictionary.rect($0, "FontBBox") } ?? .zero
+            let glyphs = interpreter.glyphs.filter { $0.font == k }
+            let unknown = glyphs.filter { $0.text == nil }.count, guessed = glyphs.filter { $0.text != nil && !$0.reliable }.count
+            out += String(format: "%d %@ %@ asc %.0f desc %.0f bbox %.0f %.0f %.0f %.0f glyphs %d unknown %d guessed %d em %.2f\n", k, font.info.name,
+                          PDFDictionary.name(font.dict, "Subtype") ?? "?", ascent, descent, bbox.minX, bbox.minY, bbox.maxX, bbox.maxY,
+                          glyphs.count, unknown, guessed, font.emScale)
+            out += "   " + glyphs.prefix(40).map { $0.text ?? "<\(String($0.code, radix: 16))>" }.joined(separator: " ") + "\n"
+        }
+        return out
+    }
+}
+
+extension EngineDiagnostics {
+    /// Every block of a page with its kind, whether it is translated, and where it is.
+    public static func blocks(input: URL, page: Int, containing needle: String = "") -> String {
+        guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { return "" }
+        var analyzer = LayoutAnalyzer()
+        guard let layout = analyzer.analyze(document: document, cgDocument: cg, pages: [page]).first else { return "" }
+        var out = ""
+        for (i, block) in layout.blocks.enumerated() where needle.isEmpty || block.text.contains(needle) {
+            let r = block.rect
+            out += String(format: "%3d %@%@ (%.0f,%.0f %.0fx%.0f) ", i, block.kind.rawValue, block.translate ? "*" : "", r.minX, r.minY, r.width, r.height)
+                + String(block.text.prefix(90)) + "\n"
+        }
+        return out
     }
 }

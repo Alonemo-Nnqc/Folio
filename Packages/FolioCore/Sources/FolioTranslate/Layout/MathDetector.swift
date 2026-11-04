@@ -27,6 +27,12 @@ enum MathDetector {
 
     static func isGreek(_ scalar: Unicode.Scalar) -> Bool { (0x0391...0x03C9).contains(scalar.value) || (0x03D0...0x03F5).contains(scalar.value) }
 
+    /// Function and operator names set upright in formulas.
+    static let operatorNames: Set<String> = [
+        "arg", "max", "min", "argmax", "argmin", "log", "ln", "lg", "exp", "sin", "cos", "tan", "tanh", "sinh", "cosh", "arctan",
+        "sigmoid", "softmax", "Softmax", "lim", "sup", "inf", "det", "tr", "diag", "sgn", "mod", "Var", "Cov", "Pr", "ker", "gcd", "erf",
+    ]
+
     /// Characters that continue a formula when they touch one: operators, digits, brackets.
     static let joiners: Set<Character> = Set("=+-−–×·*/()[]{}|^_<>0123456789'.,:;!∗")
 
@@ -38,11 +44,55 @@ enum MathDetector {
             let scalars = c.text.unicodeScalars
             if isMathFont(c.font.name) && !c.font.name.lowercased().contains("cmr") {
                 chars[i].isMath = true
+            } else if c.ink != nil {
+                // Big delimiters and operators of an extension font.
+                chars[i].isMath = true
             } else if scalars.contains(where: isMathScalar) {
                 chars[i].isMath = true
             } else if scalars.contains(where: isGreek), c.font.isItalic || isMathFont(c.font.name) {
                 chars[i].isMath = true
             }
+        }
+        // 1b. A letter standing alone in italic type is a variable (papers set in Times use the text italic for
+        //     maths): "where m is …", "(x + m, y)". "a", "A" and "I" are words too, so they need maths beside them.
+        for i in chars.indices where !chars[i].isMath && chars[i].font.isItalic && chars[i].text.count == 1
+            && chars[i].text.first!.isLetter && !chars[i].isSpace && !chars[i].isNewline {
+            let before = i > 0 ? chars[i - 1] : nil, after = i + 1 < chars.count ? chars[i + 1] : nil
+            func separate(_ o: PageChar?) -> Bool {
+                guard let o else { return true }
+                return o.isSpace || o.isNewline || o.isMath || (o.text.count == 1 && "()[]{},.;:=+−-<>|/".contains(o.text.first!))
+            }
+            guard separate(before), separate(after) else { continue }
+            // Abbreviations in italics ("e.g.", "i.e.", "et al.") are words.
+            if after?.text == ".", i + 2 < chars.count, chars[i + 2].text.first?.isLetter == true { continue }
+            if before?.text == ".", i >= 2, chars[i - 2].text.first?.isLetter == true { continue }
+            if !["a", "A", "I"].contains(chars[i].text) {
+                chars[i].isMath = true
+            } else {
+                let p = previousVisible(i, chars), n = nextVisible(i, chars)
+                let operators: Set<Character> = Set("=+−-<>×·")
+                if [p, n].contains(where: { $0.map { chars[$0].isMath || (chars[$0].text.count == 1 && operators.contains(chars[$0].text.first!)) } ?? false }) {
+                    chars[i].isMath = true
+                }
+            }
+        }
+        // 1c. Operator names set in roman ("arg max", "exp", "softmax") are maths when maths or an argument list
+        //     is next to them.
+        var w = 0
+        while w < chars.count {
+            guard !chars[w].isSpace, !chars[w].isNewline, chars[w].text.first?.isLetter == true else { w += 1; continue }
+            var e = w
+            while e + 1 < chars.count, !chars[e + 1].isSpace, !chars[e + 1].isNewline, chars[e + 1].text.first?.isLetter == true,
+                  !chars[e + 1].isMath { e += 1 }
+            let word = chars[w...e].map(\.text).joined()
+            if operatorNames.contains(word), chars[w...e].allSatisfy({ !$0.isMath }) {
+                let p = previousVisible(w, chars), n = nextVisible(e, chars)
+                let nextIsArgument = n.map { chars[$0].text == "(" || chars[$0].text == "[" } ?? false
+                if p.map({ chars[$0].isMath }) == true || n.map({ chars[$0].isMath }) == true || nextIsArgument {
+                    for k in w...e { chars[k].isMath = true }
+                }
+            }
+            w = e + 1
         }
         // 2. Sub- and superscripts: smaller and off the baseline of the text around them.
         for i in chars.indices where !chars[i].isSpace && !chars[i].isNewline && !chars[i].isMath && chars[i].run != nil {

@@ -136,7 +136,7 @@ enum LLMBatch {
 
     /// Reads the reply. Missing keys come back as nil.
     static func parse(_ reply: String, count: Int) -> [String?] {
-        guard let object = jsonObject(in: reply) else { return Array(repeating: nil, count: count) }
+        guard let object = jsonObject(in: reply) ?? lenientObject(in: reply) else { return Array(repeating: nil, count: count) }
         return (1...max(count, 1)).prefix(count).map { key in
             if let value = object[String(key)] as? String { return value }
             if let value = object[String(key)] { return "\(value)" }
@@ -158,6 +158,27 @@ enum LLMBatch {
         guard let start = candidate.firstIndex(of: "{"), let end = candidate.lastIndex(of: "}"), start < end else { return nil }
         let json = String(candidate[start...end])
         return (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
+    }
+
+    /// `{"1": "…", "2": "…"}` whose values break JSON (a model writing "quotes" inside a translation): each value
+    /// runs from its key to the last quote before the next key.
+    static func lenientObject(in text: String) -> [String: Any]? {
+        let pattern = try! NSRegularExpression(pattern: #""(\d+)"\s*:\s*""#)
+        let ns = text as NSString
+        let keys = pattern.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        guard !keys.isEmpty else { return nil }
+        var object: [String: Any] = [:]
+        for (i, match) in keys.enumerated() {
+            let start = match.range.location + match.range.length
+            let limit = i + 1 < keys.count ? keys[i + 1].range.location : ns.length
+            let chunk = ns.substring(with: NSRange(location: start, length: limit - start))
+            guard let close = chunk.range(of: "\"", options: .backwards) else { continue }
+            var value = String(chunk[..<close.lowerBound])
+            value = value.replacingOccurrences(of: "\\n", with: " ").replacingOccurrences(of: "\\\"", with: "\"")
+                .replacingOccurrences(of: "\\\\", with: "\\")
+            object[ns.substring(with: match.range(at: 1))] = value
+        }
+        return object.isEmpty ? nil : object
     }
 
     static func termsPrompt(_ context: TranslationContext) -> String {

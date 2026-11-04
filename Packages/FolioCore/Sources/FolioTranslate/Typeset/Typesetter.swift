@@ -56,7 +56,7 @@ struct Typesetter {
         return finish(plan, pitch: plan.fillPitch, formulas: formulas)
     }
 
-    func plan(_ text: String, block: LayoutBlock, formulas: [FormulaSpan], frame: CGRect) -> Plan {
+    func plan(_ text: String, block: LayoutBlock, formulas: [FormulaSpan], frame: CGRect, maxScale: Double = 1) -> Plan {
         let size = block.size
         let pitch = block.pitch
         let alignment: Alignment = switch block.kind {
@@ -71,7 +71,7 @@ struct Typesetter {
         let lastBaseline = block.lines.last!.baseline
 
         var best: Plan?
-        var scale = 1.0
+        var scale = min(maxScale, 1)
         while scale >= 0.4 {
             let fontSize = size * scale
             // Chinese and Japanese need a little more air than the original's Latin lines.
@@ -80,7 +80,8 @@ struct Typesetter {
                                               italic: false, color: block.color, formulas: formulas, scale: scale)
             let ranges = breakLineRanges(attributed, width: frame.width, indent: indent * scale)
             let ctLines = ranges.map(\.line)
-            let baseline0 = top - (top - firstBaseline) * scale
+            // Smaller type keeps the block's top line where it was; a single line keeps its middle.
+            let baseline0 = block.lines.count == 1 ? firstBaseline + (size - fontSize) * 0.3 : top - (top - firstBaseline) * scale
             var lines: [(CTLine, Double)] = []
             for (k, raw) in ctLines.enumerated() {
                 var line = raw
@@ -105,7 +106,9 @@ struct Typesetter {
             let gaps = Double(max(lines.count - 1, 0))
             let room = baseline0 - fontSize * 0.22 - frame.minY
             let widest = lines.map { CTLineGetTypographicBounds($0.0, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth($0.0) }.max() ?? 0
-            let fits = gaps * minPitch <= room + 0.5 && widest <= frame.width + 0.5
+            // Chinese and Japanese characters fill the em: their tops must stay clear of the line above.
+            let clear = !spacesBetweenCharacters || block.lines.count > 1 || baseline0 + fontSize * 0.86 <= frame.maxY + size * 0.02
+            let fits = gaps * minPitch <= room + 0.5 && widest <= frame.width + 0.5 && clear
             var maxPitch = minPitch, fillPitch = minPitch
             if gaps > 0 {
                 maxPitch = max(minPitch, min(fontSize * 1.85, (room + 0.5) / gaps))
@@ -155,8 +158,22 @@ struct Typesetter {
 
     func attributedString(_ raw: String, fontSize: Double, bold: Bool, serif: Bool, italic: Bool, color: RGBColor,
                           formulas: [FormulaSpan], scale: Double) -> NSAttributedString {
+        // Chinese punctuation next to Chinese text ("训练线性探针,(2)" → "训练线性探针，(2)").
+        var text = raw
+        if language.lowercased().hasPrefix("zh") {
+            let cjk = #"[\u4E00-\u9FFF\u3400-\u4DBF]"#
+            for (ascii, full) in [(",", "，"), (";", "；"), (":", "："), ("?", "？"), ("!", "！")] {
+                let mark = NSRegularExpression.escapedPattern(for: ascii)
+                text = text.replacingOccurrences(of: "(?<=\(cjk))\\s?\(mark)\\s?", with: full, options: .regularExpression)
+                text = text.replacingOccurrences(of: "\\s?\(mark)\\s?(?=\(cjk))", with: full, options: .regularExpression)
+            }
+            // …and after a short Latin aside in brackets that follows Chinese ("探针 (LP),").
+            text = text.replacingOccurrences(of: "(?<=\(cjk)\\s?\\([^()]{1,24}\\)),\\s?", with: "，", options: .regularExpression)
+        }
+        // Punctuation after a formula stays on its line (a word joiner forbids the break before it).
+        text = text.replacingOccurrences(of: #"(\{\s*[vV]\s*\d+\s*\})\s?([,.;:!?，。：；！？、）)\]])"#, with: "$1\u{2060}$2", options: .regularExpression)
         // Long citation lists ("[7,21,25,26,31]") may break after their commas.
-        let text = raw.replacingOccurrences(of: #"([,，])(?=\s?\d)"#, with: "$1\u{200B}", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"([,，])(?=\s?\d)"#, with: "$1\u{200B}", options: .regularExpression)
         let font = FontCatalog.font(language: language, size: fontSize, bold: bold, serif: serif)
         let cgColor = CGColor(red: color.r, green: color.g, blue: color.b, alpha: 1)
         let base: [NSAttributedString.Key: Any] = [
@@ -198,7 +215,8 @@ struct Typesetter {
         }
         if cursor < ns.length { result.append(NSAttributedString(string: ns.substring(from: cursor), attributes: base)) }
         // Formulas the translation dropped still appear, at the end.
-        for n in 1...max(formulas.count, 1) where n <= formulas.count && !used.contains(n) {
+        // (A lone operator such as "×" was probably translated as text: not worth repeating at the end.)
+        for n in 1...max(formulas.count, 1) where n <= formulas.count && !used.contains(n) && formulas[n - 1].rect.width > formulas[n - 1].size * 1.2 {
             result.append(NSAttributedString(string: " ", attributes: base))
             appendFormula(n)
         }

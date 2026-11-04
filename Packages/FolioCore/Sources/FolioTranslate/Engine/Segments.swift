@@ -9,6 +9,8 @@ struct FormulaSpan: Sendable, Hashable {
     var runs: Set<Int> = []
     /// The size of the text around it.
     var size: Double = 10
+    /// Its glyphs (indexes into the page's glyphs), drawn again where the formula goes.
+    var glyphs: [Int] = []
 }
 
 /// One unit sent for translation: the text of a block, with formulas replaced by `{v1}`, `{v2}` …
@@ -48,15 +50,17 @@ enum SegmentBuilder {
                 if c.isMath && !c.isSpace {
                     var rect = c.glyphBox
                     var runs: Set<Int> = c.run.map { [$0] } ?? []
+                    var glyphs = c.glyphs
                     var j = i
                     while j + 1 < chars.count, chars[j + 1].isMath {
                         j += 1
                         if !chars[j].isSpace {
                             rect = rect.union(chars[j].glyphBox)
                             if let run = chars[j].run { runs.insert(run) }
+                            glyphs += chars[j].glyphs
                         }
                     }
-                    formulas.append(FormulaSpan(rect: rect, baseline: line.baseline, runs: runs, size: line.size))
+                    formulas.append(FormulaSpan(rect: rect, baseline: line.baseline, runs: runs, size: line.size, glyphs: glyphs.sorted()))
                     out += TextSegment.placeholder(formulas.count)
                     i = j + 1
                     continue

@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreText
 import Foundation
 
 /// Which content stream an operator belongs to: the page's own content (`[]`), or a form XObject reached through
@@ -27,6 +28,8 @@ struct TextRun: Sendable {
     var font: FontInfo
     /// Fill color as RGB 0…1.
     var color: RGBColor
+    /// The glyphs it draws (indexes into the interpreter's glyphs).
+    var glyphs: Range<Int> = 0..<0
 
     var isHorizontal: Bool { abs(angle) < 0.02 }
     /// The run's baseline box, one em high.
@@ -35,6 +38,50 @@ struct TextRun: Sendable {
         return CGRect(x: minX, y: min(origin.y, end.y) - fontSize * 0.25, width: max(maxX - minX, 0.1), height: fontSize * 1.1)
     }
     var midpoint: CGPoint { CGPoint(x: (origin.x + end.x) / 2, y: (origin.y + end.y) / 2 + fontSize * 0.3) }
+}
+
+/// One glyph drawn by a text operator: its code, font and the exact matrix it was drawn with, so it can be
+/// drawn again elsewhere (formulas) or taken out of its operator while the glyphs around it stay put.
+struct Glyph: Sendable {
+    /// The operator that drew it (index into the interpreter's runs).
+    var run: Int
+    var code: Int
+    /// Bytes of the code in the string.
+    var length: Int
+    /// Index into the interpreter's fonts.
+    var font: Int
+    /// Glyph space (one unit = the font size) to page space: `1 Tf` and this as `Tm` draw the glyph again.
+    var matrix: CGAffineTransform
+    /// Advance width in glyph space units (without character and word spacing).
+    var width: Double
+    /// Em size in page space.
+    var size: Double
+    var text: String?
+    /// The font states the text (ToUnicode, glyph names, an explicit encoding).
+    var reliable: Bool
+    var renderMode: Int
+    var color: RGBColor
+    /// Where the code sits in the operator: the operand (`TJ` array element) and byte offset.
+    var element: Int
+    var offset: Int
+    /// How far drawing it moves the text position, as a `TJ` adjustment (nil when it cannot be one).
+    var adjustment: Double?
+    /// Glyphs of TeX's extension fonts hang from their origin: how far below it they reach, in ems.
+    var depth: Double?
+
+    var origin: CGPoint { CGPoint.zero.applying(matrix) }
+    var end: CGPoint { CGPoint(x: width, y: 0).applying(matrix) }
+    var angle: Double { atan2(matrix.b, matrix.a) }
+    var isHorizontal: Bool { abs(angle) < 0.02 && matrix.a > 0 }
+    var isVisible: Bool { renderMode != 3 && renderMode != 7 }
+    /// The em box on the baseline, from a fifth of an em below it to the cap height and above (hanging glyphs:
+    /// from their depth to just above the origin).
+    var box: CGRect {
+        let bottom = depth.map { -$0 } ?? -0.22, top = depth == nil ? 0.98 : 0.04
+        let corners = [CGPoint(x: 0, y: bottom), CGPoint(x: max(width, 0.02), y: bottom), CGPoint(x: 0, y: top), CGPoint(x: max(width, 0.02), y: top)]
+        let em = size / max(hypot(matrix.c, matrix.d), 1e-9)
+        return ContentInterpreter.bounds(of: corners.map { CGPoint(x: $0.x, y: $0.y * em).applying(matrix) })
+    }
 }
 
 /// Something painted that is not text.
@@ -50,6 +97,10 @@ struct GraphicMark: Sendable {
     var segmentCount: Int
     /// The operators that built and painted it (path construction … paint), in `location.stream`.
     var opRange: ClosedRange<Int>
+    /// Fill colour (fills) or stroke colour (strokes).
+    var color: RGBColor = .black
+    /// Stroke width in page space (0 for fills).
+    var lineWidth: Double = 0
 }
 
 /// A content stream the interpreter visited.
@@ -66,10 +117,13 @@ struct InterpretedStream {
 /// rendering, collecting where each text operator draws and the bounds of images and paths.
 final class ContentInterpreter {
     private(set) var runs: [TextRun] = []
+    private(set) var glyphs: [Glyph] = []
     private(set) var marks: [GraphicMark] = []
     private(set) var streams: [StreamPath: InterpretedStream] = [:]
+    /// Fonts used, in order of first use (`Glyph.font`).
+    private(set) var fonts: [FontMetrics] = []
 
-    private var fontCache: [Int: FontMetrics] = [:]
+    private var fontCache: [Int: Int] = [:]
     private var chainCounter = 0
 
     private struct GState {
@@ -80,9 +134,11 @@ final class ContentInterpreter {
         var wordSpacing = 0.0
         var hScale = 1.0
         var leading = 0.0
-        var font: FontMetrics?
+        var font: Int?
         var fontSize = 0.0
         var fillColor = RGBColor.black
+        var strokeColor = RGBColor.black
+        var lineWidth = 1.0
         var rise = 0.0
         var render = 0
     }
@@ -139,43 +195,72 @@ final class ContentInterpreter {
                 if clipped.isNull { return }
                 rect = clipped
             }
+            let scale = sqrt(abs(gs.ctm.a * gs.ctm.d - gs.ctm.b * gs.ctm.c))
             marks.append(GraphicMark(kind: kind, rect: rect, isWhite: kind == .fill && gs.fillWhite,
                                      location: OpLocation(stream: path, index: index),
-                                     hasCurves: pathCurves, segmentCount: pathSegments, opRange: start...index))
+                                     hasCurves: pathCurves, segmentCount: pathSegments, opRange: start...index,
+                                     color: kind == .stroke ? gs.strokeColor : gs.fillColor,
+                                     lineWidth: kind == .stroke ? max(gs.lineWidth, 0) * scale : 0))
+        }
+
+        func color(_ operands: [ContentOperand]) -> RGBColor {
+            let n = operands.compactMap(\.number)
+            switch n.count {
+            case 1: return RGBColor(r: n[0], g: n[0], b: n[0])
+            case 3: return RGBColor(r: n[0], g: n[1], b: n[2])
+            case 4: return RGBColor(r: (1 - n[0]) * (1 - n[3]), g: (1 - n[1]) * (1 - n[3]), b: (1 - n[2]) * (1 - n[3]))
+            default: return .black
+            }
         }
 
         func setFillColor(_ operands: [ContentOperand]) {
+            gs.fillColor = color(operands)
             let n = operands.compactMap(\.number)
-            switch n.count {
-            case 1: gs.fillColor = RGBColor(r: n[0], g: n[0], b: n[0])
-            case 3: gs.fillColor = RGBColor(r: n[0], g: n[1], b: n[2])
-            case 4: gs.fillColor = RGBColor(r: (1 - n[0]) * (1 - n[3]), g: (1 - n[1]) * (1 - n[3]), b: (1 - n[2]) * (1 - n[3]))
-            default: gs.fillColor = .black
-            }
             gs.fillWhite = n.count > 0 && gs.fillColor.r >= 0.99 && gs.fillColor.g >= 0.99 && gs.fillColor.b >= 0.99
         }
 
         func show(_ index: Int, _ elements: [ContentOperand]) {
             let trm = tm.concatenating(gs.ctm)
             let origin = CGPoint(x: 0, y: gs.rise).applying(trm)
+            let metrics = gs.font.map { fonts[$0] }
+            let fs = gs.fontSize, th = gs.hScale
+            let runIndex = runs.count
+            let first = glyphs.count
+            // Glyph space → text space for this operator: [Tfs·Th 0 0 Tfs 0 Trise].
+            let glyphToText = CGAffineTransform(a: fs * th, b: 0, c: 0, d: fs, tx: 0, ty: gs.rise)
+            let emScale = metrics?.emScale ?? 1
             var tx = 0.0
-            for element in elements {
+            for (e, element) in elements.enumerated() {
                 switch element {
                 case .string(let data):
-                    tx += gs.font?.advance(of: data, size: gs.fontSize, charSpacing: gs.charSpacing,
-                                          wordSpacing: gs.wordSpacing, hScale: gs.hScale)
-                        ?? Double(data.count) * gs.fontSize * 0.5 * gs.hScale
+                    var offset = 0
+                    for (code, length) in metrics?.encoding.codes(data) ?? data.map({ (Int($0), 1) }) {
+                        let w0 = metrics?.width(code) ?? 0.5
+                        let space = length == 1 && code == 32 ? gs.wordSpacing : 0
+                        let displacement = (w0 * fs + gs.charSpacing + space) * th
+                        let matrix = glyphToText.concatenating(CGAffineTransform(translationX: tx, y: 0)).concatenating(trm)
+                        let up = hypot(matrix.c, matrix.d) * emScale
+                        let decoded = metrics?.encoding.text(code)
+                        glyphs.append(Glyph(run: runIndex, code: code, length: length, font: gs.font ?? -1, matrix: matrix, width: w0,
+                                            size: up, text: decoded?.text, reliable: decoded?.reliable ?? false, renderMode: gs.render,
+                                            color: gs.render == 1 ? gs.strokeColor : gs.fillColor, element: e, offset: offset,
+                                            adjustment: fs * th != 0 ? -displacement / (fs * th) * 1000 : nil,
+                                            depth: metrics?.hangingDepth(code)))
+                        tx += displacement
+                        offset += length
+                    }
                 case .number(let adjust):
-                    tx -= adjust / 1000 * gs.fontSize * gs.hScale
+                    tx -= adjust / 1000 * fs * th
                 default: break
                 }
             }
             let end = CGPoint(x: tx, y: gs.rise).applying(trm)
-            let up = CGPoint(x: 0, y: gs.fontSize).applying(CGAffineTransform(a: trm.a, b: trm.b, c: trm.c, d: trm.d, tx: 0, ty: 0))
+            let up = CGPoint(x: 0, y: fs * emScale).applying(CGAffineTransform(a: trm.a, b: trm.b, c: trm.c, d: trm.d, tx: 0, ty: 0))
             let right = CGPoint(x: 1, y: 0).applying(CGAffineTransform(a: trm.a, b: trm.b, c: trm.c, d: trm.d, tx: 0, ty: 0))
             runs.append(TextRun(location: OpLocation(stream: path, index: index), origin: origin, end: end,
                                 fontSize: hypot(up.x, up.y), angle: atan2(right.y, right.x),
-                                renderMode: gs.render, chain: chainCounter, font: gs.font?.info ?? .unknown, color: gs.fillColor))
+                                renderMode: gs.render, chain: chainCounter, font: metrics?.info ?? .unknown, color: gs.fillColor,
+                                glyphs: first..<glyphs.count))
             tm = CGAffineTransform(translationX: tx, y: 0).concatenating(tm)
         }
 
@@ -197,9 +282,12 @@ final class ContentInterpreter {
                 let m = CGAffineTransform(a: num(0), b: num(1), c: num(2), d: num(3), tx: num(4), ty: num(5))
                 gs.ctm = m.concatenating(gs.ctm)
             case "g", "rg", "k", "sc", "scn": setFillColor(o)
+            case "G", "RG", "K", "SC", "SCN": gs.strokeColor = color(o)
             case "cs":
                 gs.fillWhite = false
                 gs.fillColor = .black
+            case "CS": gs.strokeColor = .black
+            case "w": gs.lineWidth = num(0)
             // Paths
             case "m":
                 addPoint(num(0), num(1))
@@ -319,14 +407,14 @@ final class ContentInterpreter {
                                  opRange: location.index...location.index))
     }
 
-    private func font(named name: String, resources: CGPDFDictionaryRef?) -> FontMetrics? {
-        guard let resources, let fonts = PDFDictionary.dict(resources, "Font"),
-              let dict = PDFDictionary.dict(fonts, name) else { return nil }
+    private func font(named name: String, resources: CGPDFDictionaryRef?) -> Int? {
+        guard let resources, let fontDict = PDFDictionary.dict(resources, "Font"),
+              let dict = PDFDictionary.dict(fontDict, name) else { return nil }
         let key = PDFCopier.key(dict)
         if let cached = fontCache[key] { return cached }
-        let metrics = FontMetrics(dict)
-        fontCache[key] = metrics
-        return metrics
+        fonts.append(FontMetrics(dict))
+        fontCache[key] = fonts.count - 1
+        return fonts.count - 1
     }
 
     static func bounds(of points: [CGPoint]) -> CGRect {
@@ -344,18 +432,43 @@ final class ContentInterpreter {
     }
 }
 
-/// Glyph widths of a font, enough to advance the text position after a show operator.
+/// What a font needs for following its glyphs: how strings split into codes, each code's advance width and text.
 final class FontMetrics {
-    let twoByte: Bool
+    let dict: CGPDFDictionaryRef
     let info: FontInfo
+    let encoding: FontEncoding
+    /// Type 3 fonts: the em of glyph space in text space units (from FontMatrix); 1 for others.
+    let emScale: Double
+    /// TeX's extension fonts (cmex and its clones): glyphs hang below the origin, by `descent` ems unless the
+    /// glyph's name says more.
+    let hanging: Bool
+    private let hangingRadical: Bool
+    private let descent: Double
     private var widths: [Int: Double] = [:]
     private let defaultWidth: Double
 
     init(_ dict: CGPDFDictionaryRef) {
+        self.dict = dict
         let subtype = PDFDictionary.name(dict, "Subtype")
         info = FontInfo(dict)
+        encoding = FontEncoding(font: dict)
+        let descriptor = PDFDictionary.dict(dict, "FontDescriptor")
+        let ascent = descriptor.flatMap { PDFDictionary.number($0, "Ascent") }
+        let fontDescent = descriptor.flatMap { PDFDictionary.number($0, "Descent") }
+        let bboxBottom = descriptor.flatMap { PDFDictionary.rect($0, "FontBBox") }?.minY
+        let simpleType1 = subtype == "Type1" || subtype == "MMType1"
+        let fontName = FontInfo(dict).name.lowercased()
+        let extensionFont = ["cmex", "lmex", "txex", "pxex", "blex", "mtex", "esint", "eurmex", "fourier-ex"].contains { fontName.contains($0) }
+        if simpleType1, extensionFont || (ascent.map { $0 <= 150 } ?? false) && (bboxBottom.map { $0 <= -1000 } ?? false) {
+            hanging = true
+        } else {
+            hanging = false
+        }
+        // TeX's symbol fonts draw the radical sign hanging from its top, like the extension fonts.
+        hangingRadical = simpleType1 && ["cmsy", "cmbsy", "lmsy", "txsy", "pxsy", "mtsy", "rmsy", "bmsy"].contains { fontName.contains($0) }
+        descent = min(max(-(fontDescent ?? -600) / 1000, 0.3), 1.5)
+        var em = 1.0
         if subtype == "Type0" {
-            twoByte = true
             var dw = 1000.0
             if let descendants = PDFDictionary.array(dict, "DescendantFonts") {
                 var cid: CGPDFDictionaryRef?
@@ -366,15 +479,17 @@ final class FontMetrics {
             }
             defaultWidth = dw / 1000
         } else {
-            twoByte = false
             var scale = 1.0 / 1000
             if subtype == "Type3", let matrix = PDFDictionary.array(dict, "FontMatrix") {
-                scale = PDFDictionary.numbers(matrix).first ?? scale
+                let m = PDFDictionary.numbers(matrix)
+                scale = m.first ?? scale
+                if m.count >= 4, m[3] != 0 { em = abs(m[3]) * 1000 }
             }
             let first = Int(PDFDictionary.number(dict, "FirstChar") ?? 0)
             if let w = PDFDictionary.array(dict, "Widths") {
                 for (i, value) in PDFDictionary.numbers(w).enumerated() { widths[first + i] = value * scale }
             }
+            if widths.isEmpty, subtype != "Type3" { widths = Self.systemWidths(dict, encoding: encoding) }
             var missing = 0.5
             if let descriptor = PDFDictionary.dict(dict, "FontDescriptor"),
                let value = PDFDictionary.number(descriptor, "MissingWidth"), value > 0 {
@@ -385,6 +500,26 @@ final class FontMetrics {
             }
             defaultWidth = missing
         }
+        emScale = em
+    }
+
+    /// Advance of a code in glyph space units (1 = the font size).
+    func width(_ code: Int) -> Double {
+        widths[encoding.cid(code)] ?? defaultWidth
+    }
+
+    /// How far below its origin a glyph of a hanging font reaches, in ems (TeX's sizes of its extension glyphs).
+    func hangingDepth(_ code: Int) -> Double? {
+        if hangingRadical, encoding.names[code] == "radical" || encoding.text(code)?.text == "√" { return 0.96 }
+        guard hanging else { return nil }
+        let name = encoding.names[code] ?? ""
+        // Wide accents sit on their origin like any glyph.
+        if name.hasPrefix("hatwide") || name.hasPrefix("tildewide") || name.hasPrefix("circumflex") || name.hasPrefix("tilde") { return nil }
+        for (suffix, depth) in [("Bigg", 2.96), ("bigg", 2.36), ("Big", 1.76), ("big", 1.16)] where name.hasSuffix(suffix) { return depth }
+        let integral = name.hasPrefix("integral") || name.hasPrefix("contintegral") || name.hasPrefix("contourintegral")
+        if name.hasSuffix("display") { return integral ? 2.22 : 1.4 }
+        if name.hasSuffix("text") { return integral ? 1.11 : 1.0 }
+        return descent
     }
 
     /// `/W [c [w1 w2 …] cFirst cLast w …]` → widths in text space units.
@@ -414,25 +549,29 @@ final class FontMetrics {
         return result
     }
 
-    func advance(of data: Data, size: Double, charSpacing: Double, wordSpacing: Double, hScale: Double) -> Double {
-        var total = 0.0
-        if twoByte {
-            var i = data.startIndex
-            while i + 1 < data.endIndex {
-                let code = Int(data[i]) << 8 | Int(data[i + 1])
-                total += ((widths[code] ?? defaultWidth) * size + charSpacing) * hScale
-                i += 2
-            }
-        } else {
-            for byte in data {
-                let code = Int(byte)
-                total += ((widths[code] ?? defaultWidth) * size + charSpacing + (code == 32 ? wordSpacing : 0)) * hScale
-            }
+    /// Fonts without Widths (the standard 14, not embedded): advances of the system font of that name.
+    private static func systemWidths(_ dict: CGPDFDictionaryRef, encoding: FontEncoding) -> [Int: Double] {
+        var name = PDFDictionary.name(dict, "BaseFont") ?? "Times-Roman"
+        if let plus = name.firstIndex(of: "+") { name = String(name[name.index(after: plus)...]) }
+        let substitutes = ["Times-Roman": "Times-Roman", "Times-Bold": "Times-Bold", "Times-Italic": "Times-Italic",
+                           "Times-BoldItalic": "Times-BoldItalic", "Helvetica-Oblique": "Helvetica-Oblique",
+                           "Helvetica-BoldOblique": "Helvetica-BoldOblique", "Symbol": "Symbol", "ZapfDingbats": "ZapfDingbatsITC"]
+        let lower = name.lowercased()
+        if lower.hasPrefix("courier") { return Dictionary(uniqueKeysWithValues: (0...255).map { ($0, 0.6) }) }
+        let font = CTFontCreateWithName((substitutes[name] ?? name.replacingOccurrences(of: ",", with: "-")) as CFString, 1000, nil)
+        var result: [Int: Double] = [:]
+        for code in 32...255 {
+            guard let text = encoding.text(code)?.text, text.utf16.count == 1 else { continue }
+            var unit = Array(text.utf16)
+            var glyph: CGGlyph = 0
+            guard CTFontGetGlyphsForCharacters(font, &unit, &glyph, 1) else { continue }
+            var advance = CGSize.zero
+            CTFontGetAdvancesForGlyphs(font, .horizontal, &glyph, &advance, 1)
+            result[code] = advance.width / 1000
         }
-        return total
+        return result
     }
 }
-
 
 struct RGBColor: Sendable, Hashable {
     var r: Double, g: Double, b: Double
@@ -478,9 +617,12 @@ struct FontInfo: Sendable, Hashable {
         let lower = base.lowercased()
         name = base
         isMonospace = flags & 1 != 0 || ["mono", "courier", "cmtt", "consol", "menlo", "inconsolata", "lmtt", "sfmono", "typewriter"].contains { lower.contains($0) }
-        isSerif = flags & 2 != 0 || ["times", "roman", "serif", "cmr", "lmroman", "nimbusrom", "garamond", "georgia", "palatino", "minion", "cambria", "utopia", "charter", "stix", "libertine", "mincho", "song"].contains { lower.contains($0) } && !lower.contains("sans")
+        // Papers are set in serif type unless the font says otherwise.
+        let sans = ["sans", "helvetica", "arial", "gothic", "frutiger", "myriad", "calibri", "segoe", "roboto", "opensans",
+                    "lato", "verdana", "tahoma", "futura", "avenir", "gill", "univers", "pingfang", "heiti", "hei", "cmss", "lmss"]
+        isSerif = !sans.contains { lower.contains($0) } || flags & 2 != 0 && !lower.contains("sans")
         isSymbolic = flags & 4 != 0 && flags & 32 == 0
-        isItalic = flags & 64 != 0 || ["italic", "oblique", "-it", "cmti", "cmmi"].contains { lower.contains($0) }
+        isItalic = flags & 64 != 0 || ["italic", "ital", "oblique", "-it", "cmti", "cmmi", "slanted", "-sl", "kursiv"].contains { lower.contains($0) }
         isBold = flags & 262144 != 0 || weight >= 600 || ["bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi"].contains { lower.contains($0) }
     }
 }

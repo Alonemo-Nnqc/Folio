@@ -99,4 +99,6 @@ struct PageLayout: Sendable {
     /// Ink of everything drawn that is not text (for keeping translations clear of it).
     var graphics: [CGRect]
     var runs: [TextRun]
+    /// Every glyph the page draws (`PageChar.glyphs` index into it).
+    var glyphs: [Glyph] = []
 }

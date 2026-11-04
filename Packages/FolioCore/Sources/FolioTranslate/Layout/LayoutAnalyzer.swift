@@ -30,11 +30,15 @@ struct LayoutAnalyzer {
     mutating func analyze(document: PDFDocument, cgDocument: CGPDFDocument, pages: [Int]) -> [PageLayout] {
         var prepared: [(Int, ContentInterpreter, [PageChar])] = []
         var sizeCounts: [Double: Int] = [:]
-        for number in pages {
+        // Pages before the selection too: the body size is the document's, and whether a page is in the references
+        // depends on the pages before it.
+        let selected = Set(pages)
+        let through = min(pages.max() ?? 0, cgDocument.numberOfPages)
+        for number in through > 0 ? Array(1...through) : [] {
             guard let cgPage = cgDocument.page(at: number), let page = document.page(at: number - 1) else { continue }
             let interpreter = ContentInterpreter()
             interpreter.run(page: cgPage)
-            let chars = PageText.characters(of: page, runs: interpreter.runs)
+            let chars = PageText.characters(of: page, interpreter: interpreter)
             for c in chars where !c.isSpace && !c.isNewline && !c.isRotated {
                 sizeCounts[(c.size * 2).rounded() / 2, default: 0] += 1
             }
@@ -42,8 +46,9 @@ struct LayoutAnalyzer {
         }
         bodySize = sizeCounts.max { $0.value < $1.value }?.key ?? 10
         inReferences = false
-        return prepared.map { number, interpreter, chars in
-            analyzePage(number: number, cgPage: cgDocument.page(at: number)!, interpreter: interpreter, chars: chars)
+        return prepared.compactMap { number, interpreter, chars in
+            let layout = analyzePage(number: number, cgPage: cgDocument.page(at: number)!, interpreter: interpreter, chars: chars)
+            return selected.contains(number) ? layout : nil
         }
     }
 
@@ -63,7 +68,8 @@ struct LayoutAnalyzer {
         var tables = Self.tableFrames(rules: rules, lines: lines).map { Self.trimCaptions($0, lines: lines) }.filter { isTable($0, lines: lines) }
         let figures = figureRegions(marks: marks, lines: lines, tables: tables, page: crop)
         tables.removeAll { table in figures.contains { $0.intersection(table).area > table.area * 0.4 } }
-        lines = buildLines(chars, tables: tables, pageWidth: crop.width).map(Self.markScripts)
+        let gutters = tables.map { Self.columnGutters(in: $0, lines: lines) }
+        lines = Self.readingOrder(buildLines(chars, tables: tables, gutters: gutters, pageWidth: crop.width).map(Self.markScripts))
         // Algorithms are framed by rules like tables, but their lines are code: keep them as they are.
         var algorithms: [CGRect] = []
         tables.removeAll { table in
@@ -76,10 +82,25 @@ struct LayoutAnalyzer {
         // Equation numbers set apart at the margin mark the line they sit on as an equation.
         let numbers = lines.filter { $0.text.trimmingCharacters(in: .whitespaces).range(of: #"^\(\d{1,3}[a-z]?\)$"#, options: .regularExpression) != nil }
         var equations: Set<Int> = []
+        let flat = lines.filter { !$0.isRotated }
+        let columnGutters = flat.isEmpty ? [] : Self.gutters(flat, minX: flat.map(\.minX).min()!, width: flat.map(\.maxX).max()! - flat.map(\.minX).min()!)
         for number in numbers {
             for (k, line) in lines.enumerated() where line.maxX < number.minX && abs(line.baseline - number.baseline) < number.size * 0.6 {
-                if Self.textWords(line) <= 3 { equations.insert(k) }
+                // Only in the number's own column.
+                if columnGutters.contains(where: { line.maxX <= $0.upperBound && number.minX >= $0.lowerBound }) { continue }
+                // An equation in text type ("Cable+SC+MMH = 5*24,000  (8)"): an equals sign and hardly any prose words.
+                let prose = line.text.split(separator: " ").filter { $0.count >= 3 && $0.allSatisfy { $0.isLowercase } }.count
+                if Self.textWords(line) <= 3 || line.text.contains("=") && prose <= 1 { equations.insert(k) }
             }
+        }
+        // Rows of a display set off from the text around them ("φ(u, v),  otherwise" under "0,  if I(u, v) = 0").
+        for (k, line) in lines.enumerated() where !equations.contains(k) && line.mathRatio >= 0.3 && Self.textWords(line) <= 2 {
+            let setOff = lines.contains { other in
+                other.inkRect.width > line.inkRect.width + other.size * 4 && abs(other.baseline - line.baseline) < other.size * 4
+                    && other.minX + other.size * 1.5 < line.minX && line.maxX < other.maxX - other.size * 1.5
+            }
+            let firstIsMath = line.chars.first { !$0.isSpace }?.isMath == true
+            if setOff, firstIsMath { equations.insert(k) }
         }
 
         // Lines that are not running text.
@@ -106,19 +127,23 @@ struct LayoutAnalyzer {
             }
         }
 
-        // Running text → paragraphs, headings, captions.
-        var current: LayoutBlock?
+        // Running text → paragraphs, headings, captions. A line continues the latest block it fits under; side by side
+        // blocks (sub-captions, cells set as text) are read line by line across, so a few earlier blocks are tried too.
         var textBlocks: [LayoutBlock] = []
         for line in flowing {
-            if var block = current, canJoin(block, line) {
-                block.lines.append(line)
-                current = block
+            if let k = textBlocks.indices.reversed().prefix(4).first(where: { canJoin(textBlocks[$0], line) }) {
+                textBlocks[k].lines.append(line)
             } else {
-                if let block = current { textBlocks.append(block) }
-                current = LayoutBlock(kind: .paragraph, lines: [line], translate: true)
+                textBlocks.append(LayoutBlock(kind: .paragraph, lines: [line], translate: true))
             }
         }
-        if let block = current { textBlocks.append(block) }
+        // Text that narrows beside a table or drawing (or widens past it) is laid out in separate pieces.
+        let beside = tables + figures + marks.filter { $0.rect.width * $0.rect.height > 20 }.map(\.rect)
+            + blocks.filter { !$0.translate }.map(\.rect)
+        textBlocks = textBlocks.flatMap { block in
+            let others = textBlocks.filter { $0.rect != block.rect }.map(\.rect)
+            return Self.splitBesideObstacles(block, obstacles: beside + others)
+        }
         // Shaded boxes (a journal's banner) do not hold the paper's title.
         let boxes = marks.filter { $0.kind == .fill && $0.rect.width * $0.rect.height > 3000 }.map(\.rect)
         classify(&textBlocks, page: number, crop: crop, boxes: boxes)
@@ -128,7 +153,52 @@ struct LayoutAnalyzer {
         Self.absorbStrays(&blocks)
         let graphics = marks.map(\.rect) + figures
         return PageLayout(number: number, mediaBox: media, cropBox: crop, blocks: blocks, figures: figures, tables: tables,
-                          graphics: graphics, runs: interpreter.runs)
+                          graphics: graphics, runs: interpreter.runs, glyphs: interpreter.glyphs)
+    }
+
+    /// Splits a block where its lines change width around something beside them (a table or figure the text
+    /// flows around): each piece keeps the width it was set in.
+    static func splitBesideObstacles(_ block: LayoutBlock, obstacles: [CGRect]) -> [LayoutBlock] {
+        let lines = block.lines
+        guard lines.count >= 2 else { return [block] }
+        let margin = block.size * 4
+        var cuts: [Int] = []
+        for k in 1..<lines.count {
+            let previous = lines[k - 1], line = lines[k]
+            let narrows = line.maxX < previous.maxX - margin || line.minX > previous.minX + margin
+            let widens = line.maxX > previous.maxX + margin || line.minX < previous.minX - margin
+            guard narrows || widens else { continue }
+            // The run of narrow lines on the near side of the change, and the wide line it is measured against.
+            let wide = narrows ? previous : line
+            var run: [LayoutLine] = []
+            var j = narrows ? k : k - 1
+            while j >= 0, j < lines.count, lines[j].maxX < wide.maxX - margin || lines[j].minX > wide.minX + margin, run.count < 4 {
+                run.append(lines[j])
+                j += narrows ? 1 : -1
+            }
+            guard !run.isEmpty else { continue }
+            let top = run.map(\.rect.maxY).max()!, bottom = run.map(\.rect.minY).min()!
+            let right = CGRect(x: run.map(\.maxX).max()! + 1, y: bottom, width: 0, height: top - bottom)
+            let rightSide = CGRect(x: right.minX, y: bottom, width: max(wide.maxX - right.minX - 1, 0), height: top - bottom)
+            let leftEdge = run.map(\.minX).min()!
+            let leftSide = CGRect(x: wide.minX + 1, y: bottom, width: max(leftEdge - wide.minX - 2, 0), height: top - bottom)
+            // Something really there: more than an em wide and over a line high.
+            let found = obstacles.contains { o in
+                [rightSide, leftSide].contains { side in
+                    let shared = o.intersection(side)
+                    return side.width > 0 && !shared.isNull && shared.width > block.size && shared.height > block.size * 0.8
+                }
+            }
+            if found { cuts.append(k) }
+        }
+        guard !cuts.isEmpty else { return [block] }
+        var pieces: [LayoutBlock] = []
+        var start = 0
+        for cut in cuts + [lines.count] where cut > start {
+            pieces.append(LayoutBlock(kind: block.kind, lines: Array(lines[start..<cut]), translate: block.translate))
+            start = cut
+        }
+        return pieces
     }
 
     /// Paragraph blocks whose areas run through each other are one paragraph PDFKit read in pieces (stacked
@@ -202,7 +272,7 @@ struct LayoutAnalyzer {
                 j != i && blocks[j].translate && blocks[j].kind == .paragraph && stray.rect.width < max(blocks[j].rect.width * 0.6, 1)
                     && blocks[j].lines.contains { host in
                         abs(host.baseline - line.baseline) < host.size * 0.6
-                            && line.minX < host.maxX + host.size * 1.5 && line.maxX > host.minX - host.size * 1.5
+                            && line.minX < host.maxX + host.size * 0.3 && line.maxX > host.minX - host.size * 0.3
                     }
             }).min(by: { a, b in
                 func distance(_ j: Int) -> Double { blocks[j].lines.map { abs($0.baseline - line.baseline) }.min() ?? 99 }
@@ -224,7 +294,7 @@ struct LayoutAnalyzer {
 
     /// Groups characters (in reading order) into lines; a big horizontal gap also ends a line — in tables a
     /// gap of under an em does, so each cell is its own line.
-    func buildLines(_ chars: [PageChar], tables: [CGRect], pageWidth: Double) -> [LayoutLine] {
+    func buildLines(_ chars: [PageChar], tables: [CGRect], gutters: [[ClosedRange<Double>]] = [], pageWidth: Double) -> [LayoutLine] {
         var lines: [LayoutLine] = []
         var current: [PageChar] = []
         var mainSize = 0.0
@@ -253,9 +323,13 @@ struct LayoutAnalyzer {
                 let overlap = min(c.rect.maxY, mainBaseline + mainSize) - max(c.rect.minY, mainBaseline - mainSize * 0.3)
                 let sameLine = dy < mainSize * 0.5 || (small && dy < mainSize * 0.9 && overlap > 0)
                 let gap = c.rect.minX - last.rect.maxX
-                let inTable = tables.contains { $0.insetBy(dx: -1, dy: -2).contains(c.center) }
-                let limit = (inTable ? 0.75 : 2.2) * max(mainSize, c.size)
-                if !sameLine || gap > limit || gap < -max(mainSize, 4) * 1.5 || c.isRotated != last.isRotated {
+                let table = tables.firstIndex { $0.insetBy(dx: -1, dy: -2).contains(c.center) }
+                let limit = (table != nil ? 0.75 : 2.2) * max(mainSize, c.size)
+                // In a table, a gap over a column gutter ends the cell however narrow it is.
+                let acrossGutter = table.map { t in
+                    t < gutters.count && gutters[t].contains { last.rect.maxX <= $0.lowerBound + 0.5 && c.rect.minX >= $0.upperBound - 0.5 }
+                } ?? false
+                if !sameLine || gap > limit || acrossGutter || gap < -max(mainSize, 4) * 1.5 || c.isRotated != last.isRotated {
                     flush()
                 }
             }
@@ -313,55 +387,152 @@ struct LayoutAnalyzer {
         var merged = true
         while merged {
             merged = false
-            outer: for a in lines.indices {
-                for b in lines.indices where b != a {
-                    let l = lines[a], r = lines[b]
-                    // A short piece of formula may sit off the baseline (PDFKit placed only its scripts).
-                    func formulaPiece(_ line: LayoutLine) -> Bool {
-                        line.visibleCount <= 8 && (line.mathRatio >= 0.5 || line.chars.contains { $0.isScript || $0.size < line.size * 0.85 })
-                    }
-                    let piece = formulaPiece(l) || formulaPiece(r)
-                    // A piece of formula sits up to about half an em off its host line's baseline.
-                    let host = l.visibleCount >= r.visibleCount ? l : r
-                    let baselineTolerance = piece ? host.size * 0.7 : min(l.size, r.size) * 0.3
-                    guard !l.isRotated, !r.isRotated, r.minX >= l.minX,
-                          abs(l.baseline - r.baseline) < baselineTolerance,
-                          piece || abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { continue }
-                    let gap = r.minX - l.maxX
-                    guard !inTable(l.rect), !inTable(r.rect) else { continue }
-                    if gap < -min(l.size, r.size) * 0.5 {
-                        guard abs(l.baseline - r.baseline) < min(l.size, r.size) * 0.3, abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { continue }
-                        // Interleaved pieces (accents and scripts PDFKit split off): one line if their glyphs do not collide.
-                        let lGlyphs = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map(\.rect)
-                        let collisions = r.chars.filter { c in
-                            !c.isSpace && c.size >= r.size * 0.85
-                                && lGlyphs.contains { $0.minX < c.rect.maxX - c.rect.width * 0.4 && $0.maxX > c.rect.minX + c.rect.width * 0.4 }
-                        }.count
-                        guard collisions <= max(1, r.visibleCount / 10), r.minX < l.maxX, r.maxX > l.minX else { continue }
-                    } else {
-                        // Scripts may overlap (a subscript under a superscript); full-size text may not.
-                        let lMain = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map { Double($0.rect.maxX) }.max() ?? l.maxX
-                        let rMain = r.chars.filter { !$0.isSpace && $0.size >= r.size * 0.85 }.map { Double($0.rect.minX) }.min() ?? r.minX
-                        guard rMain - lMain > -min(l.size, r.size) * 0.5, gap < max(l.size, r.size) * 1.0 else { continue }
-                    }
-                    // Two lines that each fill a column are neighbouring columns, not pieces of one line.
-                    if l.inkRect.width > pageWidth * 0.3, r.inkRect.width > pageWidth * 0.3 { continue }
-                    var space = l.chars.last!
-                    space.text = " "
-                    space.isSpace = true
-                    space.isMath = false
-                    space.rect = CGRect(x: l.maxX, y: space.rect.minY, width: max(gap, 0), height: space.rect.height)
-                    let chars = gap > 0 ? l.chars + [space] + r.chars : l.chars + r.chars
-                    guard let line = makeLine(chars) else { continue }
-                    let first = min(a, b)
-                    lines[first] = line
-                    lines.remove(at: max(a, b))
+            let order = lines.indices.sorted { lines[$0].baseline < lines[$1].baseline }
+            let window = (lines.map(\.size).max() ?? 10) * 0.75
+            var removed = Set<Int>()
+            for (p, a) in order.enumerated() where !removed.contains(a) {
+                var candidates: [Int] = []
+                var q = p - 1
+                while q >= 0, lines[a].baseline - lines[order[q]].baseline < window { candidates.append(order[q]); q -= 1 }
+                q = p + 1
+                while q < order.count, lines[order[q]].baseline - lines[a].baseline < window { candidates.append(order[q]); q += 1 }
+                for b in candidates where !removed.contains(b) {
+                    guard let line = mergePieces(lines[a], lines[b], tables: tables, pageWidth: pageWidth) else { continue }
+                    lines[a] = line
+                    removed.insert(b)
                     merged = true
-                    break outer
                 }
             }
+            if !removed.isEmpty { lines = lines.indices.filter { !removed.contains($0) }.map { lines[$0] } }
         }
         return lines
+    }
+
+    /// `l` and `r` as one line, when `r` is a piece of the same line to the right of `l` (or interleaved with it).
+    static func mergePieces(_ l: LayoutLine, _ r: LayoutLine, tables: [CGRect], pageWidth: Double) -> LayoutLine? {
+        func inTable(_ rect: CGRect) -> Bool { tables.contains { $0.insetBy(dx: -1, dy: -2).contains(rect.center) } }
+        // A short piece of formula may sit off the baseline (only its scripts on the line); so may scripts alone.
+        func formulaPiece(_ line: LayoutLine, other: LayoutLine) -> Bool {
+            line.visibleCount <= 8 && (line.mathRatio >= 0.5 || line.chars.contains { $0.isScript || $0.size < line.size * 0.85 })
+                || line.visibleCount <= 12 && line.size < other.size * 0.85
+        }
+        let piece = formulaPiece(l, other: r) || formulaPiece(r, other: l)
+        // A piece of formula sits up to about half an em off its host line's baseline, scripts up to most of an em.
+        let host = l.visibleCount >= r.visibleCount ? l : r
+        let small = min(l.size, r.size) < max(l.size, r.size) * 0.85
+        let baselineTolerance = piece ? host.size * (small ? 0.95 : 0.7) : min(l.size, r.size) * 0.3
+        guard !l.isRotated, !r.isRotated, r.minX >= l.minX,
+              abs(l.baseline - r.baseline) < baselineTolerance,
+              piece || abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { return nil }
+        let gap = r.minX - l.maxX
+        guard !inTable(l.rect), !inTable(r.rect) else { return nil }
+        if gap < -min(l.size, r.size) * 0.5 {
+            guard abs(l.baseline - r.baseline) < min(l.size, r.size) * 0.3, abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { return nil }
+            // Interleaved pieces (drawn in two passes): one line if their glyphs do not collide.
+            let lGlyphs = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map(\.rect)
+            let collisions = r.chars.filter { c in
+                !c.isSpace && c.size >= r.size * 0.85
+                    && lGlyphs.contains { $0.minX < c.rect.maxX - c.rect.width * 0.4 && $0.maxX > c.rect.minX + c.rect.width * 0.4 }
+            }.count
+            guard collisions <= max(1, r.visibleCount / 10), r.minX < l.maxX, r.maxX > l.minX else { return nil }
+        } else {
+            // Scripts may overlap (a subscript under a superscript); full-size text may not.
+            let lMain = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map { Double($0.rect.maxX) }.max() ?? l.maxX
+            let rMain = r.chars.filter { !$0.isSpace && $0.size >= r.size * 0.85 }.map { Double($0.rect.minX) }.min() ?? r.minX
+            guard rMain - lMain > -min(l.size, r.size) * 0.5, gap < max(l.size, r.size) * 1.0 else { return nil }
+        }
+        // Two lines that each fill a column are neighbouring columns, not pieces of one line.
+        if l.inkRect.width > pageWidth * 0.3, r.inkRect.width > pageWidth * 0.3 { return nil }
+        var space = l.chars.last!
+        space.text = " "
+        space.isSpace = true
+        space.isMath = false
+        space.glyphs = []
+        space.run = nil
+        space.rect = CGRect(x: l.maxX, y: space.rect.minY, width: max(gap, 0), height: space.rect.height)
+        let wordGap = gap > min(l.size, r.size) * 0.15
+        return makeLine(wordGap ? l.chars + [space] + r.chars : l.chars + r.chars)
+    }
+
+    // MARK: Reading order
+
+    /// Lines in reading order. Columns are found from gutters: vertical strips no narrow line crosses, with
+    /// narrow lines on both sides. Lines across a gutter (titles, abstracts, full-width captions) divide the
+    /// page into bands, read top to bottom; each band column by column, each column top to bottom.
+    static func readingOrder(_ lines: [LayoutLine]) -> [LayoutLine] {
+        let flat = lines.indices.filter { !lines[$0].isRotated }
+        let rotated = lines.indices.filter { lines[$0].isRotated }
+        func topDown(_ a: Int, _ b: Int) -> Bool {
+            let la = lines[a], lb = lines[b]
+            if abs(la.baseline - lb.baseline) > min(la.size, lb.size) * 0.3 { return la.baseline > lb.baseline }
+            return la.minX < lb.minX
+        }
+        guard flat.count > 3 else { return (flat.sorted(by: topDown) + rotated).map { lines[$0] } }
+        let minX = flat.map { lines[$0].minX }.min()!, maxX = flat.map { lines[$0].maxX }.max()!
+        let width = maxX - minX
+        let gutters = Self.gutters(flat.map { lines[$0] }, minX: minX, width: width)
+        guard !gutters.isEmpty else { return (flat.sorted(by: topDown) + rotated).map { lines[$0] } }
+
+        var spanning: [Int] = []
+        var column: [Int: Int] = [:]
+        for k in flat {
+            let line = lines[k]
+            let crosses = gutters.contains { line.minX < $0.lowerBound - line.size && line.maxX > $0.upperBound + line.size }
+            if crosses {
+                spanning.append(k)
+            } else {
+                let center = (line.minX + line.maxX) / 2
+                column[k] = gutters.filter { ($0.lowerBound + $0.upperBound) / 2 < center }.count
+            }
+        }
+        spanning.sort(by: topDown)
+        let separators = spanning.map { lines[$0].rect.midY }
+        var cells: [[Int]: [Int]] = [:]
+        for (k, c) in column {
+            let band = separators.filter { $0 > lines[k].rect.midY }.count
+            cells[[band, c], default: []].append(k)
+        }
+        var order: [Int] = []
+        for band in 0...spanning.count {
+            for c in 0...gutters.count { order += (cells[[band, c]] ?? []).sorted(by: topDown) }
+            if band < spanning.count { order.append(spanning[band]) }
+        }
+        return (order + rotated).map { lines[$0] }
+    }
+
+    /// Column gutters: strips between 15% and 85% of the text width that no narrow line (under 55% of the width)
+    /// crosses, 5 pt to 15% of the width wide, with at least three narrow lines on each side next to each other.
+    static func gutters(_ lines: [LayoutLine], minX: Double, width: Double) -> [ClosedRange<Double>] {
+        guard width > 100 else { return [] }
+        let narrow = lines.filter { $0.inkRect.width < width * 0.55 }
+        guard narrow.count >= 6 else { return [] }
+        let bins = Int(width.rounded(.up)) + 1
+        var coverage = [Int](repeating: 0, count: bins)
+        for line in narrow {
+            let a = max(0, Int((line.minX - minX).rounded(.down))), b = min(bins - 1, Int((line.maxX - minX).rounded(.up)))
+            if a <= b { for x in a...b { coverage[x] += 1 } }
+        }
+        // A display formula a little wider than its column may cross.
+        let tolerance = max(0, narrow.count / 60)
+        var result: [ClosedRange<Double>] = []
+        var x = Int(width * 0.15)
+        while x < Int(width * 0.85) {
+            guard coverage[x] <= tolerance else { x += 1; continue }
+            var lo = x, hi = x
+            while lo > 0, coverage[lo - 1] <= tolerance { lo -= 1 }
+            while hi + 1 < bins, coverage[hi + 1] <= tolerance { hi += 1 }
+            x = hi + 1
+            let strip = (minX + Double(lo))...(minX + Double(hi + 1))
+            guard strip.upperBound - strip.lowerBound >= 5, strip.upperBound - strip.lowerBound <= width * 0.15 else { continue }
+            let left = narrow.filter { $0.maxX <= strip.lowerBound + 1 }, right = narrow.filter { $0.minX >= strip.upperBound - 1 }
+            guard left.count >= 3, right.count >= 3 else { continue }
+            let leftSpan = (left.map(\.rect.minY).min()!, left.map(\.rect.maxY).max()!)
+            let rightSpan = (right.map(\.rect.minY).min()!, right.map(\.rect.maxY).max()!)
+            let overlap = min(leftSpan.1, rightSpan.1) - max(leftSpan.0, rightSpan.0)
+            guard overlap > min(leftSpan.1 - leftSpan.0, rightSpan.1 - rightSpan.0) * 0.3 else { continue }
+            result.append(strip)
+        }
+        return result
     }
 
     /// Characters clearly smaller than the line's text are sub- or superscripts: part of a formula, together
@@ -410,6 +581,22 @@ struct LayoutAnalyzer {
                 chars[i].isMath = true
             }
         }
+        // Operator names ("arg max", "exp") beside maths, read along the line (their limits are drawn apart).
+        for _ in 0..<2 {
+            var w = 0
+            while w < chars.count {
+                guard !chars[w].isSpace, !chars[w].isMath, chars[w].text.first?.isLetter == true else { w += 1; continue }
+                var e = w
+                while e + 1 < chars.count, !chars[e + 1].isSpace, !chars[e + 1].isMath, chars[e + 1].text.first?.isLetter == true { e += 1 }
+                if MathDetector.operatorNames.contains(chars[w...e].map(\.text).joined()) {
+                    let before = chars[..<w].last { !$0.isSpace }, after = chars[(e + 1)...].first { !$0.isSpace }
+                    if before?.isMath == true || after?.isMath == true || after?.text == "(" || after?.text == "[" {
+                        for k in w...e { chars[k].isMath = true }
+                    }
+                }
+                w = e + 1
+            }
+        }
         // Pieces of one formula ("πₓ = h_θ(F̂(x))") separated only by spaces and operators are one formula.
         let operators: Set<Character> = Set("=+-−–×·*/<>≤≥≈∈()[]{}|,")
         var i = 0
@@ -448,8 +635,42 @@ struct LayoutAnalyzer {
             }
             i = j + 1
         }
+        balanceBrackets(&chars)
         line.chars = chars
         return line
+    }
+
+    /// A bracket at the edge of a formula belongs to it only when its partner does too: "(Sₓ and S_y)" keeps its
+    /// brackets as text, "F(x)" keeps them in the formula.
+    static func balanceBrackets(_ chars: inout [PageChar]) {
+        let pairs: [(Character, Character)] = [("(", ")"), ("[", "]"), ("{", "}")]
+        var i = 0
+        while i < chars.count {
+            guard chars[i].isMath, !chars[i].isSpace else { i += 1; continue }
+            var j = i
+            while j + 1 < chars.count, chars[j + 1].isMath { j += 1 }
+            var changed = true
+            while changed, i <= j {
+                changed = false
+                let span = chars[i...j].filter { !$0.isSpace }.map(\.text)
+                for (open, close) in pairs {
+                    let opens = span.filter { $0 == String(open) }.count, closes = span.filter { $0 == String(close) }.count
+                    if closes > opens, chars[j].text == String(close) {
+                        chars[j].isMath = false
+                        j -= 1
+                        changed = true
+                    } else if opens > closes, chars[i].text == String(open) {
+                        chars[i].isMath = false
+                        i += 1
+                        changed = true
+                    }
+                    while i <= j, chars[j].isSpace { chars[j].isMath = false; j -= 1 }
+                    while i <= j, chars[i].isSpace { chars[i].isMath = false; i += 1 }
+                    if changed { break }
+                }
+            }
+            i = j + 2
+        }
     }
 
     static func trimSpaces(_ chars: [PageChar]) -> [PageChar] {
@@ -462,14 +683,46 @@ struct LayoutAnalyzer {
         return result
     }
 
+    /// Characters (left to right) with a space wherever one starts clear of everything before it by more than
+    /// a word space: more than 0.15 em, plus the usual gap between letters in letter-spaced text.
+    static func respaced(_ chars: [PageChar]) -> [PageChar] {
+        guard chars.count > 1 else { return chars }
+        var gaps: [Double] = []
+        for (a, b) in zip(chars, chars.dropFirst()) where a.run == b.run && a.run != nil {
+            let gap = (b.rect.minX - a.rect.maxX) / max(a.size, 1)
+            if gap > -0.2 && gap < 0.5 { gaps.append(gap) }
+        }
+        gaps.sort()
+        let tracking = gaps.count >= 4 && gaps[gaps.count / 2] > 0.04 ? gaps[gaps.count / 2] : 0
+        var result: [PageChar] = [chars[0]]
+        var reach = chars[0].rect.maxX
+        for c in chars.dropFirst() {
+            let previous = result.last!
+            let gap = c.rect.minX - reach
+            if gap > min(previous.size, c.size) * (0.15 + tracking) {
+                var space = previous
+                space.text = " "
+                space.isSpace = true
+                space.isMath = previous.isMath && c.isMath
+                space.glyphs = []
+                space.run = nil
+                space.ink = nil
+                space.rect = CGRect(x: reach, y: previous.rect.minY, width: gap, height: previous.rect.height)
+                result.append(space)
+            }
+            result.append(c)
+            reach = max(reach, c.rect.maxX)
+        }
+        return result
+    }
+
     static func makeLine(_ unordered: [PageChar]) -> LayoutLine? {
         // Left to right: PDFKit sometimes lists scripts out of order.
         var chars = unordered
         if chars.filter(\.isRotated).count * 2 <= chars.count {
-            chars = chars.enumerated().sorted { a, b in
+            chars = respaced(chars.filter { !$0.isSpace }.enumerated().sorted { a, b in
                 a.element.rect.minX != b.element.rect.minX ? a.element.rect.minX < b.element.rect.minX : a.offset < b.offset
-            }.map(\.element)
-            chars = trimSpaces(chars)
+            }.map(\.element))
         }
         let visible = chars.filter { !$0.isSpace }
         guard let first = visible.first else { return nil }
@@ -558,7 +811,14 @@ struct LayoutAnalyzer {
             if line.rect.midY < frame.midY {
                 frame = CGRect(x: frame.minX, y: line.rect.maxY + 1, width: frame.width, height: max(frame.maxY - line.rect.maxY - 1, 0))
             } else {
-                frame = CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: max(line.rect.minY - 1 - frame.minY, 0))
+                // The caption's further lines go with it.
+                var last = line
+                while let next = lines.first(where: { next in
+                    let drop = last.baseline - next.baseline
+                    return drop > last.size * 0.5 && drop < last.size * 1.7 && abs(next.size - last.size) < last.size * 0.1
+                        && next.minX < last.maxX && next.maxX > last.minX && !isCaptionStart(next.text)
+                }) { last = next }
+                frame = CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: max(last.rect.minY - 1 - frame.minY, 0))
             }
         }
         return frame
@@ -649,7 +909,7 @@ struct LayoutAnalyzer {
             for k in regions.indices {
                 for line in lines {
                     let r = line.rect
-                    if regions[k].contains(r) || Self.isCaptionStart(line.text) { continue }
+                    if regions[k].contains(r) || Self.isCaptionStart(line.text) || Self.continuesText(line, in: lines) && !regions[k].contains(r.center) { continue }
                     let inside = regions[k].contains(r.center)
                     let near = regions[k].insetBy(dx: -reach, dy: -reach).intersects(r)
                     let small = line.size < bodySize * 0.96 && (line.wordCount <= 6 || line.size < bodySize * 0.9)
@@ -678,6 +938,48 @@ struct LayoutAnalyzer {
             if let k = merged.firstIndex(where: { $0.intersects(region) }) { merged[k] = merged[k].union(region) } else { merged.append(region) }
         }
         return merged
+    }
+
+    /// Column gutters of a table: strips at least half an em wide that no glyph of the table touches, with text on
+    /// both sides in at least two rows.
+    static func columnGutters(in table: CGRect, lines: [LayoutLine]) -> [ClosedRange<Double>] {
+        let inside = lines.filter { table.insetBy(dx: -1, dy: -2).contains($0.rect.center) }
+        let glyphs = inside.flatMap { $0.chars.filter { !$0.isSpace } }
+        guard glyphs.count > 10, table.width > 20 else { return [] }
+        let size = glyphs.map(\.size).sorted()[glyphs.count / 2]
+        let step = 0.5
+        let bins = Int((table.width / step).rounded(.up)) + 1
+        var covered = [Bool](repeating: false, count: bins)
+        for c in glyphs {
+            let a = max(0, Int(((c.rect.minX - table.minX) / step).rounded(.down)) + 1)
+            let b = min(bins - 1, Int(((c.rect.maxX - table.minX) / step).rounded(.up)) - 1)
+            if a <= b { for x in a...b { covered[x] = true } }
+        }
+        var result: [ClosedRange<Double>] = []
+        var x = 0
+        while x < bins {
+            guard !covered[x] else { x += 1; continue }
+            var e = x
+            while e + 1 < bins, !covered[e + 1] { e += 1 }
+            let strip = (table.minX + Double(x) * step)...(table.minX + Double(e + 1) * step)
+            x = e + 1
+            guard strip.upperBound - strip.lowerBound >= size * 0.5 else { continue }
+            let rows = inside.filter { line in
+                line.chars.contains { !$0.isSpace && $0.rect.maxX <= strip.lowerBound + 0.5 }
+                    && line.chars.contains { !$0.isSpace && $0.rect.minX >= strip.upperBound - 0.5 }
+            }
+            if rows.count >= 2 { result.append(strip) }
+        }
+        return result
+    }
+
+    /// A line right under a line of running text (a caption's second line), in the same type.
+    static func continuesText(_ line: LayoutLine, in lines: [LayoutLine]) -> Bool {
+        lines.contains { other in
+            let drop = other.baseline - line.baseline
+            return drop > line.size * 0.5 && drop < line.size * 1.7 && abs(other.size - line.size) < line.size * 0.1
+                && other.wordCount >= 6 && line.minX < other.maxX && line.maxX > other.minX && abs(other.minX - line.minX) < line.size * 2
+        }
     }
 
     /// The short last line of a paragraph: right under a long line starting at the same place.
@@ -749,7 +1051,11 @@ struct LayoutAnalyzer {
         let r = block.rect
         let overlap = min(r.maxX, line.maxX) - max(r.minX, line.minX)
         if overlap < min(r.width, line.inkRect.width) * 0.5 { return false }
+        // Text running on past a figure beside it, at full width: a block of its own, so each keeps its own width.
+        if block.lines.count >= 2, line.minX < r.minX - size * 2 || line.maxX > r.maxX + size * 2 { return false }
         if Self.isCaptionStart(line.text) { return false }
+        // "References" stands alone, whatever its type (IEEE sets it in small capitals like the entries).
+        if Self.isReferencesHeading(last.text) || Self.isReferencesHeading(line.text) { return false }
         // A paragraph set in bold (IEEE abstracts): full lines of one style belong together.
         if last.font.isBold, line.font.isBold, abs(last.size - line.size) < size * 0.06, drop <= size * 1.45,
            last.inkRect.width > size * 18, !Self.isListItem(line.text) {
@@ -786,8 +1092,10 @@ struct LayoutAnalyzer {
     func isHeadingLike(_ line: LayoutLine) -> Bool {
         let text = line.text.trimmingCharacters(in: .whitespaces)
         guard line.wordCount <= 14, !text.isEmpty else { return false }
-        if text.hasSuffix(",") { return false }
-        let numbered = text.range(of: #"^((\d+(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
+        if text.hasSuffix(",") || text.hasSuffix("-") { return false }
+        var numbered = text.range(of: #"^((\d+(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
+        // An initial and a name ("G. Sharma, “…”") is a line of a reference, not section "G".
+        if numbered, text.range(of: #"^[A-Z]\.\s"#, options: .regularExpression) != nil, text.contains(",") || text.contains("“") { numbered = false }
         let bold = line.font.isBold
         let large = line.size >= bodySize * 1.12
         if numbered && (bold || large || line.wordCount <= 8) { return true }
@@ -809,7 +1117,11 @@ struct LayoutAnalyzer {
     }
 
     /// Cell text worth translating: not an abbreviation ("AS", "mIoU", "CVPR22"), not mostly numbers.
-    static func isCellText(_ text: String) -> Bool {
+    static func isCellText(_ raw: String) -> Bool {
+        // Citations say nothing to translate: "SHADE (Zhao et al. 2022)" is a name.
+        var text = raw.replacingOccurrences(of: #"\([^()]*(et al|\d{4})[^()]*\)"#, with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: #"\[[\d,\s–\-]+\]"#, with: " ", options: .regularExpression)
+        text = text.trimmingCharacters(in: .whitespaces)
         let tokens = text.split(whereSeparator: \.isWhitespace)
         if tokens.count == 1, text.range(of: #"^[A-Z0-9][A-Za-z0-9\-\.+/@%]{0,7}$"#, options: .regularExpression) != nil,
            text.filter(\.isUppercase).count >= 2 || text.contains(where: \.isNumber) {
@@ -859,6 +1171,7 @@ struct LayoutAnalyzer {
                 continue
             }
             let heading = blocks[i].lines.count <= 2 && blocks[i].lines.allSatisfy { isHeadingLike($0) || $0.font.isBold && $0.wordCount <= 10 }
+                || blocks[i].lines.count == 1 && Self.isReferencesHeading(text)
             if heading {
                 blocks[i].kind = .heading
                 if Self.isReferencesHeading(text) {
@@ -914,8 +1227,13 @@ struct LayoutAnalyzer {
     }
 
     static func endsReferences(_ text: String) -> Bool {
-        text.range(of: #"^\s*(Appendix|APPENDIX|Appendices|Supplementary|SUPPLEMENTARY|Supplemental|[A-H](\.\d+)*\.?\s+\p{Lu}\p{Ll}|附录)"#,
-                   options: .regularExpression) != nil
+        if text.range(of: #"^\s*(Appendix|APPENDIX|Appendices|Supplementary|SUPPLEMENTARY|Supplemental|附录)"#, options: .regularExpression) != nil {
+            return true
+        }
+        // "A. Proofs", "B.2 Training details" — not an entry's author line ("G. Sharma, “Weakly-supervised …").
+        return text.range(of: #"^\s*[A-H](\.\d+)*\.?\s+\p{Lu}\p{Ll}"#, options: .regularExpression) != nil
+            && !text.contains(",") && !text.contains("“") && !text.contains("\"") && !text.hasSuffix("-")
+            && text.split(separator: " ").count <= 10
     }
 }
 
