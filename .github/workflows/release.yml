@@ -1,5 +1,7 @@
 name: Release
 
+# The macOS app. Folio for Windows is released from win-v* tags by release-windows.yml; those tags do not match
+# 'v*' below, and Windows releases are never marked "latest", so the feed below always stays the macOS one.
 # Push a tag such as v1.2.0 (matching a "## [1.2.0]" section in CHANGELOG.md) to publish a release.
 # The appcast.xml attached to the newest release is the feed every installed copy of Folio checks.
 on:
@@ -37,28 +39,28 @@ jobs:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           if [ -z "$SPARKLE_ED_PRIVATE_KEY" ]; then
-            echo "::error::Secret SPARKLE_ED_PRIVATE_KEY is missing (run script/setup-release-secret.sh)"
+            echo "::error::Secret SPARKLE_ED_PRIVATE_KEY is missing (run macos/script/setup-release-secret.sh)"
             exit 1
           fi
           VERSION="${{ inputs.version }}"
-          script/release.sh "${VERSION:-${GITHUB_REF_NAME#v}}"
+          macos/script/release.sh "${VERSION:-${GITHUB_REF_NAME#v}}"
 
       - name: Upload the build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: release-build-log
-          path: build/ReleaseDerivedData.log
+          path: macos/build/ReleaseDerivedData.log
 
       - name: Package browser extensions
-        run: script/package-extensions.sh
+        run: macos/script/package-extensions.sh
 
       - name: Upload the trial build
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: folio-trial-build
-          path: dist/
+          path: macos/dist/
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -67,6 +69,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           FLAGS=()
-          [[ "$VERSION" == *-* ]] && FLAGS+=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" --title "Folio $VERSION" --notes-file dist/release-notes.md "${FLAGS[@]}" \
-            dist/Folio-*.dmg dist/Folio-*.zip dist/appcast.xml dist/folio-chromium-*.zip dist/folio-firefox-*.xpi
+          # A final macOS release is always marked "latest": installed copies read its appcast.xml.
+          if [[ "$VERSION" == *-* ]]; then FLAGS+=(--prerelease); else FLAGS+=(--latest); fi
+          gh release create "$GITHUB_REF_NAME" --title "Folio $VERSION" --notes-file macos/dist/release-notes.md "${FLAGS[@]}" \
+            macos/dist/Folio-*.dmg macos/dist/Folio-*.zip macos/dist/appcast.xml macos/dist/folio-chromium-*.zip macos/dist/folio-firefox-*.xpi

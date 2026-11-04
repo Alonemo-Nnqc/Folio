@@ -120,7 +120,7 @@ Requires Xcode 27 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
 ```bash
 git clone https://github.com/Alonemo-Nnqc/Folio.git
-cd Folio
+cd Folio/macos
 script/build_and_run.sh
 ```
 
@@ -140,7 +140,7 @@ No Apple Developer account is needed. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 | [CSL styles and locales](https://citationstyles.org) | Citation styles | CC BY-SA 3.0 |
 | [Zotero recognizer](https://www.zotero.org) | PDF metadata recognition | — |
 
-See [`LICENSES.md`](Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) for the bundled resources.
+See [`LICENSES.md`](macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) for the bundled resources.
 
 ## License
 

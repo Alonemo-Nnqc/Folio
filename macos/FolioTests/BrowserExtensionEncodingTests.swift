@@ -4,8 +4,9 @@ import Testing
 /// WEB-01: Safari's generated background page declares no charset, so on a Chinese system it decodes the extension's
 /// UTF-8 scripts as GBK and they fail to parse. Every script outside the popup (which declares UTF-8) stays ASCII.
 @Suite struct BrowserExtensionEncodingTests {
+    // macos/FolioTests/<this file> → the repository root, where the shared extension lives.
     static let shared = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appendingPathComponent("BrowserExtension/shared")
 
     @Test(arguments: ["background.js", "connector.js", "extract.js"])

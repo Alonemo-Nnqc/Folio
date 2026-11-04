@@ -76,7 +76,7 @@ else
 fi
 
 echo "▶ release notes and appcast"
-python3 - "$ROOT/CHANGELOG.md" "$VERSION" "$BUILD" "$DOWNLOAD_BASE/Folio-$VERSION.zip" "$SIGNATURE" "$OUT" "$REPO" <<'PY'
+python3 - "$ROOT/../CHANGELOG.md" "$VERSION" "$BUILD" "$DOWNLOAD_BASE/Folio-$VERSION.zip" "$SIGNATURE" "$OUT" "$REPO" <<'PY'
 import datetime, html, re, sys
 changelog, version, build, url, signature, out, repo = sys.argv[1:]
 

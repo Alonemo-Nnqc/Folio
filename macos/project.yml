@@ -37,7 +37,7 @@ targets:
         type: file
         buildPhase: resources
       # Browser extension sources, copied out for Chrome / Edge / Firefox installs (WEB-05).
-      - path: BrowserExtension
+      - path: ../BrowserExtension
         type: folder
         buildPhase: resources
     dependencies:
@@ -85,15 +85,15 @@ targets:
           - Info.plist
           - SafariExtension.entitlements
       # The web extension itself: shared files plus Safari's manifest, at the bundle's Resources root.
-      - path: BrowserExtension/shared
+      - path: ../BrowserExtension/shared
         buildPhase: resources
         excludes:
           - _locales/**
       # Localized extension strings keep their folder structure (_locales/<language>/messages.json).
-      - path: BrowserExtension/shared/_locales
+      - path: ../BrowserExtension/shared/_locales
         type: folder
         buildPhase: resources
-      - path: BrowserExtension/safari/manifest.json
+      - path: ../BrowserExtension/safari/manifest.json
         buildPhase: resources
     settings:
       base:

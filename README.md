@@ -120,7 +120,7 @@ Folio 不收集任何使用数据，文献库完全保存在你的 Mac 上。只
 
 ```bash
 git clone https://github.com/Alonemo-Nnqc/Folio.git
-cd Folio
+cd Folio/macos
 script/build_and_run.sh
 ```
 
@@ -142,7 +142,7 @@ Folio 使用了以下开源项目和服务：
 | [CSL 样式与 locale](https://citationstyles.org) | 引用样式 | CC BY-SA 3.0 |
 | [Zotero 识别服务](https://www.zotero.org) | PDF 元数据识别 | — |
 
-资源文件的详细出处见 [`LICENSES.md`](Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md)。
+资源文件的详细出处见 [`LICENSES.md`](macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md)。
 
 ## 许可证
 

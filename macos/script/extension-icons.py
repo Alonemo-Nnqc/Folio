@@ -1,6 +1,6 @@
 """Browser extension icons from the app icon, so the toolbar button matches Folio.
 
-Usage: python3 -I script/extension-icons.py <app-icon-1024.png> BrowserExtension/shared
+Usage: python3 -I macos/script/extension-icons.py <app-icon-1024.png> BrowserExtension/shared
 The 1024 render comes from the Icon Composer document:
   ictool Folio/Resources/Folio.icon --export-image --output-file app-1024.png \
     --platform macOS --rendition Default --width 1024 --height 1024 --scale 1

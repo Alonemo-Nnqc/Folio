@@ -4,7 +4,7 @@
 # Publishing and signing need the developer's own store accounts; Folio itself installs the unpacked folder.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SRC="$ROOT/BrowserExtension"
+SRC="$ROOT/../BrowserExtension"
 OUT="$ROOT/dist"
 VERSION=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$SRC/chromium/manifest.json")
 mkdir -p "$OUT"

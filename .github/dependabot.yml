@@ -5,6 +5,6 @@ updates:
     schedule:
       interval: monthly
   - package-ecosystem: swift
-    directory: /Packages/FolioCore
+    directory: /macos/Packages/FolioCore
     schedule:
       interval: monthly
