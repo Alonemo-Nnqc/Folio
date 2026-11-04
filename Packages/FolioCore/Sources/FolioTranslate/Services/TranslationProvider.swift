@@ -35,6 +35,9 @@ struct ProviderLimits: Sendable {
     var concurrency: Int
     /// Sends the paper's title, abstract and glossary with each batch (large language models).
     var usesContext: Bool
+    /// What a request usually takes, until this job has measured it: to keep progress moving while requests run.
+    var startupSeconds: Double = 1.5
+    var secondsPerCharacter: Double = 0.01
 }
 
 /// A translation backend.
@@ -52,7 +55,8 @@ extension TranslationProvider {
 
 /// Why a request failed. `description` is what the error classifier reads.
 struct ProviderError: Error, LocalizedError, Sendable {
-    enum Kind: Sendable, Equatable { case http(Int), network, invalidResponse, cancelled, process }
+    /// `agentSetup`: the agent cannot work until the user does something (signs in, chooses a model, updates it).
+    enum Kind: Sendable, Equatable { case http(Int), network, invalidResponse, cancelled, process, agentSetup }
     var kind: Kind
     var detail: String
     var host: String?
@@ -64,7 +68,7 @@ struct ProviderError: Error, LocalizedError, Sendable {
         switch kind {
         case .http(let status): status == 429 || status == 408 || status >= 500
         case .network, .invalidResponse, .process: true
-        case .cancelled: false
+        case .cancelled, .agentSetup: false
         }
     }
 
@@ -213,7 +217,11 @@ enum HTTP {
 
     /// Sends `request`; non-2xx answers and transport failures become `ProviderError`s.
     static func send(_ request: URLRequest) async throws -> Data {
-        let host = request.url?.host()
+        // With its port: on one machine that is what tells services apart.
+        let host: String? = request.url.flatMap { url -> String? in
+            guard let name = url.host() else { return nil }
+            return url.port.map { "\(name):\($0)" } ?? name
+        }
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {

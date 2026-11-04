@@ -112,6 +112,9 @@ struct PopoverSearchField: View {
                 .font(.system(size: 12))
             TextField(prompt, text: $text)
                 .textFieldStyle(.plain)
+                .focusEffectDisabled()
+                // Inside a Form, text fields read from the right otherwise.
+                .multilineTextAlignment(.leading)
                 .onSubmit(onSubmit)
             if !text.isEmpty {
                 Button {
@@ -123,8 +126,10 @@ struct PopoverSearchField: View {
                 .accessibilityLabel(String(localized: "清除"))
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        // The same tint of whatever is behind it, in light and dark and on glass; never a fill of its own.
+        .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
     }
 }

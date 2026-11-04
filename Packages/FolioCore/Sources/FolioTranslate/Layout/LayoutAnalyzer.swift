@@ -19,6 +19,14 @@ struct LayoutAnalyzer {
     /// State carried from page to page.
     private var inReferences = false
     private(set) var bodySize = 10.0
+    /// Where the text of the column at a position starts and ends, on the page being analysed.
+    private var columnOf: ((Double) -> (lo: Double, hi: Double))?
+    /// How wide the page's lines of body text usually are.
+    private var typicalWidth = Double.infinity
+    /// Horizontal rules of the page being analysed.
+    private var pageRules: [CGRect] = []
+    /// The page being analysed.
+    private var currentPage = 0
 
     init(options: Options = Options()) {
         self.options = options
@@ -58,18 +66,37 @@ struct LayoutAnalyzer {
         let media = cgPage.getBoxRect(.mediaBox)
         var crop = cgPage.getBoxRect(.cropBox).intersection(media)
         if crop.isNull || crop.width < 1 { crop = media }
+        currentPage = number
         var chars = rawChars
         MathDetector.mark(&chars)
+        let links = PageLinks.links(of: cgPage)
+        PageLinks.assign(links, to: &chars, page: crop)
 
-        let marks = interpreter.marks.filter { !$0.isWhite && $0.rect.width * $0.rect.height < crop.width * crop.height * 0.6 }
-        let rules = marks.filter { ($0.kind == .fill || $0.kind == .stroke) && $0.rect.height < 2.5 && $0.rect.width > 30 }.map(\.rect)
+        var marks = interpreter.marks.filter { !$0.isWhite && $0.rect.width * $0.rect.height < crop.width * crop.height * 0.6 }
         // Regions first, from lines not yet split into cells; then the final lines.
         var lines = buildLines(chars, tables: [], pageWidth: crop.width)
-        var tables = Self.tableFrames(rules: rules, lines: lines).map { Self.trimCaptions($0, lines: lines) }.filter { isTable($0, lines: lines) }
+        // Small pictures among the words of a line (an emoji, an icon) are part of it, not drawings.
+        let icons = Self.inlineIcons(interpreter: interpreter, lines: lines)
+        if !icons.isEmpty {
+            Self.insert(icons, into: &chars)
+            let taken = Set(icons.map { interpreter.marks[$0.mark].location })
+            marks.removeAll { taken.contains($0.location) }
+        }
+        // A rule right under words is an underline (a link in the references), not part of a table.
+        let rules = marks.filter { ($0.kind == .fill || $0.kind == .stroke) && $0.rect.height < 2.5 && $0.rect.width > 30 }.map(\.rect).filter { rule in
+            !lines.contains { line in
+                let below = line.baseline - rule.midY
+                return below > -0.5 && below < line.size * 0.17 && rule.minX >= line.minX - 1 && rule.maxX <= line.maxX + 1
+            }
+        }
+        var tables = Self.tableFrames(rules: rules, lines: lines).map { Self.trimCaptions($0, lines: lines) }.filter { isTable($0, lines: lines, marks: marks) }
         let figures = figureRegions(marks: marks, lines: lines, tables: tables, page: crop)
         tables.removeAll { table in figures.contains { $0.intersection(table).area > table.area * 0.4 } }
         let gutters = tables.map { Self.columnGutters(in: $0, lines: lines) }
-        lines = Self.readingOrder(buildLines(chars, tables: tables, gutters: gutters, pageWidth: crop.width).map(Self.markScripts))
+        lines = buildLines(chars, tables: tables, gutters: gutters, pageWidth: crop.width).map(Self.markScripts)
+        Self.joinWordFractions(&lines, marks: marks)
+        Self.markChips(&lines, marks: marks)
+        lines = Self.readingOrder(lines)
         // Algorithms are framed by rules like tables, but their lines are code: keep them as they are.
         var algorithms: [CGRect] = []
         tables.removeAll { table in
@@ -102,6 +129,34 @@ struct LayoutAnalyzer {
             let firstIsMath = line.chars.first { !$0.isSpace }?.isMath == true
             if setOff, firstIsMath { equations.insert(k) }
         }
+        Self.growDisplays(&equations, lines: lines, gutters: columnGutters, bodySize: bodySize)
+        let pseudocode = Self.pseudocodeLines(lines)
+        let edges = Self.columnEdges(lines, gutters: columnGutters)
+        pageRules = marks.filter { $0.kind != .image && $0.rect.height < 2.5 && $0.rect.width > 8 }.map(\.rect)
+        columnOf = edges
+        let bodyWidths = flat.filter { abs($0.size - bodySize) < bodySize * 0.12 }.map(\.inkRect.width).sorted()
+        typicalWidth = bodyWidths.count >= 8 ? bodyWidths[bodyWidths.count * 4 / 5] : .infinity
+        // The further lines of a caption that a drawing's area took in ("TABLE 8" / "Ablation Study …", or a narrow caption
+        // under a narrow figure): the same type, right under it, starting where it starts or centred with it.
+        var captionLines: Set<Int> = []
+        for (k, line) in lines.enumerated() where Self.isCaptionStart(line.text) {
+            var last = line
+            var claimed = 0
+            while claimed < 12, let j = lines.indices.first(where: { j in
+                let next = lines[j]
+                let drop = last.baseline - next.baseline
+                return j != k && !captionLines.contains(j) && drop > last.size * 0.5 && drop < last.size * 1.7 && next.font == line.font
+                    && abs(next.size - last.size) < last.size * 0.1 && !Self.isCaptionStart(next.text)
+                    && (abs(next.minX - line.minX) < line.size || abs((next.minX + next.maxX) - (line.minX + line.maxX)) < line.size * 4)
+                    && figures.contains { $0.contains(next.rect.center) }
+            }) {
+                captionLines.insert(j)
+                last = lines[j]
+                claimed += 1
+            }
+        }
+        // A paper's title stays text, whatever drawing is beside it (a journal's banner, a badge).
+        for (k, line) in lines.enumerated() where number == 1 && line.size >= bodySize * 1.25 && Self.textWords(line) >= 3 { captionLines.insert(k) }
 
         // Lines that are not running text.
         var blocks: [LayoutBlock] = []
@@ -113,12 +168,14 @@ struct LayoutAnalyzer {
             } else if algorithms.contains(where: { $0.insetBy(dx: -1, dy: -2).contains(center) }) || (Self.isAlgorithmStart(line.text)
                         && algorithms.contains(where: { $0.insetBy(dx: -1, dy: -bodySize * 1.6).contains(center) })) {
                 blocks.append(LayoutBlock(kind: .code, lines: [line], translate: false))
-            } else if figures.contains(where: { $0.insetBy(dx: -1, dy: -1).contains(center) }) && !Self.isCaptionStart(line.text) {
+            } else if figures.contains(where: { $0.insetBy(dx: -1, dy: -1).contains(center) }) && !Self.isCaptionStart(line.text) && !captionLines.contains(k) {
                 blocks.append(LayoutBlock(kind: .figure, lines: [line], translate: false))
+            } else if pseudocode.contains(k) {
+                blocks.append(LayoutBlock(kind: .code, lines: [line], translate: false))
             } else if tables.contains(where: { $0.insetBy(dx: -1, dy: -2).contains(center) }) {
                 let translate = options.translateTables && Self.hasWords(line.text) && !line.font.isMonospace && Self.isCellText(line.text)
                 blocks.append(LayoutBlock(kind: .tableCell, lines: [line], translate: translate))
-            } else if isMarginal(line, page: crop) {
+            } else if isMarginal(line, page: crop, lines: lines) {
                 blocks.append(LayoutBlock(kind: .header, lines: [line], translate: false))
             } else if isDisplayMath(line) || equations.contains(k) || numbers.contains(where: { $0.inkRect == line.inkRect }) {
                 blocks.append(LayoutBlock(kind: .formula, lines: [line], translate: false))
@@ -131,7 +188,7 @@ struct LayoutAnalyzer {
         // blocks (sub-captions, cells set as text) are read line by line across, so a few earlier blocks are tried too.
         var textBlocks: [LayoutBlock] = []
         for line in flowing {
-            if let k = textBlocks.indices.reversed().prefix(4).first(where: { canJoin(textBlocks[$0], line) }) {
+            if let k = textBlocks.indices.reversed().prefix(12).first(where: { canJoin(textBlocks[$0], line) }) {
                 textBlocks[k].lines.append(line)
             } else {
                 textBlocks.append(LayoutBlock(kind: .paragraph, lines: [line], translate: true))
@@ -147,13 +204,305 @@ struct LayoutAnalyzer {
         // Shaded boxes (a journal's banner) do not hold the paper's title.
         let boxes = marks.filter { $0.kind == .fill && $0.rect.width * $0.rect.height > 3000 }.map(\.rect)
         classify(&textBlocks, page: number, crop: crop, boxes: boxes)
+        let textLeft = flat.map(\.minX).min() ?? crop.minX, textRight = flat.map(\.maxX).max() ?? crop.maxX
+        for k in textBlocks.indices {
+            let r = textBlocks[k].rect, size = textBlocks[k].size
+            let column = edges(r.midX)
+            let inColumn = abs(r.midX - (column.lo + column.hi) / 2) < size * 0.8 && r.minX - column.lo > size * 1.5
+            let onPage = abs(r.midX - (textLeft + textRight) / 2) < size * 0.8 && r.minX - textLeft > size * 1.5
+            textBlocks[k].centeredInColumn = inColumn || onPage
+        }
         blocks.append(contentsOf: textBlocks)
 
         Self.mergeInterleaved(&blocks)
         Self.absorbStrays(&blocks)
+        Self.mergeTableCells(&blocks, tables: tables, rules: rules)
         let graphics = marks.map(\.rect) + figures
         return PageLayout(number: number, mediaBox: media, cropBox: crop, blocks: blocks, figures: figures, tables: tables,
-                          graphics: graphics, runs: interpreter.runs, glyphs: interpreter.glyphs)
+                          graphics: graphics, runs: interpreter.runs, glyphs: interpreter.glyphs, links: links)
+    }
+
+    // MARK: Inline pictures
+
+    /// Pictures the size of a character on a line with words beside them, and the character standing in for each.
+    static func inlineIcons(interpreter: ContentInterpreter, lines: [LayoutLine]) -> [(mark: Int, anchor: PageChar?, char: PageChar)] {
+        var result: [(mark: Int, anchor: PageChar?, char: PageChar)] = []
+        let flat = lines.filter { !$0.isRotated && $0.wordCount >= 5 }
+        var shapes: [(result: Int, line: Double)] = []
+        for (index, mark) in interpreter.marks.enumerated() {
+            let isImage = mark.kind == .image && interpreter.images[index] != nil
+            let isShape = mark.kind == .fill && !mark.isWhite && mark.hasCurves && mark.segmentCount >= 6 && interpreter.paths[index] != nil
+            guard isImage || isShape else { continue }
+            let r = mark.rect
+            let candidates = flat.filter { line in
+                r.width <= line.size * 2.6 && r.height <= line.size * 1.9 && r.height >= line.size * 0.5
+                    && r.midY > line.baseline - line.size * 0.35 && r.midY < line.baseline + line.size * 0.85
+                    && line.chars.contains { !$0.isSpace && ($0.rect.maxX <= r.midX && r.minX - $0.rect.maxX < line.size * 1.5 || $0.rect.minX >= r.midX && $0.rect.minX - r.maxX < line.size * 1.5) }
+            }
+            guard let line = candidates.min(by: { abs($0.baseline + $0.size * 0.3 - r.midY) < abs($1.baseline + $1.size * 0.3 - r.midY) }),
+                  let template = line.chars.first(where: { !$0.isSpace }) else { continue }
+            var char = template
+            char.text = "\u{FFFC}"
+            char.rect = CGRect(x: r.minX, y: line.baseline - line.size * 0.22, width: r.width, height: line.size * 1.2)
+            char.ink = r
+            char.size = line.size
+            char.baseline = line.baseline
+            char.isMath = true
+            char.isScript = false
+            char.glyphs = []
+            char.run = nil
+            char.link = nil
+            char.linkTarget = nil
+            char.icon = index
+            if isShape { shapes.append((result.count, line.baseline)) }
+            result.append((index, line.chars.last { !$0.isSpace && $0.rect.maxX <= r.midX }, char))
+        }
+        // Many small shapes on a line, or on the page, are not icons: text set as outlines, or marks of a drawing.
+        var perLine: [Double: Int] = [:]
+        for shape in shapes { perLine[shape.line, default: 0] += 1 }
+        let tooMany = shapes.count > 12 ? Set(shapes.map(\.result)) : Set(shapes.filter { perLine[$0.line]! > 3 }.map(\.result))
+        return result.indices.filter { !tooMany.contains($0) }.map { result[$0] }
+    }
+
+    /// Puts the stand-ins among the characters, each after the one to its left in the line.
+    static func insert(_ icons: [(mark: Int, anchor: PageChar?, char: PageChar)], into chars: inout [PageChar]) {
+        for icon in icons {
+            let place = icon.anchor.flatMap { anchor in chars.firstIndex { !$0.isSpace && !$0.isNewline && $0.glyphs == anchor.glyphs && $0.icon == anchor.icon } }
+            if let place {
+                chars.insert(icon.char, at: place + 1)
+            } else if let first = chars.firstIndex(where: { !$0.isSpace && !$0.isNewline && abs($0.baseline - icon.char.baseline) < icon.char.size * 0.3 && $0.rect.minX >= icon.char.rect.minX }) {
+                chars.insert(icon.char, at: first)
+            }
+        }
+    }
+
+    // MARK: Displays
+
+    /// Where each column's text starts and ends, for telling lines set off from it.
+    private static func columnEdges(_ lines: [LayoutLine], gutters: [ClosedRange<Double>]) -> (Double) -> (lo: Double, hi: Double) {
+        let flat = lines.filter { !$0.isRotated }
+        guard let minX = flat.map(\.minX).min(), let maxX = flat.map(\.maxX).max() else { return { _ in (0, 0) } }
+        var bounds = [minX]
+        for g in gutters.sorted(by: { $0.lowerBound < $1.lowerBound }) { bounds.append((g.lowerBound + g.upperBound) / 2) }
+        bounds.append(maxX)
+        var edges: [(from: Double, to: Double, lo: Double, hi: Double)] = []
+        for (a, b) in zip(bounds, bounds.dropFirst()) {
+            let inside = flat.filter { $0.minX >= a - 2 && $0.maxX <= b + 2 && $0.inkRect.width > (b - a) * 0.4 }
+            // The edges most long lines share.
+            let los = inside.map(\.minX).sorted(), his = inside.map(\.maxX).sorted()
+            edges.append((a, b, los.isEmpty ? a : los[los.count / 5], his.isEmpty ? b : his[his.count * 4 / 5]))
+        }
+        return { x in
+            let column = edges.first { x >= $0.from && x <= $0.to } ?? edges.last!
+            return (column.lo, column.hi)
+        }
+    }
+
+    /// Words on a coloured chip inside a line (a class name set on its colour): chip and word move together, as a formula.
+    static func markChips(_ lines: inout [LayoutLine], marks: [GraphicMark]) {
+        for mark in marks where mark.kind == .fill && !mark.isWhite && !mark.hasCurves && mark.rect.height < 40 && mark.rect.width > 4 {
+            let box = mark.rect
+            for k in lines.indices where !lines[k].isRotated {
+                let line = lines[k]
+                guard box.height > line.size * 0.7, box.height < line.size * 2, box.width < line.inkRect.width * 0.5, line.visibleCount >= 20,
+                      box.minY <= line.baseline, box.maxY >= line.baseline + line.size * 0.5 else { continue }
+                for c in line.chars.indices where !line.chars[c].isSpace && box.contains(CGPoint(x: line.chars[c].rect.midX, y: line.baseline + line.size * 0.25)) {
+                    lines[k].chars[c].isMath = true
+                }
+            }
+        }
+    }
+
+    /// Words set as a fraction inside a line of text ("Foreground Pixels" over "Total Pixels"): both go into the line,
+    /// as one formula.
+    static func joinWordFractions(_ lines: inout [LayoutLine], marks: [GraphicMark]) {
+        for mark in marks where mark.kind != .image && mark.rect.height < 1.5 && mark.rect.width > 6 && mark.rect.width < 200 {
+            let rule = mark.rect
+            func holds(_ line: LayoutLine) -> Bool { line.minX >= rule.minX - 1.5 && line.maxX <= rule.maxX + 1.5 && line.inkRect.width > rule.width * 0.5 && !line.isRotated }
+            guard let upper = lines.firstIndex(where: { holds($0) && $0.baseline > rule.midY && $0.baseline - rule.midY < $0.size * 1.1 }),
+                  let lower = lines.firstIndex(where: { holds($0) && $0.baseline < rule.midY && rule.midY - $0.baseline < $0.size * 1.3 }), upper != lower else { continue }
+            let size = lines[upper].size
+            // Beside it, a bigger line whose baseline runs between the two.
+            let hosts = lines.indices.filter { k in
+                k != upper && k != lower && !lines[k].isRotated && lines[k].size >= size * 1.05 && abs(lines[k].baseline + lines[k].size * 0.25 - rule.midY) < lines[k].size * 0.5
+                    && (lines[k].maxX <= rule.minX + 1 && rule.minX - lines[k].maxX < lines[k].size * 1.5 || lines[k].minX >= rule.maxX - 1 && lines[k].minX - rule.maxX < lines[k].size * 1.5)
+            }
+            guard !hosts.isEmpty else { continue }
+            var parts = lines[upper].chars + lines[lower].chars
+            for c in parts.indices where !parts[c].isSpace { parts[c].isMath = true }
+            for k in hosts { parts += lines[k].chars }
+            guard let joined = makeLine(parts) else { continue }
+            let gone = Set(hosts + [upper, lower])
+            let keep = hosts.min()!
+            lines[keep] = joined
+            lines = lines.indices.filter { $0 == keep || !gone.contains($0) }.map { lines[$0] }
+        }
+    }
+
+    /// Lines belonging to a displayed formula, from the lines already known to: rows set off from the text like them
+    /// ("0,  otherwise"), words set as a fraction ("Foreground Pixels" over "Total Pixels"), a denominator or a
+    /// limit under them. New displays are found too: set off on both sides, with hardly any prose.
+    static func growDisplays(_ equations: inout Set<Int>, lines: [LayoutLine], gutters: [ClosedRange<Double>], bodySize: Double) {
+        let edges = columnEdges(lines, gutters: gutters)
+        func prose(_ line: LayoutLine) -> Int {
+            var count = 0, run = 0
+            for c in line.chars {
+                if !c.isMath, !c.isSpace, c.text.first?.isLowercase == true {
+                    run += 1
+                } else {
+                    if run >= 3 { count += 1 }
+                    run = 0
+                }
+            }
+            return count + (run >= 3 ? 1 : 0)
+        }
+        func isSetOff(_ line: LayoutLine) -> Bool {
+            let column = edges((line.minX + line.maxX) / 2)
+            return line.minX - column.lo > line.size && column.hi - line.maxX > line.size
+        }
+        for (k, line) in lines.enumerated() where !line.isRotated && !equations.contains(k) && !isCaptionStart(line.text) {
+            guard isSetOff(line), line.visibleCount >= 3, prose(line) <= 2 else { continue }
+            if line.mathRatio >= 0.4 || (line.mathRatio >= 0.15 && line.text.contains("=") && prose(line) <= 1) { equations.insert(k) }
+        }
+        var changed = true
+        var rounds = 0
+        while changed, rounds < 8 {
+            changed = false
+            rounds += 1
+            for (k, line) in lines.enumerated() where !line.isRotated && !equations.contains(k) && !isCaptionStart(line.text) {
+                let column = edges((line.minX + line.maxX) / 2)
+                guard line.minX - column.lo > line.size * 0.5 else { continue }
+                let tiny = line.visibleCount <= 4 && line.text.last.map { !".:;,".contains($0) } ?? true
+                let row = isSetOff(line) && prose(line) <= 3 && !(line.text.hasSuffix(".") && prose(line) >= 2)
+                guard tiny || row else { continue }
+                let next = equations.contains { e in
+                    let other = lines[e]
+                    let drop = abs(other.baseline - line.baseline)
+                    let shared = min(other.maxX, line.maxX + line.size) - max(other.minX, line.minX - line.size)
+                    return drop < max(other.size, line.size) * 2.2 && shared >= line.inkRect.width * 0.8
+                }
+                if next {
+                    equations.insert(k)
+                    changed = true
+                }
+            }
+        }
+    }
+
+    /// Lines of pseudocode: three or more lines numbered in sequence, some of them reading like code; with the lines
+    /// between them, and the "Input:" and "Output:" lines above them.
+    static func pseudocodeLines(_ lines: [LayoutLine]) -> Set<Int> {
+        func number(_ line: LayoutLine) -> Int? {
+            guard let match = line.text.firstMatch(of: /^\s*(\d{1,3})[:.)]?\s/) else { return nil }
+            return Int(match.output.1)
+        }
+        func readsLikeCode(_ line: LayoutLine) -> Bool {
+            let text = line.text.replacingOccurrences(of: #"^\s*\d{1,3}[:.)]?\s*"#, with: "", options: .regularExpression)
+            return text.range(of: #"^(for|foreach|if|else|elif|while|repeat|until|end|return|function|procedure|def|break|continue)\b|(\bdo|\bthen)\s*;?\s*$|←|:=|▷"#, options: .regularExpression) != nil
+        }
+        var result: Set<Int> = []
+        var k = 0
+        while k < lines.count {
+            guard !lines[k].isRotated, let start = number(lines[k]) else { k += 1; continue }
+            var expected = start + 1
+            var last = k, numbered = [k]
+            var j = k + 1
+            while j < lines.count, j - last <= 6, !lines[j].isRotated {
+                let drop = lines[last].baseline - lines[j].baseline
+                guard drop > 0, drop < lines[last].size * Double(3 + (j - last)), abs(lines[j].size - lines[k].size) < lines[k].size * 0.3 else { break }
+                if number(lines[j]) == expected {
+                    numbered.append(j)
+                    last = j
+                    expected += 1
+                }
+                j += 1
+            }
+            let evidence = (k...last).filter { readsLikeCode(lines[$0]) }.count
+            // Right under an "Algorithm 1" heading, numbered lines need no more proof.
+            let underHeading = lines[max(0, k - 6)..<k].contains { isAlgorithmStart($0.text) && $0.baseline > lines[k].baseline && $0.baseline - lines[k].baseline < lines[k].size * 10 }
+            if numbered.count >= 2 && underHeading || numbered.count >= 3 && (evidence >= 2 || evidence * 4 >= numbered.count) {
+                result.formUnion(k...last)
+                // What comes before the first step: from under the heading, or from its "Input:" line.
+                if let heading = (max(0, k - 8)..<k).last(where: { isAlgorithmStart(lines[$0].text) }) {
+                    if heading + 1 < k { result.formUnion((heading + 1)..<k) }
+                } else if let input = (max(0, k - 8)..<k).first(where: { lines[$0].text.range(of: #"^\s*(Input|Output|Require|Ensure)\b"#, options: .regularExpression) != nil }) {
+                    result.formUnion(input..<k)
+                }
+                k = last + 1
+            } else {
+                k += 1
+            }
+        }
+        return result
+    }
+
+    // MARK: Table cells
+
+    /// Lines of one table cell joined: a cell's text may run over several lines. A line goes with the one above when
+    /// it starts or stays in line with it, no rule separates them, and it reads on (or its row has nothing else in it).
+    /// Then each cell learns how its column is aligned.
+    static func mergeTableCells(_ blocks: inout [LayoutBlock], tables: [CGRect], rules: [CGRect]) {
+        for table in tables {
+            let area = table.insetBy(dx: -1, dy: -2)
+            var indices = blocks.indices.filter { blocks[$0].kind == .tableCell && area.contains(blocks[$0].rect.center) }
+            indices.sort { blocks[$0].lines[0].baseline > blocks[$1].lines[0].baseline }
+            var removed: Set<Int> = []
+            func isNumeric(_ text: String) -> Bool {
+                text.range(of: #"^[\s\d.,±%()\-–+*†‡/×~<>≤≥]*$"#, options: .regularExpression) != nil
+            }
+            for a in indices where !removed.contains(a) {
+                while true {
+                    let upper = blocks[a].lines.last!
+                    guard upper.text.contains(where: \.isLetter) else { break }
+                    let below = indices.filter { b in
+                        guard b != a, !removed.contains(b), blocks[b].lines.count == 1 else { return false }
+                        let lower = blocks[b].lines[0]
+                        let drop = upper.baseline - lower.baseline
+                        return drop > upper.size * 0.5 && drop < upper.size * 1.5 && lower.minX < upper.maxX && lower.maxX > upper.minX
+                    }
+                    // The line right under it, and nothing else at that height in the cell's width.
+                    guard below.count == 1, let b = below.first else { break }
+                    let lower = blocks[b].lines[0]
+                    let aligned = abs(lower.minX - upper.minX) < upper.size * 0.6 || abs((lower.minX + lower.maxX) - (upper.minX + upper.maxX)) < upper.size * 1.2
+                    guard aligned, abs(lower.size - upper.size) < upper.size * 0.1, lower.font.isBold == upper.font.isBold,
+                          !isNumeric(lower.text), lower.text.contains(where: \.isLetter) else { break }
+                    let separated = rules.contains { rule in
+                        rule.midY < upper.baseline && rule.midY > lower.baseline + lower.size * 0.6 && rule.minX < upper.maxX && rule.maxX > upper.minX
+                    }
+                    guard !separated else { break }
+                    // What else is on each of the two rows.
+                    func peers(_ line: LayoutLine) -> [LayoutLine] {
+                        indices.filter { k in !removed.contains(k) && k != a && k != b }.flatMap { blocks[$0].lines }.filter { abs($0.baseline - line.baseline) < line.size * 0.3 }
+                    }
+                    let lowerPeers = peers(lower), upperPeers = peers(upper)
+                    if lowerPeers.contains(where: { isNumeric($0.text) }) { break }
+                    let startsLow = lower.text.trimmingCharacters(in: .whitespaces).first?.isLowercase == true
+                    let endsOpen = upper.text.range(of: #"(-|,|\b(and|or|of|the|for|to|with|in|on|by|a|an))\s*$"#, options: .regularExpression) != nil
+                    guard startsLow || endsOpen || (lowerPeers.isEmpty && !upperPeers.isEmpty) else { break }
+                    blocks[a].lines.append(lower)
+                    blocks[a].translate = blocks[a].translate || blocks[b].translate
+                    removed.insert(b)
+                }
+            }
+            // Alignment: which edge the cells of a column share.
+            let cells = indices.filter { !removed.contains($0) }
+            for c in cells {
+                let block = blocks[c]
+                let r = block.rect
+                let others = cells.filter { $0 != c }.map { blocks[$0].rect }.filter { $0.minX < r.maxX + block.size && $0.maxX > r.minX - block.size }
+                let left = others.filter { abs($0.minX - r.minX) < 1 }.count
+                let right = others.filter { abs($0.maxX - r.maxX) < 1 }.count
+                let middle = others.filter { abs($0.midX - r.midX) < 1 }.count
+                if left > 0, left >= middle, left >= right {
+                    blocks[c].cellAlignment = .left
+                } else if right > 0, right > left, right >= middle {
+                    blocks[c].cellAlignment = .right
+                } else {
+                    blocks[c].cellAlignment = .center
+                }
+            }
+            for k in removed.sorted(by: >) { blocks.remove(at: k) }
+        }
     }
 
     /// Splits a block where its lines change width around something beside them (a table or figure the text
@@ -182,9 +531,9 @@ struct LayoutAnalyzer {
             let rightSide = CGRect(x: right.minX, y: bottom, width: max(wide.maxX - right.minX - 1, 0), height: top - bottom)
             let leftEdge = run.map(\.minX).min()!
             let leftSide = CGRect(x: wide.minX + 1, y: bottom, width: max(leftEdge - wide.minX - 2, 0), height: top - bottom)
-            // Something really there: more than an em wide and over a line high.
+            // Something really there: more than an em wide and over a line high, and not behind the wide line as well.
             let found = obstacles.contains { o in
-                [rightSide, leftSide].contains { side in
+                !o.insetBy(dx: 1, dy: 1).intersects(wide.inkRect) && [rightSide, leftSide].contains { side in
                     let shared = o.intersection(side)
                     return side.width > 0 && !shared.isNull && shared.width > block.size && shared.height > block.size * 0.8
                 }
@@ -239,6 +588,7 @@ struct LayoutAnalyzer {
         space.text = " "
         space.isSpace = true
         space.isMath = false
+        space.link = nil
         space.rect = CGRect(x: line.maxX, y: space.rect.minY, width: 0.1, height: space.rect.height)
         return space
     }
@@ -426,7 +776,11 @@ struct LayoutAnalyzer {
               piece || abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { return nil }
         let gap = r.minX - l.maxX
         guard !inTable(l.rect), !inTable(r.rect) else { return nil }
-        if gap < -min(l.size, r.size) * 0.5 {
+        // Scripts may overlap (a subscript under a superscript); full-size text may not.
+        let lMain = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map { Double($0.rect.maxX) }.max() ?? l.maxX
+        let rMain = r.chars.filter { !$0.isSpace && $0.size >= r.size * 0.85 }.map { Double($0.rect.minX) }.min() ?? r.minX
+        let scriptsUnder = piece && small && rMain - lMain > -min(l.size, r.size) * 0.5
+        if gap < -min(l.size, r.size) * 0.5, !scriptsUnder {
             guard abs(l.baseline - r.baseline) < min(l.size, r.size) * 0.3, abs(l.size - r.size) < max(l.size, r.size) * 0.2 else { return nil }
             // Interleaved pieces (drawn in two passes): one line if their glyphs do not collide.
             let lGlyphs = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map(\.rect)
@@ -436,9 +790,6 @@ struct LayoutAnalyzer {
             }.count
             guard collisions <= max(1, r.visibleCount / 10), r.minX < l.maxX, r.maxX > l.minX else { return nil }
         } else {
-            // Scripts may overlap (a subscript under a superscript); full-size text may not.
-            let lMain = l.chars.filter { !$0.isSpace && $0.size >= l.size * 0.85 }.map { Double($0.rect.maxX) }.max() ?? l.maxX
-            let rMain = r.chars.filter { !$0.isSpace && $0.size >= r.size * 0.85 }.map { Double($0.rect.minX) }.min() ?? r.minX
             guard rMain - lMain > -min(l.size, r.size) * 0.5, gap < max(l.size, r.size) * 1.0 else { return nil }
         }
         // Two lines that each fill a column are neighbouring columns, not pieces of one line.
@@ -449,6 +800,7 @@ struct LayoutAnalyzer {
         space.isMath = false
         space.glyphs = []
         space.run = nil
+        space.link = nil
         space.rect = CGRect(x: l.maxX, y: space.rect.minY, width: max(gap, 0), height: space.rect.height)
         let wordGap = gap > min(l.size, r.size) * 0.15
         return makeLine(wordGap ? l.chars + [space] + r.chars : l.chars + r.chars)
@@ -707,6 +1059,7 @@ struct LayoutAnalyzer {
                 space.glyphs = []
                 space.run = nil
                 space.ink = nil
+                space.link = nil
                 space.rect = CGRect(x: reach, y: previous.rect.minY, width: gap, height: previous.rect.height)
                 result.append(space)
             }
@@ -745,7 +1098,8 @@ struct LayoutAnalyzer {
         let font = fontCounts.max { $0.value < $1.value }!.key
         // The colour of the words: links and citations are often coloured, the text around them is not.
         var colorCounts: [RGBColor: Int] = [:]
-        for c in visible where c.text.first?.isLetter == true { colorCounts[c.color, default: 0] += 1 }
+        for c in visible where c.text.first?.isLetter == true && c.link == nil { colorCounts[c.color, default: 0] += 1 }
+        if colorCounts.isEmpty { for c in visible where c.text.first?.isLetter == true { colorCounts[c.color, default: 0] += 1 } }
         if colorCounts.isEmpty { for c in visible { colorCounts[c.color, default: 0] += 1 } }
         let color = colorCounts.max { $0.value < $1.value }!.key
         return LayoutLine(chars: chars, inkRect: ink, baseline: baselines[baselines.count / 2], size: max(size, 1),
@@ -776,7 +1130,7 @@ struct LayoutAnalyzer {
                 lines.contains { line in
                     let c = line.rect.center
                     return c.y < upper.minY && c.y > lower.maxY && c.x > upper.minX - 4 && c.x < upper.maxX + 4
-                        && (isCaptionStart(line.text) || textWords(line) >= 8)
+                        && (isCaptionStart(line.text) || proseWords(line) >= 6)
                 }
             }
             var start = 0
@@ -826,19 +1180,26 @@ struct LayoutAnalyzer {
 
     /// Rules around running text (a frame around an abstract) do not make a table: tables have several cells
     /// per row and short lines.
-    func isTable(_ frame: CGRect, lines: [LayoutLine]) -> Bool {
+    func isTable(_ frame: CGRect, lines: [LayoutLine], marks: [GraphicMark] = []) -> Bool {
         let inside = lines.filter { frame.insetBy(dx: -1, dy: -2).contains($0.rect.center) }
         guard inside.count >= 2 else { return false }
+        // Rules around a paper's title and authors.
+        if inside.contains(where: { $0.size >= bodySize * 1.4 && Self.textWords($0) >= 2 }) { return false }
+        // Grid lines of a bar chart: tall narrow bars stand between them.
+        // (a table's own vertical rules are thin)
+        let bars = marks.filter { $0.kind == .fill && !$0.isWhite && frame.insetBy(dx: -1, dy: -1).contains($0.rect.center) && $0.rect.height > bodySize * 2.2 && $0.rect.width > 3 && $0.rect.width < frame.width * 0.3 }
+        if bars.count >= 3 { return false }
         let chars = inside.reduce(0) { $0 + $1.visibleCount }
-        // Fraction bars of a big equation.
-        let math = inside.reduce(0) { $0 + $1.chars.filter(\.isMath).count }
+        // Fraction bars of a big equation (numbers such as 7.6 × 10⁹ say nothing).
+        let math = inside.reduce(0) { $0 + $1.chars.filter { $0.isMath && $0.text.first.map { !$0.isNumber && !".,×·-−".contains($0) } == true }.count }
         if Double(math) > Double(chars) * 0.4 { return false }
         let prose = inside.filter { Self.textWords($0) >= 6 }.reduce(0) { $0 + $1.visibleCount }
         if Double(prose) > Double(chars) * 0.5 { return false }
         // At least two rows with two or more cells: separate lines on one baseline, or wide gaps inside a line.
         var rows: [Double: Int] = [:]
         for line in inside { rows[(line.baseline / 3).rounded(), default: 0] += 1 + Self.columnGaps(line) }
-        return rows.values.filter { $0 >= 2 }.count >= 2 || inside.count >= 6
+        let wide = rows.values.filter { $0 >= 2 }.count
+        return wide >= 2 || inside.count >= 6 && wide >= 1
     }
 
     /// Gaps between columns inside a line: horizontal space of more than 0.8 em between two characters.
@@ -864,9 +1225,13 @@ struct LayoutAnalyzer {
                 if !Self.isBackground(r, lines: lines, boxy: true) { seeds.append(r) }
             case .fill, .stroke:
                 if thin {
-                    minor.append(r)
+                    // A rule across the page separates what is above and below it; it does not hold them together.
+                    if r.width < page.width * 0.6 { minor.append(r) }
                 } else if !Self.isBackground(r, lines: lines, boxy: boxy) {
                     seeds.append(r)
+                } else if boxy, Self.textInside(r, lines: lines) < 40 {
+                    // A box with a label: part of the drawing it touches, if any.
+                    minor.append(r)
                 }
             }
         }
@@ -912,11 +1277,20 @@ struct LayoutAnalyzer {
                     if regions[k].contains(r) || Self.isCaptionStart(line.text) || Self.continuesText(line, in: lines) && !regions[k].contains(r.center) { continue }
                     let inside = regions[k].contains(r.center)
                     let near = regions[k].insetBy(dx: -reach, dy: -reach).intersects(r)
-                    let small = line.size < bodySize * 0.96 && (line.wordCount <= 6 || line.size < bodySize * 0.9)
+                    // A label in a box of the drawing.
+                    let boxed = line.wordCount <= 4 && marks.contains { $0.kind != .image && !$0.isWhite && $0.rect.intersection(r).area > r.area * 0.25 && $0.rect.height > line.size }
+                    // Labels are short; longer ones sit within the drawing's width. Lines of words beside it (a biography
+                    // next to its photo) are text, however small.
+                    let within = r.minX >= regions[k].minX - 2 && r.maxX <= regions[k].maxX + 2
+                    let small = boxed || line.size < bodySize * 0.96 && (line.wordCount <= 4 || within && (line.wordCount <= 6 || line.size < bodySize * 0.9 && line.wordCount <= 8))
+                    // A few words between two parts of one drawing belong to it.
+                    let bridging = near && line.wordCount <= 4 && regions.indices.contains { j in
+                        j != k && regions[j].insetBy(dx: -reach, dy: -reach).intersects(r) && min(regions[j].maxY, regions[k].maxY) > max(regions[j].minY, regions[k].minY)
+                    }
                     // Axis titles in body type: a few words within the drawing's width, not the end of a paragraph.
                     let title = line.wordCount <= 4 && r.minX >= regions[k].minX - 2 && r.maxX <= regions[k].maxX + 2
                         && !Self.endsParagraph(line, in: lines)
-                    if inside || (near && (small || title)) {
+                    if inside || bridging || (near && (small || title)) {
                         let grown = regions[k].union(r)
                         if grown != regions[k] {
                             regions[k] = grown
@@ -992,17 +1366,30 @@ struct LayoutAnalyzer {
 
     /// A shape behind running text (a coloured box, a frame around an abstract) rather than part of a drawing.
     static func isBackground(_ rect: CGRect, lines: [LayoutLine], boxy: Bool) -> Bool {
+        // A plain box (a shaded row, a highlight) with any text on it; a drawn shape only with a lot of text.
+        textInside(rect, lines: lines) >= (boxy ? 3 : 40)
+    }
+
+    static func textInside(_ rect: CGRect, lines: [LayoutLine]) -> Int {
         var chars = 0
         for line in lines where rect.insetBy(dx: -1, dy: -1).contains(line.rect.center) { chars += line.visibleCount }
-        // A plain box (a shaded row, a highlight) with any text on it; a drawn shape only with a lot of text.
-        return chars >= (boxy ? 3 : 40)
+        return chars
     }
 
     // MARK: Line roles
 
-    func isMarginal(_ line: LayoutLine, page: CGRect) -> Bool {
+    func isMarginal(_ line: LayoutLine, page: CGRect, lines: [LayoutLine] = []) -> Bool {
         let top = page.maxY - page.height * 0.065, bottom = page.minY + page.height * 0.06
         guard line.rect.minY > top || line.rect.maxY < bottom else { return false }
+        // The last line of a full column may reach into the margin: it goes on from the line next to it.
+        if line.wordCount >= 4, abs(line.size - bodySize) < bodySize * 0.12 {
+            let continues = lines.contains { other in
+                let distance = abs(other.baseline - line.baseline)
+                return distance > line.size * 0.5 && distance < line.size * 1.6 && abs(other.size - line.size) < line.size * 0.1
+                    && other.minX < line.maxX && other.maxX > line.minX && other.rect.minY <= top && other.rect.maxY >= bottom
+            }
+            if continues { return false }
+        }
         let text = line.text.trimmingCharacters(in: .whitespaces)
         let numeric = text.range(of: #"^[\divxlcIVXLC\-–—/ ]+$"#, options: .regularExpression) != nil
         return numeric || line.size < bodySize * 0.95 || line.wordCount <= 12
@@ -1014,6 +1401,9 @@ struct LayoutAnalyzer {
         // An equation number at the end: "… = … (11)".
         let numbered = text.range(of: #"\(\d+[a-z]?\)\s*$"#, options: .regularExpression) != nil
         if numbered, ratio >= 0.2 || text.contains("=") { return true }
+        // "where" and a display: nothing to translate around it, and its limits and fractions stay with it.
+        if ratio >= 0.7, Self.textWords(line) <= 1, text.range(of: #"^\s*(where|with|for|and|or|s\.t\.|subject to|if)\b"#, options: .regularExpression) != nil,
+           let last = text.trimmingCharacters(in: .whitespaces).last, ",.;)".contains(last) || last.isNumber { return true }
         // A line starting with a word in lower case continues a sentence ("of queries as ŷ = …").
         if let first = line.chars.first(where: { !$0.isSpace }), !first.isMath, first.text.first?.isLowercase == true, Self.textWords(line) >= 1 {
             return false
@@ -1022,6 +1412,14 @@ struct LayoutAnalyzer {
         let words = Self.textWords(line)
         if words >= 2 && ratio < 0.85 { return false }
         return ratio >= 0.55 && line.wordCount <= 12
+    }
+
+    /// Words in lower case of three or more letters: a row of column names has few, a line of text many.
+    static func proseWords(_ line: LayoutLine) -> Int {
+        line.text.split(whereSeparator: \.isWhitespace).filter { word in
+            let letters = word.trimmingCharacters(in: .punctuationCharacters)
+            return letters.count >= 3 && letters.allSatisfy(\.isLowercase)
+        }.count
     }
 
     /// Words of three or more letters outside formulas.
@@ -1051,6 +1449,11 @@ struct LayoutAnalyzer {
         let r = block.rect
         let overlap = min(r.maxX, line.maxX) - max(r.minX, line.minX)
         if overlap < min(r.width, line.inkRect.width) * 0.5 { return false }
+        // A rule between two lines (the row of a table with its own rules, a line above a footnote) keeps them apart.
+        if pageRules.contains(where: { rule in
+            rule.midY < last.baseline - last.size * 0.2 && rule.midY > line.baseline + line.size * 0.6
+                && min(rule.maxX, min(last.maxX, line.maxX)) - max(rule.minX, max(last.minX, line.minX)) > min(last.inkRect.width, line.inkRect.width) * 0.3
+        }) { return false }
         // Text running on past a figure beside it, at full width: a block of its own, so each keeps its own width.
         if block.lines.count >= 2, line.minX < r.minX - size * 2 || line.maxX > r.maxX + size * 2 { return false }
         if Self.isCaptionStart(line.text) { return false }
@@ -1065,22 +1468,43 @@ struct LayoutAnalyzer {
         let lastHeading = isHeadingLike(last), lineHeading = isHeadingLike(line)
         if lastHeading || lineHeading {
             let sameStyle = lastHeading == lineHeading && last.font.isBold == line.font.isBold && abs(last.size - line.size) < last.size * 0.06
-            let numbered = line.text.range(of: #"^\s*((\d+(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
+            let numbered = line.text.range(of: #"^\s*((\d{1,2}(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
             if !sameStyle || numbered || drop > size * 1.45 { return false }
             return true
         }
+        // A paragraph opening with bold words ("Problem Formulation. The entire …"), after a finished sentence.
+        if !last.font.isBold, let opening = line.chars.first(where: { !$0.isSpace }), opening.font.isBold, !opening.isMath,
+           line.chars.prefix(12).filter({ !$0.isSpace && $0.font.isBold }).count >= 6,
+           let end = last.text.trimmingCharacters(in: .whitespaces).last, ".:?!。".contains(end) {
+            return false
+        }
         // A bullet always starts an item; "(2)" or "3." only after a line that stopped short.
         if Self.isListItem(line.text) {
-            let bullet = line.text.trimmingCharacters(in: .whitespaces).first.map { "•▪◦●○■□‣∙·-–—*".contains($0) } ?? false
+            let bullet = line.text.trimmingCharacters(in: .whitespaces).first.map { "•▪◦●○■□‣∙·-–—*\u{FFFD}".contains($0) } ?? false
             if bullet || last.maxX < r.maxX - size * 2 { return false }
         }
         // A line in another colour is another element (a coloured heading or note), unless it is mostly citations.
         if abs(line.color.r - block.color.r) + abs(line.color.g - block.color.g) + abs(line.color.b - block.color.b) > 0.6,
            Self.textWords(line) >= 3 || isHeadingLike(line) { return false }
+        // Short lines one under another, each starting anew: a list of names, addresses or keywords, not a paragraph.
+        if let columnOf {
+            let column = columnOf((line.minX + line.maxX) / 2)
+            let width = min(column.hi - column.lo, typicalWidth)
+            let opening = line.chars.first { !$0.isSpace }
+            let startsAnew = opening.map { $0.isMath || $0.isScript || $0.text.first?.isUppercase == true || $0.text.first?.isNumber == true } ?? false
+            let goesOn = last.text.range(of: #"(,|-|\b(and|or|of|the|for|to|with|in|on|by|a|an))\s*$"#, options: .regularExpression) != nil
+            let ragged = abs(last.maxX - line.maxX) > size * 0.4
+            // Lists like these are the front matter of a paper, or small print; a caption or narrow text runs on.
+            let listLike = currentPage == 1 || size < bodySize * 0.96
+            if listLike, !Self.isCaptionStart(block.lines[0].text), width > 0, last.inkRect.width < width * 0.6, line.inkRect.width < width * 0.6,
+               ragged, startsAnew, !goesOn { return false }
+        }
         // A new paragraph: the line is indented from the block's left edge …
         let left = block.lines.count > 1 ? block.lines.dropFirst().map(\.minX).min()! : last.minX
         let hanging = block.lines.count == 1 && Self.isListItem(last.text)
-        if !hanging, line.minX > left + size * 0.8, last.maxX > r.maxX - size * 2 { return false }
+        // (lines centred under one another are not indented)
+        let centred = abs((line.minX + line.maxX) / 2 - r.midX) < size * 0.6 && line.maxX < r.maxX - size * 0.8
+        if !hanging, !centred, line.minX > left + size * 0.8, last.maxX > r.maxX - size * 2 { return false }
         // … or the previous line ended a sentence well short of the right edge.
         if block.lines.count >= 2, last.maxX < r.maxX - size * 4,
            let end = last.text.trimmingCharacters(in: .whitespaces).last, ".:?!。".contains(end) {
@@ -1093,23 +1517,28 @@ struct LayoutAnalyzer {
         let text = line.text.trimmingCharacters(in: .whitespaces)
         guard line.wordCount <= 14, !text.isEmpty else { return false }
         if text.hasSuffix(",") || text.hasSuffix("-") { return false }
-        var numbered = text.range(of: #"^((\d+(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
+        // (a year starting a line of text, "2022. He is", is no section number)
+        var numbered = text.range(of: #"^((\d{1,2}(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
         // An initial and a name ("G. Sharma, “…”") is a line of a reference, not section "G".
         if numbered, text.range(of: #"^[A-Z]\.\s"#, options: .regularExpression) != nil, text.contains(",") || text.contains("“") { numbered = false }
         let bold = line.font.isBold
         let large = line.size >= bodySize * 1.12
+        // Bold words that run on into plain ones start a paragraph: "Datasets. We use".
+        if bold, !large, let end = line.chars.last(where: { !$0.isSpace }), !end.font.isBold, !end.isMath { return false }
         if numbered && (bold || large || line.wordCount <= 8) { return true }
         return (bold || large) && line.chars.filter { !$0.isSpace && $0.font.isBold == bold }.count * 10 >= line.visibleCount * 8
     }
 
     static func isCaptionStart(_ text: String) -> Bool {
-        text.range(of: #"^\s*(Figure|Fig\.?|FIGURE|FIG\.?|Table|TABLE|Tab\.|Algorithm|Listing|Scheme|Chart|Supplementary (Figure|Table)|图|表)\s*[S]?\d+"#,
+        // Not a sentence that happens to start the line with a reference to one ("Fig. 3 and recount …", "Fig. 2 bottom)."):
+        // punctuation, a capital, or nothing comes after the number.
+        text.range(of: #"^\s*(Figure|Fig\.?|FIGURE|FIG\.?|Table|TABLE|Tab\.|Algorithm|Listing|Scheme|Chart|Supplementary (Figure|Table)|图|表)\s*(S?\d+|[IVXLC]+\b)(\s*$|\s*[.:：|—–\-]|\s+[\p{Lu}\p{Han}])"#,
                    options: .regularExpression) != nil
     }
 
     /// "• …", "– …", "1) …", "(ii) …", "[3] …" at the start of a line.
     static func isListItem(_ text: String) -> Bool {
-        text.range(of: #"^\s*([•▪◦●○■□‣∙·\-–—*]|\(?[0-9]{1,2}[.)]|\([ivxIVX]{1,4}\)|\([a-z]\)|\[\d{1,3}\])\s"#, options: .regularExpression) != nil
+        text.range(of: #"^\s*([•▪◦●○■□‣∙·\-–—*\x{FFFD}]|\(?[0-9]{1,2}[.)]|\([ivxIVX]{1,4}\)|\([a-z]\)|\[\d{1,3}\])\s"#, options: .regularExpression) != nil
     }
 
     static func isAlgorithmStart(_ text: String) -> Bool {
@@ -1121,8 +1550,11 @@ struct LayoutAnalyzer {
         // Citations say nothing to translate: "SHADE (Zhao et al. 2022)" is a name.
         var text = raw.replacingOccurrences(of: #"\([^()]*(et al|\d{4})[^()]*\)"#, with: " ", options: .regularExpression)
         text = text.replacingOccurrences(of: #"\[[\d,\s–\-]+\]"#, with: " ", options: .regularExpression)
+        let cited = text != raw
         text = text.trimmingCharacters(in: .whitespaces)
         let tokens = text.split(whereSeparator: \.isWhitespace)
+        // A name with its citation: the method or dataset of that paper ("Rein [74]", "TENT (Wang et al. 2021)").
+        if cited, tokens.count <= 3 { return false }
         if tokens.count == 1, text.range(of: #"^[A-Z0-9][A-Za-z0-9\-\.+/@%]{0,7}$"#, options: .regularExpression) != nil,
            text.filter(\.isUppercase).count >= 2 || text.contains(where: \.isNumber) {
             return false
@@ -1151,7 +1583,19 @@ struct LayoutAnalyzer {
             }
             titleIndex = candidates.max { blocks[$0].size < blocks[$1].size }
         }
-        let abstractTop = page == 1 ? blocks.first(where: { Self.isAbstractStart($0.text) })?.rect.maxY : nil
+        // Names and addresses end where the abstract starts; without one, at the first real paragraph or section.
+        var abstractTop: Double?
+        if page == 1 {
+            if let abstract = blocks.first(where: { Self.isAbstractStart($0.text) }) { abstractTop = abstract.rect.maxY }
+            if abstractTop == nil, let titleIndex {
+                let titleBottom = blocks[titleIndex].rect.minY
+                for block in blocks where block.rect.maxY <= titleBottom + 1 {
+                    let isBody = block.lines.count >= 4 && block.lines.dropLast().allSatisfy { $0.wordCount >= 6 }
+                    let isFirstSection = block.text.range(of: #"^\s*(1\.?|I\.)\s+\p{Lu}"#, options: .regularExpression) != nil && block.lines.count <= 2
+                    if isBody || isFirstSection { abstractTop = max(abstractTop ?? 0, block.rect.maxY) }
+                }
+            }
+        }
 
         for i in blocks.indices {
             let text = blocks[i].text.trimmingCharacters(in: .whitespaces)
@@ -1162,9 +1606,23 @@ struct LayoutAnalyzer {
             }
             if Self.isCaptionStart(text) {
                 blocks[i].kind = .caption
-                if inReferences { inReferences = false }
                 continue
             }
+            // An entry of a reference list with no heading to it: only that entry stays.
+            if !inReferences, !options.translateReferences, Self.isReferenceEntry(blocks[i]) {
+                blocks[i].kind = .reference
+                blocks[i].translate = false
+                continue
+            }
+            // The tail of an entry cut off from it ("Mach. Intell., vol. 47, no. 5, pp. 3673–3690, May 2025.").
+            if !options.translateReferences, blocks[i].lines.count <= 2, text.range(of: #"\b(vol\.|pp\.)\s*\d"#, options: .regularExpression) != nil,
+               text.range(of: #"(19|20)\d\d"#, options: .regularExpression) != nil {
+                blocks[i].kind = .reference
+                blocks[i].translate = false
+                continue
+            }
+            // Running text in the middle of the references: the list has ended (an appendix, the next chapter).
+            if inReferences, Self.isRunningProse(blocks[i]) { inReferences = false }
             if !inReferences, let titleIndex, let abstractTop, blocks[i].rect.minY > abstractTop, blocks[i].rect.maxY <= blocks[titleIndex].rect.minY + 1 {
                 blocks[i].kind = .author
                 blocks[i].translate = false
@@ -1178,7 +1636,7 @@ struct LayoutAnalyzer {
                     inReferences = !options.translateReferences
                     continue
                 }
-                if inReferences, Self.endsReferences(text) { inReferences = false }
+                if inReferences, Self.endsReferences(text) || Self.isNumberedSection(text) { inReferences = false }
                 if inReferences { blocks[i].kind = .reference; blocks[i].translate = false }
                 continue
             }
@@ -1218,12 +1676,31 @@ struct LayoutAnalyzer {
     }
 
     static func isAbstractStart(_ text: String) -> Bool {
-        text.range(of: #"^\s*(Abstract|ABSTRACT|A B S T R A C T|Summary|摘\s*要)\b"#, options: .regularExpression) != nil
+        text.range(of: #"^\s*(a\s?b\s?s\s?t\s?r\s?a\s?c\s?t|summary|摘\s*要)\b"#, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
     static func isReferencesHeading(_ text: String) -> Bool {
         text.range(of: #"^\s*((\d+|[IVX]+)\.?\s*)?(References|REFERENCES|Reference|Bibliography|BIBLIOGRAPHY|Literature Cited|Works Cited|参考文献)\s*$"#,
                    options: .regularExpression) != nil
+    }
+
+    /// "[12] A. Author, B. Author, “Title,” in Venue, 2019."
+    static func isReferenceEntry(_ block: LayoutBlock) -> Bool {
+        let text = block.text
+        return block.lines.count <= 8 && text.range(of: #"^\s*\[\d{1,3}\]\s+\p{Lu}"#, options: .regularExpression) != nil
+            && text.range(of: #"(19|20)\d\d"#, options: .regularExpression) != nil && text.filter { $0 == "," }.count >= 2
+    }
+
+    /// Five or more lines of sentences with nothing of a reference about them.
+    static func isRunningProse(_ block: LayoutBlock) -> Bool {
+        let text = block.text
+        guard block.lines.count >= 5, text.split(separator: " ").count >= 50 else { return false }
+        return text.range(of: #"(19|20)\d\d|et al|\bpp\.|\bvol\.|\bProc\b|\bConf\b|\bJ\.|doi|arXiv|^\s*\[\d"#, options: [.regularExpression, .caseInsensitive]) == nil
+    }
+
+    /// "3 Climbers", "3.2 Power" — no entry reads like this: entries have authors and commas.
+    static func isNumberedSection(_ text: String) -> Bool {
+        text.range(of: #"^\s*\d{1,2}(\.\d+)*\.?\s+\p{Lu}\p{Ll}"#, options: .regularExpression) != nil && !text.contains(",") && text.split(separator: " ").count <= 10
     }
 
     static func endsReferences(_ text: String) -> Bool {

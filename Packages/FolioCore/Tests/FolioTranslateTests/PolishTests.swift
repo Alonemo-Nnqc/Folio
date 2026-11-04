@@ -89,6 +89,9 @@ import Testing
         }
         #expect(text("训练线性探针 (LP),(2) 微调") == "训练线性探针 (LP)，(2) 微调")
         #expect(text("因此,他们提出") == "因此，他们提出")
-        #expect(text("见[7, 21]和 a, b") == "见[7, 21]和 a, b")
+        #expect(text("见[7, 21]和 a, b") == "见 [7, 21] 和 a, b")
+        // One even space around Latin words, numbers and formulas, whatever the translator left.
+        #expect(text("基于SAM的 分割在12个数据集") == "基于 SAM 的 分割在 12 个数据集")
+        #expect(text("结果 为（SAM）。") == "结果 为（SAM）。")
     }
 }

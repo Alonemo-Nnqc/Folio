@@ -8,6 +8,10 @@ protocol SingleTextProvider: TranslationProvider {
 
 extension SingleTextProvider {
     func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
+        try await translateEach(items, context: context)
+    }
+
+    func translateEach(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
         var results: [String] = []
         for item in items {
             // Services cap the length of one text: long paragraphs go sentence by sentence.
@@ -94,7 +98,30 @@ enum LanguageCodes {
 
 /// Google Translate's public web endpoint (the one browser extensions use), one text per request.
 struct GoogleWebProvider: SingleTextProvider {
-    var limits = ProviderLimits(batchCharacters: 4500, batchItems: 1, concurrency: 6, usesContext: false)
+    var limits = ProviderLimits(batchCharacters: 4500, batchItems: 25, concurrency: 4, usesContext: false, startupSeconds: 1.5, secondsPerCharacter: 0.001)
+
+    /// Several texts in one request (`translate_a/t` takes any number of `q`): far fewer requests, so far fewer refusals.
+    func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
+        guard items.count > 1 else { return try await translateEach(items, context: context) }
+        var components = URLComponents(string: "https://translate.googleapis.com/translate_a/t")!
+        components.queryItems = [
+            .init(name: "client", value: "gtx"), .init(name: "sl", value: LanguageCodes.google(context.sourceLanguage)),
+            .init(name: "tl", value: LanguageCodes.google(context.targetLanguage)), .init(name: "dt", value: "t"),
+        ]
+        var request = URLRequest(url: components.url!, timeoutInterval: 60)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded;charset=utf-8", forHTTPHeaderField: "Content-Type")
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+?")
+        request.httpBody = Data(items.map { "q=" + ($0.text.addingPercentEncoding(withAllowedCharacters: allowed) ?? $0.text) }.joined(separator: "&").utf8)
+        let data = try await HTTP.send(request)
+        // Each answer is its text, or its text and the language detected.
+        if let array = try HTTP.json(data) as? [Any], array.count == items.count {
+            let texts = array.compactMap { ($0 as? String) ?? ($0 as? [Any])?.first as? String }
+            if texts.count == items.count { return texts }
+        }
+        return try await translateEach(items, context: context)
+    }
 
     func translateOne(_ text: String, context: TranslationContext) async throws -> String {
         var components = URLComponents(string: "https://translate.googleapis.com/translate_a/single")!
@@ -118,8 +145,17 @@ struct GoogleWebProvider: SingleTextProvider {
 
 /// Bing Translator's web endpoint (no key): a token from the translator page, then one text per request.
 struct BingWebProvider: SingleTextProvider {
-    var limits = ProviderLimits(batchCharacters: 950, batchItems: 1, concurrency: 4, usesContext: false)
+    var limits = ProviderLimits(batchCharacters: 950, batchItems: 20, concurrency: 8, usesContext: false, startupSeconds: 1.8, secondsPerCharacter: 0.0035)
     private static let session = SessionCache()
+
+    /// Several short texts in one request, a line each (it keeps lines): most of a request's time is the same
+    /// however little it carries. If the lines do not come back one for one, each text goes on its own.
+    func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
+        guard items.count > 1, items.allSatisfy({ !$0.text.contains("\n") }) else { return try await translateEach(items, context: context) }
+        let reply = try await translateOne(items.map(\.text).joined(separator: "\n"), context: context)
+        let lines = reply.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        return lines.count == items.count ? lines : try await translateEach(items, context: context)
+    }
 
     struct Session: Sendable {
         var ig: String, iid: String, key: String, token: String, host: String

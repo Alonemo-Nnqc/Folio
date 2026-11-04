@@ -186,6 +186,18 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         fitColumnsOnce()
     }
 
+    /// The progress of running translations, in the rows showing them.
+    func updateTranslationProgress(_ jobs: [String: TranslationCoordinator.JobState]) {
+        let column = outline.column(withIdentifier: ItemColumn.title.identifier)
+        guard column >= 0 else { return }
+        for (id, job) in jobs {
+            guard let node = itemNodes[id] else { continue }
+            let row = outline.row(forItem: node)
+            guard row >= 0, let cell = outline.view(atColumn: column, row: row, makeIfNecessary: false) as? TitleCell else { continue }
+            cell.updateTranslation(stage: job.stage, fraction: job.fraction)
+        }
+    }
+
     /// On first layout, make every visible column fit: the title column keeps at least 260 pt and
     /// the other columns shrink proportionally.
     private func fitColumnsOnce() {
@@ -289,7 +301,7 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         case .title:
             let cell = make(TitleCell.self, TitleCell.identifier)
             let origin = entry.originItemId.flatMap { snapshot.items[$0]?.title }
-            let job = model.translations.jobs[entry.id]
+            let job = model.translations.currentJob(of: entry.id)
             let translation = job.map { (stage: $0.stage, fraction: $0.fraction) }
             cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin,
                                hasNote: snapshot.notedItems.contains(entry.id), translation: translation)

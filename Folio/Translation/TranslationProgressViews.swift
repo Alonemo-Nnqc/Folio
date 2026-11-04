@@ -1,4 +1,5 @@
 import AppKit
+import FolioTranslate
 
 /// Floating capsule at the bottom of the reader while its paper is being translated (TRANS-04): what the
 /// engine is doing, a progress bar and the percentage, on Liquid Glass so the page shows through.
@@ -39,10 +40,11 @@ final class TranslationProgressHUD: NSView {
         let icon = NSImageView(image: NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: nil) ?? NSImage())
         icon.symbolConfiguration = .init(pointSize: 13, weight: .medium)
         icon.contentTintColor = .secondaryLabelColor
-        stage.font = .systemFont(ofSize: NSFont.smallSystemFontSize + 1, weight: .medium)
+        // Digits of one width in a box of one width: the capsule stays put while the count goes up.
+        stage.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize + 1, weight: .medium)
         stage.lineBreakMode = .byTruncatingTail
-        stage.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
-        stage.setContentHuggingPriority(.required, for: .horizontal)
+        stage.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        stage.setContentHuggingPriority(.defaultLow, for: .horizontal)
         percent.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize + 1, weight: .regular)
         percent.textColor = .secondaryLabelColor
         percent.alignment = .right
@@ -56,7 +58,7 @@ final class TranslationProgressHUD: NSView {
         NSLayoutConstraint.activate([
             bar.widthAnchor.constraint(equalToConstant: 160),
             percent.widthAnchor.constraint(equalToConstant: 34),
-            stage.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
+            stage.widthAnchor.constraint(equalToConstant: TranslationProgressBar.stageWidth(font: stage.font!)),
         ])
         glass = Self.capsule(around: stack, cornerRadius: 18)
         glass.translatesAutoresizingMaskIntoConstraints = false
@@ -86,6 +88,18 @@ final class TranslationProgressHUD: NSView {
 }
 
 enum TranslationProgressBar {
+    /// Room for any stage's text: it changes as the translation goes on, and what is beside it must not move.
+    static func stageWidth(font: NSFont) -> CGFloat {
+        let texts = TranslationStageText.widest + [String(localized: "正在启动翻译"), String(localized: "等待翻译")]
+        let widest = texts.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 100
+        return min(ceil(widest) + 2, 220)
+    }
+
+    /// Room for "100%".
+    static func percentWidth(font: NSFont) -> CGFloat {
+        ceil(("100%" as NSString).size(withAttributes: [.font: font]).width) + 1
+    }
+
     /// Determinate with a fraction, otherwise animated.
     static func apply(_ fraction: Double?, to bar: NSProgressIndicator) {
         if let fraction {

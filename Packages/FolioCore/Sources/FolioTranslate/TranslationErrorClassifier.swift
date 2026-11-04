@@ -6,6 +6,8 @@ public enum TranslationFailureReason: String, Sendable, Hashable, CaseIterable {
     case quota
     case network
     case modelNotFound
+    case clientOutdated
+    case agentSetup
     case serverError
     case configuration
     case engineBroken
@@ -43,6 +45,8 @@ public enum TranslationErrorClassifier {
 
     private static let rules: [(TranslationFailureReason, [String])] = [
         (.appleTranslationUnavailable, [#"FOLIO_APPLE_TRANSLATE:"#]),
+        (.agentSetup, [#"agent-setup "#]),
+        (.clientOutdated, http(426) + ["upgrade required", #"version[^\n]{0,40}(is )?outdated"#, #"please (update|upgrade) to (version )?\d"#, "client version"]),
         (.modelNotFound, ["model_not_found", #"model[^\n]{0,80}(does not exist|not found|not exist)"#, "no such model",
                           "unknown model", "invalid model", String(localized: "模型不存在", bundle: .module)]),
         (.quota, rateLimit + balance),
@@ -79,7 +83,23 @@ public enum TranslationErrorClassifier {
         patterns.contains { haystack.range(of: $0.lowercased(), options: .regularExpression) != nil }
     }
 
+    /// A sentence to set inside another: shortened, without its final stop.
+    private static func trimmedSentence(_ text: String) -> String {
+        shortened(text).trimmingCharacters(in: CharacterSet(charactersIn: " .。"))
+    }
+
     static func text(for reason: TranslationFailureReason, raw: String, haystack: String, original: String) -> String {
+        // An agent's own service answered: say which agent, and what it said.
+        if let agent = firstMatch(#"agent ([\w-]+):"#, in: original), [.authentication, .quota, .serverError, .unknown].contains(reason) {
+            var said = firstMatch(#"agent [\w-]+:\s*([^\n]+)"#, in: original) ?? raw
+            said = trimmedSentence(said.replacingOccurrences(of: #"\s+http \d{3}$"#, with: "", options: .regularExpression))
+            switch reason {
+            case .quota where matches(haystack, balance): return String(localized: "\(agent) 的账户额度已用完：\(said)", bundle: .module)
+            case .quota: return String(localized: "\(agent) 的模型服务限流了请求，请稍后重试或换一个模型：\(said)", bundle: .module)
+            case .unknown: return String(localized: "\(agent) 运行失败：\(said)", bundle: .module)
+            default: return String(localized: "\(agent) 的模型服务返回错误：\(said)", bundle: .module)
+            }
+        }
         let found = host(in: original)
         // A space on each side of a Latin name inside Chinese text, none before punctuation.
         let host = found.map { " \($0)" } ?? "", hostThen = found.map { String(localized: " \($0) ", bundle: .module) } ?? ""
@@ -97,6 +117,20 @@ public enum TranslationErrorClassifier {
         case .modelNotFound:
             let name = model(in: original).map { " \($0)" } ?? ""
             return String(localized: "模型\(name) 不存在或无权使用，请在 设置 ▸ 翻译 中检查模型名称", bundle: .module)
+        case .clientOutdated:
+            let current = firstMatch(#"version \(?v?(\d+(?:\.\d+)+)\)?\s*(?:is )?(?:outdated|too old)"#, in: original)
+            let required = firstMatch(#"(?:to|least|version) v?(\d+(?:\.\d+)+)(?: or (?:later|newer|above))"#, in: original)
+            let versions = current.map { c in
+                required.map { String(localized: "它上报的客户端版本 \(c) 已过期（要求 \($0) 或更新）", bundle: .module) } ?? String(localized: "它上报的客户端版本 \(c) 已过期", bundle: .module)
+            } ?? String(localized: "它上报的客户端版本已过期", bundle: .module)
+            if let agent = firstMatch(#"agent ([\w-]+):"#, in: original) {
+                return String(localized: "\(agent) 的版本过旧：\(versions)。请在终端更新 \(agent) 后重试", bundle: .module)
+            }
+            return String(localized: "服务\(hostThen)的上游拒绝了请求（426）：\(versions)。这个版本号是该接口服务自己上报的，和这台 Mac 上安装的命令行工具无关，请更新这个接口服务（例如 grok2api）或在它的设置里改高版本号", bundle: .module)
+        case .agentSetup:
+            let agent = firstMatch(#"agent-setup ([\w-]+):"#, in: original) ?? ""
+            let reason = trimmedSentence(firstMatch(#"agent-setup [\w-]+:\s*([^\n]+)"#, in: original) ?? raw)
+            return String(localized: "\(agent) 还不能使用：\(reason)。请先在终端运行一次 \(agent)，完成登录或设置后再试", bundle: .module)
         case .serverError:
             return String(localized: "翻译服务\(hostThen)暂时出错\(code([500, 502, 503, 504]))，这是服务端的问题，请稍后重试", bundle: .module)
         case .network:

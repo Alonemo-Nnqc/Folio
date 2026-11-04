@@ -14,6 +14,11 @@ struct TranslationSettingsPane: View {
             EngineSection(coordinator: model.translations)
         }
         .formStyle(.grouped)
+        // No caret in the first text field just for opening the page.
+        .task {
+            try? await Task.sleep(for: .milliseconds(80))
+            if let window = NSApp.keyWindow, window.firstResponder is NSTextView { window.makeFirstResponder(nil) }
+        }
     }
 
     static func abbreviatedPath(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
@@ -144,18 +149,22 @@ struct ServiceSection: View {
         @Bindable var settings = model.settings
         let service = TranslationServiceCatalog.service(id: settings.translationService)
         Section {
-            Picker("翻译服务", selection: $settings.translationService) {
+            Picker(selection: $settings.translationService) {
                 ForEach(groups, id: \.title) { group in
                     Section(group.title) {
                         ForEach(group.services) { Text(label(for: $0)).tag($0.id) }
                     }
                 }
+            } label: {
+                Label {
+                    Text("翻译服务")
+                    if let note = service?.note { Text(note) }
+                } icon: {
+                    if let service { ServiceIcon(service: service) }
+                }
             }
             .task(id: "\(settings.translationProfiles.count)-\(settings.translationFields.count)-\(settings.translationService)") {
                 configured = await findConfigured()
-            }
-            if let note = service?.note {
-                Text(note).font(.caption).foregroundStyle(.secondary)
             }
             if let service {
                 if TranslationProfiles.supportsProfiles(service) { TranslationProfileRow(model: model, service: service) }
@@ -163,17 +172,17 @@ struct ServiceSection: View {
                 let profileID = settings.selectedTranslationProfiles[service.id] ?? ""
                 ForEach(service.fields.filter { !$0.isAdvanced }) { FieldRow(model: model, serviceID: service.id, field: $0).id("\($0.id)-\(profileID)") }
                 ReasoningRow(settings: settings, serviceID: service.id)
+                if service.id == TranslationServiceCatalog.appleServiceID { appleRow }
+                if hasStatus(service) {
+                    ServiceStatusRow(model: model, service: service, canTest: !compact).id("\(service.id)-\(profileID)")
+                }
                 let advanced = service.fields.filter { $0.isAdvanced && !ReasoningEffort.managedOptions.contains($0.option) }
                 if !compact, !advanced.isEmpty {
                     DisclosureGroup("高级", isExpanded: $showAdvanced) {
                         ForEach(advanced) { FieldRow(model: model, serviceID: service.id, field: $0).id("\($0.id)-\(profileID)") }
                     }
                 }
-                if service.id == TranslationServiceCatalog.appleServiceID { appleRow }
-                if case .agent(let agent) = service.backend { AgentStatusRow(agent: agent, settings: settings, service: service) }
             }
-        } header: {
-            Text("翻译服务")
         }
         .task(id: "\(settings.translationService)-\(settings.translationOptions.langIn)-\(settings.translationOptions.langOut)") {
             guard settings.translationService == TranslationServiceCatalog.appleServiceID else { return }
@@ -189,6 +198,12 @@ struct ServiceSection: View {
                 }
             }
         }
+    }
+
+    /// An agent's row says whether it is installed, so the sheet has it too; a test needs the whole page.
+    private func hasStatus(_ service: TranslationService) -> Bool {
+        if case .agent = service.backend { return true }
+        return !compact && service.category != .free
     }
 
     @ViewBuilder
@@ -217,38 +232,141 @@ struct ServiceSection: View {
         return [(String(localized: "我的服务"), mine),
                 (String(localized: "免费"), all.filter { $0.category == .free }),
                 (String(localized: "本机"), all.filter { $0.category == .local }),
-                (String(localized: "本机智能体（无需 Key）"), all.filter { $0.category == .agent }),
+                (String(localized: "本机智能体（这台 Mac 上未找到）"), all.filter { $0.category == .agent }),
                 (String(localized: "大模型 API"), all.filter { $0.category == .llm }),
                 (String(localized: "机器翻译 API"), all.filter { $0.category == .machine })].filter { !$0.services.isEmpty }
     }
 }
 
-/// Whether the chosen agent is on this Mac, and where.
-private struct AgentStatusRow: View {
-    let agent: LocalAgent
-    let settings: AppSettings
+/// A tile like those of System Settings, saying what kind of service this is.
+private struct ServiceIcon: View {
     let service: TranslationService
-    @State private var location: URL??
 
-    var body: some View {
-        Group {
-            switch location {
-            case .some(.some(let url)):
-                Label("已找到 \(TranslationSettingsPane.abbreviatedPath(url.path))", systemImage: "checkmark.circle").foregroundStyle(.secondary)
-            case .some(.none):
-                Label("没有在这台 Mac 上找到 \(agent.command)，请先安装并登录", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-            case .none:
-                ProgressView().controlSize(.small)
-            }
-        }
-        .task(id: pathValue) {
-            let path = pathValue
-            location = .some(await Task.detached { agent.locate(customPath: path) }.value)
+    private var symbol: String {
+        if service.id == TranslationServiceCatalog.appleServiceID { return "apple.logo" }
+        switch service.category {
+        case .free: return "globe"
+        case .local: return "desktopcomputer"
+        case .agent: return "terminal.fill"
+        case .llm: return "sparkles"
+        case .machine: return "character.book.closed.fill"
         }
     }
 
+    private var color: Color {
+        switch service.category {
+        case .free: .blue
+        case .local: .gray
+        case .agent: .indigo
+        case .llm: .purple
+        case .machine: .teal
+        }
+    }
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 26, height: 26)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Where the service stands: the agent found on this Mac and its version, and what a test with one sentence says.
+private struct ServiceStatusRow: View {
+    let model: AppModel
+    let service: TranslationService
+    var canTest = true
+    @State private var testing = false
+    @State private var outcome: TranslationServiceTest.Outcome?
+    @State private var location: URL??
+    @State private var version: String?
+
+    private var agent: LocalAgent? {
+        if case .agent(let agent) = service.backend { return agent }
+        return nil
+    }
+
+    var body: some View {
+        LabeledContent {
+            if canTest {
+                Button(testing ? String(localized: "测试中…") : String(localized: "测试")) { test() }
+                    .disabled(testing || (agent != nil && location == .some(nil)))
+                    .accessibilityIdentifier("translationServiceTest")
+            }
+        } label: {
+            status
+        }
+        .task(id: pathValue) {
+            guard let agent else { return }
+            let path = pathValue
+            version = nil
+            let found = await Task.detached { agent.locate(customPath: path) }.value
+            location = .some(found)
+            if let found { version = await Task.detached { agent.version(at: found) }.value }
+        }
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        if testing {
+            Label {
+                Text("正在翻译一句话…")
+            } icon: {
+                ProgressView().controlSize(.small)
+            }
+            .foregroundStyle(.secondary)
+        } else if let outcome {
+            Label {
+                Text(outcome.message).textSelection(.enabled)
+            } icon: {
+                Image(systemName: outcome.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(outcome.succeeded ? Color.green : Color.orange)
+            }
+        } else if agent != nil {
+            switch location {
+            case .some(.some(let url)):
+                Label {
+                    Text(found(url))
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                }
+                .foregroundStyle(.secondary)
+            case .some(.none):
+                Label {
+                    Text("没有在这台 Mac 上找到 \(agent?.command ?? "")，请先安装并登录")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                }
+            case .none:
+                ProgressView().controlSize(.small)
+            }
+        } else {
+            Text("翻译一句话，确认这个服务能用").foregroundStyle(.secondary)
+        }
+    }
+
+    private func found(_ url: URL) -> String {
+        let path = TranslationSettingsPane.abbreviatedPath(url.path)
+        return version.map { String(localized: "已找到 \(path)（\($0)）") } ?? String(localized: "已找到 \(path)")
+    }
+
     private var pathValue: String {
-        service.fields.first { $0.option.hasSuffix("-path") }.flatMap { settings.translationFields[service.id]?[$0.option] } ?? ""
+        service.fields.first { $0.option.hasSuffix("-path") }.flatMap { model.settings.translationFields[service.id]?[$0.option] } ?? ""
+    }
+
+    private func test() {
+        testing = true
+        outcome = nil
+        let fields = model.settings.translationFields[service.id] ?? [:]
+        let secrets = (try? model.translations.secrets.secrets(for: service)) ?? [:]
+        let language = model.settings.translationOptions.langOut
+        let id = service.id
+        Task {
+            outcome = await TranslationServiceTest.run(serviceID: id, fields: fields, secrets: secrets, language: language)
+            testing = false
+        }
     }
 }
 
@@ -326,33 +444,22 @@ private struct OptionsSection: View {
     var compact = false
 
     var body: some View {
-        Section {
-            Picker("原文语言", selection: $settings.translationOptions.langIn) {
-                ForEach(TranslationOptions.commonLanguages, id: \.code) { Text($0.name).tag($0.code) }
+        if compact {
+            Section("选项") {
+                languageRows
+                outputRows
+                tablesToggle
             }
-            Picker("译文语言", selection: $settings.translationOptions.langOut) {
-                ForEach(TranslationOptions.commonLanguages, id: \.code) { Text($0.name).tag($0.code) }
-            }
-            Picker("生成", selection: $settings.translationOptions.outputs) {
-                Text("纯译文和双语对照").tag(TranslationOptions.Outputs.both)
-                Text("仅纯译文").tag(TranslationOptions.Outputs.mono)
-                Text("仅双语对照").tag(TranslationOptions.Outputs.dual)
-            }
-            if settings.translationOptions.outputs != .mono {
-                Picker("双语排版", selection: $settings.translationOptions.dualLayout) {
-                    Text("原文与译文左右并排").tag(TranslationOptions.DualLayout.sideBySide)
-                    Text("原文页与译文页交替").tag(TranslationOptions.DualLayout.alternatingPages)
+        } else {
+            Section("语言") { languageRows }
+            Section("输出") { outputRows }
+            Section("翻译内容") {
+                tablesToggle
+                Toggle(isOn: $settings.translationOptions.translateReferences) {
+                    Text("翻译参考文献")
+                    Text("默认保留参考文献列表的原文")
                 }
-            }
-            TextField("页码范围（选填）", text: Binding(get: { settings.translationOptions.pages ?? "" },
-                                                set: { settings.translationOptions.pages = $0.isEmpty ? nil : $0 }),
-                      prompt: Text("全部，例如 1-3,5"))
-            Toggle("翻译表格", isOn: $settings.translationOptions.translateTables)
-                .help("逐格翻译表格中的文字；数字和符号保持原样")
-            if !compact {
-                Toggle("翻译参考文献", isOn: $settings.translationOptions.translateReferences)
-                    .help("默认保留参考文献列表的原文")
-                LabeledContent("术语表（选填）") {
+                LabeledContent {
                     HStack {
                         Text(settings.translationOptions.glossaryFile?.lastPathComponent ?? String(localized: "未选择"))
                             .foregroundStyle(.secondary)
@@ -361,18 +468,60 @@ private struct OptionsSection: View {
                         }
                         Button("选择…", action: chooseGlossary)
                     }
+                } label: {
+                    Text("术语表（选填）")
+                    Text("CSV 文件，两列：原文, 译文")
                 }
-                Picker("同时请求数", selection: Binding(get: { settings.translationOptions.concurrency ?? 0 },
-                                                   set: { settings.translationOptions.concurrency = $0 == 0 ? nil : $0 })) {
+            }
+            Section("速度") {
+                Picker(selection: Binding(get: { settings.translationOptions.concurrency ?? 0 },
+                                          set: { settings.translationOptions.concurrency = $0 == 0 ? nil : $0 })) {
                     Text("自动").tag(0)
                     ForEach([1, 2, 4, 8, 12, 16], id: \.self) { Text("\($0)").tag($0) }
+                } label: {
+                    Text("同时请求数")
+                    Text("付费接口额度较高时调大可以更快；遇到限流时调小")
                 }
-                .help("同时发出的翻译请求数。付费接口额度较高时调大可以更快；遇到限流时调小")
-                Toggle("重新翻译（不使用缓存）", isOn: $settings.translationOptions.ignoreCache)
-                    .help("默认会复用同一篇论文用同一服务翻译过的段落，重试时更快、更省")
+                Toggle(isOn: $settings.translationOptions.ignoreCache) {
+                    Text("重新翻译（不使用缓存）")
+                    Text("默认会复用同一篇论文用同一服务翻译过的段落，重试时更快、更省")
+                }
             }
-        } header: {
-            Text(compact ? String(localized: "选项") : String(localized: "默认选项"))
+        }
+    }
+
+    @ViewBuilder
+    private var languageRows: some View {
+        Picker("原文语言", selection: $settings.translationOptions.langIn) {
+            ForEach(TranslationOptions.commonLanguages, id: \.code) { Text($0.name).tag($0.code) }
+        }
+        Picker("译文语言", selection: $settings.translationOptions.langOut) {
+            ForEach(TranslationOptions.commonLanguages, id: \.code) { Text($0.name).tag($0.code) }
+        }
+    }
+
+    @ViewBuilder
+    private var outputRows: some View {
+        Picker("生成", selection: $settings.translationOptions.outputs) {
+            Text("纯译文和双语对照").tag(TranslationOptions.Outputs.both)
+            Text("仅纯译文").tag(TranslationOptions.Outputs.mono)
+            Text("仅双语对照").tag(TranslationOptions.Outputs.dual)
+        }
+        if settings.translationOptions.outputs != .mono {
+            Picker("双语排版", selection: $settings.translationOptions.dualLayout) {
+                Text("原文与译文左右并排").tag(TranslationOptions.DualLayout.sideBySide)
+                Text("原文页与译文页交替").tag(TranslationOptions.DualLayout.alternatingPages)
+            }
+        }
+        TextField("页码范围（选填）", text: Binding(get: { settings.translationOptions.pages ?? "" },
+                                            set: { settings.translationOptions.pages = $0.isEmpty ? nil : $0 }),
+                  prompt: Text("全部，例如 1-3,5"))
+    }
+
+    private var tablesToggle: some View {
+        Toggle(isOn: $settings.translationOptions.translateTables) {
+            Text("翻译表格")
+            Text("逐格翻译表格中的文字；数字和符号保持原样")
         }
     }
 
@@ -384,8 +533,8 @@ private struct OptionsSection: View {
     }
 }
 
-/// "获取模型列表": fetches the service's models with the key and address entered above and lets the
-/// user pick one from a searchable list.
+/// The model chosen, in the same dress as the pop-up buttons around it. Opens a searchable list of the models the service
+/// offers, fetched with the key and address entered above; a name typed in the search field can be used as it is.
 struct ModelListButton: View {
     let model: AppModel
     let serviceID: String
@@ -399,92 +548,43 @@ struct ModelListButton: View {
     @State private var loading = false
     @State private var models: [String] = []
     @State private var error: String?
-    @State private var filter = ""
-    @State private var custom = ""
 
     var body: some View {
         Button {
             showing = true
             Task { await load() }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Text(current.isEmpty ? (placeholder.isEmpty ? String(localized: "默认") : placeholder) : current)
                     .foregroundStyle(current.isEmpty ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2).foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .background(Color.primary.opacity(0.1), in: Circle())
+                    .padding(.trailing, 3.5)
             }
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .help("选择模型")
         .accessibilityLabel(String(localized: "选择模型"))
         .popover(isPresented: $showing, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("选择模型").font(.headline)
-                    Spacer()
-                    if loading { ProgressView().controlSize(.small) }
-                    Button {
-                        Task { await load() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderless)
-                    .help("重新获取")
-                    .disabled(loading)
-                }
-                if loading && models.isEmpty {
-                    ProgressView("正在获取…").frame(maxWidth: .infinity, minHeight: 120)
-                } else if let error, models.isEmpty {
-                    ContentUnavailableView("无法获取模型列表", systemImage: "exclamationmark.triangle", description: Text(error))
-                        .frame(minHeight: 140)
-                } else {
-                    PopoverSearchField(prompt: String(localized: "搜索模型"), text: $filter)
-                    List(filtered, id: \.self) { name in
-                        Button {
-                            pick(name)
-                        } label: {
-                            HStack {
-                                Text(name)
-                                Spacer()
-                                if name == current { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .listStyle(.plain)
-                    // Let the popover's own glass show through, like a native menu.
-                    .scrollContentBackground(.hidden)
-                    .background(.clear)
-                    .frame(height: 240)
-                    Text("\(models.count) 个模型").font(.caption).foregroundStyle(.secondary)
-                }
-                Divider()
-                HStack(spacing: 6) {
-                    TextField("其他模型", text: $custom, prompt: Text("输入模型名称"))
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit { if !custom.isEmpty { pick(custom) } }
-                    Button("使用") { pick(custom) }.disabled(custom.trimmingCharacters(in: .whitespaces).isEmpty)
-                    if !current.isEmpty {
-                        Button("恢复默认") { pick("") }
-                    }
-                }
-            }
-            .padding(12)
-            .frame(width: 340)
+            ModelPickerPanel(current: current, models: models, loading: loading, error: error,
+                             reload: { Task { await load() } }, pick: pick)
+        }
+        .onAppear {
+            guard UserDefaults.standard.bool(forKey: "FolioPreviewModelPicker"), !showing else { return }
+            showing = true
+            Task { await load() }
         }
     }
 
     private func pick(_ name: String) {
         onPick(name.trimmingCharacters(in: .whitespaces))
-        custom = ""
         showing = false
-    }
-
-    private var filtered: [String] {
-        let q = filter.trimmingCharacters(in: .whitespaces).lowercased()
-        return q.isEmpty ? models : models.filter { $0.lowercased().contains(q) }
     }
 
     private func load() async {
@@ -506,6 +606,164 @@ struct ModelListButton: View {
     }
 }
 
+/// What the model button opens: one field to search or type a name, the models by family, and what to do at the bottom.
+private struct ModelPickerPanel: View {
+    let current: String
+    let models: [String]
+    let loading: Bool
+    let error: String?
+    let reload: () -> Void
+    let pick: (String) -> Void
+    @State private var filter = UserDefaults.standard.string(forKey: "FolioPreviewModelFilter") ?? ""
+    @State private var hovered: String?
+    @FocusState private var searching: Bool
+
+    private var query: String { filter.trimmingCharacters(in: .whitespaces) }
+
+    private var matches: [String] {
+        query.isEmpty ? models : models.filter { $0.lowercased().contains(query.lowercased()) }
+    }
+
+    /// What Return picks: the name exactly as typed if the list has it, else the first match, else the name as typed.
+    private var returnTarget: String? {
+        guard !query.isEmpty else { return nil }
+        return models.contains(query) ? query : matches.first ?? query
+    }
+
+    /// "gemini-3.8-flash" and "gemini-2.5-pro" under gemini; "openai/gpt-5" under openai. Only when that helps.
+    private var groups: [(name: String, models: [String])] {
+        guard query.isEmpty, models.count > 6 else { return [("", matches)] }
+        var order: [String] = []
+        var byFamily: [String: [String]] = [:]
+        for model in matches {
+            let family = model.split(whereSeparator: { "/-:".contains($0) }).first.map(String.init) ?? model
+            if byFamily[family] == nil { order.append(family) }
+            byFamily[family, default: []].append(model)
+        }
+        return order.count > 1 ? order.map { ($0, byFamily[$0]!) } : [("", matches)]
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PopoverSearchField(prompt: String(localized: "搜索或输入模型名称"), text: $filter, onSubmit: submit)
+                .focused($searching)
+                .padding(10)
+            Divider()
+            content
+                .frame(height: 260)
+            Divider()
+            footer
+        }
+        .frame(width: 360)
+        .onAppear { searching = true }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if loading && models.isEmpty {
+            ProgressView("正在获取…").frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    if let error, models.isEmpty {
+                        Label(error, systemImage: "exclamationmark.triangle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(10)
+                    }
+                    ForEach(groups, id: \.name) { group in
+                        if !group.name.isEmpty {
+                            Text(group.name)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.top, 8)
+                                .padding(.bottom, 2)
+                        }
+                        ForEach(group.models, id: \.self) { row($0) }
+                    }
+                    if !query.isEmpty, !models.contains(query) {
+                        row(query, title: String(localized: "使用“\(query)”"), symbol: "text.cursor")
+                    }
+                    if models.isEmpty, error == nil, query.isEmpty {
+                        Text("这个服务没有提供模型列表，请直接输入模型名称")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .padding(10)
+                    }
+                }
+                .padding(6)
+            }
+        }
+    }
+
+    private func row(_ name: String, title: String? = nil, symbol: String? = nil) -> some View {
+        Button {
+            pick(name)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: symbol ?? "checkmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(symbol == nil ? Color.accentColor : Color.secondary)
+                    .opacity(symbol != nil || name == current ? 1 : 0)
+                    .frame(width: 14)
+                Text(title ?? name)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+                if name == returnTarget {
+                    Image(systemName: "return")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(hovered == name ? Color.primary.opacity(0.1) : name == returnTarget ? Color.primary.opacity(0.06) : .clear,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            if inside { hovered = name } else if hovered == name { hovered = nil }
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 10) {
+            if loading {
+                // The list has its own spinner until there is a list.
+                if !models.isEmpty { ProgressView().controlSize(.small) }
+            } else {
+                Button(action: reload) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("重新获取")
+                .accessibilityLabel(String(localized: "重新获取"))
+            }
+            if !models.isEmpty {
+                Text(query.isEmpty ? String(localized: "\(models.count) 个模型") : String(localized: "\(matches.count) / \(models.count) 个模型"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !current.isEmpty {
+                Button("恢复默认") { pick("") }
+                    .buttonStyle(.borderless)
+                    .font(.callout)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func submit() {
+        if let returnTarget { pick(returnTarget) }
+    }
+}
+
 /// 推理强度: choices that depend on the service and the chosen model (TRANS-03).
 private struct ReasoningRow: View {
     @Bindable var settings: AppSettings
@@ -517,31 +775,52 @@ private struct ReasoningRow: View {
     }
 }
 
-/// The reasoning levels the service and model accept, as a segmented control beside the address, key and model.
+/// The thinking levels the service and model accept: a segmented control when they fit, otherwise a menu.
 struct ReasoningPicker: View {
     let serviceID: String
     @Binding var fields: [String: String]
+
+    private var selection: Binding<String> {
+        Binding(get: { ReasoningEffort.current(serviceID: serviceID, fields: fields) ?? "" },
+                set: { value in
+                    var updated = fields
+                    ReasoningEffort.set(value, serviceID: serviceID, fields: &updated)
+                    fields = updated
+                })
+    }
 
     var body: some View {
         switch ReasoningEffort.support(serviceID: serviceID, fields: fields) {
         case .none:
             EmptyView()
         case .unsupportedModel:
-            LabeledContent("推理强度") {
+            LabeledContent("思考程度") {
                 Text("当前模型不支持").foregroundStyle(.secondary)
             }
             .help("所选模型不是推理模型，不会发送推理强度参数")
-        case let .choices(choices, _):
-            Picker("推理强度", selection: Binding(
-                get: { ReasoningEffort.current(serviceID: serviceID, fields: fields) ?? "" },
-                set: { value in
-                    var updated = fields
-                    ReasoningEffort.set(value, serviceID: serviceID, fields: &updated)
-                    fields = updated
-                })) {
-                ForEach(choices) { Text($0.title).tag($0.value) }
+        case .decidedByModel(let level):
+            LabeledContent {
+                Text(level).foregroundStyle(.secondary)
+            } label: {
+                Text("思考程度")
+                Text("由所选模型决定，想换程度请换一个模型")
             }
-            .pickerStyle(.segmented)
+        case let .choices(choices, _):
+            if choices.count > 5 {
+                Picker(selection: selection) {
+                    ForEach(choices) { Text($0.title).tag($0.value) }
+                } label: {
+                    Text("思考程度")
+                    Text("越高译文可能越好，也越慢；翻译通常用低就够了")
+                }
+            } else {
+                Picker(selection: selection) {
+                    ForEach(choices) { Text($0.title).tag($0.value) }
+                } label: {
+                    Text("思考程度")
+                }
+                .pickerStyle(.segmented)
+            }
         }
     }
 }

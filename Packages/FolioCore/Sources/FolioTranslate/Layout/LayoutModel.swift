@@ -48,6 +48,12 @@ struct LayoutBlock: Sendable {
     var kind: BlockKind
     var lines: [LayoutLine]
     var translate: Bool
+    /// How a table cell sits in its column, from the other cells of the column (nil: not known).
+    var cellAlignment: CellAlignment?
+    /// In the middle of its column, or of the page, with room on both sides.
+    var centeredInColumn = false
+
+    enum CellAlignment: Sendable { case left, center, right }
 
     var rect: CGRect { lines.dropFirst().reduce(lines[0].rect) { $0.union($1.rect) } }
     var size: Double {
@@ -80,11 +86,20 @@ struct LayoutBlock: Sendable {
         let rest = lines.dropFirst().map(\.minX).min() ?? lines[0].minX
         return max(0, lines[0].minX - rest)
     }
-    /// Lines centred in the block rather than flush left (headings, short captions).
+    /// How far the lines after the first start right of it (a list item's text after its bullet).
+    var hangingIndent: Double {
+        guard lines.count > 1 else { return 0 }
+        let rest = lines.dropFirst().map(\.minX)
+        let lo = rest.min()!, hi = rest.max()!
+        guard hi - lo < size * 0.4, lo - lines[0].minX > size * 0.5, lo - lines[0].minX < size * 4 else { return 0 }
+        return lo - lines[0].minX
+    }
+    /// Lines centred in the block rather than flush left (headings, short captions). Centring is exact, so the lines'
+    /// middles agree to a fraction of an em; a list item's lines, starting after its bullet, come close but do not.
     var isCentered: Bool {
         let r = rect
-        return lines.allSatisfy { abs(($0.minX + $0.maxX) / 2 - r.midX) < size * 0.6 }
-            && lines.contains { $0.minX - r.minX > size * 1.5 }
+        guard lines.allSatisfy({ abs(($0.minX + $0.maxX) / 2 - r.midX) < max(1.5, size * 0.2) }) else { return false }
+        return lines.count == 1 ? centeredInColumn : lines.contains { $0.minX - r.minX > size * 0.8 && r.maxX - $0.maxX > size * 0.8 }
     }
 }
 
@@ -101,4 +116,6 @@ struct PageLayout: Sendable {
     var runs: [TextRun]
     /// Every glyph the page draws (`PageChar.glyphs` index into it).
     var glyphs: [Glyph] = []
+    /// The page's link annotations.
+    var links: [PageLink] = []
 }

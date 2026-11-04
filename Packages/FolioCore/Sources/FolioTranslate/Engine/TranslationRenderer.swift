@@ -43,6 +43,8 @@ final class RenderAudit: @unchecked Sendable {
         var lineCount: Int
         var pitch: Double
         var fontSize: Double
+        /// Each line's baseline and where it runs.
+        var lines: [(baseline: Double, minX: Double, maxX: Double)] = []
     }
     private(set) var entries: [Entry] = []
     var conflicts = 0
@@ -50,6 +52,8 @@ final class RenderAudit: @unchecked Sendable {
     var lostGlyphs = 0
     /// Glyphs drawn again in formulas.
     var formulaGlyphs = 0
+    /// Blocks that kept their text but moved, by page and block: how far.
+    var moved: [Int: [Int: Double]] = [:]
     private let lock = NSLock()
 
     /// Measures glyph ink (image bounds need a context; nothing is drawn into it).
@@ -67,10 +71,14 @@ final class RenderAudit: @unchecked Sendable {
                 if !ink.isNull, ink.width > 0 { boxes.append(ink.offsetBy(dx: origin.x, dy: origin.y)) }
             }
         }
-        boxes += result.transplants.map { $0.formula.rect.applying($0.transform) }
+        boxes += result.transplants.map { ($0.formula.ink.isNull ? $0.formula.rect : $0.formula.ink).applying($0.transform) }
+        let lines = result.lines.map { entry -> (baseline: Double, minX: Double, maxX: Double) in
+            let width = CTLineGetTypographicBounds(entry.line, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth(entry.line)
+            return (Double(entry.origin.y), Double(entry.origin.x), Double(entry.origin.x) + width)
+        }
         lock.withLock {
             entries.append(Entry(page: page, block: block, frame: frame, boxes: boxes, scale: result.scale, fits: result.fits,
-                                 lineCount: result.lines.count, pitch: result.pitch, fontSize: plan.fontSize))
+                                 lineCount: result.lines.count, pitch: result.pitch, fontSize: plan.fontSize, lines: lines))
         }
     }
 }
@@ -90,7 +98,15 @@ final class TranslationRenderer {
     struct Output {
         var mono: Data?
         var dual: Data?
+        /// For checking a render: what stays of the original, and what was set over it, each alone (`auditLayers`).
+        var base: Data?
+        var overlay: Data?
     }
+
+    /// Also produce `Output.base` and `Output.overlay`.
+    var auditLayers = false
+
+    private enum Layers { case all, base, overlay }
 
     /// Renders `pages` (layouts in page order). `translations` maps segment ids to translated text; segments
     /// without a translation keep their original text (partial previews).
@@ -101,6 +117,8 @@ final class TranslationRenderer {
         let overlayData = NSMutableData()
         var transplants: [Int: [Transplant]] = [:]
         var removals: [Int: PageRemoval] = [:]
+        // Where the links of translated text went, by page and link.
+        var linkPlaces: [Int: [Int: [CGRect]]] = [:]
         if let consumer = CGDataConsumer(data: overlayData as CFMutableData),
            let context = CGContext(consumer: consumer, mediaBox: nil, nil) {
             let typesetter = Typesetter(language: language)
@@ -109,18 +127,26 @@ final class TranslationRenderer {
                 let info = [kCGPDFContextMediaBox: Data(bytes: &box, count: MemoryLayout<CGRect>.size)] as CFDictionary
                 context.beginPDFPage(info)
                 // Operators that also draw text staying in the original must stay.
-                let pageSegments = (bySegment[layout.number] ?? []).filter { translations[$0.id]?.isEmpty == false }
+                let onPage = bySegment[layout.number] ?? []
+                let leads = Dictionary(onPage.filter(\.isLead).map { ($0.block, $0) }, uniquingKeysWith: { a, _ in a })
+                let pageSegments = onPage.filter { !$0.isLead && translations[$0.id]?.isEmpty == false }
                 let translatedBlocks = Set(pageSegments.map(\.block))
                 var kept: Set<Int> = []
                 for (index, block) in layout.blocks.enumerated() where !translatedBlocks.contains(index) {
                     for line in block.lines { for c in line.chars { kept.formUnion(c.glyphs) } }
                 }
-                var planned: [(segment: TextSegment, frame: CGRect, plan: Typesetter.Plan)] = []
-                for segment in pageSegments {
-                    guard let text = translations[segment.id] else { continue }
-
+                var planned: [(segment: TextSegment, frame: CGRect, plan: Typesetter.Plan, text: String)] = []
+                for var segment in pageSegments {
+                    guard var text = translations[segment.id] else { continue }
+                    // A heading run into the paragraph goes before it, its formulas first.
+                    if let lead = leads[segment.block] {
+                        let shift = lead.formulas.count
+                        let body = Placeholders.replace(in: text) { TextSegment.placeholder($0 + shift) }
+                        text = Typesetter.leadStart + (translations[lead.id] ?? lead.source) + Typesetter.leadEnd + " " + body
+                        segment.formulas = lead.formulas + segment.formulas
+                    }
                     let frame = Self.frame(for: segment.block, in: layout)
-                    planned.append((segment, frame, typesetter.plan(text, block: layout.blocks[segment.block], formulas: segment.formulas, frame: frame)))
+                    planned.append((segment, frame, typesetter.plan(text, block: layout.blocks[segment.block], formulas: segment.formulas, frame: frame), text))
                 }
                 // The cells of a table share one size: the size most of them fit at.
                 for table in layout.tables {
@@ -133,19 +159,69 @@ final class TranslationRenderer {
                     let common = scales[scales.count / 2]
                     for k in cells where planned[k].plan.scale > common + 0.001 {
                         let entry = planned[k]
-                        planned[k].plan = typesetter.plan(translations[entry.segment.id] ?? "", block: layout.blocks[entry.segment.block],
+                        planned[k].plan = typesetter.plan(entry.text, block: layout.blocks[entry.segment.block],
                                                           formulas: entry.segment.formulas, frame: entry.frame, maxScale: common)
                     }
                 }
+                // Running text is set in stretches of even lines; the rest fills its own space.
+                var flowing = planned.map { PageFlow.Entry(block: $0.segment.block, frame: $0.frame, text: $0.text, formulas: $0.segment.formulas, plan: $0.plan) }
+                let outcome = PageFlow.layOut(&flowing, layout: layout, typesetter: typesetter)
+                let placements = outcome.placements
+                for k in planned.indices {
+                    planned[k].plan = flowing[k].plan
+                    planned[k].frame = flowing[k].frame
+                }
                 let pitches = Self.harmonizedPitches(planned.map { ($0.plan, layout.blocks[$0.segment.block]) })
+                // Displayed formulas going along with the text around them are drawn again, like the formulas in lines.
+                let moves = outcome.moves.filter { abs($0.dy) >= 0.3 }
+                for move in moves {
+                    for index in move.blocks {
+                        for line in layout.blocks[index].lines { for c in line.chars { kept.subtract(c.glyphs) } }
+                    }
+                }
                 var removal = PageRemoval(kept: kept)
+                for move in moves {
+                    for index in move.blocks { removal.add(layout.blocks[index]) }
+                    // Its rules too: the whole area, rows and all.
+                    let area = move.span.rect.insetBy(dx: -0.5, dy: -move.span.size * 0.15)
+                    removal.rects.append(area)
+                    var span = move.span
+                    span.links = []
+                    for index in move.blocks {
+                        for line in layout.blocks[index].lines {
+                            for c in line.chars {
+                                if let link = c.link, let page = layout.links.first(where: { $0.index == link }) {
+                                    linkPlaces[layout.number, default: [:]][link] = page.rects.map { $0.offsetBy(dx: 0, dy: move.dy) }
+                                }
+                            }
+                        }
+                        audit?.moved[layout.number, default: [:]][index] = move.dy
+                    }
+                    transplants[layout.number, default: []].append(Transplant(formula: span, origin: CGPoint(x: span.rect.minX, y: span.baseline + move.dy), scale: 1))
+                }
                 for (k, entry) in planned.enumerated() {
                     let block = layout.blocks[entry.segment.block]
-                    let result = typesetter.finish(entry.plan, pitch: pitches[k], formulas: entry.segment.formulas)
+                    let placement = placements[k]
+                    let result = typesetter.finish(entry.plan, pitch: placement?.pitch ?? pitches[k], firstBaseline: placement?.firstBaseline, formulas: entry.segment.formulas)
                     typesetter.draw(result, in: context)
                     transplants[layout.number, default: []] += result.transplants
                     removal.add(block)
-                    audit?.record(page: layout.number, block: entry.segment.block, frame: entry.frame, result: result, plan: entry.plan)
+                    for line in block.lines {
+                        for c in line.chars {
+                            if let link = c.link, linkPlaces[layout.number]?[link] == nil { linkPlaces[layout.number, default: [:]][link] = [] }
+                        }
+                    }
+                    for transplant in result.transplants {
+                        for span in transplant.formula.links {
+                            linkPlaces[layout.number, default: [:]][span.link, default: []].append(span.rect.applying(transplant.transform).insetBy(dx: -0.5, dy: 0))
+                        }
+                    }
+                    // Links over running words go with the same stretch of the translation.
+                    let held = Set(entry.segment.formulas.flatMap(\.allLinks).map(\.link))
+                    for link in Set(block.lines.flatMap { $0.chars.compactMap(\.link) }).subtracting(held) {
+                        linkPlaces[layout.number, default: [:]][link] = LinkText.places(of: link, in: block, lines: result.lines, fontSize: entry.plan.fontSize)
+                    }
+                    audit?.record(page: layout.number, block: entry.segment.block, frame: placement?.frame ?? entry.frame, result: result, plan: entry.plan)
                 }
                 removals[layout.number] = removal
                 context.endPDFPage()
@@ -154,7 +230,7 @@ final class TranslationRenderer {
         }
         guard let overlay = CGPDFDocument(CGDataProvider(data: overlayData as CFData)!) else { return Output() }
 
-        func compose(dual: Bool) -> Data {
+        func compose(dual: Bool, layers: Layers = .all) -> Data {
             let composer = PDFComposer(source: source, streamCache: streamCache)
             for layout in layouts { _ = composer.reserveOutputPage(forSourcePage: layout.number) }
             for (index, layout) in layouts.enumerated() {
@@ -172,16 +248,38 @@ final class TranslationRenderer {
                 audit?.conflicts += edits.values.filter { if case .replace = $0 { return true } else { return false } }.count
                 // Rules that are part of formulas (fraction bars, radicals) move with the formula.
                 var droppedRules: [Int] = []
+                // The formulas' own areas too: a fraction's bar may lie outside the line's box.
+                let pageFormulas = transplants[layout.number] ?? []
+                let formulaAreas = pageFormulas.map { $0.formula.rect.insetBy(dx: -0.5, dy: -$0.formula.size * 0.15) }
                 for (m, mark) in interpreter.marks.enumerated() where mark.kind != .image && !mark.isWhite
-                    && mark.rect.height < 4 && rects.contains(where: { $0.insetBy(dx: -0.5, dy: -0.5).contains(mark.rect) }) {
+                    && (mark.rect.height < 4 && rects.contains(where: { $0.insetBy(dx: -0.5, dy: -0.5).contains(mark.rect) })
+                        || Self.isRule(mark.rect, ofFormulaIn: formulaAreas)) {
                     for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
                     droppedRules.append(m)
                 }
-                if let edited = composer.pageForm(layout.number, interpreter: interpreter, edits: edits) {
+                // Pictures set among the words go with them.
+                for transplant in pageFormulas {
+                    for m in transplant.formula.icons where m < interpreter.marks.count {
+                        let mark = interpreter.marks[m]
+                        for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+                    }
+                }
+                // A coloured chip tight around a formula moves with it.
+                var chips: [Int: Int] = [:]
+                for transplant in transplants[layout.number] ?? [] {
+                    let formula = transplant.formula
+                    for (m, mark) in interpreter.marks.enumerated() where mark.kind == .fill && !mark.isWhite && !mark.hasCurves && chips[m] == nil
+                        && mark.rect.height >= 4 && mark.rect.contains(CGPoint(x: formula.rect.midX, y: formula.baseline + formula.size * 0.25))
+                        && mark.rect.width < formula.rect.width + formula.size * 2 && mark.rect.height < formula.size * 2 {
+                        chips[m] = transplant.formula.glyphs.first ?? -1
+                        for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+                    }
+                }
+                if layers != .overlay, let edited = composer.pageForm(layout.number, interpreter: interpreter, edits: edits) {
                     xobjects["E"] = edited
                     content += "q /E Do Q\n"
                 }
-                let debugEdited = ProcessInfo.processInfo.environment["FOLIO_DEBUG_EDITED_ONLY"] != nil
+                let debugEdited = layers == .base || ProcessInfo.processInfo.environment["FOLIO_DEBUG_EDITED_ONLY"] != nil
                 if !debugEdited, let text = composer.foreignPageForm(overlay, page: index + 1) {
                     xobjects["T"] = text
                     content += "q /T Do Q\n"
@@ -207,9 +305,25 @@ final class TranslationRenderer {
                     }
                     drawnOrphans.formUnion(glyphs[formula.glyphs.count...])
                     audit?.formulaGlyphs += glyphs.count
-                    let rules = droppedRules.filter { area.contains(interpreter.marks[$0].rect.insetBy(dx: 0.1, dy: 0)) }
+                    let rules = droppedRules.filter { Self.isRule(interpreter.marks[$0].rect, ofFormulaIn: [area]) }
+                        + chips.filter { $0.value == (formula.glyphs.first ?? -1) }.map(\.key)
                     let t = transplant.transform
                     content += "q \(PDFValue.format(t.a)) 0 0 \(PDFValue.format(t.d)) \(PDFValue.format(t.tx)) \(PDFValue.format(t.ty)) cm\n"
+                    func matrix(_ m: CGAffineTransform) -> String {
+                        [m.a, m.b, m.c, m.d, m.tx, m.ty].map { PDFValue.format(Double($0)) }.joined(separator: " ")
+                    }
+                    for m in formula.icons {
+                        if let image = interpreter.images[m], case .ref(let number) = composer.copier.copy(stream: image.stream) {
+                            let name = "FolioI\(xobjects.count)"
+                            xobjects[name] = number
+                            content += "q " + matrix(image.matrix) + " cm /\(name) Do Q\n"
+                        } else if let ctm = interpreter.paths[m], let stream = interpreter.streams[interpreter.marks[m].location.stream] {
+                            // A shape: its own path, in its own colour.
+                            let mark = interpreter.marks[m]
+                            let ops = mark.opRange.map { String(decoding: stream.source[stream.ops[$0].range], as: UTF8.self) }.joined(separator: "\n")
+                            content += "q " + matrix(ctm) + " cm \(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg\n" + ops + "\nQ\n"
+                        }
+                    }
                     content += Self.drawing(glyphs: glyphs.sorted(), rules: rules, interpreter: interpreter) { font in
                         if let name = fontNames[font] { return name }
                         let name = "FolioG\(fontNames.count)"
@@ -220,9 +334,11 @@ final class TranslationRenderer {
                     content += "Q\n"
                 }
                 let outputPage = composer.reserveOutputPage(forSourcePage: layout.number)
+                let places = linkPlaces[layout.number] ?? [:]
                 if !dual {
                     composer.addPage(object: outputPage, mediaBox: geometry.mediaBox, cropBox: geometry.cropBox, rotation: geometry.rotation,
-                                     content: Data(content.utf8), xobjects: xobjects, fonts: fonts, annotations: composer.links(ofSourcePage: layout.number))
+                                     content: Data(content.utf8), xobjects: xobjects, fonts: fonts,
+                                     annotations: composer.links(ofSourcePage: layout.number, placement: places))
                     continue
                 }
                 guard let original = composer.pageForm(layout.number) else { continue }
@@ -240,19 +356,30 @@ final class TranslationRenderer {
                     composer.addPage(object: outputPage, mediaBox: media, rotation: geometry.rotation, content: Data(both.utf8),
                                      xobjects: ["O": original, "M": translatedForm],
                                      annotations: composer.links(ofSourcePage: layout.number)
-                                        + composer.links(ofSourcePage: layout.number, offset: CGPoint(x: width, y: 0)))
+                                        + composer.links(ofSourcePage: layout.number, offset: CGPoint(x: width, y: 0), placement: places))
                 case .alternatingPages:
                     composer.addPage(object: outputPage, mediaBox: geometry.mediaBox, cropBox: geometry.cropBox, rotation: geometry.rotation,
                                      content: Data("q /O Do Q\n".utf8), xobjects: ["O": original],
                                      annotations: composer.links(ofSourcePage: layout.number))
                     composer.addPage(mediaBox: geometry.mediaBox, cropBox: geometry.cropBox, rotation: geometry.rotation,
                                      content: Data("q /M Do Q\n".utf8), xobjects: ["M": translatedForm],
-                                     annotations: composer.links(ofSourcePage: layout.number))
+                                     annotations: composer.links(ofSourcePage: layout.number, placement: places))
                 }
             }
             return composer.finish(title: title)
         }
-        return Output(mono: wantMono ? compose(dual: false) : nil, dual: wantDual ? compose(dual: true) : nil)
+        return Output(mono: wantMono ? compose(dual: false) : nil, dual: wantDual ? compose(dual: true) : nil,
+                      base: auditLayers ? compose(dual: false, layers: .base) : nil,
+                      overlay: auditLayers ? compose(dual: false, layers: .overlay) : nil)
+    }
+
+    /// Whether a thin mark belongs to a formula in one of `areas`: a fraction's bar (a little wider than what is over and
+    /// under it), a root's line, the sides of a big bracket. Its middle is inside, and it hardly reaches out.
+    static func isRule(_ rect: CGRect, ofFormulaIn areas: [CGRect]) -> Bool {
+        guard min(rect.width, rect.height) < 2.5 else { return false }
+        return areas.contains { area in
+            area.insetBy(dx: -2.5, dy: -0.5).contains(rect) && area.contains(CGPoint(x: rect.midX, y: rect.midY))
+        }
     }
 
     // MARK: Spacing
@@ -285,7 +412,9 @@ final class TranslationRenderer {
         for (k, other) in layout.blocks.enumerated() where k != index {
             // PDFKit's selections are taller than the type: below a block, the next one starts at its cap height.
             var r = other.rect
-            let top = other.lines[0].baseline + other.lines[0].size * 0.8
+            // A formula reaches as high as its scripts and accents do.
+            let top = other.kind == .formula ? other.lines.flatMap(\.chars).filter { !$0.isSpace }.map { Double($0.inkBox.maxY) }.max() ?? Double(r.maxY)
+                : other.lines[0].baseline + other.lines[0].size * 0.8
             if top < r.maxY, top > r.minY { r = CGRect(x: r.minX, y: r.minY, width: r.width, height: top - r.minY) }
             obstacles.append(r)
         }
@@ -307,6 +436,11 @@ final class TranslationRenderer {
         let maxExtension = block.kind == .tableCell ? size * 0.2 : max(block.pitch * 2, rect.height * 0.5)
         var bottom = max(min(rect.minY, belowTop + gap), rect.minY - maxExtension)
         if belowTop + gap > rect.minY { bottom = min(belowTop + gap, lastBaseline - size * 0.25) }
+        // Whatever the original's last line got away with, the lines of a translation stay above a rule right under them.
+        if block.lines.count > 1 {
+            let rules = layout.graphics.filter { $0.height < 2.5 && $0.maxX > horizontal.minX && $0.minX < horizontal.maxX && $0.maxY <= lastBaseline - size * 0.1 }
+            if let rule = rules.map(\.maxY).max() { bottom = max(bottom, rule + 0.2) }
+        }
         // Upwards: not into the descenders of the line above (rows of a table set an em apart).
         var top = rect.maxY
         let firstBaseline = block.lines[0].baseline
@@ -315,6 +449,13 @@ final class TranslationRenderer {
                   low.baseline < firstBaseline + size * 1.8,
                   other.rect.maxX > horizontal.minX, other.rect.minX < horizontal.maxX else { continue }
             top = min(top, max(low.baseline - low.size * 0.14 - size * 0.04, firstBaseline + size * 0.6))
+        }
+        // Nor into a rule right above it (the rule over a table's header).
+        if block.lines.count == 1 {
+            for g in layout.graphics where g.height < 2.5 && g.minX < horizontal.maxX && g.maxX > horizontal.minX
+                && g.minY > firstBaseline + size * 0.4 && g.minY < firstBaseline + size * 1.8 {
+                top = min(top, max(g.minY - size * 0.02, firstBaseline + size * 0.6))
+            }
         }
         var frame = CGRect(x: rect.minX, y: bottom, width: rect.width, height: top - bottom)
 
@@ -326,6 +467,12 @@ final class TranslationRenderer {
             let limit = inTable ? size * 3 : max(rect.width, size * 30)
             let maxX = min(right - gap, rect.maxX + limit)
             if maxX > frame.maxX { frame.size.width = maxX - frame.minX }
+            if block.isCentered, block.kind != .tableCell {
+                // Growing on both sides keeps it centred.
+                let left = obstacles.filter { $0.maxX <= rect.minX + 0.5 && $0.minY < band.maxY && $0.maxY > band.minY }.map(\.maxX).max() ?? page.minX
+                let grow = max(0, min(right - gap - rect.maxX, rect.minX - left - gap, limit))
+                frame = CGRect(x: rect.minX - grow, y: frame.minY, width: rect.width + 2 * grow, height: frame.height)
+            }
             if block.kind == .tableCell {
                 // Cells grow on both sides, so centred text stays centred, into at most half the space between them
                 // and their neighbours (which may grow too).
@@ -333,8 +480,17 @@ final class TranslationRenderer {
                     ?? rect.maxX + size * 2
                 let left = obstacles.filter { $0.maxX <= rect.minX + 0.5 && $0.minY < band.maxY && $0.maxY > band.minY }.map(\.maxX).max()
                     ?? rect.minX - size * 2
-                let grow = max(0, min((right - rect.maxX) / 2, (rect.minX - left) / 2, size * 3) - 0.5)
-                frame = CGRect(x: rect.minX - grow, y: frame.minY, width: rect.width + 2 * grow, height: frame.height)
+                switch block.cellAlignment {
+                case .left?:
+                    // Its column's left edge stays; it grows to the right.
+                    frame = CGRect(x: rect.minX, y: frame.minY, width: rect.width + max(0, min(right - rect.maxX - size * 0.4, size * 4)), height: frame.height)
+                case .right?:
+                    let grow = max(0, min(rect.minX - left - size * 0.4, size * 4))
+                    frame = CGRect(x: rect.minX - grow, y: frame.minY, width: rect.width + grow, height: frame.height)
+                default:
+                    let grow = max(0, min((right - rect.maxX) / 2, (rect.minX - left) / 2, size * 3) - 0.5)
+                    frame = CGRect(x: rect.minX - grow, y: frame.minY, width: rect.width + 2 * grow, height: frame.height)
+                }
             }
         }
         return frame
@@ -440,6 +596,18 @@ final class TranslationRenderer {
     /// filled rectangles. `fontName` names the resource for a font index.
     static func drawing(glyphs: [Int], rules: [Int], interpreter: ContentInterpreter, fontName: (Int) -> String) -> String {
         var out = ""
+        // Chips go under the glyphs; bars and radicals are drawn after them.
+        func box(_ r: Int) -> String {
+            let mark = interpreter.marks[r]
+            var rect = mark.rect
+            if mark.kind == .stroke {
+                let w = max(mark.lineWidth, 0.3)
+                rect = rect.insetBy(dx: rect.height < rect.width ? 0 : -w / 2, dy: rect.height < rect.width ? -w / 2 : 0)
+            }
+            return "\(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg "
+                + "\(PDFValue.format(rect.minX)) \(PDFValue.format(rect.minY)) \(PDFValue.format(rect.width)) \(PDFValue.format(rect.height)) re f\n"
+        }
+        for r in rules where interpreter.marks[r].rect.height >= 4 { out += box(r) }
         var font = -1
         var color: RGBColor?
         var mode = -1
@@ -468,16 +636,7 @@ final class TranslationRenderer {
             }
             out += "ET\n"
         }
-        for r in rules {
-            let mark = interpreter.marks[r]
-            var rect = mark.rect
-            if mark.kind == .stroke {
-                let w = max(mark.lineWidth, 0.3)
-                rect = rect.insetBy(dx: rect.height < rect.width ? 0 : -w / 2, dy: rect.height < rect.width ? -w / 2 : 0)
-            }
-            out += "\(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg "
-                + "\(PDFValue.format(rect.minX)) \(PDFValue.format(rect.minY)) \(PDFValue.format(rect.width)) \(PDFValue.format(rect.height)) re f\n"
-        }
+        for r in rules where interpreter.marks[r].rect.height < 4 { out += box(r) }
         return out
     }
 }

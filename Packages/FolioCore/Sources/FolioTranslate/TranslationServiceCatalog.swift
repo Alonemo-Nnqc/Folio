@@ -182,7 +182,57 @@ public enum TranslationServiceCatalog {
         .init(id: "cursoragent", displayName: "Cursor CLI", backend: .agent(.cursor), category: .agent, fields: [
             .init(option: "--cursor-agent-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--cursor-agent-path", command: "cursor-agent"),
-        ], note: String(localized: "调用本机已登录的 Cursor CLI，无需配置 Key", bundle: .module)),
+        ], note: String(localized: "调用本机已登录的 Cursor CLI，无需配置 Key\nCursor 应用不带这个命令，需要单独安装 Cursor CLI", bundle: .module)),
+        .init(id: "grokcli", displayName: "Grok CLI", backend: .agent(.grok), category: .agent, fields: [
+            .init(option: "--grok-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--grok-cli-path", command: "grok"),
+        ], note: String(localized: "调用本机已登录的 Grok CLI，无需配置 Key", bundle: .module)),
+        .init(id: "antigravitycli", displayName: "Antigravity CLI", backend: .agent(.antigravity), category: .agent, fields: [
+            .init(option: "--antigravity-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--antigravity-cli-path", command: "agy"),
+        ], note: String(localized: "调用本机已登录的 Antigravity 命令行（agy），无需配置 Key", bundle: .module)),
+        .init(id: "copilotcli", displayName: "GitHub Copilot CLI", backend: .agent(.copilot), category: .agent, fields: [
+            .init(option: "--copilot-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--copilot-cli-path", command: "copilot"),
+        ], note: String(localized: "调用本机已登录的 GitHub Copilot CLI，无需配置 Key", bundle: .module)),
+        .init(id: "kirocli", displayName: "Kiro CLI", backend: .agent(.kiro), category: .agent, fields: [
+            .init(option: "--kiro-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--kiro-cli-path", command: "kiro-cli"),
+        ], note: String(localized: "调用本机已登录的 Kiro CLI，无需配置 Key", bundle: .module)),
+        .init(id: "clinecli", displayName: "Cline CLI", backend: .agent(.cline), category: .agent, fields: [
+            .init(option: "--cline-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--cline-cli-path", command: "cline"),
+        ], note: String(localized: "调用本机已配置的 Cline CLI，无需在 Folio 中配置 Key", bundle: .module)),
+        .init(id: "kimicli", displayName: "Kimi CLI", backend: .agent(.kimi), category: .agent, fields: [
+            .init(option: "--kimi-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--kimi-cli-path", command: "kimi"),
+        ], note: String(localized: "调用本机已登录的 Kimi CLI，无需配置 Key", bundle: .module)),
+        .init(id: "droidcli", displayName: "Factory Droid", backend: .agent(.droid), category: .agent, fields: [
+            .init(option: "--droid-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--droid-path", command: "droid"),
+        ], note: String(localized: "调用本机已登录的 Factory Droid，无需配置 Key", bundle: .module)),
+        .init(id: "ampcli", displayName: "Amp", backend: .agent(.amp), category: .agent, fields: [
+            agentPath("--amp-path", command: "amp"),
+        ], note: String(localized: "调用本机已登录的 Amp，模型由 Amp 决定", bundle: .module)),
+        .init(id: "gooseagent", displayName: "goose", backend: .agent(.goose), category: .agent, fields: [
+            .init(option: "--goose-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--goose-path", command: "goose"),
+        ], note: String(localized: "调用本机已配置的 goose，无需在 Folio 中配置 Key", bundle: .module)),
+        .init(id: "picli", displayName: "pi", backend: .agent(.pi), category: .agent, fields: [
+            .init(option: "--pi-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: "provider/model"),
+            agentPath("--pi-path", command: "pi"),
+        ], note: String(localized: "调用本机已配置的 pi，无需在 Folio 中配置 Key", bundle: .module)),
+        .init(id: "hermesagent", displayName: "Hermes Agent", backend: .agent(.hermes), category: .agent, fields: [
+            .init(option: "--hermes-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
+            agentPath("--hermes-path", command: "hermes"),
+        ], note: String(localized: "调用本机已配置的 Hermes Agent（需先运行 hermes model 选好模型）", bundle: .module)),
+        .init(id: "openclawagent", displayName: "OpenClaw", backend: .agent(.openclaw), category: .agent, fields: [
+            .init(option: "--openclaw-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: "provider/model"),
+            agentPath("--openclaw-path", command: "openclaw"),
+        ], note: String(localized: "调用本机已配置的 OpenClaw，无需在 Folio 中配置 Key", bundle: .module)),
+        .init(id: "deepseekharness", displayName: "DeepSeek Harness", backend: .agent(.deepseek), category: .agent, fields: [
+            agentPath("--deepseek-harness-path", command: "dsh"),
+        ], note: String(localized: "调用本机已配置的 DeepSeek Harness（dsh），模型由它的配置决定", bundle: .module)),
         // Large language models
         .init(id: "openai", displayName: "OpenAI", backend: .openAI(defaultBase: "https://api.openai.com/v1"), category: .llm, fields: [
             apiKey("--openai-api-key"),

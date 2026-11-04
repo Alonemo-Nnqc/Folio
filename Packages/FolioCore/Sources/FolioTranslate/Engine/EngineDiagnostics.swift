@@ -201,7 +201,7 @@ extension EngineDiagnostics {
         var t = Date()
         let layouts = analyzer.analyze(document: document, cgDocument: cg, pages: numbers)
         var report = String(format: "layout %.2f s\n", Date().timeIntervalSince(t))
-        let segments = layouts.flatMap(SegmentBuilder.segments(for:))
+        let segments = SegmentBuilder.segments(for: layouts, target: "zh")
         let sample = Array("本文提出了一种简单而有效的方法，用于在未知目标域上提升语义分割模型的泛化能力。我们在多个基准数据集上进行了大量实验，结果表明该方法优于现有技术。")
         var translations: [String: String] = [:]
         for segment in segments {
@@ -259,7 +259,7 @@ extension EngineDiagnostics {
         var analyzer = LayoutAnalyzer()
         let layouts = analyzer.analyze(document: document, cgDocument: cg, pages: [page])
         var out = ""
-        for segment in layouts.flatMap(SegmentBuilder.segments(for:)) where needle.isEmpty || segment.source.contains(needle) {
+        for segment in layouts.flatMap({ SegmentBuilder.segments(for: $0) }) where needle.isEmpty || segment.source.contains(needle) {
             out += "[\(segment.kind.rawValue)] \(segment.source)\n"
             for (i, f) in segment.formulas.enumerated() {
                 out += String(format: "  v%d x %.1f-%.1f y %.1f-%.1f base %.1f\n", i + 1, f.rect.minX, f.rect.maxX, f.rect.minY, f.rect.maxY, f.baseline)
@@ -305,7 +305,7 @@ extension EngineDiagnostics {
         guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { throw CocoaError(.fileReadCorruptFile) }
         var analyzer = LayoutAnalyzer()
         let layouts = analyzer.analyze(document: document, cgDocument: cg, pages: Array(1...cg.numberOfPages))
-        let segments = layouts.flatMap(SegmentBuilder.segments(for:))
+        let segments = SegmentBuilder.segments(for: layouts, target: "zh")
         let cache = TranslationCache(directory: TranslationJob.supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
                                      document: input, signature: "\(serviceID)|\(model)|en|zh|v1", ignore: false)
         let sample = Array("本文提出了一种简单而有效的方法，用于在未知目标域上提升语义分割模型的泛化能力。我们在多个基准数据集上进行了大量实验，结果表明该方法优于现有技术。")
@@ -332,6 +332,7 @@ extension EngineDiagnostics {
         let renderer = TranslationRenderer(source: cg, language: "zh")
         let audit = RenderAudit()
         renderer.audit = audit
+        renderer.auditLayers = true
         let rendered = renderer.render(layouts: layouts, segments: segments, translations: translations, mono: true, dual: false,
                                        dualLayout: .sideBySide, title: nil)
         if let output, let mono = rendered.mono { try mono.write(to: output) }
@@ -345,7 +346,8 @@ extension EngineDiagnostics {
             let translated = Set(entries.map(\.block))
             var obstacles: [(String, CGRect)] = []
             for (i, block) in layout.blocks.enumerated() where !translated.contains(i) {
-                obstacles.append(("\(block.kind.rawValue) \"\(block.text.prefix(24))\"", block.rect.insetBy(dx: 0.5, dy: block.size * 0.15)))
+                let rect = block.rect.offsetBy(dx: 0, dy: audit.moved[layout.number]?[i] ?? 0)
+                obstacles.append(("\(block.kind.rawValue) \"\(block.text.prefix(24))\"", rect.insetBy(dx: 0.5, dy: block.size * 0.15)))
             }
             for figure in layout.figures { obstacles.append(("figure", figure)) }
             for entry in entries {
@@ -353,13 +355,14 @@ extension EngineDiagnostics {
                 let label = "p\(layout.number) \(block.kind.rawValue) \"\(block.text.prefix(30))\""
                 if entry.scale < 0.85 { shrunk += 1; if verbose { issues.append(String(format: "shrunk %.2f: ", entry.scale) + label) } }
                 if !entry.fits { unfit += 1; issues.append("does not fit: " + label) }
+                func at(_ r: CGRect) -> String { String(format: " @%d,%.0f,%.0f,%.0f,%.0f", layout.number, r.minX, r.minY, r.width, r.height) }
                 for box in entry.boxes {
                     // The first line's ascent may reach above the original's line box; bottom and sides may not grow.
                     let allowed = CGRect(x: entry.frame.minX - 1.5, y: entry.frame.minY - 1.5, width: entry.frame.width + 3,
                                          height: entry.frame.height + 1.5 + entry.fontSize * 0.35)
                     if !allowed.contains(box) {
                         outside += 1
-                        issues.append("outside frame: " + label)
+                        issues.append("outside frame: " + label + at(box))
                         break
                     }
                 }
@@ -369,14 +372,14 @@ extension EngineDiagnostics {
                         // A drawing the block sits on (a shaded box) is a background, not an obstacle.
                         if rect.contains(block.rect.insetBy(dx: 2, dy: 2)) { continue }
                         overlaps += 1
-                        issues.append("overlaps \(name): " + label)
+                        issues.append("overlaps \(name): " + label + at(box))
                         hit = true
                         break
                     }
                     for other in entries where other.block != entry.block && !hit {
                         if other.boxes.contains(where: { $0.intersection(box).area > max(2, box.area * 0.05) }) {
                             overlaps += 1
-                            issues.append("overlaps translated block \(other.block): " + label)
+                            issues.append("overlaps translated block \(other.block): " + label + at(box))
                             hit = true
                         }
                     }
@@ -386,6 +389,59 @@ extension EngineDiagnostics {
                     let drawn = entry.pitch * Double(entry.lineCount - 1)
                     fills.append(drawn / original)
                 }
+            }
+        }
+        // Real collisions: places where what was set over the page and what stays of the page both put ink.
+        var collisions = 0
+        if let base = rendered.base.flatMap({ CGPDFDocument(CGDataProvider(data: $0 as CFData)!) }),
+           let over = rendered.overlay.flatMap({ CGPDFDocument(CGDataProvider(data: $0 as CFData)!) }) {
+            for layout in layouts where byPage[layout.number] != nil {
+                guard let a = base.page(at: layout.number), let b = over.page(at: layout.number) else { continue }
+                for spot in inkCollisions(a, b) {
+                    collisions += 1
+                    issues.append(String(format: "collision %d px: p%d @%d,%.0f,%.0f,%.0f,%.0f", spot.pixels, layout.number, layout.number, spot.rect.minX, spot.rect.minY, spot.rect.width, spot.rect.height))
+                }
+            }
+        }
+        // Even spacing: neighbouring lines of running text much closer together than is usual on their page.
+        var tightGaps = 0, lineGaps = 0
+        for layout in layouts {
+            // Lists of short lines (keywords, names) and table rows set their own distances; running text is what counts.
+            let measures = layout.blocks.filter { $0.kind == .paragraph && $0.lines.count >= 2 }.map(\.rect.width).sorted()
+            let measure = measures.isEmpty ? Double.infinity : measures[measures.count / 2]
+            let entries = (byPage[layout.number] ?? []).filter { entry in
+                let block = layout.blocks[entry.block]
+                return block.kind == .paragraph && (block.lines.count >= 2 || block.rect.width >= measure * 0.6)
+            }
+            var lines = entries.flatMap { entry in entry.lines.map { (line: $0, size: entry.fontSize) } }
+            lines.sort { $0.line.baseline > $1.line.baseline }
+            let kept = layout.blocks.enumerated().filter { k, _ in !entries.contains { $0.block == k } }.map { k, block in
+                block.rect.offsetBy(dx: 0, dy: audit.moved[layout.number]?[k] ?? 0)
+            }
+            var gaps: [(distance: Double, ratio: Double, upper: Int)] = []
+            for (i, upper) in lines.enumerated() {
+                guard let j = lines[(i + 1)...].firstIndex(where: { lower in
+                    min(lower.line.maxX, upper.line.maxX) - max(lower.line.minX, upper.line.minX) > min(lower.line.maxX - lower.line.minX, upper.line.maxX - upper.line.minX) * 0.5
+                        && upper.line.baseline - lower.line.baseline > upper.size * 0.5
+                }) else { continue }
+                let lower = lines[j]
+                let distance = upper.line.baseline - lower.line.baseline
+                guard distance < upper.size * 3, abs(upper.size - lower.size) < upper.size * 0.1 else { continue }
+                // Something kept between them (a formula) sets its own distance.
+                let band = CGRect(x: max(lower.line.minX, upper.line.minX), y: lower.line.baseline + upper.size * 0.2,
+                                  width: min(lower.line.maxX, upper.line.maxX) - max(lower.line.minX, upper.line.minX), height: max(distance - upper.size * 0.4, 0.1))
+                if kept.contains(where: { $0.intersects(band) }) { continue }
+                gaps.append((distance, distance / upper.size, i))
+            }
+            let sorted = gaps.map(\.ratio).sorted()
+            guard sorted.count >= 4 else { continue }
+            let median = sorted[sorted.count / 2]
+            lineGaps += gaps.count
+            for gap in gaps where gap.ratio < median * 0.85 {
+                tightGaps += 1
+                let upper = lines[gap.upper].line
+                issues.append(String(format: "tight gap %.2f of %.2f: p%d @%d,%.0f,%.0f,%.0f,%.0f", gap.ratio, median, layout.number, layout.number,
+                                     upper.minX, upper.baseline - gap.distance, upper.maxX - upper.minX, gap.distance))
             }
         }
         // Original text left on translated pages.
@@ -402,13 +458,33 @@ extension EngineDiagnostics {
                 }
             }
         }
+        // Links under translated words: which of them followed their words.
+        var linksFollowed = 0, linksLost = 0
+        for layout in layouts {
+            let byBlock = Dictionary(grouping: segments.filter { $0.page == layout.number }, by: \.block)
+            for (block, parts) in byBlock {
+                var texts: [Int: String] = [:]
+                for line in layout.blocks[block].lines {
+                    for c in line.chars { if let link = c.link { texts[link, default: ""] += c.text } }
+                }
+                let followed = Set(parts.flatMap(\.formulas).flatMap(\.allLinks).map(\.link))
+                for (link, text) in texts {
+                    if followed.contains(link) {
+                        linksFollowed += 1
+                    } else {
+                        linksLost += 1
+                        issues.append("link lost: p\(layout.number) \"\(text.prefix(50))\"")
+                    }
+                }
+            }
+        }
         fills.sort()
         let fill = fills.isEmpty ? 0 : fills[fills.count / 2]
         let low = fills.filter { $0 < 0.75 }.count
-        var report = String(format: "%@: %d segments (%d cached), overlaps %d, outside %d, unfit %d, shrunk<0.85 %d, rewritten ops %d, residual %d, lost glyphs %d, formula glyphs %d, fill median %.2f (%d of %d under 0.75)\n",
+        var report = String(format: "%@: %d segments (%d cached), overlaps %d, outside %d, unfit %d, shrunk<0.85 %d, rewritten ops %d, residual %d, lost glyphs %d, formula glyphs %d, links followed %d lost %d, tight gaps %d of %d, collisions %d, fill median %.2f (%d of %d under 0.75)\n",
                             input.lastPathComponent, segments.count, cached, overlaps, outside, unfit, shrunk, audit.conflicts, residual,
-                            audit.lostGlyphs, audit.formulaGlyphs, fill, low, fills.count)
-        for issue in issues.prefix(verbose ? 200 : 25) { report += "  " + issue + "\n" }
+                            audit.lostGlyphs, audit.formulaGlyphs, linksFollowed, linksLost, tightGaps, lineGaps, collisions, fill, low, fills.count)
+        for issue in issues.prefix(verbose ? 400 : 60) { report += "  " + issue + "\n" }
         return report
     }
 }
@@ -443,11 +519,184 @@ extension EngineDiagnostics {
         var analyzer = LayoutAnalyzer()
         guard let layout = analyzer.analyze(document: document, cgDocument: cg, pages: [page]).first else { return "" }
         var out = ""
+        // Which stretch of even lines each paragraph is set in.
+        let runs = PageFlow.runs(of: layout.blocks.indices.filter { layout.blocks[$0].translate }, in: layout)
+        var stretch: [Int: Int] = [:]
+        for (k, run) in runs.enumerated() { for member in run { stretch[member] = k } }
         for (i, block) in layout.blocks.enumerated() where needle.isEmpty || block.text.contains(needle) {
             let r = block.rect
-            out += String(format: "%3d %@%@ (%.0f,%.0f %.0fx%.0f) ", i, block.kind.rawValue, block.translate ? "*" : "", r.minX, r.minY, r.width, r.height)
+            out += String(format: "%3d %@%@%@ (%.0f,%.0f %.0fx%.0f) ", i, block.kind.rawValue, block.translate ? "*" : "", stretch[i].map { " s\($0)" } ?? "", r.minX, r.minY, r.width, r.height)
                 + String(block.text.prefix(90)) + "\n"
         }
         return out
+    }
+}
+
+extension EngineDiagnostics {
+    /// The links of a PDF: where each is, the text under it, and where it leads.
+    public static func links(input: URL, pages: [Int]? = nil) -> String {
+        guard let document = PDFDocument(url: input) else { return "" }
+        var out = ""
+        var total = 0, internalLinks = 0, external = 0, dead = 0
+        for number in pages ?? Array(1...max(document.pageCount, 1)) {
+            guard let page = document.page(at: number - 1) else { continue }
+            for annotation in page.annotations where annotation.type == "Link" {
+                total += 1
+                let r = annotation.bounds
+                let text = page.selection(for: r)?.string?.replacingOccurrences(of: "\n", with: " ") ?? ""
+                var target = "?"
+                if let destination = annotation.destination ?? (annotation.action as? PDFActionGoTo)?.destination {
+                    if let to = destination.page {
+                        target = "p\(document.index(for: to) + 1) y\(Int(destination.point.y))"
+                        internalLinks += 1
+                    } else {
+                        dead += 1
+                    }
+                } else if let url = (annotation.action as? PDFActionURL)?.url {
+                    target = url.absoluteString
+                    external += 1
+                } else {
+                    dead += 1
+                }
+                out += String(format: "p%d (%.0f,%.0f %.0fx%.0f) \"%@\" → %@\n", number, r.minX, r.minY, r.width, r.height, String(text.prefix(40)), target)
+            }
+        }
+        return "links \(total): internal \(internalLinks), web \(external), no target \(dead)\n" + out
+    }
+}
+
+extension EngineDiagnostics {
+    /// Blocks that look wrongly understood, for checking the analysis on many documents: formulas sent for
+    /// translation, text left in the original, paragraphs cut into pieces.
+    public static func suspects(input: URL) -> String {
+        guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL), cg.numberOfPages > 0 else { return "" }
+        var analyzer = LayoutAnalyzer()
+        let layouts = analyzer.analyze(document: document, cgDocument: cg, pages: Array(1...cg.numberOfPages))
+        var out = ""
+        func report(_ kind: String, _ layout: PageLayout, _ rect: CGRect, _ text: String) {
+            out += String(format: "%@ p%d \"%@\" @%d,%.0f,%.0f,%.0f,%.0f\n", kind, layout.number, String(text.prefix(60)).replacingOccurrences(of: "\n", with: " "),
+                          layout.number, rect.minX, rect.minY, rect.width, rect.height)
+        }
+        for layout in layouts {
+            let blocks = layout.blocks
+            for (i, block) in blocks.enumerated() {
+                let visible = block.lines.reduce(0) { $0 + $1.visibleCount }
+                if block.translate {
+                    // A line set far apart from its neighbours: a display inside the paragraph.
+                    if block.lines.count >= 3 {
+                        let gaps = zip(block.lines, block.lines.dropFirst()).map { $0.baseline - $1.baseline }
+                        if let g = gaps.max(), g > block.pitch * 1.7 { report("gap", layout, block.rect, block.text) }
+                    }
+                    let math = block.lines.reduce(0) { $0 + $1.chars.filter { $0.isMath && !$0.isSpace }.count }
+                    if visible >= 3, Double(math) >= Double(visible) * 0.5 { report("mathy", layout, block.rect, block.text) }
+                    let words = block.lines.reduce(0) { $0 + LayoutAnalyzer.textWords($1) }
+                    if words <= 1, block.kind != .tableCell { report("fewwords", layout, block.rect, block.text) }
+                    if layout.figures.contains(where: { $0.insetBy(dx: -1, dy: -1).contains(block.rect.center) }) { report("infigure", layout, block.rect, block.text) }
+                    // Something else on the same baseline, right next to it: a piece of a line.
+                    if block.lines.count == 1, block.kind == .heading || block.kind == .paragraph {
+                        let line = block.lines[0]
+                        let beside = blocks.enumerated().contains { k, other in
+                            k != i && other.lines.contains { o in
+                                abs(o.baseline - line.baseline) < line.size * 0.3 && (o.minX - line.maxX < line.size * 0.8 && o.minX >= line.minX || line.minX - o.maxX < line.size * 0.8 && o.maxX <= line.maxX)
+                            }
+                        }
+                        if beside { report("piece", layout, block.rect, block.text) }
+
+                    }
+                    for (k, other) in blocks.enumerated() where k > i && other.translate {
+                        let shared = block.rect.insetBy(dx: 1, dy: block.size * 0.25).intersection(other.rect.insetBy(dx: 1, dy: other.size * 0.25))
+                        if !shared.isNull, shared.width > 2, shared.height > 1 { report("cross", layout, shared, block.text + " × " + other.text) }
+                    }
+                } else if block.kind != .reference && block.kind != .figure && block.kind != .tableCell && block.kind != .header && block.kind != .rotated {
+                    let prose = block.lines.reduce(0) { $0 + $1.text.split(separator: " ").filter { $0.count >= 3 && $0.allSatisfy { $0.isLowercase } }.count }
+                    if prose >= 5 { report("kept-\(block.kind.rawValue)", layout, block.rect, block.text) }
+                }
+                // A paragraph in pieces: one-line blocks stacked like lines.
+                if block.translate, block.kind == .paragraph, block.lines.count == 1, i + 1 < blocks.count {
+                    let next = blocks[i + 1]
+                    if next.translate, next.kind == .paragraph, next.lines.count == 1, abs(next.lines[0].minX - block.lines[0].minX) < 1,
+                       block.lines[0].baseline - next.lines[0].baseline < block.size * 1.5, block.lines[0].baseline > next.lines[0].baseline {
+                        report("stack", layout, block.rect.union(next.rect), block.text)
+                    }
+                }
+            }
+        }
+        return out
+    }
+}
+
+extension EngineDiagnostics {
+    /// The agents found on this Mac; with `probe`, each is asked to translate one sentence.
+    public static func agents(probe: Bool, only: String? = nil) async -> String {
+        var out = ""
+        for agent in LocalAgent.allCases where only == nil || agent.serviceID == only || agent.command == only {
+            guard let url = agent.locate() else {
+                out += "○ \(agent.serviceID)\t\(agent.commands.joined(separator: "/"))\tnot found\n"
+                continue
+            }
+            out += "● \(agent.serviceID)\t\(url.path)\t\(agent.version(at: url) ?? "?")\n"
+            guard probe else { continue }
+            let started = Date()
+            let outcome = await TranslationServiceTest.run(serviceID: agent.serviceID, fields: [:], secrets: [:])
+            out += String(format: "    %@ %.0f s: %@\n", outcome.succeeded ? "ok" : "FAILED", Date().timeIntervalSince(started), outcome.message)
+        }
+        return out
+    }
+}
+
+extension EngineDiagnostics {
+    /// Where two pages (rendered at twice their size) both have dark ink, grouped into spots: page coordinates, and how
+    /// many pixels. Anything light (a shaded row behind a table) is not ink.
+    static func inkCollisions(_ a: CGPDFPage, _ b: CGPDFPage) -> [(rect: CGRect, pixels: Int)] {
+        let scale = 2.0
+        guard let pa = render(a, scale: scale), let pb = render(b, scale: scale), pa.count == pb.count else { return [] }
+        let box = a.getBoxRect(.cropBox)
+        let width = Int(box.width * scale), height = Int(box.height * scale)
+        let cell = 12
+        var cells: [Int: Int] = [:]
+        let columns = width / cell + 1
+        for y in 0..<height {
+            for x in 0..<width {
+                let i = (y * width + x) * 4
+                func dark(_ p: [UInt8]) -> Bool { Int(p[i]) + Int(p[i + 1]) + Int(p[i + 2]) < 320 }
+                if dark(pa), dark(pb) { cells[(y / cell) * columns + x / cell, default: 0] += 1 }
+            }
+        }
+        // Neighbouring cells are one spot.
+        var seen: Set<Int> = []
+        var spots: [(rect: CGRect, pixels: Int)] = []
+        for start in cells.keys where !seen.contains(start) {
+            var stack = [start], pixels = 0
+            var minX = Int.max, maxX = 0, minY = Int.max, maxY = 0
+            seen.insert(start)
+            while let c = stack.popLast() {
+                pixels += cells[c] ?? 0
+                let row = c / columns, column = c % columns
+                minX = min(minX, column); maxX = max(maxX, column); minY = min(minY, row); maxY = max(maxY, row)
+                for dy in -1...1 {
+                    for dx in -1...1 {
+                        let n = (row + dy) * columns + column + dx
+                        if cells[n] != nil, seen.insert(n).inserted { stack.append(n) }
+                    }
+                }
+            }
+            guard pixels >= 6 else { continue }
+            // The bitmap's rows run down from the top of the page.
+            let size = Double(cell) / scale
+            spots.append((CGRect(x: box.minX + Double(minX) * size, y: box.maxY - Double(maxY + 1) * size, width: Double(maxX - minX + 1) * size, height: Double(maxY - minY + 1) * size), pixels))
+        }
+        return spots.sorted { $0.pixels > $1.pixels }
+    }
+}
+
+extension EngineDiagnostics {
+    /// What a page draws other than text, largest first.
+    public static func marks(input: URL, page number: Int) -> String {
+        guard let cg = CGPDFDocument(input as CFURL), let page = cg.page(at: number) else { return "" }
+        let interpreter = ContentInterpreter()
+        interpreter.run(page: page)
+        return interpreter.marks.sorted { $0.rect.width * $0.rect.height > $1.rect.width * $1.rect.height }.map { m in
+            String(format: "%@ (%.1f,%.1f %.1fx%.1f) curves %d segs %d white %d", "\(m.kind)", m.rect.minX, m.rect.minY, m.rect.width, m.rect.height, m.hasCurves ? 1 : 0, m.segmentCount, m.isWhite ? 1 : 0)
+        }.joined(separator: "\n")
     }
 }

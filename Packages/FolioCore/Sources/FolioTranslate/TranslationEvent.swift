@@ -13,3 +13,15 @@ public enum TranslationEvent: Sendable, Hashable {
     case failed(message: String, logURL: URL)
     case cancelled
 }
+
+/// What the stages of a translation are called. Views reserve room for the widest, so nothing moves as the count goes up.
+public enum TranslationStageText {
+    public static func paragraphs(done: Int, total: Int) -> String {
+        String(localized: "翻译段落 \(done)/\(total)", bundle: .module)
+    }
+
+    public static var layout: String { String(localized: "排版译文", bundle: .module) }
+
+    /// The stages' widest forms.
+    public static var widest: [String] { [paragraphs(done: 888, total: 888), layout] }
+}

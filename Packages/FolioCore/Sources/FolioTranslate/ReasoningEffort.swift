@@ -16,6 +16,8 @@ public enum ReasoningEffort {
         case none
         /// The service has one, but the chosen model does not reason.
         case unsupportedModel
+        /// The chosen model settles the level ("gemini-3.8-flash-high"); it cannot be told another. What to show for it.
+        case decidedByModel(String)
         case choices([Choice], default: String)
     }
 
@@ -25,6 +27,8 @@ public enum ReasoningEffort {
         "openaicompatible": "--openai-compatible-reasoning-effort",
         "deepseek": "--deepseek-reasoning-effort",
         "siliconflow": "--siliconflow-enable-thinking",
+        "claudecode": "--claude-code-effort", "codex": "--codex-effort", "antigravitycli": "--antigravity-cli-effort",
+        "grokcli": "--grok-cli-effort", "picli": "--pi-effort", "hermesagent": "--hermes-effort",
     ]
 
     /// Options that only exist to switch the parameter on; Folio sets them itself.
@@ -45,7 +49,37 @@ public enum ReasoningEffort {
     private static let fullRange = [choice("minimal", String(localized: "最低", bundle: .module)), choice("low", String(localized: "低", bundle: .module)), choice("medium", String(localized: "中", bundle: .module)), choice("high", String(localized: "高", bundle: .module)),
                                     choice("xhigh", String(localized: "极高", bundle: .module))]
 
+    /// A level's name for people.
+    static func title(ofLevel level: String) -> String {
+        switch level {
+        case "off", "none": String(localized: "关闭", bundle: .module)
+        case "minimal": String(localized: "最低", bundle: .module)
+        case "low": String(localized: "低", bundle: .module)
+        case "medium": String(localized: "中", bundle: .module)
+        case "high": String(localized: "高", bundle: .module)
+        case "xhigh": String(localized: "极高", bundle: .module)
+        case "max": String(localized: "最高", bundle: .module)
+        case "thinking": String(localized: "深度思考", bundle: .module)
+        default: level
+        }
+    }
+
+    /// What a local agent offers: its levels and "its own setting", unless the chosen model's name is a level already.
+    private static func agentSupport(_ agent: LocalAgent, service: TranslationService, fields: [String: String]) -> Support {
+        guard !agent.effortLevels.isEmpty else { return .none }
+        let field = service.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }
+        let chosen = field.flatMap { fields[$0.option] }?.trimmingCharacters(in: .whitespaces) ?? ""
+        let model = chosen.isEmpty ? field?.defaultValue : chosen
+        if let level = LocalAgent.effort(inModelName: model) { return .decidedByModel(title(ofLevel: level)) }
+        if agent.modelDecidesEffort, !chosen.isEmpty { return .decidedByModel(String(localized: "模型默认", bundle: .module)) }
+        let levels = agent.effortLevels.map { choice($0, title(ofLevel: $0)) }
+        return .choices(levels + [choice("", String(localized: "由智能体决定", bundle: .module))], default: agent.defaultEffort ?? "")
+    }
+
     public static func support(serviceID: String, fields: [String: String]) -> Support {
+        if let service = TranslationServiceCatalog.service(id: serviceID), case .agent(let agent) = service.backend {
+            return agentSupport(agent, service: service, fields: fields)
+        }
         switch serviceID {
         case "openai", "openaicompatible":
             let fallback = TranslationServiceCatalog.service(id: serviceID)?.fields

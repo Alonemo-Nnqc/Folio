@@ -44,7 +44,7 @@ case "translate":
         case "--dual": options.outputs = .dual
         case "--fresh": options.ignoreCache = true
         case "--concurrency": options.concurrency = Int(next())
-        case "--field": let kv = next().split(separator: "=", maxSplits: 1).map(String.init); fields[kv[0]] = kv[1]
+        case "--field": let kv = next().split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init); fields[kv[0]] = kv[1]
         case "--secret": let kv = next().split(separator: "=", maxSplits: 1).map(String.init); secrets[kv[0]] = kv[1]
         default: break
         }
@@ -59,7 +59,7 @@ case "translate":
         let t = String(format: "%6.1fs", Date().timeIntervalSince(start))
         switch event {
         case .stage(let s): if s != lastStage { lastStage = s; if !s.hasPrefix("翻译段落") || s.hasSuffix("0") { print(t, "stage", s) } }
-        case .progress: break
+        case .progress(let value): if arguments.contains("--progress") { print(t, "progress", value) }
         case .preview(let u): print(t, "preview", u.lastPathComponent)
         case .finished(let m, let d): print(t, "finished", m?.path ?? "-", d?.path ?? "-")
         case .failed(let message, let log): print(t, "FAILED", message, log.path)
@@ -68,6 +68,15 @@ case "translate":
     }
 case "blocks":
     print(EngineDiagnostics.blocks(input: url(arguments[1]), page: Int(arguments[2]) ?? 1, containing: arguments.count > 3 ? arguments[3] : ""))
+case "links":
+    print(EngineDiagnostics.links(input: url(arguments[1]), pages: arguments.count > 2 ? arguments[2].split(separator: ",").compactMap { Int($0) } : nil))
+case "agents":
+    // agents [--probe] [service or command]
+    print(await EngineDiagnostics.agents(probe: arguments.contains("--probe"), only: arguments.dropFirst().first { !$0.hasPrefix("--") }))
+case "marks":
+    print(EngineDiagnostics.marks(input: url(arguments[1]), page: Int(arguments[2]) ?? 1))
+case "suspects":
+    print(EngineDiagnostics.suspects(input: url(arguments[1])))
 case "fonts":
     print(EngineDiagnostics.fonts(input: url(arguments[1]), page: Int(arguments[2]) ?? 1))
 case "bing":

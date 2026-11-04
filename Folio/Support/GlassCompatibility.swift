@@ -3,7 +3,7 @@ import SwiftUI
 /// Liquid Glass on macOS 26, the closest earlier style before that.
 extension View {
     @ViewBuilder func glassProminentButtonStyle() -> some View {
-        if #available(macOS 26, *) { buttonStyle(.glassProminent) } else { buttonStyle(.borderedProminent) }
+        if !UserDefaults.standard.bool(forKey: "FolioPreviewNoGlass"), #available(macOS 26, *) { buttonStyle(.glassProminent) } else { buttonStyle(.borderedProminent) }
     }
 
     @ViewBuilder func glassButtonStyle() -> some View {

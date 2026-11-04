@@ -68,8 +68,13 @@ final class ItemListViewController: NSViewController {
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             _ = (self.model.rows, self.model.snapshot, self.model.selectedItemIDs, self.model.selectedFileIDs,
-                 self.model.currentSort, self.model.previewExpandRequest, self.model.translations.jobs)
+                 self.model.currentSort, self.model.previewExpandRequest, self.model.translations.jobIDs)
             self.controller.update()
+        })
+        // Progress moves several times a second: only the bars of the rows it concerns follow it.
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            self.controller.updateTranslationProgress(self.model.translations.jobs)
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }

@@ -90,15 +90,21 @@ final class PDFComposer {
         ], data: content)
     }
 
-    /// Link annotations of source page `number`, moved by `offset` (for pages placed beside another).
-    func links(ofSourcePage number: Int, offset: CGPoint = .zero) -> [PDFValue] {
-        guard let dict = source.page(at: number)?.dictionary, let annots = PDFDictionary.array(dict, "Annots") else { return [] }
+    /// Link annotations of source page `number`, moved by `offset` (for pages placed beside another). `placement`
+    /// says where links went whose words moved: one annotation per place, none when their words are gone.
+    func links(ofSourcePage number: Int, offset: CGPoint = .zero, placement: [Int: [CGRect]] = [:]) -> [PDFValue] {
+        guard let dict = source.page(at: number)?.dictionary else { return [] }
         var result: [PDFValue] = []
-        for index in 0..<CGPDFArrayGetCount(annots) {
-            var annot: CGPDFDictionaryRef?
-            guard CGPDFArrayGetDictionary(annots, index, &annot), let annot,
-                  PDFDictionary.name(annot, "Subtype") == "Link" else { continue }
+        for (index, annot) in PageLinks.annotations(of: dict).enumerated() where reachable(annot) {
             var entries = copier.entries(of: annot, skipping: ["P", "Parent", "StructParent", "Popup"])
+            if let places = placement[index] {
+                entries["QuadPoints"] = nil
+                for rect in places {
+                    entries["Rect"] = .rect(rect.offsetBy(dx: offset.x, dy: offset.y))
+                    result.append(.ref(writer.add(.dict(entries))))
+                }
+                continue
+            }
             if offset != .zero {
                 if let rect = PDFDictionary.rect(annot, "Rect") { entries["Rect"] = .rect(rect.offsetBy(dx: offset.x, dy: offset.y)) }
                 if let quads = PDFDictionary.array(annot, "QuadPoints") {
@@ -109,6 +115,19 @@ final class PDFComposer {
             result.append(.ref(writer.add(.dict(entries))))
         }
         return result
+    }
+
+    /// Whether the link leads somewhere in the output: when only some pages are written, a link to a page left out
+    /// goes nowhere.
+    private func reachable(_ annot: CGPDFDictionaryRef) -> Bool {
+        guard reserved.count < source.numberOfPages else { return true }
+        var target = PDFDictionary.object(annot, "Dest")
+        if target == nil, let action = PDFDictionary.dict(annot, "A") {
+            guard PDFDictionary.name(action, "S") == "GoTo" else { return true }
+            target = PDFDictionary.object(action, "D")
+        }
+        guard let target, let page = PDFDestinations.page(of: target, catalog: source.catalog) else { return true }
+        return copier.pageMap[PDFCopier.key(page)] != nil
     }
 
     /// Adds a page drawing `content` with the named form XObjects. `object` is a number from
@@ -157,5 +176,64 @@ final class PDFComposer {
         var data = Data([0xFE, 0xFF])
         for unit in text.utf16 { data.append(UInt8(unit >> 8)); data.append(UInt8(unit & 0xFF)) }
         return data
+    }
+}
+
+/// Finds the page a destination is on.
+enum PDFDestinations {
+    /// The page dictionary of a destination: an array, or a name or string looked up in the catalog.
+    static func page(of destination: CGPDFObjectRef, catalog: CGPDFDictionaryRef?) -> CGPDFDictionaryRef? {
+        switch CGPDFObjectGetType(destination) {
+        case .array:
+            var array: CGPDFArrayRef?
+            guard CGPDFObjectGetValue(destination, .array, &array), let array else { return nil }
+            return page(ofArray: array)
+        case .dictionary:
+            var dict: CGPDFDictionaryRef?
+            guard CGPDFObjectGetValue(destination, .dictionary, &dict), let dict, let array = PDFDictionary.array(dict, "D") else { return nil }
+            return page(ofArray: array)
+        case .name:
+            var name: UnsafePointer<CChar>?
+            guard CGPDFObjectGetValue(destination, .name, &name), let name, let catalog else { return nil }
+            return named(Data(String(cString: name).utf8), catalog: catalog)
+        case .string:
+            var string: CGPDFStringRef?
+            guard CGPDFObjectGetValue(destination, .string, &string), let string, let catalog else { return nil }
+            return named(PDFCopier.data(of: string), catalog: catalog)
+        default:
+            return nil
+        }
+    }
+
+    private static func page(ofArray array: CGPDFArrayRef) -> CGPDFDictionaryRef? {
+        var page: CGPDFDictionaryRef?
+        return CGPDFArrayGetDictionary(array, 0, &page) ? page : nil
+    }
+
+    private static func named(_ name: Data, catalog: CGPDFDictionaryRef) -> CGPDFDictionaryRef? {
+        if let dests = PDFDictionary.dict(catalog, "Dests"), let text = String(data: name, encoding: .utf8),
+           let object = PDFDictionary.object(dests, text), let found = page(of: object, catalog: nil) { return found }
+        guard let names = PDFDictionary.dict(catalog, "Names"), let tree = PDFDictionary.dict(names, "Dests") else { return nil }
+        return lookup(name, in: tree, depth: 0)
+    }
+
+    /// Looks `name` up in a name tree.
+    private static func lookup(_ name: Data, in node: CGPDFDictionaryRef, depth: Int) -> CGPDFDictionaryRef? {
+        guard depth < 32 else { return nil }
+        if let names = PDFDictionary.array(node, "Names") {
+            for k in stride(from: 0, to: CGPDFArrayGetCount(names) - 1, by: 2) {
+                var key: CGPDFStringRef?, value: CGPDFObjectRef?
+                guard CGPDFArrayGetString(names, k, &key), let key, PDFCopier.data(of: key) == name,
+                      CGPDFArrayGetObject(names, k + 1, &value), let value else { continue }
+                return page(of: value, catalog: nil)
+            }
+        }
+        if let kids = PDFDictionary.array(node, "Kids") {
+            for k in 0..<CGPDFArrayGetCount(kids) {
+                var kid: CGPDFDictionaryRef?
+                if CGPDFArrayGetDictionary(kids, k, &kid), let kid, let found = lookup(name, in: kid, depth: depth + 1) { return found }
+            }
+        }
+        return nil
     }
 }

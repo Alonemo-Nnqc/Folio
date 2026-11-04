@@ -23,6 +23,12 @@ struct PageChar: Sendable {
     var glyphs: [Int] = []
     /// Where the glyph's ink is, when it is not the em box on the baseline (TeX's big delimiters and operators).
     var ink: CGRect?
+    /// The link annotation it is under (`PageLink.index`).
+    var link: Int?
+    /// What that link leads to (the same number for the same place).
+    var linkTarget: Int?
+    /// A picture set among the words, standing in for a character: its mark (index into the page's marks).
+    var icon: Int?
 
     var center: CGPoint { CGPoint(x: rect.midX, y: baseline + size * 0.3) }
 
@@ -31,6 +37,28 @@ struct PageChar: Sendable {
         if let ink { return ink }
         let width = min(rect.width, size * 1.1)
         return CGRect(x: rect.minX, y: baseline - size * 0.28, width: max(width, 0.1), height: size * 1.2)
+    }
+
+    /// Where the ink of the glyph is, from the shape of the character: for telling whether lines really touch.
+    var inkBox: CGRect {
+        if let ink { return ink }
+        let (bottom, top) = Self.verticalExtent(of: text)
+        return CGRect(x: rect.minX, y: baseline + size * bottom, width: max(min(rect.width, size * 1.1), 0.1), height: size * (top - bottom))
+    }
+
+    /// Bottom and top of a character's ink, in ems from the baseline.
+    static func verticalExtent(of text: String) -> (Double, Double) {
+        guard let c = text.first else { return (-0.02, 0.72) }
+        switch c {
+        case "a", "c", "e", "m", "n", "o", "r", "s", "u", "v", "w", "x", "z", "α", "ε", "ι", "κ", "ν", "ο", "π", "σ", "τ", "υ", "ω": return (-0.02, 0.48)
+        case "g", "p", "q", "y", "γ", "η", "μ", "ρ", "φ", "χ", "ψ": return (-0.22, 0.48)
+        case "j", "Q", "β", "ζ", "ξ", ",", ";": return (-0.22, c == "," || c == ";" ? 0.46 : 0.72)
+        case "(", ")", "[", "]", "{", "}", "|", "/", "\\", "∥", "⟨", "⟩": return (-0.26, 0.76)
+        case ".", ":", "·": return (-0.02, 0.46)
+        case "-", "–", "—", "−", "=", "+", "<", ">", "~", "≈", "×", "≤", "≥", "→", "←", "↑", "↓", "∈", "⊂", "≠": return (0.02, 0.56)
+        case "'", "\"", "′", "″", "^", "ˆ", "˜", "`", "´", "¯", "˙", "¨", "∗", "*": return (0.36, 0.76)
+        default: return (-0.02, 0.72)
+        }
     }
 }
 
@@ -120,12 +148,16 @@ enum PageText {
                 continue
             }
             let metrics = g.font >= 0 && g.font < fonts.count ? fonts[g.font] : nil
+            var font = metrics?.info ?? .unknown
+            // Filled and stroked: bold made from a regular font.
+            if g.renderMode == 2 { font.isBold = true }
             var char = PageChar(text: label, rect: rect, isSpace: false, isNewline: false, size: g.size, baseline: origin.y,
-                                font: metrics?.info ?? .unknown, color: g.color, run: g.run, isRotated: !horizontal)
+                                font: font, color: g.color, run: g.run, isRotated: !horizontal)
             char.glyphs = [index]
             if g.depth != nil, horizontal { char.ink = g.box }
-            // Unknown glyphs are symbols: kept as drawn.
-            if text == nil { char.isMath = true }
+            // Unknown glyphs are symbols: kept as drawn. So are glyphs of a symbol font that only PDFKit has a guess for
+            // (an arrow it reads as "A").
+            if text == nil || (g.text == nil && metrics?.info.isSymbolic == true) { char.isMath = true }
 
             if let p = last {
                 let newLine: Bool
@@ -147,6 +179,8 @@ enum PageText {
                     br.isMath = false
                     br.glyphs = []
                     br.run = nil
+                    br.link = nil
+                    br.linkTarget = nil
                     chars.append(br)
                     anchorBaseline = origin.y
                     anchorSize = char.size
@@ -161,6 +195,8 @@ enum PageText {
                         space.isMath = false
                         space.glyphs = []
                         space.run = nil
+                        space.link = nil
+                        space.linkTarget = nil
                         space.rect = CGRect(x: p.rect.maxX, y: p.rect.minY, width: max(gap, 0), height: p.rect.height)
                         chars.append(space)
                     }

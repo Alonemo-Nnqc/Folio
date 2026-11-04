@@ -16,7 +16,19 @@ final class TranslationCoordinator {
         var preview: URL?
     }
 
-    private(set) var jobs: [String: JobState] = [:]
+    private(set) var jobs: [String: JobState] = [:] {
+        didSet {
+            current = jobs
+            let keys = Set(jobs.keys)
+            if keys != jobIDs { jobIDs = keys }
+        }
+    }
+    /// The items with a job: changes when one starts or ends, not with its progress, which moves several times a second.
+    private(set) var jobIDs: Set<String> = []
+    /// `jobs`, for reading without being told of each change.
+    @ObservationIgnored private var current: [String: JobState] = [:]
+
+    func currentJob(of itemId: String) -> JobState? { current[itemId] }
 
     /// Screenshots of the progress UI without running the engine (`-FolioPreviewTranslating`).
     func previewJob(itemId: String, fileId: String, stage: String, fraction: Double?) {

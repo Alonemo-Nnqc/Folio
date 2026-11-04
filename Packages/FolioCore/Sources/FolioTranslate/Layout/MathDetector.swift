@@ -5,9 +5,9 @@ import Foundation
 enum MathDetector {
     private static let mathFonts = [
         "cmmi", "cmsy", "cmex", "cmbsy", "cmmib", "msbm", "msam", "eufm", "eusm", "eurm", "rsfs", "lmmath", "math",
-        "symbol", "mtmi", "mtsy", "mtex", "mathematica", "euclid", "esint", "wasy", "stmary", "txsy", "pxsy", "txmi",
+        "symbol", "lasy", "mathabx", "mtmi", "mtsy", "mtex", "mathematica", "euclid", "esint", "wasy", "stmary", "txsy", "pxsy", "txmi",
         "pxmi", "txex", "pxex", "rtxmi", "ntxmi", "ntxsy", "zplm", "mnsymbol", "mdput", "mdbch", "lmsy", "lmmi", "cmbrm",
-        "dsrom", "bbold", "bbm", "mathdesign", "stixgeneral-italic", "xits", "fourier", "lucidanewmath", "advp",
+        "dsrom", "bbold", "bbm", "mathdesign", "stixgeneral-italic", "xits", "fourier", "lucidanewmath",
     ]
 
     static func isMathFont(_ name: String) -> Bool {
@@ -38,11 +38,19 @@ enum MathDetector {
 
     /// Sets `isMath` on `chars` (one page, reading order).
     static func mark(_ chars: inout [PageChar]) {
+        // A "math" font setting most of the page is the page's text face.
+        var fontCounts: [String: Int] = [:]
+        var visible = 0
+        for c in chars where !c.isSpace && !c.isNewline && c.text.first?.isLetter == true {
+            fontCounts[c.font.name, default: 0] += 1
+            visible += 1
+        }
+        let textFaces = Set(fontCounts.filter { $0.value >= 200 && Double($0.value) >= Double(visible) * 0.4 }.keys)
         // 1. Characters that are math by themselves.
         for i in chars.indices where !chars[i].isSpace && !chars[i].isNewline {
             let c = chars[i]
             let scalars = c.text.unicodeScalars
-            if isMathFont(c.font.name) && !c.font.name.lowercased().contains("cmr") {
+            if isMathFont(c.font.name) && !c.font.name.lowercased().contains("cmr") && !textFaces.contains(c.font.name) {
                 chars[i].isMath = true
             } else if c.ink != nil {
                 // Big delimiters and operators of an extension font.
@@ -170,7 +178,8 @@ enum MathDetector {
                 if o.isSpace || o.isRotated || o.run == nil { continue }
                 seen += 1
                 if abs(o.baseline - c.baseline) > o.size * 0.7 || abs(o.rect.minX - c.rect.minX) > o.size * 8 { continue }
-                if o.size >= c.size * 1.15 { return o }
+                // Not a drop cap: far bigger than any script's base.
+                if o.size >= c.size * 1.15, o.size <= c.size * 2.2 { return o }
             }
         }
         return nil

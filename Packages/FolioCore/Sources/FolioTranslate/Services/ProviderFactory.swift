@@ -10,7 +10,7 @@ public enum TranslationConfigurationError: Error, LocalizedError, Sendable, Equa
         switch self {
         case .unknownService(let id): String(localized: "未知的翻译服务：\(id)", bundle: .module)
         case .missingField(let service, let field): String(localized: "\(service) 需要填写“\(field)”，请在设置的“翻译”页补充。", bundle: .module)
-        case .agentNotFound(let command): String(localized: "在这台 Mac 上找不到 \(command)。请先安装并登录，或在设置的“翻译”页填写它的路径。", bundle: .module)
+        case .agentNotFound(let command): String(localized: "在这台 Mac 上找不到 \(command)。请先安装并登录，或在 设置 ▸ 翻译 的高级选项里填写它的路径。", bundle: .module)
         case .appleUnavailable: String(localized: "Apple 系统翻译需要 macOS 26 或更高版本。", bundle: .module)
         }
     }
@@ -71,7 +71,7 @@ enum ProviderFactory {
             let temperature = temperatureOption.flatMap { fields[$0] }.flatMap(Double.init) ?? (extra["reasoning_effort"] == nil ? 0.2 : nil)
             provider = OpenAIChatProvider(endpoint: endpoint, apiKey: key, model: try required(modelOption ?? ""), temperature: temperature,
                                           extraBody: extra,
-                                          limits: local ? ProviderLimits(batchCharacters: 1800, batchItems: 20, concurrency: 2, usesContext: true)
+                                          limits: local ? ProviderLimits(batchCharacters: 1800, batchItems: 20, concurrency: 2, usesContext: true, startupSeconds: 2, secondsPerCharacter: 0.04)
                                                         : ProviderLimits(batchCharacters: 2600, batchItems: 30, concurrency: 8, usesContext: true))
         case .azureOpenAI:
             provider = AzureOpenAIProvider(resource: try required("--azure-openai-base-url"), apiKey: try required("--azure-openai-api-key"),
@@ -111,7 +111,8 @@ enum ProviderFactory {
             guard let executable = agent.locate(customPath: pathOption.flatMap { fields[$0] }) else {
                 throw TranslationConfigurationError.agentNotFound(agent.command)
             }
-            provider = AgentProvider(agent: agent, executable: executable, model: modelOption.flatMap(value))
+            provider = AgentProvider(agent: agent, executable: executable, model: modelOption.flatMap(value),
+                                     effort: ReasoningEffort.current(serviceID: serviceID, fields: fields))
         case .command:
             provider = CommandProvider(command: try required("--clitranslator-command"),
                                        timeout: value("--clitranslator-timeout").flatMap(Double.init) ?? 60)

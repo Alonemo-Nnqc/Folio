@@ -11,7 +11,7 @@ import Foundation
 ///   -FolioPreviewExpand  YES                     expands the selected item
 ///   -FolioPreviewSearch  <text>                  opens the search field with text
 ///   -FolioPreviewTab     metadata | annotations | notes   inspector tab
-///   -FolioPreviewSheet   tagEditor | tagEdit | zotero | identifier | manualMatch
+///   -FolioPreviewSheet   tagEditor | tagEdit | zotero | identifier | manualMatch | translate
 ///   -FolioPreviewDrop    <file count>            shows the Finder drop overlay
 ///   -FolioPreviewToast   <text>
 ///   -FolioPreviewOpenReader <title prefix>      opens that item's PDF in a reader tab
@@ -29,6 +29,11 @@ import Foundation
 ///   -FolioPreviewTranslating <title prefix>    shows that item as being translated (42%)
 ///   -FolioPreviewTranslationProfiles YES        two sample translation configurations (in memory)
 ///   -FolioPreviewProfileEditor YES              with Settings 翻译: opens 编辑配置…
+///   -FolioPreviewModelPicker YES                with Settings 翻译: opens the model list (Snapshot draws it)
+///   -FolioPreviewWindowHeight 1400              with Settings: a window this tall, to draw all of a long page
+///   -FolioPreviewModelFilter high               with ModelPicker: this typed in its search field
+///   -FolioPreviewAppearance light               light or dark, whatever the system's is
+///   -FolioPreviewNoGlass YES                    plain prominent buttons: a window with a glass one draws blank in Snapshot
 ///   -FolioPreviewProfileDetail YES              …and the first configuration's details sheet
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
@@ -81,6 +86,8 @@ enum PreviewHooks {
         case "zotero": model.activeSheet = .zoteroImport
         case "identifier": model.activeSheet = .identifierAdd
         case "manualMatch": if let id = model.selectedItemIDs.first { model.activeSheet = .manualMatch(itemId: id) }
+        case "translate":
+            if let id = model.selectedItemIDs.first, let file = model.defaultFile(of: id) { model.activeSheet = .translate(fileId: file.id) }
         default: break
         }
         let drop = defaults.integer(forKey: "FolioPreviewDrop")
@@ -112,8 +119,18 @@ enum PreviewHooks {
                 }
             }
         }
+        if let appearance = defaults.string(forKey: "FolioPreviewAppearance") {
+            NSApp.appearance = NSAppearance(named: appearance == "light" ? .aqua : .darkAqua)
+        }
         if let path = defaults.string(forKey: "FolioPreviewSnapshot") {
             let delay = defaults.double(forKey: "FolioPreviewSnapshotDelay")
+            let height = defaults.double(forKey: "FolioPreviewWindowHeight")
+            if height > 0 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + max(0.5, (delay > 0 ? delay : 3) - 1)) {
+                    guard let window = AppDelegate.shared.settingsWindow?.window else { return }
+                    window.setContentSize(NSSize(width: window.contentLayoutRect.width, height: height))
+                }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) {
                 let reader = NSApp.windows.first { $0.windowController is ReaderWindowController && $0.isVisible }
                 let window = defaults.string(forKey: "FolioPreviewSettings") != nil ? AppDelegate.shared.settingsWindow?.window
@@ -121,6 +138,8 @@ enum PreviewHooks {
                 // An open sheet (e.g. 编辑配置…, and a sheet on top of it) is what the window shows.
                 var shown = window
                 while let sheet = shown?.attachedSheet { shown = sheet }
+                if defaults.bool(forKey: "FolioPreviewModelPicker"),
+                   let popover = NSApp.windows.first(where: { String(describing: type(of: $0)).contains("Popover") }) { shown = popover }
                 guard let view = shown?.contentView?.superview,
                       let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
                 view.cacheDisplay(in: view.bounds, to: rep)

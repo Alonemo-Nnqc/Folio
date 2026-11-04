@@ -194,6 +194,22 @@
       }
     },
     "%lld" : {},
+    "%lld / %lld 个模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %2$lld Models"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld 个模型"
+          }
+        }
+      }
+    },
     "%lld 个文件未检索到元数据，已保留为独立文件" : {
       "localizations" : {
         "en" : {
@@ -390,6 +406,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple Translation needs the offline language pack for these languages first. Click “Download Language Pack” in Settings ▸ Translation."
+          }
+        }
+      }
+    },
+    "CSV 文件，两列：原文, 译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A CSV file with two columns: original, translation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "CSV 文件，两列：原文, 译文"
           }
         }
       }
@@ -1049,6 +1081,22 @@
         }
       }
     },
+    "付费接口额度较高时调大可以更快；遇到限流时调小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raise it for faster translation on paid services with high limits; lower it if requests are throttled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "付费接口额度较高时调大可以更快；遇到限流时调小"
+          }
+        }
+      }
+    },
     "以临时附加组件载入，Firefox 重启后需要重新载入" : {
       "localizations" : {
         "en" : {
@@ -1135,6 +1183,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Use the Zotero recognizer"
+          }
+        }
+      }
+    },
+    "使用“%@”" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "使用“%@”"
           }
         }
       }
@@ -3347,6 +3411,22 @@
         }
       }
     },
+    "已找到 %@（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found %1$@ (%2$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "已找到 %1$@（%2$@）"
+          }
+        }
+      }
+    },
     "已找到 pdf2zh_next %@，翻译将使用它" : {
       "localizations" : {
         "en" : {
@@ -3745,6 +3825,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quick Look"
+          }
+        }
+      }
+    },
+    "思考程度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thinking"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "思考程度"
           }
         }
       }
@@ -4423,6 +4519,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Search or create a tag"
+          }
+        }
+      }
+    },
+    "搜索或输入模型名称" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search or Type a Model Name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "搜索或输入模型名称"
           }
         }
       }
@@ -5469,12 +5581,18 @@
         }
       }
     },
-    "本机智能体（无需 Key）" : {
+    "本机智能体（这台 Mac 上未找到）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agents on This Mac (No Key)"
+            "value" : "Local Agents (Not Found on This Mac)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "本机智能体（这台 Mac 上未找到）"
           }
         }
       }
@@ -5877,6 +5995,22 @@
         }
       }
     },
+    "正在翻译一句话…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translating a sentence…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "正在翻译一句话…"
+          }
+        }
+      }
+    },
     "正在获取…" : {
       "localizations" : {
         "en" : {
@@ -6153,6 +6287,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Light"
+          }
+        }
+      }
+    },
+    "测试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "测试"
+          }
+        }
+      }
+    },
+    "测试中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testing…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "测试中…"
           }
         }
       }
@@ -6529,6 +6695,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Layout-preserving translation by pdf2zh_next (BabelDOC, AGPL-3.0)\nThe built-in components are downloaded on first use, about 1.4 GB"
+          }
+        }
+      }
+    },
+    "由所选模型决定，想换程度请换一个模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set by the chosen model; choose another model to change it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "由所选模型决定，想换程度请换一个模型"
           }
         }
       }
@@ -7059,6 +7241,22 @@
         }
       }
     },
+    "翻译一句话，确认这个服务能用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translates one sentence to check the service works"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "翻译一句话，确认这个服务能用"
+          }
+        }
+      }
+    },
     "翻译全文" : {
       "localizations" : {
         "en" : {
@@ -7075,6 +7273,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Translate Paper…"
+          }
+        }
+      }
+    },
+    "翻译内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What to Translate"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "翻译内容"
           }
         }
       }
@@ -7508,6 +7722,12 @@
             "state" : "translated",
             "value" : "Language"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "语言"
+          }
         }
       }
     },
@@ -7547,6 +7767,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Use Folio's MCP server to find the pdf2zh_next installed on my Mac and set it as Folio's translation engine."
+          }
+        }
+      }
+    },
+    "越高译文可能越好，也越慢；翻译通常用低就够了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Higher may translate better but takes longer; Low is usually enough"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "越高译文可能越好，也越慢；翻译通常用低就够了"
           }
         }
       }
@@ -7703,6 +7939,22 @@
         }
       }
     },
+    "输出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Output"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "输出"
+          }
+        }
+      }
+    },
     "边栏" : {
       "localizations" : {
         "en" : {
@@ -7795,6 +8047,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This isn't a PDF file"
+          }
+        }
+      }
+    },
+    "这个服务没有提供模型列表，请直接输入模型名称" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This service doesn’t list its models. Type a model name."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "这个服务没有提供模型列表，请直接输入模型名称"
           }
         }
       }
@@ -8044,7 +8312,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Translates the text of table cells one by one; numbers and symbols stay as they are"
+            "value" : "Translates table text cell by cell; numbers and symbols stay as they are"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "逐格翻译表格中的文字；数字和符号保持原样"
           }
         }
       }
@@ -8075,6 +8349,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add by Identifier…"
+          }
+        }
+      }
+    },
+    "速度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "速度"
           }
         }
       }
@@ -8494,7 +8784,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paragraphs of the same paper translated with the same service are reused by default, so retries are faster and cheaper"
+            "value" : "Paragraphs of this paper already translated by this service are reused by default, which is faster and cheaper"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "默认会复用同一篇论文用同一服务翻译过的段落，重试时更快、更省"
           }
         }
       }
@@ -8505,6 +8801,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The reference list stays in the original by default"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "默认保留参考文献列表的原文"
           }
         }
       }

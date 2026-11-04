@@ -11,6 +11,102 @@
         }
       }
     },
+    "%@ 的模型服务返回错误：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s model service returned an error: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 的模型服务返回错误：%2$@"
+          }
+        }
+      }
+    },
+    "%@ 的模型服务限流了请求，请稍后重试或换一个模型：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s model service is rate limiting. Try again later or choose another model: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 的模型服务限流了请求，请稍后重试或换一个模型：%2$@"
+          }
+        }
+      }
+    },
+    "%@ 的版本过旧：%@。请在终端更新 %@ 后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is out of date: %2$@. Update %3$@ in Terminal and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 的版本过旧：%2$@。请在终端更新 %3$@ 后重试"
+          }
+        }
+      }
+    },
+    "%@ 的账户额度已用完：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ has used up its quota: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 的账户额度已用完：%2$@"
+          }
+        }
+      }
+    },
+    "%@ 运行失败：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ failed: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 运行失败：%2$@"
+          }
+        }
+      }
+    },
+    "%@ 还不能使用：%@。请先在终端运行一次 %@，完成登录或设置后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ can't be used yet: %2$@. Run %3$@ once in Terminal to sign in or finish its setup, then try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 还不能使用：%2$@。请先在终端运行一次 %3$@，完成登录或设置后再试"
+          }
+        }
+      }
+    },
     "%@ 需要填写“%@”，请在设置的“翻译”页补充。" : {
       "localizations" : {
         "en" : {
@@ -663,6 +759,22 @@
         }
       }
     },
+    "关闭" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
     "关闭思考" : {
       "localizations" : {
         "en" : {
@@ -833,12 +945,18 @@
         }
       }
     },
-    "在这台 Mac 上找不到 %@。请先安装并登录，或在设置的“翻译”页填写它的路径。" : {
+    "在这台 Mac 上找不到 %@。请先安装并登录，或在 设置 ▸ 翻译 的高级选项里填写它的路径。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ wasn't found on this Mac. Install it and sign in, or enter its path in Settings ▸ Translation."
+            "value" : "%@ wasn't found on this Mac. Install it and sign in, or enter its path under Advanced in Settings ▸ Translation."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "在这台 Mac 上找不到 %@。请先安装并登录，或在 设置 ▸ 翻译 的高级选项里填写它的路径。"
           }
         }
       }
@@ -849,6 +967,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Region"
+          }
+        }
+      }
+    },
+    "它上报的客户端版本 %@ 已过期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the client version it reports, %@, is outdated"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "它上报的客户端版本 %@ 已过期"
+          }
+        }
+      }
+    },
+    "它上报的客户端版本 %@ 已过期（要求 %@ 或更新）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the client version it reports, %1$@, is outdated (%2$@ or newer is required)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "它上报的客户端版本 %1$@ 已过期（要求 %2$@ 或更新）"
+          }
+        }
+      }
+    },
+    "它上报的客户端版本已过期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the client version it reports is outdated"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "它上报的客户端版本已过期"
           }
         }
       }
@@ -1231,6 +1397,22 @@
         }
       }
     },
+    "服务%@的上游拒绝了请求（426）：%@。这个版本号是该接口服务自己上报的，和这台 Mac 上安装的命令行工具无关，请更新这个接口服务（例如 grok2api）或在它的设置里改高版本号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The upstream of the service%1$@rejected the request (426): %2$@. That version comes from the API service itself, not from any command-line tool on this Mac. Update the service (grok2api, for example) or raise the version in its settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "服务%1$@的上游拒绝了请求（426）：%2$@。这个版本号是该接口服务自己上报的，和这台 Mac 上安装的命令行工具无关，请更新这个接口服务（例如 grok2api）或在它的设置里改高版本号"
+          }
+        }
+      }
+    },
     "服务器%@中断了连接，请稍后重试" : {
       "localizations" : {
         "en" : {
@@ -1267,6 +1449,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The service returned no models."
+          }
+        }
+      }
+    },
+    "服务没有返回译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service returned no translation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "服务没有返回译文"
           }
         }
       }
@@ -1381,6 +1579,22 @@
         }
       }
     },
+    "模型默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Model Default"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "模型默认"
+          }
+        }
+      }
+    },
     "正在启动翻译引擎" : {
       "localizations" : {
         "en" : {
@@ -1431,6 +1645,22 @@
         }
       }
     },
+    "深度思考" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deep Thinking"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "深度思考"
+          }
+        }
+      }
+    },
     "清理临时文件" : {
       "localizations" : {
         "en" : {
@@ -1447,6 +1677,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Generate pages"
+          }
+        }
+      }
+    },
+    "由智能体决定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent’s Own Setting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "由智能体决定"
           }
         }
       }
@@ -1865,6 +2111,38 @@
         }
       }
     },
+    "调用本机已登录的 Amp，模型由 Amp 决定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Amp signed in on this Mac; Amp chooses the model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Amp，模型由 Amp 决定"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Antigravity 命令行（agy），无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Antigravity command line (agy) signed in on this Mac; no key needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Antigravity 命令行（agy），无需配置 Key"
+          }
+        }
+      }
+    },
     "调用本机已登录的 Claude Code 命令行\n建议填写 claude 的完整路径" : {
       "localizations" : {
         "en" : {
@@ -1895,12 +2173,34 @@
         }
       }
     },
-    "调用本机已登录的 Cursor CLI，无需配置 Key" : {
+    "调用本机已登录的 Cursor CLI，无需配置 Key\nCursor 应用不带这个命令，需要单独安装 Cursor CLI" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Uses the Cursor CLI on this Mac with your login, no key needed"
+            "value" : "Uses the Cursor CLI signed in on this Mac; no key needed\nThe Cursor app doesn't include this command; install the Cursor CLI separately"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Cursor CLI，无需配置 Key\nCursor 应用不带这个命令，需要单独安装 Cursor CLI"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Factory Droid，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Factory Droid signed in on this Mac; no key needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Factory Droid，无需配置 Key"
           }
         }
       }
@@ -1915,6 +2215,70 @@
         }
       }
     },
+    "调用本机已登录的 GitHub Copilot CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the GitHub Copilot CLI signed in on this Mac; no key needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 GitHub Copilot CLI，无需配置 Key"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Grok CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Grok CLI signed in on this Mac; no key needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Grok CLI，无需配置 Key"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Kimi CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Kimi CLI signed in on this Mac; no key needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Kimi CLI，无需配置 Key"
+          }
+        }
+      }
+    },
+    "调用本机已登录的 Kiro CLI，无需配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Kiro CLI signed in on this Mac; no key needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已登录的 Kiro CLI，无需配置 Key"
+          }
+        }
+      }
+    },
     "调用本机已登录的 Qwen Code，无需配置 Key" : {
       "localizations" : {
         "en" : {
@@ -1925,12 +2289,108 @@
         }
       }
     },
+    "调用本机已配置的 Cline CLI，无需在 Folio 中配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the Cline CLI set up on this Mac; no key needed in Folio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已配置的 Cline CLI，无需在 Folio 中配置 Key"
+          }
+        }
+      }
+    },
+    "调用本机已配置的 DeepSeek Harness（dsh），模型由它的配置决定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses DeepSeek Harness (dsh) set up on this Mac; its configuration chooses the model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已配置的 DeepSeek Harness（dsh），模型由它的配置决定"
+          }
+        }
+      }
+    },
+    "调用本机已配置的 Hermes Agent（需先运行 hermes model 选好模型）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses Hermes Agent set up on this Mac (run hermes model first to choose a model)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已配置的 Hermes Agent（需先运行 hermes model 选好模型）"
+          }
+        }
+      }
+    },
+    "调用本机已配置的 OpenClaw，无需在 Folio 中配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses OpenClaw set up on this Mac; no key needed in Folio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已配置的 OpenClaw，无需在 Folio 中配置 Key"
+          }
+        }
+      }
+    },
+    "调用本机已配置的 goose，无需在 Folio 中配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses goose set up on this Mac; no key needed in Folio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已配置的 goose，无需在 Folio 中配置 Key"
+          }
+        }
+      }
+    },
     "调用本机已配置的 opencode，无需在 Folio 中配置 Key" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Uses opencode as configured on this Mac, no key needed in Folio"
+          }
+        }
+      }
+    },
+    "调用本机已配置的 pi，无需在 Folio 中配置 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses pi set up on this Mac; no key needed in Folio"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "调用本机已配置的 pi，无需在 Folio 中配置 Key"
           }
         }
       }

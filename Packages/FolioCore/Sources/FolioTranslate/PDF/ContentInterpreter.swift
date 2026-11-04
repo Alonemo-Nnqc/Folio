@@ -68,12 +68,14 @@ struct Glyph: Sendable {
     var adjustment: Double?
     /// Glyphs of TeX's extension fonts hang from their origin: how far below it they reach, in ems.
     var depth: Double?
+    /// Outside the clipping area where it is drawn: nothing of it shows (text of a page a figure was cropped from).
+    var isClipped = false
 
     var origin: CGPoint { CGPoint.zero.applying(matrix) }
     var end: CGPoint { CGPoint(x: width, y: 0).applying(matrix) }
     var angle: Double { atan2(matrix.b, matrix.a) }
     var isHorizontal: Bool { abs(angle) < 0.02 && matrix.a > 0 }
-    var isVisible: Bool { renderMode != 3 && renderMode != 7 }
+    var isVisible: Bool { renderMode != 3 && renderMode != 7 && !isClipped }
     /// The em box on the baseline, from a fifth of an em below it to the cap height and above (hanging glyphs:
     /// from their depth to just above the origin).
     var box: CGRect {
@@ -122,6 +124,10 @@ final class ContentInterpreter {
     private(set) var streams: [StreamPath: InterpretedStream] = [:]
     /// Fonts used, in order of first use (`Glyph.font`).
     private(set) var fonts: [FontMetrics] = []
+    /// The image XObject of each image mark drawn with `Do`, and the matrix it was drawn with: to draw it again.
+    private(set) var images: [Int: (stream: CGPDFStreamRef, matrix: CGAffineTransform)] = [:]
+    /// The same for small filled shapes: the matrix their path was drawn with.
+    private(set) var paths: [Int: CGAffineTransform] = [:]
 
     private var fontCache: [Int: Int] = [:]
     private var chainCounter = 0
@@ -196,6 +202,7 @@ final class ContentInterpreter {
                 rect = clipped
             }
             let scale = sqrt(abs(gs.ctm.a * gs.ctm.d - gs.ctm.b * gs.ctm.c))
+            if kind == .fill, rect.width < 40, rect.height < 40 { paths[marks.count] = gs.ctm }
             marks.append(GraphicMark(kind: kind, rect: rect, isWhite: kind == .fill && gs.fillWhite,
                                      location: OpLocation(stream: path, index: index),
                                      hasCurves: pathCurves, segmentCount: pathSegments, opRange: start...index,
@@ -241,11 +248,16 @@ final class ContentInterpreter {
                         let matrix = glyphToText.concatenating(CGAffineTransform(translationX: tx, y: 0)).concatenating(trm)
                         let up = hypot(matrix.c, matrix.d) * emScale
                         let decoded = metrics?.encoding.text(code)
-                        glyphs.append(Glyph(run: runIndex, code: code, length: length, font: gs.font ?? -1, matrix: matrix, width: w0,
-                                            size: up, text: decoded?.text, reliable: decoded?.reliable ?? false, renderMode: gs.render,
-                                            color: gs.render == 1 ? gs.strokeColor : gs.fillColor, element: e, offset: offset,
-                                            adjustment: fs * th != 0 ? -displacement / (fs * th) * 1000 : nil,
-                                            depth: metrics?.hangingDepth(code)))
+                        var glyph = Glyph(run: runIndex, code: code, length: length, font: gs.font ?? -1, matrix: matrix, width: w0,
+                                          size: up, text: decoded?.text, reliable: decoded?.reliable ?? false, renderMode: gs.render,
+                                          color: gs.render == 1 ? gs.strokeColor : gs.fillColor, element: e, offset: offset,
+                                          adjustment: fs * th != 0 ? -displacement / (fs * th) * 1000 : nil,
+                                          depth: metrics?.hangingDepth(code))
+                        if let clip = gs.clip {
+                            let middle = CGPoint(x: w0 / 2, y: 0.3).applying(matrix)
+                            glyph.isClipped = !clip.insetBy(dx: -1, dy: -1).contains(middle)
+                        }
+                        glyphs.append(glyph)
                         tx += displacement
                         offset += length
                     }
@@ -330,7 +342,7 @@ final class ContentInterpreter {
                       let dict = CGPDFStreamGetDictionary(stream) else { break }
                 let subtype = PDFDictionary.name(dict, "Subtype")
                 if subtype == "Image" {
-                    addImageMark(ctm: gs.ctm, clip: gs.clip, location: OpLocation(stream: path, index: index))
+                    addImageMark(ctm: gs.ctm, clip: gs.clip, location: OpLocation(stream: path, index: index), stream: stream)
                 } else if subtype == "Form", depth < 12 {
                     let formPath = path + [index]
                     let formSource = Self.data(of: stream)
@@ -399,10 +411,11 @@ final class ContentInterpreter {
 
     static let pathConstruction: Set<String> = ["m", "l", "c", "v", "y", "re", "h"]
 
-    private func addImageMark(ctm: CGAffineTransform, clip: CGRect?, location: OpLocation) {
+    private func addImageMark(ctm: CGAffineTransform, clip: CGRect?, location: OpLocation, stream: CGPDFStreamRef? = nil) {
         var rect = CGRect(x: 0, y: 0, width: 1, height: 1).applying(ctm)
         if let clip { rect = rect.intersection(clip) }
         guard !rect.isNull, rect.width > 0.5, rect.height > 0.5 else { return }
+        if let stream { images[marks.count] = (stream, ctm) }
         marks.append(GraphicMark(kind: .image, rect: rect, isWhite: false, location: location, hasCurves: false, segmentCount: 0,
                                  opRange: location.index...location.index))
     }
@@ -481,9 +494,7 @@ final class FontMetrics {
         } else {
             var scale = 1.0 / 1000
             if subtype == "Type3", let matrix = PDFDictionary.array(dict, "FontMatrix") {
-                let m = PDFDictionary.numbers(matrix)
-                scale = m.first ?? scale
-                if m.count >= 4, m[3] != 0 { em = abs(m[3]) * 1000 }
+                scale = PDFDictionary.numbers(matrix).first ?? scale
             }
             let first = Int(PDFDictionary.number(dict, "FirstChar") ?? 0)
             if let w = PDFDictionary.array(dict, "Widths") {
@@ -499,6 +510,15 @@ final class FontMetrics {
                 if !nonZero.isEmpty { missing = nonZero.reduce(0, +) / Double(nonZero.count) }
             }
             defaultWidth = missing
+            // Type 3 fonts have no em of their own. The font size normally is the em; generators that keep the size in
+            // the font matrix show it in the widths, about half an em for most characters.
+            if subtype == "Type3" {
+                let advances = widths.values.filter { $0 > 0 }.sorted()
+                if !advances.isEmpty {
+                    let estimate = advances[advances.count / 2] * 2
+                    if estimate < 0.5 || estimate > 2 { em = estimate }
+                }
+            }
         }
         emScale = em
     }
@@ -623,6 +643,8 @@ struct FontInfo: Sendable, Hashable {
         isSerif = !sans.contains { lower.contains($0) } || flags & 2 != 0 && !lower.contains("sans")
         isSymbolic = flags & 4 != 0 && flags & 32 == 0
         isItalic = flags & 64 != 0 || ["italic", "ital", "oblique", "-it", "cmti", "cmmi", "slanted", "-sl", "kursiv"].contains { lower.contains($0) }
-        isBold = flags & 262144 != 0 || weight >= 600 || ["bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi"].contains { lower.contains($0) }
+        let stem = descriptor.flatMap { PDFDictionary.number($0, "StemV") } ?? 0
+        isBold = flags & 262144 != 0 || weight >= 600 || (stem >= 130 && !isMonospace)
+            || ["bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi", "medi", "sfbx", "sfsx", "cmssbx", "ptmb", "phvb", "pplb"].contains { lower.contains($0) }
     }
 }

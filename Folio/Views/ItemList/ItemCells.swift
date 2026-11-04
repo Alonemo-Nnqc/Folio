@@ -63,16 +63,19 @@ final class TitleCell: NSTableCellView {
         progress.maxValue = 1
         progress.isHidden = true
         progress.setAccessibilityIdentifier("translationProgressBar")
-        stageLabel.font = ItemListMetrics.secondaryFont
+        stageLabel.font = .monospacedDigitSystemFont(ofSize: ItemListMetrics.secondaryFont.pointSize, weight: .regular)
+        stageLabel.alignment = .right
         stageLabel.textColor = .secondaryLabelColor
         stageLabel.lineBreakMode = .byTruncatingTail
         stageLabel.isHidden = true
         // In a narrow column the title gives way first, then the bar narrows;
         // what the engine is doing stays readable longest.
         stageLabel.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(740), for: .horizontal)
-        stageLabel.setContentHuggingPriority(.required, for: .horizontal)
+        // Its box keeps its width (below) while the text changes; only a narrow column makes it give way.
+        stageLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         progressLabel.font = .monospacedDigitSystemFont(ofSize: ItemListMetrics.secondaryFont.pointSize, weight: .regular)
         progressLabel.textColor = .secondaryLabelColor
+        progressLabel.alignment = .right
         progressLabel.isHidden = true
         progressLabel.setContentHuggingPriority(.required, for: .horizontal)
         progressLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -100,7 +103,9 @@ final class TitleCell: NSTableCellView {
             stageLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             progress.centerYAnchor.constraint(equalTo: centerYAnchor),
             progress.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
-            { let width = progress.widthAnchor.constraint(equalToConstant: 64); width.priority = NSLayoutConstraint.Priority(720); return width }(),
+            { let width = progress.widthAnchor.constraint(equalToConstant: 64); width.priority = .defaultHigh; return width }(),
+            { let width = stageLabel.widthAnchor.constraint(equalToConstant: TranslationProgressBar.stageWidth(font: stageLabel.font!)); width.priority = NSLayoutConstraint.Priority(745); return width }(),
+            progressLabel.widthAnchor.constraint(equalToConstant: TranslationProgressBar.percentWidth(font: progressLabel.font!)),
         ])
         labelBeforeProgress = label.trailingAnchor.constraint(lessThanOrEqualTo: stageLabel.leadingAnchor, constant: -8)
         titleRoom = label.widthAnchor.constraint(greaterThanOrEqualToConstant: 64)
@@ -108,6 +113,18 @@ final class TitleCell: NSTableCellView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
+
+    /// A running translation's stage and progress, shown in place.
+    func updateTranslation(stage: String, fraction: Double?) {
+        TranslationProgressBar.apply(fraction, to: progress)
+        progressLabel.isHidden = fraction == nil
+        if stageLabel.stringValue != stage {
+            stageLabel.stringValue = stage
+            stageLabel.toolTip = stage
+            progress.toolTip = stage
+        }
+        progressLabel.stringValue = fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? ""
+    }
 
     /// `origin` is the title of the item a trashed file was deleted from (TRASH-03); `translation` is the
     /// stage and progress of a running translation (TRANS-04), shown as text and a progress bar.
@@ -119,11 +136,7 @@ final class TitleCell: NSTableCellView {
         labelBeforeProgress.isActive = translation != nil
         titleRoom.isActive = translation != nil
         if let translation {
-            TranslationProgressBar.apply(translation.fraction, to: progress)
-            stageLabel.stringValue = translation.stage
-            stageLabel.toolTip = translation.stage
-            progressLabel.stringValue = translation.fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? ""
-            progress.toolTip = translation.stage
+            updateTranslation(stage: translation.stage, fraction: translation.fraction)
         } else {
             progress.stopAnimation(nil)
         }

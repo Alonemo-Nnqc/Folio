@@ -76,14 +76,8 @@ public final class TranslationJob: @unchecked Sendable {
 
     private func run(emit: @escaping @Sendable (TranslationEvent) -> Void, log: TranslationLog) async throws -> TranslationEvent {
         let options = request.options
-        var lastProgress = 0.0
-        func progress(_ value: Double) {
-            let clamped = min(max(value, lastProgress), 1)
-            if clamped - lastProgress >= 0.004 || clamped >= 1 {
-                lastProgress = clamped
-                emit(.progress(clamped))
-            }
-        }
+        let reported = MonotonicProgress(emit: emit)
+        func progress(_ value: Double) { reported.report(value) }
         log.write("translate \(request.input.lastPathComponent) with \(request.serviceID) \(options.langIn)→\(options.langOut)")
         let provider = try ProviderFactory.make(serviceID: request.serviceID, fields: request.fieldValues, secrets: request.secrets,
                                                 concurrency: options.concurrency)
@@ -102,7 +96,7 @@ public final class TranslationJob: @unchecked Sendable {
         let output = options.onlyIncludeTranslatedPages || options.pages == nil ? selected : Array(1...cg.numberOfPages)
         let byNumber = Dictionary(uniqueKeysWithValues: analysed.map { ($0.number, $0) })
         let layouts = output.compactMap { byNumber[$0] ?? PageLayout.untouched(cg, number: $0) }
-        let segments = analysed.flatMap(SegmentBuilder.segments(for:))
+        let segments = SegmentBuilder.segments(for: analysed, target: options.langOut)
         log.write(String(format: "layout: %d pages, %d segments in %.2f s", analysed.count, segments.count, Date().timeIntervalSince(started)))
         progress(0.04)
         if segments.isEmpty { throw EngineError.noText }
@@ -150,12 +144,28 @@ public final class TranslationJob: @unchecked Sendable {
 
         let batches = Self.batches(segments.filter { state.translation(for: $0) == nil }, limits: provider.limits)
         let total = segments.count
-        func reportTranslation() {
-            let done = state.doneCount
-            emit(.stage(String(localized: "翻译段落 \(done)/\(total)", bundle: .module)))
-            progress(0.08 + 0.86 * state.doneFraction)
+        // Between finished batches the bar goes on moving, by what is running and how long that usually takes.
+        let estimate = ProgressEstimate(done: state.characters.done, total: state.characters.total, limits: provider.limits)
+        let target = ProgressTarget { 0.08 + 0.86 * estimate.fraction() }
+        let ticker = Task.detached(priority: .utility) {
+            // One curve from here to the end: what finishes in a jump still arrives over a moment or two.
+            var shown = target.value()
+            var lastCount = -1
+            while !Task.isCancelled {
+                let goal = target.value()
+                shown = min(goal, shown + max(0.001, (goal - shown) * 0.2))
+                reported.report(shown)
+                if shown <= 0.94 {
+                    let count = max(state.doneCount, min(total - 1, Int(Double(total) * (shown - 0.08) / 0.86)))
+                    if count != lastCount {
+                        lastCount = count
+                        emit(.stage(TranslationStageText.paragraphs(done: count, total: total)))
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+            }
         }
-        reportTranslation()
+        defer { ticker.cancel() }
         let batchContext = context
         defer { termTask?.cancel() }
         try await withThrowingTaskGroup(of: Void.self) { group in
@@ -165,7 +175,7 @@ public final class TranslationJob: @unchecked Sendable {
                 group.addTask {
                     var context = batchContext
                     context.glossary = glossary.entries
-                    let texts = try await self.translate(batch, provider: provider, context: context, log: log)
+                    let texts = try await self.translate(batch, provider: provider, context: context, log: log, estimate: estimate)
                     for (segment, raw) in zip(batch, texts) {
                         let text = segment.kind == .heading ? HeadingNumbers.restoreSpace(source: segment.source, translation: raw) : raw
                         state.store(text, for: segment)
@@ -175,7 +185,6 @@ public final class TranslationJob: @unchecked Sendable {
             }
             for _ in 0..<max(1, provider.limits.concurrency) { startNext() }
             while try await group.next() != nil {
-                reportTranslation()
                 cache.saveIfNeeded()
                 previews.update(state.snapshot(), pagesDone: state.completedPages)
                 startNext()
@@ -184,9 +193,11 @@ public final class TranslationJob: @unchecked Sendable {
         cache.save()
         try Task.checkCancellation()
 
-        // 4. The translated PDFs.
-        emit(.stage(String(localized: "排版译文", bundle: .module)))
-        progress(0.95)
+        // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
+        emit(.stage(TranslationStageText.layout))
+        let renderSeconds = 0.5 + Double(layouts.count) * 0.08
+        let renderStarted = Date()
+        target.set { 0.94 + 0.05 * (1 - exp(-Date().timeIntervalSince(renderStarted) / renderSeconds)) }
         await previews.finish()
         let base = request.input.deletingPathExtension().lastPathComponent
         let wantMono = options.outputs != .dual, wantDual = options.outputs != .mono
@@ -203,16 +214,27 @@ public final class TranslationJob: @unchecked Sendable {
             try dual.write(to: dualURL!)
         }
         log.write(String(format: "done in %.1f s", Date().timeIntervalSince(started)))
+        ticker.cancel()
         progress(1)
         return .finished(mono: monoURL, dual: dualURL)
     }
 
-    /// Who translates: the cache is only shared between runs of the same service, model and languages.
+    /// Who translates: the cache is only shared between runs of the same service, model, thinking level and languages.
     private func signature() -> String {
+        Self.signature(of: request)
+    }
+
+    static func signature(of request: TranslationRequest) -> String {
         let service = TranslationServiceCatalog.service(id: request.serviceID)
         let model = service?.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }
             .flatMap { request.fieldValues[$0.option].flatMap { $0.isEmpty ? nil : $0 } ?? $0.defaultValue } ?? ""
-        return "\(request.serviceID)|\(model)|\(request.options.langIn)|\(request.options.langOut)|v1"
+        // Only a level other than the usual one shows, so what is already cached at the usual one stays usable.
+        var thinking = ""
+        if case let .choices(_, usual) = ReasoningEffort.support(serviceID: request.serviceID, fields: request.fieldValues),
+           let level = ReasoningEffort.current(serviceID: request.serviceID, fields: request.fieldValues), level != usual {
+            thinking = "|thinking=\(level)"
+        }
+        return "\(request.serviceID)|\(model)\(thinking)|\(request.options.langIn)|\(request.options.langOut)|v1"
     }
 
     // MARK: Batches
@@ -237,7 +259,7 @@ public final class TranslationJob: @unchecked Sendable {
 
     /// One batch, retried on passing failures; a batch that keeps failing is split in halves.
     private func translate(_ batch: [TextSegment], provider: TranslationProvider, context: TranslationContext,
-                           log: TranslationLog) async throws -> [String] {
+                           log: TranslationLog, estimate: ProgressEstimate) async throws -> [String] {
         let items = batch.map { TranslationItem(text: $0.source, kind: $0.kind) }
         var context = context
         if provider.limits.usesContext {
@@ -248,13 +270,16 @@ public final class TranslationJob: @unchecked Sendable {
         for attempt in 0..<6 {
             try Task.checkCancellation()
             try await rateGate.wait()
+            let characters = batch.reduce(0) { $0 + $1.source.count }
+            let request = estimate.begin(characters: characters)
             do {
                 let started = Date()
                 let texts = try await provider.translate(items, context: context)
-                log.write(String(format: "batch of %d (%d chars) in %.1f s", batch.count, batch.reduce(0) { $0 + $1.source.count },
-                                 Date().timeIntervalSince(started)))
+                log.write(String(format: "batch of %d (%d chars) in %.1f s", batch.count, characters, Date().timeIntervalSince(started)))
+                estimate.finish(request)
                 return texts.map(Self.clean)
             } catch let error as ProviderError {
+                estimate.abandon(request)
                 lastError = error
                 log.write("attempt \(attempt + 1) failed: \(error.detail.prefix(500))")
                 guard error.isRetryable else { throw error }
@@ -271,8 +296,8 @@ public final class TranslationJob: @unchecked Sendable {
         }
         if batch.count > 1 {
             let half = batch.count / 2
-            let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log)
-            let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log)
+            let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log, estimate: estimate)
+            let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log, estimate: estimate)
             return first + second
         }
         throw lastError ?? ProviderError(kind: .invalidResponse, detail: "translation failed")
@@ -375,6 +400,105 @@ func withTimeout<T: Sendable>(seconds: Double, _ body: @escaping @Sendable () as
     }
 }
 
+// MARK: - Progress
+
+/// Reports progress that only goes forward, in small enough steps not to flood whoever is listening.
+final class MonotonicProgress: @unchecked Sendable {
+    private let emit: @Sendable (TranslationEvent) -> Void
+    private let lock = NSLock()
+    private var last = 0.0
+
+    init(emit: @escaping @Sendable (TranslationEvent) -> Void) { self.emit = emit }
+
+    func report(_ value: Double) {
+        let next: Double? = lock.withLock {
+            let clamped = min(max(value, last), 1)
+            guard clamped - last >= 0.0005 || (clamped >= 1 && last < 1) else { return nil }
+            last = clamped
+            return clamped
+        }
+        if let next { emit(.progress(next)) }
+    }
+}
+
+/// What the progress bar is heading for, which changes from stage to stage.
+final class ProgressTarget: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: @Sendable () -> Double
+
+    init(_ value: @escaping @Sendable () -> Double) { current = value }
+
+    func set(_ value: @escaping @Sendable () -> Double) { lock.withLock { current = value } }
+    func value() -> Double { lock.withLock { current } () }
+}
+
+/// How far the translation has come, at any moment: what is done, plus how far the requests under way should be by
+/// now, going by how long requests of this job have taken so far (at first, by what is usual for the service).
+/// Services only answer when they are done, so the part under way is an estimate; it never gets ahead of a request
+/// that takes longer than expected, it slows down.
+final class ProgressEstimate: @unchecked Sendable {
+    private struct Running { var characters: Double; var started: Date }
+    private let lock = NSLock()
+    private var running: [Int: Running] = [:]
+    private var nextID = 0
+    private var done: Double
+    private let total: Double
+    private let startup: Double
+    private var secondsPerCharacter: Double
+    private var measured = false
+    private var highest = 0.0
+    private let clock: @Sendable () -> Date
+
+    init(done: Int, total: Int, limits: ProviderLimits, clock: @escaping @Sendable () -> Date = { Date() }) {
+        self.done = Double(done)
+        self.total = Double(max(total, 1))
+        startup = limits.startupSeconds
+        secondsPerCharacter = limits.secondsPerCharacter
+        self.clock = clock
+    }
+
+    func begin(characters: Int) -> Int {
+        lock.withLock {
+            nextID += 1
+            running[nextID] = Running(characters: Double(characters), started: clock())
+            return nextID
+        }
+    }
+
+    func finish(_ id: Int) {
+        lock.withLock {
+            guard let request = running.removeValue(forKey: id) else { return }
+            done += request.characters
+            let rate = max(clock().timeIntervalSince(request.started) - startup, 0.05) / max(request.characters, 1)
+            secondsPerCharacter = measured ? (secondsPerCharacter + rate) / 2 : rate
+            measured = true
+        }
+    }
+
+    /// A request that failed: its part is not done after all (the bar stays where it is until the retry catches up).
+    func abandon(_ id: Int) { _ = lock.withLock { running.removeValue(forKey: id) } }
+
+    /// Share of the work done, 0…1; it never goes back.
+    func fraction() -> Double {
+        lock.withLock {
+            let now = clock()
+            var sum = done
+            for request in running.values {
+                let expected = startup + request.characters * secondsPerCharacter
+                sum += request.characters * Self.share(elapsed: now.timeIntervalSince(request.started) / expected)
+            }
+            highest = max(highest, min(sum / total, 1))
+            return highest
+        }
+    }
+
+    /// How much of a request to count after `elapsed` times its expected time: steadily up to nine tenths, then ever
+    /// more slowly, so a slow one keeps moving without being counted as done.
+    static func share(elapsed x: Double) -> Double {
+        x <= 1 ? 0.9 * max(x, 0) : 0.9 + 0.09 * (1 - 1 / (1 + (x - 1) / 1.5))
+    }
+}
+
 // MARK: - State
 
 /// Translations so far, shared by the concurrent batches.
@@ -404,7 +528,7 @@ final class TranslationState: @unchecked Sendable {
     func translation(for segment: TextSegment) -> String? { lock.withLock { translations[segment.id] } }
     func snapshot() -> [String: String] { lock.withLock { translations } }
     var doneCount: Int { lock.withLock { translations.count } }
-    var doneFraction: Double { lock.withLock { Double(doneCharacters) / Double(totalCharacters) } }
+    var characters: (done: Int, total: Int) { lock.withLock { (doneCharacters, totalCharacters) } }
     var completedPages: Set<Int> { lock.withLock { Set(remainingByPage.filter { $0.value <= 0 }.keys) } }
 }
 
