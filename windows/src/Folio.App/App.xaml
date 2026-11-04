@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="Folio.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Folio.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Rows are code-only controls that render whatever item they are bound to (keeps virtualization). -->
+            <DataTemplate x:Key="ItemRowTemplate">
+                <local:ItemRow />
+            </DataTemplate>
+            <DataTemplate x:Key="SidebarRowTemplate">
+                <local:SidebarRow />
+            </DataTemplate>
+
+            <!-- Folio's colours, the same as the macOS app's. -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="FolioAccent">#FF007AFF</Color>
+                    <SolidColorBrush x:Key="FolioAccentBrush" Color="#FF007AFF" />
+                    <SolidColorBrush x:Key="FolioSidebarBrush" Color="#F2F2F4F6" />
+                    <SolidColorBrush x:Key="FolioContentBrush" Color="#FFFFFFFF" />
+                    <SolidColorBrush x:Key="FolioInspectorBrush" Color="#F7F7F8FA" />
+                    <SolidColorBrush x:Key="FolioSelectionBrush" Color="#FFE3E3E8" />
+                    <SolidColorBrush x:Key="FolioSecondaryTextBrush" Color="#FF6E6E73" />
+                    <SolidColorBrush x:Key="FolioSeparatorBrush" Color="#FFE5E5EA" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="FolioAccent">#FF0A84FF</Color>
+                    <SolidColorBrush x:Key="FolioAccentBrush" Color="#FF0A84FF" />
+                    <SolidColorBrush x:Key="FolioSidebarBrush" Color="#E6262628" />
+                    <SolidColorBrush x:Key="FolioContentBrush" Color="#FF1E1E1E" />
+                    <SolidColorBrush x:Key="FolioInspectorBrush" Color="#F0242426" />
+                    <SolidColorBrush x:Key="FolioSelectionBrush" Color="#FF3A3A3C" />
+                    <SolidColorBrush x:Key="FolioSecondaryTextBrush" Color="#FF98989D" />
+                    <SolidColorBrush x:Key="FolioSeparatorBrush" Color="#FF38383A" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

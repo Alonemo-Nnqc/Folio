@@ -178,3 +178,41 @@ public class CitationTests
         Assert.Equal(2, parsed.Metadata.Authors.Count);
     }
 }
+
+public class AnnotationTests
+{
+    /// <summary>FOLIO_SAMPLE_PDF: a real paper; annotations are written to a copy and read back.</summary>
+    [Fact]
+    public void WritesAnnotationsByIncrementalUpdate()
+    {
+        var sample = Environment.GetEnvironmentVariable("FOLIO_SAMPLE_PDF");
+        if (string.IsNullOrEmpty(sample) || !File.Exists(sample)) return;
+        var copy = Path.Combine(Path.GetTempPath(), $"annotated-{Guid.NewGuid():N}.pdf");
+        File.Copy(sample, copy);
+        var before = PdfAnnotations.Read(copy).Count;
+        // The quad of page 1's first text line, from its letters.
+        double[] quad;
+        using (var doc = UglyToad.PdfPig.PdfDocument.Open(copy))
+        {
+            var letters = doc.GetPage(1).Letters.Where(l => l.Value.Trim().Length > 0).ToList();
+            var y = letters[0].StartBaseLine.Y;
+            var line = letters.Where(l => Math.Abs(l.StartBaseLine.Y - y) < 1).ToList();
+            double left = line.Min(l => l.BoundingBox.Left), right = line.Max(l => l.BoundingBox.Right);
+            double bottom = line.Min(l => l.BoundingBox.Bottom), top = line.Max(l => l.BoundingBox.Top);
+            quad = [left, top, right, top, left, bottom, right, bottom];
+        }
+        // A highlight over the top of page 1, an underline, a note and a stroke.
+        AnnotationWriter.Add(copy, [
+            new NewAnnotation(1, "Highlight", "yellow", Quads: [quad], Author: "Folio Test"),
+            new NewAnnotation(1, "Underline", "blue", Quads: [[50, 650, 300, 650, 50, 630, 300, 630]]),
+            new NewAnnotation(1, "Text", "pink", Rect: [500, 500, 520, 520], Contents: "批注：中文内容"),
+            new NewAnnotation(2, "Ink", "red", Strokes: [[100, 100, 150, 150, 200, 120]]),
+        ]);
+        var after = PdfAnnotations.Read(copy);
+        Assert.Equal(before + 4, after.Count);
+        Assert.Contains(after, a => a.Kind == "note" && a.Comment == "批注：中文内容");
+        Assert.Contains(after, a => a.Kind == "highlight" && a.Author == "Folio Test" && !string.IsNullOrEmpty(a.Text));
+        Assert.Equal(PdfText.PageCount(sample), PdfText.PageCount(copy));
+        File.Copy(copy, Path.Combine(Path.GetTempPath(), "folio-annotated-latest.pdf"), true);
+    }
+}
