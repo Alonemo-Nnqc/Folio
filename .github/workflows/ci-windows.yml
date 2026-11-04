@@ -54,9 +54,9 @@ jobs:
       - name: Package (trial)
         shell: pwsh
         run: |
-          dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} -p:Version=0.0.0-ci -o publish
+          dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} -p:Version=0.0.1 -o publish
           dotnet tool install -g vpk --version 1.2.161
-          vpk pack --packId Folio --packVersion 0.0.0-ci --packDir publish --mainExe Folio.exe --packTitle Folio --packAuthors Folio `
+          vpk pack --packId Folio --packVersion 0.0.1-ci.${{ github.run_number }} --packDir publish --mainExe Folio.exe --packTitle Folio --packAuthors Folio `
             --icon windows/src/Folio.App/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --outputDir releases
           Get-ChildItem releases
 
