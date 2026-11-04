@@ -12,7 +12,10 @@ $work = Join-Path ([IO.Path]::GetTempPath()) "folio-pdfjs-$version"
 New-Item -ItemType Directory -Force $work | Out-Null
 $tgz = Join-Path $work 'pdfjs.tgz'
 Invoke-WebRequest "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-$version.tgz" -OutFile $tgz
-$actual = (Get-FileHash $tgz -Algorithm SHA256).Hash.ToLowerInvariant()
+# .NET directly: under MSBuild, PowerShell's module path may not reach Get-FileHash.
+$stream = [System.IO.File]::OpenRead($tgz)
+try { $actual = ([System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash($stream)) -replace '-', '').ToLowerInvariant() }
+finally { $stream.Dispose() }
 if ($actual -ne $sha256) { throw "pdfjs-dist checksum mismatch: $actual" }
 tar -xzf $tgz -C $work
 $pkg = Join-Path $work 'package'
