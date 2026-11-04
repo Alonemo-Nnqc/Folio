@@ -1,0 +1,127 @@
+name: Release (Windows)
+
+# Push a tag such as win-v1.0.0 (matching a "## [1.0.0]" section in windows/CHANGELOG.md) to publish Folio for Windows.
+#
+# The repository also releases the macOS app (tags v*, release.yml). The two never collide:
+# - win-v* tags do not match release.yml's 'v*' filter, and vice versa;
+# - Windows releases are created with --latest=false, so GitHub's "latest" stays the macOS release, whose
+#   appcast.xml installed Macs read (Sparkle: releases/latest/download/appcast.xml);
+# - Folio for Windows finds its updates itself: it lists releases, keeps win-v* tags and reads that release's
+#   releases.win-x64.json / releases.win-arm64.json (Velopack). Assets carry the channel in their names.
+on:
+  push:
+    tags: ['win-v*']
+  # A trial run from the Actions tab: builds and packages, uploads the result, publishes nothing.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (needs a section in windows/CHANGELOG.md)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  VPK_VERSION: '1.2.161'
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            platform: x64
+          - arch: arm64
+            platform: ARM64
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $v = '${{ inputs.version }}'
+          if (-not $v) { $v = '${{ github.ref_name }}' -replace '^win-v', '' }
+          if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Bad version: $v" }
+          "value=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Fetch pdf.js
+        shell: pwsh
+        run: windows/scripts/fetch-pdfjs.ps1
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r win-${{ matrix.arch }} `
+            -p:Platform=${{ matrix.platform }} -p:Version=${{ steps.version.outputs.value }} -o publish
+
+      - name: Package (Velopack)
+        shell: pwsh
+        env:
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          dotnet tool install -g vpk --version $env:VPK_VERSION
+          $args = @('pack', '--packId', 'Folio', '--packVersion', '${{ steps.version.outputs.value }}', '--packDir', 'publish',
+                    '--mainExe', 'Folio.exe', '--packTitle', 'Folio', '--packAuthors', 'Folio', '--icon', 'windows/src/Folio.App/Assets/Folio.ico',
+                    '--channel', 'win-${{ matrix.arch }}', '--runtime', 'win-${{ matrix.arch }}', '--outputDir', 'releases')
+          # Optional code signing: add the certificate as secrets to remove SmartScreen's "unknown publisher" warning.
+          if ($env:WINDOWS_PFX_BASE64) {
+            [IO.File]::WriteAllBytes("$PWD\sign.pfx", [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+            $args += @('--signParams', "/f `"$PWD\sign.pfx`" /p `"$env:WINDOWS_PFX_PASSWORD`" /fd sha256 /tr http://timestamp.digicert.com /td sha256")
+          }
+          vpk @args
+          Remove-Item sign.pfx -ErrorAction SilentlyContinue
+          Get-ChildItem releases
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folio-windows-${{ matrix.arch }}
+          path: releases/
+
+  publish:
+    name: Publish GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/win-v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: releases
+          merge-multiple: true
+
+      - name: Release notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#win-v}"
+          python3 - "$VERSION" <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          text = open("windows/CHANGELOG.md", encoding="utf-8").read()
+          match = re.search(r"^## \[" + re.escape(version) + r"\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          if not match:
+              sys.exit(f"windows/CHANGELOG.md has no section for [{version}]")
+          open("release-notes.md", "w", encoding="utf-8").write(match.group(1).strip() + "\n")
+          PY
+
+      - name: Publish (never marked latest)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#win-v}"
+          FLAGS=(--latest=false)
+          [[ "$VERSION" == *-* ]] && FLAGS+=(--prerelease)
+          ls -la releases
+          gh release create "$GITHUB_REF_NAME" --title "Folio $VERSION for Windows" --notes-file release-notes.md "${FLAGS[@]}" \
+            releases/Folio-win-*-Setup.exe releases/Folio-win-*-Portable.zip releases/*.nupkg \
+            releases/releases.win-*.json releases/assets.win-*.json releases/RELEASES-win-*

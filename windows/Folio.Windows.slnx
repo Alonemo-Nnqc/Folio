@@ -1,0 +1,13 @@
+<Solution>
+  <Configurations>
+    <Platform Name="ARM64" />
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/Folio.Core/Folio.Core.csproj" />
+    <Project Path="src/Folio.App/Folio.App.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Folio.Core.Tests/Folio.Core.Tests.csproj" />
+  </Folder>
+</Solution>

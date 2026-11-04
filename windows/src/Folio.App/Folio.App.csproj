@@ -31,6 +31,14 @@
     <ProjectReference Include="..\Folio.Core\Folio.Core.csproj" />
   </ItemGroup>
 
+  <!-- pdf.js is fetched (pinned, checksummed) instead of being committed. -->
+  <Target Name="FetchPdfJs" BeforeTargets="BeforeBuild" Condition="!Exists('$(MSBuildProjectDirectory)\Assets\pdfjs\.version')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\..\scripts\fetch-pdfjs.ps1&quot;" />
+    <ItemGroup>
+      <Content Include="Assets\pdfjs\**\*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <Content Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" />
     <!-- The reader page around pdf.js; pdf.js itself is fetched by scripts/fetch-pdfjs.ps1 into Assets\pdfjs. -->

@@ -13,6 +13,7 @@ public static class Program
     {
         // Velopack's install / update / uninstall hooks run here and exit before any window appears.
         VelopackApp.Build().Run();
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write(e.ExceptionObject as Exception);
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
         // One Folio at a time: a second launch (a folio:// link, a PDF opened from Explorer) goes to the first.
@@ -24,11 +25,11 @@ public static class Program
         }
         instance.Activated += (_, e) => App.Current?.HandleActivation(e);
 
-        Application.Start(_ =>
+        Application.Start(callback =>
         {
             var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
             SynchronizationContext.SetSynchronizationContext(context);
-            _ = new App();
+            new App();
         });
         return 0;
     }
@@ -53,6 +54,7 @@ public partial class App : Application
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
+            CrashLog.Write(e.Exception);
             e.Handled = true;
             Model?.Toasts.Show(e.Message, "warning");
         };
@@ -60,11 +62,19 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Model = new AppModel(DispatcherQueue.GetForCurrentThread());
-        Window = new MainWindow(Model);
-        Model.Start();
-        Window.Activate();
-        HandleActivation(AppInstance.GetCurrent().GetActivatedEventArgs());
+        try
+        {
+            Model = new AppModel(DispatcherQueue.GetForCurrentThread());
+            Window = new MainWindow(Model);
+            Model.Start();
+            Window.Activate();
+            HandleActivation(AppInstance.GetCurrent().GetActivatedEventArgs());
+        }
+        catch (Exception e)
+        {
+            CrashLog.Write(e);
+            throw;
+        }
     }
 
     /// <summary>Files and folio:// links from Explorer, the browser extension or a second launch.</summary>
@@ -82,6 +92,23 @@ public partial class App : Application
                 }
             }
         });
+    }
+}
+
+/// <summary>Unexpected errors, appended to %APPDATA%\Folio\crash.log (shown in Settings ▸ Update for bug reports).</summary>
+static class CrashLog
+{
+    public static string PathName => Path.Combine(AppSettings.Folder, "crash.log");
+
+    public static void Write(Exception? e)
+    {
+        if (e == null) return;
+        try
+        {
+            Directory.CreateDirectory(AppSettings.Folder);
+            File.AppendAllText(PathName, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Folio {Updater.CurrentVersion}\n{e}\n\n");
+        }
+        catch { }
     }
 }
 

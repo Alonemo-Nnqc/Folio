@@ -105,7 +105,6 @@ public sealed class MainWindow : Window
         _root.KeyboardAccelerators.Add(Accelerator(VirtualKey.O, VirtualKeyModifiers.Control, () => _ = Commands.AddFiles(model)));
         _root.KeyboardAccelerators.Add(Accelerator(VirtualKey.N, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => _ = _sidebar.NewGroup(null)));
         _root.KeyboardAccelerators.Add(Accelerator(VirtualKey.C, VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift, () => Commands.CopyCitation(model, model.SelectedItemIds, model.DefaultStyle)));
-        _root.KeyboardAccelerators.Add(Accelerator((VirtualKey)188, VirtualKeyModifiers.Control, () => SettingsWindow.Open(model)));
         _root.KeyboardAccelerators.Add(Accelerator(VirtualKey.W, VirtualKeyModifiers.Control, () => { if (_tabs.SelectedItem is TabViewItem t && t != _libraryTab) CloseTab(t); }));
         _root.KeyboardAccelerators.Add(Accelerator(VirtualKey.Number1, VirtualKeyModifiers.Control, () => _tabs.SelectedItem = _libraryTab));
 
@@ -323,8 +322,14 @@ public sealed class MainWindow : Window
         var raw = _model.Settings.Raw("windowBounds")?.ToString();
         var parts = raw?.Split(',').Select(p => int.TryParse(p, out var v) ? v : -1).ToArray();
         if (parts is { Length: 4 } && parts.All(p => p >= 0) && parts[2] > 600 && parts[3] > 400)
+        {
             AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(parts[0], parts[1], parts[2], parts[3]));
-        else AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 880));
+            return;
+        }
+        // First launch: 85% of the screen's work area, centred (sizes are in physical pixels).
+        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        int width = (int)(area.Width * 0.85), height = (int)(area.Height * 0.85);
+        AppWindow.MoveAndResize(new Windows.Graphics.RectInt32(area.X + (area.Width - width) / 2, area.Y + (area.Height - height) / 2, width, height));
     }
 
     void SaveBounds()

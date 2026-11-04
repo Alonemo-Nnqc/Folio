@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Folio Reader</title>
+  <link rel="stylesheet" href="../../Assets/pdfjs/web/pdf_viewer.css">
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <nav id="sidebarTabs">
+      <button data-pane="thumbnails" title="Thumbnails" class="active">&#xE8A9;</button>
+      <button data-pane="outline" title="Outline">&#xE8FD;</button>
+      <button data-pane="annotations" title="Annotations">&#xE70F;</button>
+      <button data-pane="search" title="Search">&#xE721;</button>
+    </nav>
+    <section id="thumbnails" class="pane active"></section>
+    <section id="outline" class="pane"></section>
+    <section id="annotations" class="pane"></section>
+    <section id="search" class="pane">
+      <input id="searchBox" type="search" autocomplete="off">
+      <div id="searchStatus"></div>
+    </section>
+  </aside>
+  <main id="viewerContainer">
+    <div id="viewer" class="pdfViewer"></div>
+  </main>
+  <div id="loading"></div>
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

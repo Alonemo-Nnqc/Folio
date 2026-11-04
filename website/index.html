@@ -327,7 +327,13 @@
       </div>
       <p class="download-meta reveal" style="--d:4" id="dlMeta">&nbsp;</p>
 
-      <div class="first-run reveal" style="--d:5">
+      <div class="first-run reveal js-platform-windows" style="--d:5" hidden>
+        <h3 data-i18n="dl.winFirstTitle">首次安装</h3>
+        <p data-i18n="dl.winFirstBody">运行下载的 Folio-win-…-Setup.exe 即可安装，无需管理员权限。如果 Windows 显示“Windows 已保护你的电脑”，点「更多信息」，再点「仍要运行」。</p>
+        <p class="first-run-note" data-i18n="dl.firstNote">之后的版本会通过应用内更新自动安装，不需要重复这一步。</p>
+      </div>
+
+      <div class="first-run reveal js-platform-mac" style="--d:5">
         <h3 data-i18n="dl.firstTitle">首次打开</h3>
         <p data-i18n="dl.firstBody">Folio 暂未经过 Apple 公证。首次打开时，请前往 系统设置 ▸ 隐私与安全性，在页面底部点「仍要打开」。也可以在终端中运行：</p>
         <div class="code">
@@ -338,6 +344,7 @@
       </div>
 
       <ul class="download-links reveal" style="--d:6">
+        <li id="altPlatform" hidden><a href="https://github.com/Alonemo-Nnqc/Folio/releases">其他平台</a></li>
         <li><a href="https://github.com/Alonemo-Nnqc/Folio/releases" data-i18n="dl.l1">所有版本与更新日志</a></li>
         <li><a href="https://github.com/Alonemo-Nnqc/Folio/releases/latest" data-i18n="dl.l2">浏览器扩展安装包</a></li>
         <li><a href="https://github.com/Alonemo-Nnqc/Folio#从源码构建" data-href-en="https://github.com/Alonemo-Nnqc/Folio/blob/main/README.en.md#building-from-source" data-i18n="dl.l3">从源码构建</a></li>

@@ -3,6 +3,8 @@ using Folio.Core;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
 namespace Folio.App;
@@ -54,7 +56,7 @@ public sealed class Inspector : Grid
         _scroll.Visibility = _page == "notes" ? Visibility.Collapsed : Visibility.Visible;
         _notes.Show(item?.Id);
         // While the user edits a field, a refresh caused by that edit must not rebuild the form.
-        if (!force && _shownItem == item?.Id && FocusManager.GetFocusedElement(XamlRoot) is TextBox { Parent: not null } focused && IsChild(focused)) return;
+        if (!force && _shownItem == item?.Id && XamlRoot != null && FocusManager.GetFocusedElement(XamlRoot) is TextBox { Parent: not null } focused && IsChild(focused)) return;
         _shownItem = item?.Id;
         _content.Children.Clear();
         if (item == null)

@@ -1,0 +1,69 @@
+:root {
+  --bg: #e9e9ec;
+  --sidebar: #f4f4f6;
+  --text: #1c1c1e;
+  --secondary: #6e6e73;
+  --accent: #007aff;
+  --separator: #dcdce0;
+  --hover: rgba(0, 0, 0, .05);
+  --page-shadow: 0 1px 4px rgba(0, 0, 0, .18), 0 0 0 1px rgba(0, 0, 0, .04);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #1b1b1d;
+  --sidebar: #232325;
+  --text: #f2f2f7;
+  --secondary: #98989d;
+  --accent: #0a84ff;
+  --separator: #38383a;
+  --hover: rgba(255, 255, 255, .06);
+  --page-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+  color-scheme: dark;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+  font: 13px "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif; }
+body { display: flex; }
+
+#sidebar { width: 220px; flex: none; display: flex; flex-direction: column; background: var(--sidebar);
+  border-right: 1px solid var(--separator); }
+body.no-sidebar #sidebar { display: none; }
+#sidebarTabs { display: flex; justify-content: center; gap: 2px; padding: 8px; }
+#sidebarTabs button { font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; font-size: 14px; width: 30px; height: 26px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--secondary); cursor: pointer; }
+#sidebarTabs button.active { background: var(--hover); color: var(--accent); }
+.pane { display: none; flex: 1; overflow: auto; padding: 4px 10px 16px; }
+.pane.active { display: block; }
+
+#thumbnails { text-align: center; }
+.thumb { display: block; margin: 8px auto 2px; cursor: pointer; border: 2px solid transparent; border-radius: 3px; background: #fff;
+  box-shadow: var(--page-shadow); }
+.thumb.current { border-color: var(--accent); }
+.thumb-label { color: var(--secondary); font-size: 11px; margin-bottom: 6px; }
+
+.outline-item { display: flex; justify-content: space-between; gap: 8px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+.outline-item:hover { background: var(--hover); }
+.outline-item .page { color: var(--secondary); flex: none; }
+.outline-children { padding-left: 12px; }
+
+.annotation-card { padding: 7px 9px; margin: 6px 0; border-radius: 6px; background: var(--hover); border-left: 3px solid; cursor: pointer; }
+.annotation-card .meta { color: var(--secondary); font-size: 11px; margin-top: 3px; }
+
+#searchBox { width: 100%; box-sizing: border-box; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--separator);
+  background: transparent; color: var(--text); margin: 4px 0 8px; }
+#searchStatus { color: var(--secondary); font-size: 12px; }
+
+#viewerContainer { position: absolute; left: 221px; right: 0; top: 0; bottom: 0; overflow: auto; }
+body.no-sidebar #viewerContainer { left: 0; }
+.pdfViewer .page { box-shadow: var(--page-shadow); border: 0; margin: 12px auto; }
+body.no-shadows .pdfViewer .page { box-shadow: none; }
+:root[data-theme="dark"] .pdfViewer .page canvas { filter: none; }
+
+/* Tools: the text layer stays selectable for the markup tools; drawing tools get a crosshair. */
+body.tool-note .page, body.tool-textbox .page { cursor: copy; }
+body.tool-ink .page { cursor: crosshair; }
+body.tool-ink .textLayer, body.tool-note .textLayer, body.tool-textbox .textLayer { pointer-events: none; }
+.ink-layer { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
+body.tool-ink .ink-layer { pointer-events: auto; }
+.find-flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--accent); } to { box-shadow: var(--page-shadow); } }
+#loading { position: fixed; inset: 0; pointer-events: none; }
