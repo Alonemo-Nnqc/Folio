@@ -413,7 +413,7 @@ public static class GlyphNames
             ["diamond"] = "⋄", ["diamondmath"] = "⋄", ["heart"] = "♡", ["club"] = "♣", ["spade"] = "♠", ["checkmark"] = "✓", ["xmark"] = "✗",
             ["backslashmath"] = "∖", ["setminus"] = "∖", ["wreathproduct"] = "≀", ["negationslash"] = "̸", ["square"] = "□", ["lozenge"] = "◊",
             ["colonequal"] = "≔", ["defines"] = "≜", ["hbar"] = "ℏ", ["planckover2pi"] = "ℏ", ["planckover2pi1"] = "ℏ",
-            ["ell"] = "ℓ", ["wp"] = "℘", ["Re"] = "ℜ", ["Im"] = "ℑ", ["vector"] = "⃗", ["harpoonleftright"] = "⇌",
+            ["ell"] = "ℓ", ["lscript"] = "ℓ", ["wp"] = "℘", ["dotlessi1"] = "ı", ["tie1"] = "⁀", ["flat1"] = "♭", ["Re"] = "ℜ", ["Im"] = "ℑ", ["vector"] = "⃗", ["harpoonleftright"] = "⇌",
             ["arrowhookleft"] = "↩", ["arrowhookright"] = "↪", ["notsubset"] = "⊄", ["notsuperset"] = "⊅",
             ["sharp"] = "♯", ["flat"] = "♭", ["natural"] = "♮", ["bottom"] = "⊥", ["top"] = "⊤", ["parallel"] = "∥", ["divides"] = "∣",
             ["visiblespace"] = "␣", ["slurabove"] = "⌢", ["slurbelow"] = "⌣", ["followsorequal"] = "⪰", ["precedesorequal"] = "⪯",

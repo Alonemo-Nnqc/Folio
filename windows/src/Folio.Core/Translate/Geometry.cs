@@ -56,6 +56,7 @@ public readonly record struct Rect(double X, double Y, double Width, double Heig
     public double MidX => (MinX + MaxX) / 2;
     public double MidY => (MinY + MaxY) / 2;
     public Pt Center => new(MidX, MidY);
+    public double Area => IsNull ? 0 : W * H;
     public double W => Math.Abs(Width);
     public double H => Math.Abs(Height);
 

@@ -216,3 +216,35 @@ public class AnnotationTests
         File.Copy(copy, Path.Combine(Path.GetTempPath(), "folio-annotated-latest.pdf"), true);
     }
 }
+
+public class LayoutTests
+{
+    /// <summary>FOLIO_SAMPLE_PDF + FOLIO_LAYOUT_DUMP: writes the analysis in the macOS folio-translate layout DUMP format, for diffing.</summary>
+    [Fact]
+    public void DumpsLayoutLikeTheMacEngine()
+    {
+        var sample = Environment.GetEnvironmentVariable("FOLIO_SAMPLE_PDF");
+        var output = Environment.GetEnvironmentVariable("FOLIO_LAYOUT_DUMP");
+        if (string.IsNullOrEmpty(sample) || string.IsNullOrEmpty(output)) return;
+        using var source = Folio.Core.Translate.Pdf.PdfSource.Open(sample);
+        var analyzer = new Folio.Core.Translate.Layout.LayoutAnalyzer();
+        var layouts = analyzer.Analyze(source, Enumerable.Range(1, source.Pages.Count).ToList());
+        var sb = new System.Text.StringBuilder();
+        sb.Append(System.FormattableString.Invariant($"body size {analyzer.BodySize:F1}\n"));
+        foreach (var layout in layouts)
+        {
+            var counts = new Dictionary<Folio.Core.Translate.Layout.BlockKind, int>();
+            foreach (var block in layout.Blocks)
+            {
+                counts[block.Kind] = counts.GetValueOrDefault(block.Kind) + 1;
+                var r = block.Rect;
+                sb.Append(System.FormattableString.Invariant($"[{Folio.Core.Translate.Layout.BlockKinds.Raw(block.Kind)}{(block.Translate ? "*" : "")}] ({r.MinX:F0},{r.MinY:F0} {r.W:F0}x{r.H:F0}) "))
+                  .Append(string.Join(" | ", block.Lines.Select(l => l.Text))).Append('\n');
+            }
+            sb.Append($"page {layout.Number}: ").Append(string.Join(", ", Enum.GetValues<Folio.Core.Translate.Layout.BlockKind>()
+                .Where(counts.ContainsKey).Select(k => $"{Folio.Core.Translate.Layout.BlockKinds.Raw(k)} {counts[k]}")))
+              .Append($", figures {layout.Figures.Count}, tables {layout.Tables.Count}\n");
+        }
+        File.WriteAllText(output, sb.ToString());
+    }
+}
