@@ -621,8 +621,12 @@ struct LayoutAnalyzer {
             guard let p = blocks.indices.filter({ j in
                 j != i && blocks[j].translate && blocks[j].kind == .paragraph && stray.rect.width < max(blocks[j].rect.width * 0.6, 1)
                     && blocks[j].lines.contains { host in
-                        abs(host.baseline - line.baseline) < host.size * 0.6
-                            && line.minX < host.maxX + host.size * 0.3 && line.maxX > host.minX - host.size * 0.3
+                        // Beside words on its baseline. With a line of the paragraph above and below, a gap does not matter:
+                        // it is in the middle of the paragraph ("A ∈ R   uniformly initialized,").
+                        let enclosed = blocks[j].lines.contains { $0.baseline > line.baseline + host.size * 0.5 && $0.minX < line.maxX && $0.maxX > line.minX }
+                            && blocks[j].lines.contains { $0.baseline < line.baseline - host.size * 0.5 && $0.minX < line.maxX && $0.maxX > line.minX }
+                        return abs(host.baseline - line.baseline) < host.size * 0.6
+                            && (enclosed || (line.minX < host.maxX + host.size * 0.3 && line.maxX > host.minX - host.size * 0.3))
                     }
             }).min(by: { a, b in
                 func distance(_ j: Int) -> Double { blocks[j].lines.map { abs($0.baseline - line.baseline) }.min() ?? 99 }
@@ -754,6 +758,112 @@ struct LayoutAnalyzer {
                 }
             }
             if !removed.isEmpty { lines = lines.indices.filter { !removed.contains($0) }.map { lines[$0] } }
+        }
+        return joinAcrossInnerGaps(reuniteByDrawingOrder(lines), inTable: inTable)
+    }
+
+    /// Two pieces on one baseline with a wide gap between them (a list of formulas and what they are) are one line when
+    /// the lines just above and below run across the gap: there is no column gutter there.
+    static func joinAcrossInnerGaps(_ input: [LayoutLine], inTable: (CGRect) -> Bool) -> [LayoutLine] {
+        var lines = input
+        var removed = Set<Int>()
+        let order = lines.indices.filter { !lines[$0].isRotated }.sorted { lines[$0].minX < lines[$1].minX }
+        for a in order where !removed.contains(a) {
+            for b in order where b != a && !removed.contains(b) {
+                let l = lines[a], r = lines[b]
+                let size = max(l.size, r.size)
+                let gap = r.minX - l.maxX
+                guard gap > 0, gap < size * 6, abs(l.baseline - r.baseline) < size * 0.3, abs(l.size - r.size) < size * 0.2,
+                      !inTable(l.rect), !inTable(r.rect) else { continue }
+                func spans(_ line: LayoutLine) -> Bool {
+                    abs(line.size - size) < size * 0.2 && line.minX <= l.maxX + 1 && line.maxX >= r.minX - 1
+                }
+                let above = lines.indices.contains { k in
+                    !removed.contains(k) && k != a && k != b && lines[k].baseline > l.baseline + size * 0.5
+                        && lines[k].baseline < l.baseline + size * 1.8 && spans(lines[k])
+                }
+                let below = lines.indices.contains { k in
+                    !removed.contains(k) && k != a && k != b && lines[k].baseline < l.baseline - size * 0.5
+                        && lines[k].baseline > l.baseline - size * 1.8 && spans(lines[k])
+                }
+                guard above, below else { continue }
+                var space = l.chars.last!
+                space.text = " "
+                space.isSpace = true
+                space.isMath = false
+                space.glyphs = []
+                space.run = nil
+                space.link = nil
+                space.rect = CGRect(x: l.maxX, y: space.rect.minY, width: gap, height: space.rect.height)
+                if let line = makeLine(l.chars + [space] + r.chars) {
+                    lines[a] = line
+                    removed.insert(b)
+                }
+            }
+        }
+        return lines.indices.filter { !removed.contains($0) }.map { lines[$0] }
+    }
+
+    /// Whose formula a piece belongs to shows in the content stream: it is drawn in between that formula's glyphs. Position
+    /// alone cannot say: the numerator of a fraction in a script, a limit above a sum, a tall bracket or a subscript can sit
+    /// nearer the line above or below than their own. Left with the wrong line they would be set among the wrong words,
+    /// or stay on the page over the translation. A short stretch of formula drawn between two parts of a line is that line's.
+    static func reuniteByDrawingOrder(_ input: [LayoutLine]) -> [LayoutLine] {
+        var lines = input
+        for _ in 0..<3 {
+            struct Item { var order: Int; var line: Int; var char: Int; var c: PageChar }
+            var drawn: [Item] = []
+            for (l, line) in lines.enumerated() where !line.isRotated {
+                for (i, c) in line.chars.enumerated() where !c.isSpace {
+                    if let order = c.glyphs.first { drawn.append(Item(order: order, line: l, char: i, c: c)) }
+                }
+            }
+            drawn.sort { $0.order < $1.order }
+            var stretches: [(line: Int, items: [Item])] = []
+            for item in drawn {
+                if stretches.last?.line == item.line { stretches[stretches.count - 1].items.append(item) } else { stretches.append((item.line, [item])) }
+            }
+            var moved: [Int: [PageChar]] = [:]
+            var taken: [Int: Set<Int>] = [:]
+            var s = 0
+            while s < stretches.count {
+                defer { s += 1 }
+                let host = stretches[s].line
+                let size = lines[host].size
+                let last = stretches[s].items.last!
+                search: for e in (s + 2)..<max(s + 2, min(s + 5, stretches.count)) where stretches[e].line == host {
+                    let first = stretches[e].items[0]
+                    guard first.order - last.order <= 40 else { break search }
+                    let between = stretches[(s + 1)..<e]
+                    for stretch in between {
+                        let chars = stretch.items.map(\.c)
+                        let math = chars.filter(\.isMath).count, letters = chars.filter { $0.text.first?.isLetter == true }.count
+                        guard chars.count <= 8, stretch.line != host, math * 2 >= chars.count || letters == 0,
+                              taken[stretch.line]?.isDisjoint(with: stretch.items.map(\.char)) ?? true,
+                              chars.allSatisfy({ abs($0.center.y - lines[host].baseline) < size * 2.2
+                                  && $0.rect.midX > last.c.rect.minX - size * 3 && $0.rect.midX < first.c.rect.maxX + size * 3 }) else { break search }
+                    }
+                    for stretch in between {
+                        for item in stretch.items {
+                            var c = item.c
+                            c.isMath = true
+                            moved[host, default: []].append(c)
+                            taken[stretch.line, default: []].insert(item.char)
+                        }
+                    }
+                    s = e - 1
+                    break search
+                }
+            }
+            guard !moved.isEmpty else { break }
+            var rebuilt: [LayoutLine] = []
+            for (l, line) in lines.enumerated() {
+                var chars = line.chars
+                if let gone = taken[l] { chars = chars.enumerated().filter { !gone.contains($0.offset) }.map(\.element) }
+                chars += moved[l] ?? []
+                if moved[l] == nil, taken[l] == nil { rebuilt.append(line) } else if let line = makeLine(trimSpaces(chars)) { rebuilt.append(line) }
+            }
+            lines = rebuilt
         }
         return lines
     }

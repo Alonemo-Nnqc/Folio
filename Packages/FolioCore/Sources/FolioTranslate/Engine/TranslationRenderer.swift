@@ -52,6 +52,8 @@ final class RenderAudit: @unchecked Sendable {
     var lostGlyphs = 0
     /// Glyphs drawn again in formulas.
     var formulaGlyphs = 0
+    /// Glyphs of the original still on the page, in the middle of text set again: they would sit on the translation.
+    var leftBehind: [String] = []
     /// Blocks that kept their text but moved, by page and block: how far.
     var moved: [Int: [Int: Double]] = [:]
     private let lock = NSLock()
@@ -243,8 +245,23 @@ final class TranslationRenderer {
                 var content = ""
                 let removal = removals[layout.number] ?? PageRemoval()
                 let rects = removal.rects
+                var pendingRuleCheck: [CGRect] = []
                 let removed = Set(interpreter.glyphs.indices.filter { removal.removes(interpreter.glyphs[$0], index: $0) })
                 var edits = Self.glyphEdits(interpreter: interpreter, removing: removed)
+                if let audit, layers == .all, !dual {
+                    let entries = audit.entries.filter { $0.page == layout.number }
+                    let sources = Set(entries.map(\.block)).map { layout.blocks[$0] }.filter { $0.kind == .paragraph }
+                    let frames = entries.flatMap(\.boxes) + sources.flatMap { block in
+                        // The lines themselves, not the whole block: a block can wrap around a neighbour.
+                        zip(block.lines, block.lines.dropFirst()).map { $0.rect.union($1.rect).insetBy(dx: 1, dy: 1) }
+                    }
+                    for (i, glyph) in interpreter.glyphs.enumerated() where glyph.isVisible && !removed.contains(i) {
+                        let text = glyph.text?.trimmingCharacters(in: .whitespaces) ?? ""
+                        guard !text.isEmpty, frames.contains(where: { $0.insetBy(dx: 0.5, dy: 0.5).contains(CGPoint(x: glyph.box.midX, y: glyph.box.midY)) }) else { continue }
+                        audit.leftBehind.append(String(format: "p%d \"%@\" @%.0f,%.0f", layout.number, text, glyph.box.midX, glyph.box.midY))
+                    }
+                    pendingRuleCheck = frames
+                }
                 audit?.conflicts += edits.values.filter { if case .replace = $0 { return true } else { return false } }.count
                 // Rules that are part of formulas (fraction bars, radicals) move with the formula.
                 var droppedRules: [Int] = []
@@ -256,6 +273,12 @@ final class TranslationRenderer {
                         || Self.isRule(mark.rect, ofFormulaIn: formulaAreas)) {
                     for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
                     droppedRules.append(m)
+                }
+                // A rule (fraction bar, radical) left in the middle of the text set again.
+                for (m, mark) in interpreter.marks.enumerated() where !pendingRuleCheck.isEmpty && mark.kind != .image && !mark.isWhite
+                    && mark.rect.height < 2 && mark.rect.width < 60 && mark.rect.width > 1 && !droppedRules.contains(m)
+                    && pendingRuleCheck.contains(where: { $0.insetBy(dx: 0.5, dy: 0.5).contains(CGPoint(x: mark.rect.midX, y: mark.rect.midY)) }) {
+                    audit?.leftBehind.append(String(format: "p%d rule %.0f wide @%.0f,%.0f", layout.number, mark.rect.width, mark.rect.midX, mark.rect.midY))
                 }
                 // Pictures set among the words go with them.
                 for transplant in pageFormulas {

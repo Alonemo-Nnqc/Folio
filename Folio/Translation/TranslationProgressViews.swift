@@ -7,7 +7,7 @@ final class TranslationProgressHUD: NSView {
     private var glass: NSView!
     private let stage = NSTextField(labelWithString: "")
     private let percent = NSTextField(labelWithString: "")
-    private let bar = NSProgressIndicator()
+    private let bar = TranslationBar()
 
     /// Liquid Glass on macOS 26, a HUD material before that.
     private static func capsule(around content: NSView, cornerRadius: CGFloat) -> NSView {
@@ -48,15 +48,12 @@ final class TranslationProgressHUD: NSView {
         percent.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize + 1, weight: .regular)
         percent.textColor = .secondaryLabelColor
         percent.alignment = .right
-        bar.style = .bar
-        bar.controlSize = .small
-        bar.minValue = 0
-        bar.maxValue = 1
         let stack = NSStackView(views: [icon, stage, bar, percent])
         stack.spacing = 10
         stack.edgeInsets = NSEdgeInsets(top: 9, left: 16, bottom: 9, right: 16)
         NSLayoutConstraint.activate([
             bar.widthAnchor.constraint(equalToConstant: 160),
+            bar.heightAnchor.constraint(equalToConstant: TranslationBar.height),
             percent.widthAnchor.constraint(equalToConstant: 34),
             stage.widthAnchor.constraint(equalToConstant: TranslationProgressBar.stageWidth(font: stage.font!)),
         ])
@@ -81,7 +78,7 @@ final class TranslationProgressHUD: NSView {
     func update(stage text: String, fraction: Double?) {
         stage.stringValue = text
         TranslationProgressBar.apply(fraction, to: bar)
-        percent.stringValue = fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? ""
+        percent.stringValue = "\(Int(((fraction ?? 0) * 100).rounded()))%"
         setAccessibilityLabel(String(localized: "翻译：\(text)"))
         setAccessibilityValue(percent.stringValue)
     }
@@ -100,16 +97,78 @@ enum TranslationProgressBar {
         ceil(("100%" as NSString).size(withAttributes: [.font: font]).width) + 1
     }
 
-    /// Determinate with a fraction, otherwise animated.
-    static func apply(_ fraction: Double?, to bar: NSProgressIndicator) {
-        if let fraction {
-            if bar.isIndeterminate { bar.stopAnimation(nil); bar.isIndeterminate = false }
-            bar.doubleValue = min(max(fraction, 0), 1)
-        } else if !bar.isIndeterminate {
-            bar.isIndeterminate = true
-            bar.startAnimation(nil)
-        } else {
-            bar.startAnimation(nil)
+    /// How far the translation is; nothing done yet shows as an empty bar, never as an animation.
+    static func apply(_ fraction: Double?, to bar: TranslationBar) {
+        bar.fraction = fraction ?? 0
+    }
+}
+
+/// A bar that only says how much is done: it fills as the translation goes on and does nothing else. The system's bar
+/// animates on its own (an indeterminate bar slides back and forth; a determinate one eases between values), which reads
+/// as "busy" rather than "this far".
+final class TranslationBar: NSView {
+    static let height: CGFloat = 5
+
+    private let track = CALayer()
+    private let fill = CALayer()
+
+    /// 0…1.
+    var fraction: Double = 0 {
+        didSet {
+            let value = min(max(fraction, 0), 1)
+            guard value != oldValue else { return }
+            fraction = value
+            needsLayout = true
+            setAccessibilityValue(NSNumber(value: value))
         }
     }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.addSublayer(track)
+        layer?.addSublayer(fill)
+        for layer in [track, fill] {
+            layer.actions = ["bounds": NSNull(), "position": NSNull(), "frame": NSNull(), "backgroundColor": NSNull()]
+            layer.cornerCurve = .continuous
+        }
+        setAccessibilityElement(true)
+        setAccessibilityRole(.progressIndicator)
+        setAccessibilityMinValue(NSNumber(value: 0))
+        setAccessibilityMaxValue(NSNumber(value: 1))
+        setAccessibilityValue(NSNumber(value: 0))
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: Self.height) }
+    override var wantsUpdateLayer: Bool { true }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let h = min(bounds.height, Self.height)
+        let y = (bounds.height - h) / 2
+        track.frame = CGRect(x: 0, y: y, width: bounds.width, height: h)
+        fill.frame = CGRect(x: 0, y: y, width: (bounds.width * fraction).rounded(.toNearestOrAwayFromZero), height: h)
+        track.cornerRadius = h / 2
+        fill.cornerRadius = h / 2
+        CATransaction.commit()
+    }
+
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            track.backgroundColor = NSColor.quaternaryLabelColor.cgColor
+            fill.backgroundColor = NSColor.controlAccentColor.cgColor
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    /// Where the fill ends, for tests.
+    var fillWidth: CGFloat { fill.frame.width }
 }

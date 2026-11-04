@@ -167,6 +167,27 @@ import Testing
     }
 }
 
+extension FileLabelTests {
+    @Test func translationsAlikeAreToldApartByTime() {
+        let paper = FileRecord(id: "p", itemId: "i", relativePath: "Files/p.pdf", originalName: "p.pdf", size: 0, sha256: "p", modifiedAt: Date())
+        func translation(_ id: String, minutes: Double) -> FileRecord {
+            var file = FileRecord(id: id, itemId: "i", relativePath: "Files/\(id).pdf", originalName: "\(id).pdf", size: 0, sha256: id,
+                                  modifiedAt: Date(), dateAdded: Date(timeIntervalSince1970: 1_800_000_000 + minutes * 60))
+            file.translationKind = .dual
+            file.translationOf = paper.id
+            file.translatedBy = "Antigravity CLI · gemini-3.8-flash-low"
+            return file
+        }
+        let first = translation("a", minutes: 0), second = translation("b", minutes: 90)
+        let files = [paper, first, second]
+        let labels = [first, second].map { FileLabel.title(of: $0, among: files, defaultFileId: paper.id) }
+        #expect(labels[0] != labels[1])
+        #expect(labels.allSatisfy { $0.hasPrefix("Bilingual · Antigravity CLI · gemini-3.8-flash-low · ") })
+        // Alone, no time.
+        #expect(FileLabel.title(of: first, among: [paper, first], defaultFileId: paper.id) == "Bilingual · Antigravity CLI · gemini-3.8-flash-low")
+    }
+}
+
 @Suite struct FileHasherTests {
     @Test func hashesFileContents() throws {
         let url = FileManager.default.temporaryDirectory.appending(path: "folio-hash-\(UUID().uuidString).txt")

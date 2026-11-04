@@ -9,6 +9,9 @@ extension ChatModel {
     func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
         let reply = try await complete(system: LLMBatch.systemPrompt(context), user: LLMBatch.userMessage(items))
         let parsed = LLMBatch.parse(reply, count: items.count)
+        if parsed.allSatisfy({ $0 == nil }), ProviderError.isDecline(reply) || ProviderError.isContentRefusal(reply) {
+            throw ProviderError(kind: .refused, detail: "declined: " + String(reply.prefix(300)))
+        }
         if parsed.contains(where: { $0 == nil }) {
             throw ProviderError(kind: .invalidResponse, detail: "the reply is missing translations: " + String(reply.prefix(300)))
         }
@@ -46,8 +49,12 @@ struct OpenAIChatProvider: ChatModel {
               let choices = object["choices"] as? [[String: Any]], let message = choices.first?["message"] as? [String: Any] else {
             throw ProviderError(kind: .invalidResponse, detail: "unexpected reply: " + String(decoding: data.prefix(300), as: UTF8.self))
         }
-        if let content = message["content"] as? String { return content }
-        if let parts = message["content"] as? [[String: Any]] { return parts.compactMap { $0["text"] as? String }.joined() }
+        let finish = choices.first?["finish_reason"] as? String
+        let content = (message["content"] as? String) ?? (message["content"] as? [[String: Any]])?.compactMap { $0["text"] as? String }.joined()
+        if finish == "content_filter" || finish == "safety", (content ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
+            throw ProviderError(kind: .refused, detail: "finish_reason: \(finish ?? "")")
+        }
+        if let content { return content }
         throw ProviderError(kind: .invalidResponse, detail: "empty reply")
     }
 

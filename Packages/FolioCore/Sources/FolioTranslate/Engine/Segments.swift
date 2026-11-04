@@ -69,7 +69,7 @@ enum SegmentBuilder {
         return layouts.flatMap { segments(for: $0, target: target) }
     }
 
-    private static func hasWords(_ text: String) -> Bool {
+    static func hasWords(_ text: String) -> Bool {
         text.replacingOccurrences(of: #"\{v\d+\}"#, with: "", options: .regularExpression).contains(where: \.isLetter)
     }
 

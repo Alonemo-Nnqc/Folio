@@ -56,7 +56,8 @@ extension TranslationProvider {
 /// Why a request failed. `description` is what the error classifier reads.
 struct ProviderError: Error, LocalizedError, Sendable {
     /// `agentSetup`: the agent cannot work until the user does something (signs in, chooses a model, updates it).
-    enum Kind: Sendable, Equatable { case http(Int), network, invalidResponse, cancelled, process, agentSetup }
+    /// `refused`: the service's content review would not translate this text.
+    enum Kind: Sendable, Equatable { case http(Int), network, invalidResponse, cancelled, process, agentSetup, refused }
     var kind: Kind
     var detail: String
     var host: String?
@@ -68,10 +69,22 @@ struct ProviderError: Error, LocalizedError, Sendable {
         switch kind {
         case .http(let status): status == 429 || status == 408 || status >= 500
         case .network, .invalidResponse, .process: true
-        case .cancelled, .agentSetup: false
+        case .cancelled, .agentSetup, .refused: false
         }
     }
 
+    /// What services say when their content review stops a text (not a problem with the request or the account).
+    static func isContentRefusal(_ text: String) -> Bool {
+        text.range(of: #"content[_ \-]?(filter|policy|management|moderation|risk|safety)|data_inspection_failed|inappropriate[_ ]content|sensitive[_ ]words?|content exists risk|responsible ?ai|policy violation|violat(es|ion)[^\n]{0,40}(policy|guidelines|usage)|prohibited content|blocked (by|due to)[^\n]{0,30}(safety|policy|moderation)|finish_reason"?\s*[:=]\s*"?(content_filter|safety)|内容(审核|安全|风险)|敏感(词|内容|信息)|不合规|违规"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// A model declining in words instead of translating.
+    static func isDecline(_ reply: String) -> Bool {
+        reply.trimmingCharacters(in: .whitespacesAndNewlines)
+            .range(of: #"^(I('m| am) sorry|I can(no|')t (help|assist|translate|comply|provide)|I won'?t|Sorry, (but )?I can|抱歉|对不起，?我无法|我无法(协助|翻译|提供))"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
+    }
     /// Seconds the server asked to wait (`Retry-After`).
     var retryAfter: Double?
 }
@@ -112,6 +125,8 @@ enum LLMBatch {
         Rules:
         - Reply with only a JSON object that has exactly the same keys, each mapped to its translation. No explanations, no code fences.
         - Placeholders like {v1}, {v2} stand for formulas. Keep every one of them exactly as written and put it where it belongs in the translated sentence.
+        - {v0} is not a formula: it marks where the text breaks across a column or a page. Keep it once, at the corresponding point of your translation.
+        - The values are consecutive passages of the paper, in reading order.
         - Keep citations ([12], [3, 7], Smith et al. (2020)), URLs, code, numbers and units unchanged.
         - Keep names of models, methods, datasets, metrics, software and abbreviations (e.g. ResNet-50, CLIP, mIoU, ImageNet, GAN) in their original form.
         - Use the established terminology of the field and translate terms consistently; follow the glossary.
@@ -127,12 +142,14 @@ enum LLMBatch {
         return prompt
     }
 
-    /// The user message: `{"1": "…", "2": "…"}`, with a note on which items are short.
+    /// The user message: `{"1": "…", "2": "…"}` in reading order (sorted keys would read "1, 10, 11, …, 2"), with a note
+    /// on which items are short.
     static func userMessage(_ items: [TranslationItem]) -> String {
-        var object: [String: String] = [:]
-        for (i, item) in items.enumerated() { object[String(i + 1)] = item.text }
-        let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data()
-        var message = String(decoding: data, as: UTF8.self)
+        func json(_ string: String) -> String {
+            let data = (try? JSONSerialization.data(withJSONObject: string, options: [.fragmentsAllowed, .withoutEscapingSlashes])) ?? Data()
+            return String(decoding: data, as: UTF8.self)
+        }
+        var message = "{" + items.enumerated().map { "\(json(String($0.offset + 1))): \(json($0.element.text))" }.joined(separator: ", ") + "}"
         let short = items.enumerated().filter { $0.element.isShort }.map { String($0.offset + 1) }
         if !short.isEmpty { message += "\n\nShort items (headings or table cells): " + short.joined(separator: ", ") }
         return message
@@ -229,7 +246,8 @@ enum HTTP {
             }
             guard (200..<300).contains(http.statusCode) else {
                 let body = String(decoding: data.prefix(2000), as: UTF8.self)
-                var error = ProviderError(kind: .http(http.statusCode), detail: "Error code: \(http.statusCode) - \(body)", host: host)
+                let refused = [400, 403, 422, 451].contains(http.statusCode) && ProviderError.isContentRefusal(body)
+                var error = ProviderError(kind: refused ? .refused : .http(http.statusCode), detail: "Error code: \(http.statusCode) - \(body)", host: host)
                 if let retry = http.value(forHTTPHeaderField: "Retry-After"), let seconds = Double(retry) { error.retryAfter = seconds }
                 throw error
             }

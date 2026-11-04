@@ -112,7 +112,7 @@ enum ProviderFactory {
                 throw TranslationConfigurationError.agentNotFound(agent.command)
             }
             provider = AgentProvider(agent: agent, executable: executable, model: modelOption.flatMap(value),
-                                     effort: ReasoningEffort.current(serviceID: serviceID, fields: fields))
+                                     effort: ReasoningEffort.agentEffort(serviceID: serviceID, fields: fields))
         case .command:
             provider = CommandProvider(command: try required("--clitranslator-command"),
                                        timeout: value("--clitranslator-timeout").flatMap(Double.init) ?? 60)

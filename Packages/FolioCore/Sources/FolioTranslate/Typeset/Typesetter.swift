@@ -126,7 +126,9 @@ struct Typesetter {
                 let isLast = k == ctLines.count - 1
                 // Justify full lines only: stretching a short one (before an unbreakable citation list) leaves holes.
                 let natural = CTLineGetTypographicBounds(line, nil, nil, nil) - CTLineGetTrailingWhitespaceWidth(line)
-                if alignment == .justified, !isLast, natural > available * 0.9 {
+                // Chinese and Japanese lines are justified even when a Latin word too long for the rest of the line went on
+                // to the next one: a ragged edge in the middle of a paragraph shows more than slightly looser characters.
+                if alignment == .justified, !isLast, natural > available * (spacesBetweenCharacters ? 0.72 : 0.9) {
                     if spacesBetweenCharacters {
                         // Chinese and Japanese justify by spacing every character a little, not by stretching spaces.
                         line = Self.justifiedByKerning(attributed, range: ranges[k].range, extra: available - natural, fontSize: fontSize) ?? line
@@ -385,11 +387,11 @@ struct Typesetter {
         var gaps: [Int] = []
         for k in 0..<(length - 1) {
             let a = ns.character(at: range.location + k), b = ns.character(at: range.location + k + 1)
-            if isCJK(a) || isCJK(b) { gaps.append(k) }
+            if isCJK(a) || isCJK(b) || a == 0x20 { gaps.append(k) }
         }
         if gaps.isEmpty { gaps = Array(0..<(length - 1)) }
         let kern = extra / Double(gaps.count)
-        guard kern < fontSize * 0.16 else { return nil }
+        guard kern < fontSize * 0.3 else { return nil }
         let line = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: range.location, length: range.length)))
         for k in gaps { line.addAttribute(NSAttributedString.Key(kCTKernAttributeName as String), value: kern, range: NSRange(location: k, length: 1)) }
         return CTLineCreateWithAttributedString(line)

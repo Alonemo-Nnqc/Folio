@@ -281,7 +281,7 @@ extension EngineDiagnostics {
         var out = ""
         for line in lines where line.baseline >= minY && line.baseline <= maxY {
             out += String(format: "base %.1f size %.1f x %.1f-%.1f: ", line.baseline, line.size, line.minX, line.maxX) + line.text + "\n"
-            out += "   " + line.chars.filter { !$0.isSpace }.prefix(8).map { String(format: "%@[%.1f %.1f %@]", $0.text, $0.baseline, $0.size, $0.isScript ? "s" : "") }.joined(separator: " ") + "\n"
+            out += "   " + line.chars.filter { !$0.isSpace }.map { String(format: "%@[%.1f r%d m%d]", $0.text, $0.baseline, $0.run ?? -1, $0.isMath ? 1 : 0) }.joined(separator: " ") + "\n"
         }
         return out
     }
@@ -329,6 +329,23 @@ extension EngineDiagnostics {
             }
             translations[segment.id] = text
         }
+        // Paragraphs continued in the next column or page: translated as one, then cut where each part ends.
+        let continuations = Continuations.find(segments, layouts: layouts)
+        var joinedNotes: [String] = []
+        for c in continuations where c.parts.allSatisfy({ cache.lookup($0.source) == nil }) {
+            var offset = 0
+            var whole = ""
+            for (k, part) in c.parts.enumerated() {
+                let shift = offset
+                let text = Placeholders.replace(in: translations[part.id] ?? "") { TextSegment.placeholder($0 + shift) }
+                whole += (k == 0 ? "" : Continuations.marker) + text
+                offset += part.formulas.count
+            }
+            guard let pieces = Continuations.split(whole, c) else { joinedNotes.append("joined, not splittable: p\(c.parts[0].page)"); continue }
+            for (part, piece) in zip(c.parts, pieces) { translations[part.id] = piece }
+            let a = c.parts[0].source.suffix(30), b = c.parts[1].source.prefix(30)
+            joinedNotes.append("joined: p\(c.parts[0].page)→p\(c.parts[1].page) \"…\(a)\" + \"\(b)…\"")
+        }
         let renderer = TranslationRenderer(source: cg, language: "zh")
         let audit = RenderAudit()
         renderer.audit = audit
@@ -338,7 +355,7 @@ extension EngineDiagnostics {
         if let output, let mono = rendered.mono { try mono.write(to: output) }
 
         var issues: [String] = []
-        var overlaps = 0, outside = 0, shrunk = 0, unfit = 0
+        var overlaps = 0, outside = 0, shrunk = 0, unfit = 0, stray = 0, misplaced = 0
         var fills: [Double] = []
         let byPage = Dictionary(grouping: audit.entries, by: \.page)
         for layout in layouts {
@@ -350,6 +367,36 @@ extension EngineDiagnostics {
                 obstacles.append(("\(block.kind.rawValue) \"\(block.text.prefix(24))\"", rect.insetBy(dx: 0.5, dy: block.size * 0.15)))
             }
             for figure in layout.figures { obstacles.append(("figure", figure)) }
+            // A piece of a formula set with another line: the glyphs drawn just before and after it are elsewhere.
+            do {
+                var lineOfRun: [Int: Int] = [:]
+                var charsAndLines: [(c: PageChar, line: Int, translated: Bool)] = []
+                var n = 0
+                for block in layout.blocks {
+                    for line in block.lines {
+                        for c in line.chars where !c.isSpace {
+                            if let run = c.run { lineOfRun[run] = n }
+                            charsAndLines.append((c, n, block.translate && block.kind != .formula))
+                        }
+                        n += 1
+                    }
+                }
+                let translatedLines = Set(charsAndLines.filter(\.translated).map(\.line))
+                for (c, own, _) in charsAndLines where c.isMath {
+                    guard let run = c.run, let before = lineOfRun[run - 1], let after = lineOfRun[run + 1], before == after, before != own,
+                          translatedLines.contains(before) || translatedLines.contains(own) else { continue }
+                    misplaced += 1
+                    issues.append("misplaced: p\(layout.number) \"\(c.text)\" @\(Int(c.rect.midX)),\(Int(c.rect.midY))")
+                }
+            }
+            // Stays on the page in the middle of a paragraph that is set again: it would sit on top of the translation.
+            for (i, block) in layout.blocks.enumerated() where !translated.contains(i) && block.lines.reduce(0, { $0 + $1.visibleCount }) <= 8 {
+                let inside = entries.contains { entry in
+                    let host = layout.blocks[entry.block]
+                    return host.kind == .paragraph && host.rect.insetBy(dx: 0, dy: host.size * 0.3).contains(block.rect.center)
+                }
+                if inside { stray += 1; issues.append("stray: p\(layout.number) \"\(block.text.prefix(24))\" @\(Int(block.rect.minX)),\(Int(block.rect.minY))") }
+            }
             for entry in entries {
                 let block = layout.blocks[entry.block]
                 let label = "p\(layout.number) \(block.kind.rawValue) \"\(block.text.prefix(30))\""
@@ -484,6 +531,9 @@ extension EngineDiagnostics {
         var report = String(format: "%@: %d segments (%d cached), overlaps %d, outside %d, unfit %d, shrunk<0.85 %d, rewritten ops %d, residual %d, lost glyphs %d, formula glyphs %d, links followed %d lost %d, tight gaps %d of %d, collisions %d, fill median %.2f (%d of %d under 0.75)\n",
                             input.lastPathComponent, segments.count, cached, overlaps, outside, unfit, shrunk, audit.conflicts, residual,
                             audit.lostGlyphs, audit.formulaGlyphs, linksFollowed, linksLost, tightGaps, lineGaps, collisions, fill, low, fills.count)
+        report += "left behind \(audit.leftBehind.count), misplaced \(misplaced), stray \(stray), continued \(continuations.count)\n"
+        for note in joinedNotes.prefix(verbose ? 200 : 10) { report += "  " + note + "\n" }
+        for glyph in audit.leftBehind.prefix(verbose ? 200 : 20) { report += "  left: " + glyph + "\n" }
         for issue in issues.prefix(verbose ? 400 : 60) { report += "  " + issue + "\n" }
         return report
     }

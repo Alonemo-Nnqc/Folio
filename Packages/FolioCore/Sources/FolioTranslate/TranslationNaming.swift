@@ -59,8 +59,14 @@ public enum TranslationNaming {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = String(localized: "M月d日 HH.mm", bundle: .module)
-        let time = formatter.string(from: date)
-        return String(localized: "\(original)（\(what) · \(provider.label) · \(time)）", bundle: .module)
+        var time = formatter.string(from: date)
+        var timed = String(localized: "\(original)（\(what) · \(provider.label) · \(time)）", bundle: .module)
+        if existing.contains(timed) {
+            formatter.dateFormat = String(localized: "M月d日 HH.mm.ss", bundle: .module)
+            time = formatter.string(from: date)
+            timed = String(localized: "\(original)（\(what) · \(provider.label) · \(time)）", bundle: .module)
+        }
+        return timed
     }
 
     /// The two kinds of output (FolioCore's TranslationKind, without depending on it).

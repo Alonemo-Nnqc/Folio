@@ -389,6 +389,22 @@
         }
       }
     },
+    "M月d日 HH.mm.ss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MMM d HH.mm.ss"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "M月d日 HH.mm.ss"
+          }
+        }
+      }
+    },
     "Ollama（本地）" : {
       "localizations" : {
         "en" : {
@@ -1831,6 +1847,38 @@
         }
       }
     },
+    "翻译服务拒绝翻译 %lld 个段落（内容审核）。请换一个翻译服务或模型再试。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service refused %lld paragraphs (content review). Try another service or model."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "翻译服务拒绝翻译 %lld 个段落（内容审核）。请换一个翻译服务或模型再试。"
+          }
+        }
+      }
+    },
+    "翻译服务拒绝翻译 %lld 个段落（内容审核），这些段落保留了原文。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service refused %lld paragraphs (content review); they keep their original text."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "翻译服务拒绝翻译 %lld 个段落（内容审核），这些段落保留了原文。"
+          }
+        }
+      }
+    },
     "翻译服务拒绝访问%@：这个 API Key 没有使用该服务或模型的权限" : {
       "localizations" : {
         "en" : {
@@ -2415,6 +2463,22 @@
         }
       }
     },
+    "超高" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ultra"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "超高"
+          }
+        }
+      }
+    },
     "软件包安装完成" : {
       "localizations" : {
         "en" : {
@@ -2441,6 +2505,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This PDF has no text to translate (it may be a scan that needs text recognition first)."
+          }
+        }
+      }
+    },
+    "这篇论文已经是%@，不需要翻译成%@。可以在翻译设置里换一种译文语言。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This paper is already in %1$@, so there is nothing to translate into %2$@. You can choose another target language in Translation settings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "这篇论文已经是%1$@，不需要翻译成%2$@。可以在翻译设置里换一种译文语言。"
           }
         }
       }

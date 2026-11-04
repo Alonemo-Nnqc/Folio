@@ -59,6 +59,7 @@ public enum ReasoningEffort {
         case "high": String(localized: "高", bundle: .module)
         case "xhigh": String(localized: "极高", bundle: .module)
         case "max": String(localized: "最高", bundle: .module)
+        case "ultra": String(localized: "超高", bundle: .module)
         case "thinking": String(localized: "深度思考", bundle: .module)
         default: level
         }
@@ -72,8 +73,25 @@ public enum ReasoningEffort {
         let model = chosen.isEmpty ? field?.defaultValue : chosen
         if let level = LocalAgent.effort(inModelName: model) { return .decidedByModel(title(ofLevel: level)) }
         if agent.modelDecidesEffort, !chosen.isEmpty { return .decidedByModel(String(localized: "模型默认", bundle: .module)) }
-        let levels = agent.effortLevels.map { choice($0, title(ofLevel: $0)) }
-        return .choices(levels + [choice("", String(localized: "由智能体决定", bundle: .module))], default: agent.defaultEffort ?? "")
+        var offered = agent.effortLevels
+        var usual = agent.defaultEffort ?? ""
+        // Codex says which levels each model takes; a model that takes none ("gpt-6-sol") is told none.
+        if agent == .codex, let listed = AgentModels.codexLevels(model: chosen) {
+            let levels = listed.levels.filter { $0 != "none" }
+            guard !levels.isEmpty else { return .unsupportedModel }
+            offered = levels
+            usual = levels.contains("low") ? "low" : (listed.usual.flatMap { levels.contains($0) ? $0 : nil } ?? levels[0])
+        }
+        let levels = offered.map { choice($0, title(ofLevel: $0)) }
+        return .choices(levels + [choice("", String(localized: "由智能体决定", bundle: .module))], default: usual)
+    }
+
+    /// What a local agent is told: the level chosen, or "" (no option at all) when its model decides or takes none.
+    public static func agentEffort(serviceID: String, fields: [String: String]) -> String {
+        switch support(serviceID: serviceID, fields: fields) {
+        case .choices: current(serviceID: serviceID, fields: fields) ?? ""
+        default: ""
+        }
     }
 
     public static func support(serviceID: String, fields: [String: String]) -> Support {

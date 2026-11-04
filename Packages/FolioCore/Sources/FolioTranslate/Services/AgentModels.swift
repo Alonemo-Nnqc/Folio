@@ -25,7 +25,11 @@ public enum AgentModels {
                 }
             }
         case .gemini:
-            models = ["auto", "gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"]
+            // The models this version of Gemini CLI accepts, as its own code names them; a known list if that cannot be read.
+            models = ["auto"] + (geminiModels(executable: executable) ?? [
+                "gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.1-flash-lite",
+                "gemini-2.5-pro", "gemini-2.5-flash",
+            ])
             if let data = try? Data(contentsOf: home.appending(path: ".gemini/settings.json")),
                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 if let name = (object["model"] as? [String: Any])?["name"] as? String { models.insert(name, at: 0) }
@@ -67,12 +71,59 @@ public enum AgentModels {
                let object = LLMBatch.jsonObject(in: output), let list = object["models"] as? [[String: Any]] {
                 models = list.compactMap { $0["key"] as? String ?? $0["id"] as? String }
             }
-        case .droid, .copilot, .kiro, .cline, .kimi, .amp, .goose, .hermes, .deepseek:
+        case .hermes:
+            // ~/.hermes/config.yaml: the model it uses unless told otherwise.
+            let config = (try? String(contentsOf: home.appending(path: ".hermes/config.yaml"), encoding: .utf8)) ?? ""
+            var inModel = false
+            for line in config.split(separator: "\n", omittingEmptySubsequences: false) {
+                if line.hasPrefix("model:") { inModel = true; continue }
+                if inModel, !line.hasPrefix(" ") { break }
+                if inModel, let match = line.firstMatch(of: /^\s+default:\s*"?([^"\s#]+)/) { models.append(String(match.output.1)) }
+            }
+        case .droid, .copilot, .kiro, .cline, .kimi, .amp, .goose, .deepseek:
             // No listing to read: the model field stays free text, and empty means the agent's own default.
             break
         }
         var seen: Set<String> = []
         return models.filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
+    /// Codex's own list of what each model accepts: its thinking levels and the one it uses by default.
+    public static func codexLevels(model: String?) -> (levels: [String], usual: String?)? {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let config = (try? String(contentsOf: home.appending(path: ".codex/config.toml"), encoding: .utf8)) ?? ""
+        guard let name = model?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? value("model", in: config),
+              let data = try? Data(contentsOf: home.appending(path: ".codex/models_cache.json")),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let entry = (object["models"] as? [[String: Any]])?.first(where: { ($0["slug"] as? String) == name }),
+              let listed = entry["supported_reasoning_levels"] as? [Any] else { return nil }
+        let levels = listed.compactMap { ($0 as? [String: Any])?["effort"] as? String ?? $0 as? String }
+        return (levels, entry["default_reasoning_level"] as? String)
+    }
+
+    /// Gemini CLI's model names, read from its installed code (`var DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"` and the like).
+    static func geminiModels(executable: URL?) -> [String]? {
+        guard let executable else { return nil }
+        let real = executable.resolvingSymlinksInPath()
+        // …/node_modules/@google/gemini-cli/…: its bundle folder.
+        var root = real.deletingLastPathComponent()
+        for _ in 0..<4 where !FileManager.default.fileExists(atPath: root.appending(path: "bundle").path) { root.deleteLastPathComponent() }
+        let bundle = root.appending(path: "bundle")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: bundle, includingPropertiesForKeys: nil) else { return nil }
+        for file in files where file.pathExtension == "js" {
+            guard let text = try? String(contentsOf: file, encoding: .utf8), text.contains("VALID_GEMINI_MODELS") else { continue }
+            let names = text.matches(of: /var (?:PREVIEW|DEFAULT|SECONDARY)_GEMINI[_A-Z0-9]*_MODEL = "(gemini-[^"]+)"/).map { String($0.output.1) }
+            let usable = names.filter { !$0.contains("embedding") && !$0.contains("customtools") }
+            var seen: Set<String> = []
+            let ordered = usable.filter { seen.insert($0).inserted }.sorted { a, b in
+                // Newest first: by version number, then pro before flash before lite.
+                func version(_ m: String) -> Double { Double(m.firstMatch(of: /gemini-(\d+(?:\.\d+)?)/).map { String($0.output.1) } ?? "0") ?? 0 }
+                func rank(_ m: String) -> Int { m.contains("pro") ? 0 : m.contains("lite") ? 2 : 1 }
+                return version(a) != version(b) ? version(a) > version(b) : rank(a) < rank(b)
+            }
+            if !ordered.isEmpty { return ordered }
+        }
+        return nil
     }
 
     private static func lines(_ executable: URL?, _ arguments: [String]) async -> [String] {

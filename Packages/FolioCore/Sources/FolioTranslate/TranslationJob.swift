@@ -99,7 +99,11 @@ public final class TranslationJob: @unchecked Sendable {
         let segments = SegmentBuilder.segments(for: analysed, target: options.langOut)
         log.write(String(format: "layout: %d pages, %d segments in %.2f s", analysed.count, segments.count, Date().timeIntervalSince(started)))
         progress(0.04)
-        if segments.isEmpty { throw EngineError.noText }
+        if segments.isEmpty {
+            // Text, but all of it already in the language asked for: not a scan.
+            let language = TranslationOptions.commonLanguages.first { $0.code == options.langOut }?.name ?? options.langOut
+            throw analysed.contains(where: { !SegmentBuilder.segments(for: $0).isEmpty }) ? EngineError.alreadyInTarget(language) : EngineError.noText
+        }
 
         // 2. Context and glossary.
         var context = TranslationContext(sourceLanguage: options.langIn, targetLanguage: options.langOut,
@@ -127,7 +131,18 @@ public final class TranslationJob: @unchecked Sendable {
         // 3. Translations: the cache first, then the service.
         let cache = TranslationCache(directory: Self.supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
                                      document: request.input, signature: signature(), ignore: options.ignoreCache)
+        defer { cache.save() }
         let state = TranslationState(segments: segments)
+        // Paragraphs cut by a column or page break go as one text; their parts are set apart again.
+        let continuations = Continuations.find(segments, layouts: analysed)
+        let joinedParts = Dictionary(continuations.map { ($0.joined.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let inContinuation = Set(continuations.flatMap(\.parts).map(\.id))
+        log.write("continued paragraphs: \(continuations.count)")
+        for continuation in continuations {
+            if let hit = cache.lookup(continuation.joined.source), let pieces = Continuations.split(hit, continuation) {
+                for (part, piece) in zip(continuation.parts, pieces) { state.store(piece, for: part) }
+            }
+        }
         for segment in segments {
             if segment.kind == .heading, let heading = StandardHeadings.translate(segment.source, to: options.langOut) {
                 state.store(heading, for: segment)
@@ -142,7 +157,22 @@ public final class TranslationJob: @unchecked Sendable {
         let previews = PreviewWriter(renderer: renderer, layouts: layouts, segments: segments,
                                      directory: request.outputDirectory, emit: emit)
 
-        let batches = Self.batches(segments.filter { state.translation(for: $0) == nil }, limits: provider.limits)
+        // What is left to send: whole paragraphs, the continued ones as one text each.
+        var units: [TextSegment] = []
+        var sent = Set<String>()
+        for segment in segments where state.translation(for: segment) == nil {
+            if inContinuation.contains(segment.id) {
+                guard let c = continuations.first(where: { $0.parts.contains { $0.id == segment.id } }), !sent.contains(c.joined.id) else { continue }
+                if c.parts.allSatisfy({ state.translation(for: $0) == nil }) {
+                    sent.insert(c.joined.id)
+                    units.append(c.joined)
+                    continue
+                }
+            }
+            units.append(segment)
+        }
+        let refusals = RefusalCount(limit: max(5, segments.count / 20))
+        let batches = Self.batches(units, limits: provider.limits)
         let total = segments.count
         // Between finished batches the bar goes on moving, by what is running and how long that usually takes.
         let estimate = ProgressEstimate(done: state.characters.done, total: state.characters.total, limits: provider.limits)
@@ -175,8 +205,30 @@ public final class TranslationJob: @unchecked Sendable {
                 group.addTask {
                     var context = batchContext
                     context.glossary = glossary.entries
-                    let texts = try await self.translate(batch, provider: provider, context: context, log: log, estimate: estimate)
+                    let texts = try await self.translate(batch, provider: provider, context: context, log: log, estimate: estimate,
+                                                         refusals: refusals)
                     for (segment, raw) in zip(batch, texts) {
+                        guard let raw else {
+                            // Refused by the service's content review: the original stays, and is not cached.
+                            for part in joinedParts[segment.id]?.parts ?? [segment] { state.store(part.source, for: part) }
+                            continue
+                        }
+                        if let continuation = joinedParts[segment.id] {
+                            if let pieces = Continuations.split(raw, continuation) {
+                                for (part, piece) in zip(continuation.parts, pieces) { state.store(piece, for: part) }
+                                cache.store(raw, for: segment.source)
+                            } else {
+                                // The translator moved a formula across the break: the parts go on their own.
+                                log.write("continued paragraph p\(segment.page) not splittable, translating its parts apart")
+                                let apart = try await self.translate(continuation.parts, provider: provider, context: context, log: log,
+                                                                     estimate: estimate, refusals: refusals)
+                                for (part, text) in zip(continuation.parts, apart) {
+                                    state.store(text ?? part.source, for: part)
+                                    if let text { cache.store(text, for: part.source) }
+                                }
+                            }
+                            continue
+                        }
                         let text = segment.kind == .heading ? HeadingNumbers.restoreSpace(source: segment.source, translation: raw) : raw
                         state.store(text, for: segment)
                         cache.store(text, for: segment.source)
@@ -190,8 +242,10 @@ public final class TranslationJob: @unchecked Sendable {
                 startNext()
             }
         }
-        cache.save()
         try Task.checkCancellation()
+        if refusals.count > 0 {
+            emit(.notice(String(localized: "翻译服务拒绝翻译 \(refusals.count) 个段落（内容审核），这些段落保留了原文。", bundle: .module)))
+        }
 
         // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
         emit(.stage(TranslationStageText.layout))
@@ -258,8 +312,10 @@ public final class TranslationJob: @unchecked Sendable {
     }
 
     /// One batch, retried on passing failures; a batch that keeps failing is split in halves.
+    /// The batch's translations, in order; nil for a paragraph the service refused (content review), which keeps its
+    /// original. A translation that lost or duplicated a formula's placeholder is asked for once more.
     private func translate(_ batch: [TextSegment], provider: TranslationProvider, context: TranslationContext,
-                           log: TranslationLog, estimate: ProgressEstimate) async throws -> [String] {
+                           log: TranslationLog, estimate: ProgressEstimate, refusals: RefusalCount) async throws -> [String?] {
         let items = batch.map { TranslationItem(text: $0.source, kind: $0.kind) }
         var context = context
         if provider.limits.usesContext {
@@ -267,21 +323,38 @@ public final class TranslationJob: @unchecked Sendable {
             context.glossary = Array(context.glossary.filter { text.contains($0.source.lowercased()) }.prefix(80))
         }
         var lastError: Error?
-        for attempt in 0..<6 {
+        var refused = false
+        attempts: for attempt in 0..<6 {
             try Task.checkCancellation()
             try await rateGate.wait()
             let characters = batch.reduce(0) { $0 + $1.source.count }
             let request = estimate.begin(characters: characters)
             do {
                 let started = Date()
-                let texts = try await provider.translate(items, context: context)
+                var texts = try await provider.translate(items, context: context).map(Self.clean)
                 log.write(String(format: "batch of %d (%d chars) in %.1f s", batch.count, characters, Date().timeIntervalSince(started)))
                 estimate.finish(request)
-                return texts.map(Self.clean)
+                // Formulas: each placeholder exactly once. A model that dropped one gets a second chance; failing that,
+                // the typesetter puts what is missing at the end.
+                let broken = batch.indices.filter { !Self.placeholdersIntact(texts[$0], source: batch[$0].source) }
+                if !broken.isEmpty, provider.limits.usesContext {
+                    log.write("placeholders lost in \(broken.count) of \(batch.count), asking again")
+                    if let again = try? await provider.translate(broken.map { items[$0] }, context: context).map(Self.clean) {
+                        for (k, i) in broken.enumerated() where k < again.count
+                            && Self.placeholderErrors(again[k], source: batch[i].source) < Self.placeholderErrors(texts[i], source: batch[i].source) {
+                            texts[i] = again[k]
+                        }
+                    }
+                }
+                return texts
             } catch let error as ProviderError {
                 estimate.abandon(request)
                 lastError = error
                 log.write("attempt \(attempt + 1) failed: \(error.detail.prefix(500))")
+                if error.kind == .refused {
+                    refused = true
+                    break attempts
+                }
                 guard error.isRetryable else { throw error }
                 let wait = error.retryAfter ?? min(30, pow(2, Double(attempt)) * 1.5)
                 if case .http(429) = error.kind {
@@ -295,12 +368,30 @@ public final class TranslationJob: @unchecked Sendable {
             }
         }
         if batch.count > 1 {
+            // Halves until the paragraph that is the problem is found.
             let half = batch.count / 2
-            let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log, estimate: estimate)
-            let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log, estimate: estimate)
+            let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
+            let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
             return first + second
         }
+        if refused {
+            log.write("refused by the service: p\(batch[0].page) \"\(batch[0].source.prefix(80))\"")
+            guard refusals.add() else { throw EngineError.tooManyRefused(refusals.count) }
+            return [nil]
+        }
         throw lastError ?? ProviderError(kind: .invalidResponse, detail: "translation failed")
+    }
+
+    /// Every formula placeholder of the source once, none added. `{v0}` (a break) may move or go.
+    static func placeholdersIntact(_ text: String, source: String) -> Bool {
+        placeholderErrors(text, source: source) == 0
+    }
+
+    static func placeholderErrors(_ text: String, source: String) -> Int {
+        var want: [Int: Int] = [:], got: [Int: Int] = [:]
+        for n in Placeholders.numbers(in: source) where n != 0 { want[n, default: 0] += 1 }
+        for n in Placeholders.numbers(in: text) where n != 0 { got[n, default: 0] += 1 }
+        return Set(want.keys).union(got.keys).reduce(0) { $0 + abs((want[$1] ?? 0) - (got[$1] ?? 0)) }
     }
 
     static func clean(_ text: String) -> String {
@@ -343,14 +434,36 @@ public final class TranslationJob: @unchecked Sendable {
 
 enum EngineError: Error, LocalizedError {
     case unreadable, encrypted, noText
+    /// Everything there is to translate is already in this language.
+    case alreadyInTarget(String)
+    /// The service refused this many paragraphs: more than a few, so something else is wrong.
+    case tooManyRefused(Int)
 
     var errorDescription: String? {
         switch self {
         case .unreadable: String(localized: "无法读取这个 PDF 文件。", bundle: .module)
         case .encrypted: String(localized: "PDF 已加密或受密码保护，无法翻译。", bundle: .module)
         case .noText: String(localized: "这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。", bundle: .module)
+        case .alreadyInTarget(let language):
+            String(localized: "这篇论文已经是\(language)，不需要翻译成\(language)。可以在翻译设置里换一种译文语言。", bundle: .module)
+        case .tooManyRefused(let count):
+            String(localized: "翻译服务拒绝翻译 \(count) 个段落（内容审核）。请换一个翻译服务或模型再试。", bundle: .module)
         }
     }
+}
+
+/// Paragraphs a service refused to translate, up to how many are put up with.
+final class RefusalCount: @unchecked Sendable {
+    private let lock = NSLock()
+    private var refused = 0
+    let limit: Int
+
+    init(limit: Int) { self.limit = limit }
+
+    var count: Int { lock.withLock { refused } }
+
+    /// Counts one more; false once there are more than the limit.
+    func add() -> Bool { lock.withLock { refused += 1; return refused <= limit } }
 }
 
 /// Holds every request of a job back after the service said it gets too many.

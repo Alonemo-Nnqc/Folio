@@ -28,6 +28,16 @@ case "segments":
     print(EngineDiagnostics.segments(input: url(arguments[1]), page: Int(arguments[2]) ?? 1, containing: arguments.count > 3 ? arguments[3] : ""))
 case "lines":
     print(EngineDiagnostics.lines(input: url(arguments[1]), page: Int(arguments[2]) ?? 1, minY: Double(arguments[3]) ?? 0, maxY: Double(arguments[4]) ?? 1000))
+case "agent-models":
+    // Every local agent: found where, its version, the models Folio lists for it and the thinking levels it offers.
+    for agent in LocalAgent.allCases {
+        guard let url = agent.locate(customPath: nil) else { print("\(agent.command): not installed"); continue }
+        let version = agent.version(at: url) ?? "?"
+        let models = await AgentModels.models(for: agent, executable: url)
+        print("\(agent.command) \(version) @ \(url.path)")
+        print("   models (\(models.count)): \(models.prefix(12).joined(separator: ", "))")
+        print("   levels: \(agent.effortLevels.joined(separator: " ")) default \(agent.defaultEffort ?? "-")")
+    }
 case "translate":
     // translate <pdf> <output dir> <service> [--pages 1-3] [--to zh] [--field key=value]… [--secret key=value]… [--mono|--dual] [--fresh]
     var fields: [String: String] = [:], secrets: [String: String] = [:]
@@ -61,6 +71,7 @@ case "translate":
         case .stage(let s): if s != lastStage { lastStage = s; if !s.hasPrefix("翻译段落") || s.hasSuffix("0") { print(t, "stage", s) } }
         case .progress(let value): if arguments.contains("--progress") { print(t, "progress", value) }
         case .preview(let u): print(t, "preview", u.lastPathComponent)
+        case .notice(let text): print(t, "notice", text)
         case .finished(let m, let d): print(t, "finished", m?.path ?? "-", d?.path ?? "-")
         case .failed(let message, let log): print(t, "FAILED", message, log.path)
         case .cancelled: print(t, "cancelled")

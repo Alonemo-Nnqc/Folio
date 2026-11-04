@@ -1293,6 +1293,22 @@
         }
       }
     },
+    "保留两者" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Both"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "保留两者"
+          }
+        }
+      }
+    },
     "保留原文排版、公式和图表\n译文会作为新文件加入该条目" : {
       "localizations" : {
         "en" : {
@@ -1649,6 +1665,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Built-in translation components installed"
+          }
+        }
+      }
+    },
+    "再次翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translating Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "再次翻译"
           }
         }
       }
@@ -2129,6 +2161,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Right-click to add to groups, tag or delete in bulk"
+          }
+        }
+      }
+    },
+    "同一服务和模型再翻译一次时；保留两者时按翻译时间区分，替换的旧译文会移到废纸篓" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When a paper is translated again by the same service and model. Kept translations are told apart by time; a replaced one goes to the Trash."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "同一服务和模型再翻译一次时；保留两者时按翻译时间区分，替换的旧译文会移到废纸篓"
           }
         }
       }
@@ -5307,6 +5355,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Updates are downloaded from GitHub Releases and their signature is verified before installing."
+          }
+        }
+      }
+    },
+    "替换旧的译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace the Earlier One"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "替换旧的译文"
           }
         }
       }

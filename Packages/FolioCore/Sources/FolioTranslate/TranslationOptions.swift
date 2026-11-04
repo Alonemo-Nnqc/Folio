@@ -38,6 +38,12 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
     public var concurrency: Int?
     /// Translate again instead of reusing earlier translations of the same text.
     public var ignoreCache: Bool = false
+    /// A paper translated again by the same service and model: both kept (told apart by time), or the old one replaced.
+    public var duplicates: Duplicates = .keepBoth
+
+    public enum Duplicates: String, Sendable, Hashable, Codable, CaseIterable {
+        case keepBoth, replace
+    }
 
     public init(langIn: String = "en", langOut: String = "zh", outputs: Outputs = .both,
                 dualLayout: DualLayout = .sideBySide, pages: String? = nil,
@@ -59,7 +65,7 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case langIn, langOut, outputs, dualLayout, pages, onlyIncludeTranslatedPages, glossaryFile
-        case translateTables, translateReferences, concurrency, ignoreCache
+        case translateTables, translateReferences, concurrency, ignoreCache, duplicates
     }
 
     /// Reads settings saved by any version: missing keys keep their defaults.
@@ -77,6 +83,7 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
         translateReferences = try c.decodeIfPresent(Bool.self, forKey: .translateReferences) ?? false
         concurrency = try c.decodeIfPresent(Int.self, forKey: .concurrency)
         ignoreCache = try c.decodeIfPresent(Bool.self, forKey: .ignoreCache) ?? false
+        duplicates = (try? c.decodeIfPresent(Duplicates.self, forKey: .duplicates)) ?? .keepBoth
     }
 
     /// Common target languages offered in settings (code, display name).

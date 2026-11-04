@@ -7,16 +7,22 @@ import FolioCore
 /// is filed under the item. Needs an installed engine (`-FolioTranslatorDirectory`).
 enum TranslationSelfTest {
     /// The determinate progress bars showing, by the kind of window they are in, with where they are in it.
-    private static func progressBars() -> [(kind: String, value: Double, frame: CGRect)] {
-        func find(in view: NSView) -> NSProgressIndicator? {
-            if let bar = view as? NSProgressIndicator, !bar.isHidden, !bar.isIndeterminate { return bar }
+    private static func progressBars() -> [(kind: String, value: Double, frame: CGRect, fill: CGFloat, animating: Bool)] {
+        func find(in view: NSView) -> TranslationBar? {
+            if let bar = view as? TranslationBar, !bar.isHidden { return bar }
             for subview in view.subviews { if let bar = find(in: subview) { return bar } }
             return nil
+        }
+        /// A system progress indicator showing anywhere in the window: that would be one sliding or pulsing.
+        func animated(in view: NSView) -> Bool {
+            if let indicator = view as? NSProgressIndicator, !indicator.isHidden, indicator.style == .bar { return true }
+            return view.subviews.contains { animated(in: $0) }
         }
         return NSApp.windows.compactMap { window in
             let kind = window.windowController is ReaderWindowController ? "reader" : window.windowController is FolioWindowController ? "list" : nil
             guard let kind, window.isVisible, let content = window.contentView, let bar = find(in: content) else { return nil }
-            return (kind, bar.doubleValue, bar.convert(bar.bounds, to: nil))
+            bar.layoutSubtreeIfNeeded()
+            return (kind, bar.fraction, bar.convert(bar.bounds, to: nil), bar.fillWidth, animated(in: content))
         }
     }
 
@@ -46,8 +52,15 @@ enum TranslationSelfTest {
             // What the bars show as it runs, and whether they stay where they are while the numbers change.
             var barValues: [String: Set<Int>] = [:]
             var barPlaces: [String: Set<String>] = [:]
+            var lastValue: [String: Double] = [:]
+            var backwards: [String: Int] = [:], wrongFill: [String: Int] = [:], sliding: [String: Int] = [:]
             while model.translations.jobs[itemId] != nil {
                 for bar in progressBars() {
+                    // Only forward; filled as far as the value says; no system bar animating beside it.
+                    if bar.value < (lastValue[bar.kind] ?? 0) - 0.0001 { backwards[bar.kind, default: 0] += 1 }
+                    lastValue[bar.kind] = bar.value
+                    if abs(bar.fill - bar.frame.width * bar.value) > 1 { wrongFill[bar.kind, default: 0] += 1 }
+                    if bar.animating { sliding[bar.kind, default: 0] += 1 }
                     barValues[bar.kind, default: []].insert(Int(bar.value * 100))
                     let f = bar.frame
                     barPlaces[bar.kind, default: []].insert(String(format: "x %.1f width %.1f", f.minX, f.width))
@@ -77,6 +90,9 @@ enum TranslationSelfTest {
                 write((values.count >= 3 ? "PASS" : "FAIL") + " \(kind) bar followed the progress: \(values.count) values, \(values.min() ?? 0)…\(values.max() ?? 0)%")
                 let places = barPlaces[kind] ?? []
                 write((places.count == 1 ? "PASS" : "FAIL") + " \(kind) bar stayed in place: \(places.count) positions \(places.sorted().prefix(6))")
+                write(((backwards[kind] ?? 0) == 0 ? "PASS" : "FAIL") + " \(kind) bar never went back (\(backwards[kind] ?? 0))")
+                write(((wrongFill[kind] ?? 0) == 0 ? "PASS" : "FAIL") + " \(kind) bar filled as far as its value (\(wrongFill[kind] ?? 0) off)")
+                write(((sliding[kind] ?? 0) == 0 ? "PASS" : "FAIL") + " \(kind) no animated system bar (\(sliding[kind] ?? 0))")
             }
             write(String(format: "DONE in %.0fs", Date().timeIntervalSince(started)))
         }

@@ -14,6 +14,8 @@ final class TranslationCoordinator {
         var stage: String
         /// The translation so far (pages done translated, the rest original), for reading while it runs.
         var preview: URL?
+        /// What to tell the user when it is done (paragraphs the service would not translate).
+        var notices: [String] = []
     }
 
     private(set) var jobs: [String: JobState] = [:] {
@@ -214,9 +216,12 @@ final class TranslationCoordinator {
             if jobs[itemId]?.stage == String(localized: "正在启动翻译") { jobs[itemId]?.stage = String(localized: "正在翻译") }
         case .preview(let url):
             jobs[itemId]?.preview = url
+        case .notice(let text):
+            jobs[itemId]?.notices.append(text)
         case .finished(let mono, let dual):
+            let notices = jobs[itemId]?.notices ?? []
             jobs[itemId] = nil
-            file(mono: mono, dual: dual, of: fileId, provider: provider)
+            file(mono: mono, dual: dual, of: fileId, provider: provider, notices: notices)
         case .failed(let message, let logURL):
             fail(itemId: itemId, fileId: fileId, message: message, log: logURL)
         case .cancelled:
@@ -227,7 +232,7 @@ final class TranslationCoordinator {
 
     /// Copies the results into the library next to the original (TRANS-05), named by language, provider and
     /// model ("论文（简体中文译文 · DeepSeek · deepseek-chat）.pdf").
-    private func file(mono: URL?, dual: URL?, of fileId: String, provider: TranslationNaming.Provider) {
+    private func file(mono: URL?, dual: URL?, of fileId: String, provider: TranslationNaming.Provider, notices: [String] = []) {
         guard let model, let source = model.snapshot.files[fileId] else { return }
         let base = (source.fileName as NSString).deletingPathExtension
         let language = TranslationOptions.commonLanguages.first { $0.code == model.settings.translationOptions.langOut }?.name ?? ""
@@ -235,6 +240,9 @@ final class TranslationCoordinator {
         func name(_ kind: TranslationNaming.TranslationKindName) -> String {
             TranslationNaming.baseName(original: base, kind: kind, language: language, provider: provider, existing: existing)
         }
+        // The same paper by the same service and model before: replaced, if that is what the user chose.
+        let earlier = model.settings.translationOptions.duplicates == .replace
+            ? model.snapshot.files.values.filter { $0.translationOf == fileId && $0.translatedBy == provider.label }.map(\.id) : []
         var added: [FileRecord] = []
         model.perform(String(localized: "无法保存译文")) {
             if let mono {
@@ -245,9 +253,11 @@ final class TranslationCoordinator {
             }
         }
         guard let first = added.first else { return }
+        if !earlier.isEmpty { model.trashFiles(earlier) }
         model.importer.indexFulltext()
         let title = model.snapshot.items[source.itemId]?.title ?? base
-        model.toasts.show(String(localized: "「\(title)」翻译完成"), systemImage: "character.book.closed.fill", actionTitle: String(localized: "打开译文")) {
+        let done = ([String(localized: "「\(title)」翻译完成")] + notices).joined(separator: " ")
+        model.toasts.show(done, systemImage: "character.book.closed.fill", actionTitle: String(localized: "打开译文")) {
             model.open(fileId: first.id, mode: .reader)
         }
     }

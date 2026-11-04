@@ -62,7 +62,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     public var effortLevels: [String] {
         switch self {
         case .claude, .antigravity: ["low", "medium", "high", "xhigh", "max"]
-        case .codex: ["low", "medium", "high", "xhigh"]
+        case .codex: ["minimal", "low", "medium", "high", "xhigh", "max"]
         case .grok: ["low", "medium", "high"]
         case .pi: ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         case .hermes: ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
@@ -177,7 +177,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
 
     /// The version the command reports, if it answers.
     public func version(at url: URL) -> String? {
-        guard let result = CommandProbe.run(url.path, ["--version"], environment: LocalProcess.environment(), timeout: 10), result.status == 0 else { return nil }
+        // Some check for updates first (Hermes): a slow network must not make them look broken.
+        guard let result = CommandProbe.run(url.path, ["--version"], environment: LocalProcess.environment(), timeout: 25), result.status == 0 else { return nil }
         return CommandProbe.version(in: result.output)
     }
 
@@ -325,6 +326,7 @@ enum AgentFailure {
         if clean.contains("{\"") || clean.contains("{\n") { clean = said }
         let detail = "agent \(agent.command): " + said
         func has(_ pattern: String) -> Bool { clean.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil }
+        if ProviderError.isContentRefusal(clean) { return ProviderError(kind: .refused, detail: detail) }
         if has(#"too many requests|rate.?limit|\b429\b|resource.?exhausted"#) { return ProviderError(kind: .http(429), detail: detail) }
         if has(#"\b(http|status|code)[ :=]*402\b|insufficient.?(balance|quota|credit)|out of credits|usage limit|quota exceeded|exceeded your"#) {
             return ProviderError(kind: .http(402), detail: detail)
@@ -424,15 +426,46 @@ final class RefusalMemory: @unchecked Sendable {
 /// built on Node need it), the real HOME and proxy settings; the working directory is an empty folder.
 enum LocalProcess {
     static func run(_ command: [String], input: String, timeout: TimeInterval) async throws -> String {
-        try await withCheckedThrowingContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(with: Result { try runBlocking(command, input: input, timeout: timeout) })
+        // When the job ends (another batch failed, the user cancelled) the command stops at once, instead of running
+        // on for minutes with nobody waiting for it.
+        let handle = Handle()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(with: Result { try runBlocking(command, input: input, timeout: timeout, handle: handle) })
+                }
             }
+        } onCancel: {
+            handle.stop()
+        }
+    }
+
+    /// The running command, for stopping it from elsewhere; stopping before it starts stops it as it starts.
+    final class Handle: @unchecked Sendable {
+        private let lock = NSLock()
+        private var process: Process?
+        private var stopped = false
+
+        func started(_ process: Process) {
+            let stop = lock.withLock { self.process = process; return stopped }
+            if stop { Self.end(process) }
+        }
+
+        func stop() {
+            let process = lock.withLock { stopped = true; return self.process }
+            if let process { Self.end(process) }
+        }
+
+        private static func end(_ process: Process) {
+            guard process.isRunning else { return }
+            process.terminate()
+            let pid = process.processIdentifier
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if process.isRunning { kill(pid, SIGKILL) } }
         }
     }
 
     /// Runs the command on this thread until it ends.
-    static func runBlocking(_ command: [String], input: String, timeout: TimeInterval) throws -> String {
+    static func runBlocking(_ command: [String], input: String, timeout: TimeInterval, handle: Handle? = nil) throws -> String {
         let workDirectory = FileManager.default.temporaryDirectory.appending(path: "folio-translate-work", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
         let process = Process()
@@ -460,6 +493,7 @@ enum LocalProcess {
         }
         Running.shared.add(process)
         defer { Running.shared.remove(process) }
+        handle?.started(process)
         DispatchQueue.global().async {
             try? stdin.fileHandleForWriting.write(contentsOf: Data(input.utf8))
             try? stdin.fileHandleForWriting.close()

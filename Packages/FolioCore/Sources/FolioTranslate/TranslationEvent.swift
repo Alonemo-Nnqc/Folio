@@ -9,6 +9,8 @@ public enum TranslationEvent: Sendable, Hashable {
     /// A translated PDF of the pages done so far (the rest still in the original), to read while the
     /// translation goes on. A new file each time; earlier ones may be deleted.
     case preview(URL)
+    /// Something the user should know once the translation is done ("3 paragraphs kept their original").
+    case notice(String)
     case finished(mono: URL?, dual: URL?)
     case failed(message: String, logURL: URL)
     case cancelled

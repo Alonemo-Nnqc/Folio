@@ -346,10 +346,9 @@ private struct ProfileSheetHeader: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "server.rack")
-                .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.white)
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(.secondary)
                 .frame(width: 34, height: 34)
-                .background(Color.accentColor.gradient, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline).lineLimit(1)

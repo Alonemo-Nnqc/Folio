@@ -238,7 +238,7 @@ struct ServiceSection: View {
     }
 }
 
-/// A tile like those of System Settings, saying what kind of service this is.
+/// What kind of service this is, as a plain system symbol in the label's colour.
 private struct ServiceIcon: View {
     let service: TranslationService
 
@@ -247,28 +247,15 @@ private struct ServiceIcon: View {
         switch service.category {
         case .free: return "globe"
         case .local: return "desktopcomputer"
-        case .agent: return "terminal.fill"
+        case .agent: return "terminal"
         case .llm: return "sparkles"
-        case .machine: return "character.book.closed.fill"
-        }
-    }
-
-    private var color: Color {
-        switch service.category {
-        case .free: .blue
-        case .local: .gray
-        case .agent: .indigo
-        case .llm: .purple
-        case .machine: .teal
+        case .machine: return "character.book.closed"
         }
     }
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 26, height: 26)
-            .background(color.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .foregroundStyle(.secondary)
             .accessibilityHidden(true)
     }
 }
@@ -511,6 +498,15 @@ private struct OptionsSection: View {
             Picker("双语排版", selection: $settings.translationOptions.dualLayout) {
                 Text("原文与译文左右并排").tag(TranslationOptions.DualLayout.sideBySide)
                 Text("原文页与译文页交替").tag(TranslationOptions.DualLayout.alternatingPages)
+            }
+        }
+        if !compact {
+            Picker(selection: $settings.translationOptions.duplicates) {
+                Text("保留两者").tag(TranslationOptions.Duplicates.keepBoth)
+                Text("替换旧的译文").tag(TranslationOptions.Duplicates.replace)
+            } label: {
+                Text("再次翻译")
+                Text("同一服务和模型再翻译一次时；保留两者时按翻译时间区分，替换的旧译文会移到废纸篓")
             }
         }
         TextField("页码范围（选填）", text: Binding(get: { settings.translationOptions.pages ?? "" },

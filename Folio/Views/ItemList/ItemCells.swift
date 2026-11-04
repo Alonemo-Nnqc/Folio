@@ -25,7 +25,7 @@ final class TitleCell: NSTableCellView {
     let badge = CapsuleBadge()
     private let badges = NSStackView()
     /// Translation progress of the item (TRANS-04), at the right edge of the cell.
-    let progress = NSProgressIndicator()
+    let progress = TranslationBar()
     /// What the engine is doing ("翻译段落 34/120"), before the bar.
     let stageLabel = NSTextField(labelWithString: "")
     /// "42%" after the bar, while the engine reports progress.
@@ -57,10 +57,6 @@ final class TitleCell: NSTableCellView {
         badges.detachesHiddenViews = true
         badges.addArrangedSubview(badge)
 
-        progress.style = .bar
-        progress.controlSize = .small
-        progress.minValue = 0
-        progress.maxValue = 1
         progress.isHidden = true
         progress.setAccessibilityIdentifier("translationProgressBar")
         stageLabel.font = .monospacedDigitSystemFont(ofSize: ItemListMetrics.secondaryFont.pointSize, weight: .regular)
@@ -102,6 +98,7 @@ final class TitleCell: NSTableCellView {
             stageLabel.trailingAnchor.constraint(equalTo: progress.leadingAnchor, constant: -8),
             stageLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             progress.centerYAnchor.constraint(equalTo: centerYAnchor),
+            progress.heightAnchor.constraint(equalToConstant: TranslationBar.height),
             progress.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
             { let width = progress.widthAnchor.constraint(equalToConstant: 64); width.priority = .defaultHigh; return width }(),
             { let width = stageLabel.widthAnchor.constraint(equalToConstant: TranslationProgressBar.stageWidth(font: stageLabel.font!)); width.priority = NSLayoutConstraint.Priority(745); return width }(),
@@ -117,13 +114,13 @@ final class TitleCell: NSTableCellView {
     /// A running translation's stage and progress, shown in place.
     func updateTranslation(stage: String, fraction: Double?) {
         TranslationProgressBar.apply(fraction, to: progress)
-        progressLabel.isHidden = fraction == nil
+        progressLabel.isHidden = false
         if stageLabel.stringValue != stage {
             stageLabel.stringValue = stage
             stageLabel.toolTip = stage
             progress.toolTip = stage
         }
-        progressLabel.stringValue = fraction.map { "\(Int(($0 * 100).rounded()))%" } ?? ""
+        progressLabel.stringValue = "\(Int(((fraction ?? 0) * 100).rounded()))%"
     }
 
     /// `origin` is the title of the item a trashed file was deleted from (TRASH-03); `translation` is the
@@ -132,13 +129,11 @@ final class TitleCell: NSTableCellView {
                        translation: (stage: String, fraction: Double?)? = nil) {
         progress.isHidden = translation == nil
         stageLabel.isHidden = translation == nil
-        progressLabel.isHidden = translation?.fraction == nil
+        progressLabel.isHidden = translation == nil
         labelBeforeProgress.isActive = translation != nil
         titleRoom.isActive = translation != nil
         if let translation {
             updateTranslation(stage: translation.stage, fraction: translation.fraction)
-        } else {
-            progress.stopAnimation(nil)
         }
         // Set the base font before any attributed text so the smaller secondary run survives.
         label.font = ItemListMetrics.titleFont

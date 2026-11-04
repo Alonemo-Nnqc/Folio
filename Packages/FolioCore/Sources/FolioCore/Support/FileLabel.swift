@@ -14,8 +14,15 @@ public enum FileLabel {
     /// `files` are all the files of the paper, `defaultFileId` its default one.
     public static func title(of file: FileRecord, among files: [FileRecord], defaultFileId: String?) -> String {
         if let kind = file.translationKind {
-            guard let by = file.translatedBy, !by.isEmpty else { return kindName(kind) }
-            return "\(kindName(kind)) · \(by)"
+            let base = file.translatedBy.flatMap { $0.isEmpty ? nil : "\(kindName(kind)) · \($0)" } ?? kindName(kind)
+            // Two of the same kind by the same service and model: the time each was made tells them apart.
+            let alike = files.filter { $0.id != file.id && $0.translationKind == kind && $0.translatedBy == file.translatedBy
+                && $0.translationOf == file.translationOf }
+            guard !alike.isEmpty else { return base }
+            let formatter = DateFormatter()
+            formatter.locale = Locale.current
+            formatter.setLocalizedDateFormatFromTemplate(alike.contains { abs($0.dateAdded.timeIntervalSince(file.dateAdded)) < 60 } ? "MMMd HH:mm:ss" : "MMMd HH:mm")
+            return "\(base) · \(formatter.string(from: file.dateAdded))"
         }
         return isOriginal(file, among: files, defaultFileId: defaultFileId)
             ? String(localized: "原文", bundle: .module) : file.fileName
