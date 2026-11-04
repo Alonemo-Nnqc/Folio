@@ -1,0 +1,27 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "在资源管理器中显示" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Show in File Explorer" } } } },
+    "有新版本可用" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "A new version is available" } } } },
+    "Folio %@ 已下载，重新启动即可完成安装。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Folio %@ has been downloaded. Restart to finish installing it." } } } },
+    "立即重新启动" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Restart Now" } } } },
+    "稍后" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Later" } } } },
+    "已是最新版本" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "You're up to date" } } } },
+    "Folio %@ 是目前最新的 Windows 版本。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Folio %@ is the latest version for Windows." } } } },
+    "无法检查更新：%@" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't check for updates: %@" } } } },
+    "正在下载 Folio %@…" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Downloading Folio %@…" } } } },
+    "从开发环境运行时无法自动更新。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Updates aren't available when Folio runs from a development build." } } } },
+    "文件" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "File" } } } },
+    "编辑" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit" } } } },
+    "显示" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "View" } } } },
+    "帮助" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Help" } } } },
+    "退出" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Exit" } } } },
+    "设置…" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings…" } } } },
+    "关于 Folio" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "About Folio" } } } },
+    "Windows 版本 %@" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Version %@ for Windows" } } } },
+    "打开所在文件夹" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Containing Folder" } } } },
+    "Windows 安全中心或杀毒软件可能拦截了端口 %@。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Windows Security or an antivirus program may be blocking port %@." } } } },
+    "翻译服务的 API 密钥用 Windows 数据保护（DPAPI）加密，只有当前 Windows 用户能读取。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "API keys for translation services are encrypted with Windows Data Protection (DPAPI); only your Windows account can read them." } } } }
+  },
+  "version" : "1.0"
+}
