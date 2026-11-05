@@ -357,7 +357,9 @@ public sealed class TextLine
         return WithExtra(spaces.ToDictionary(k => k, _ => each));
     }
 
-    public readonly record struct PlacedGlyphs(FontCatalog.Face Face, ushort[] Glyphs, SKPoint[] Positions, SKRect Ink);
+    /// <summary>Glyphs of one face, with the characters they stand for (Text) and, for each glyph, where its
+    /// characters start in Text (UTF-16): the PDF then carries the real text, not a guess from the font's cmap.</summary>
+    public readonly record struct PlacedGlyphs(FontCatalog.Face Face, ushort[] Glyphs, SKPoint[] Positions, SKRect Ink, string Text, int[] Clusters);
 
     /// <summary>The glyphs of the line by face, positioned from its origin (y down), and where its formulas sit.</summary>
     public (List<PlacedGlyphs> Glyphs, List<(InlineObject Object, double X)> Objects) Layout()
@@ -379,11 +381,14 @@ public sealed class TextLine
             }
             var ids = new List<ushort>();
             var points = new List<SKPoint>();
+            var clusters = new List<int>();
+            int segFrom = Math.Max(run.Start, Start), segTo = Math.Min(run.End, end);
             var ink = SKRect.Empty;
             bool any = false;
             void Add(int g, double x)
             {
                 ids.Add(run.Glyphs[g]);
+                clusters.Add(run.Clusters[g] - segFrom);
                 var pt = new SKPoint((float)(x + run.OffsetX[g] * size), (float)(-run.OffsetY[g] * size));
                 points.Add(pt);
                 var b = run.Bounds[g];
@@ -418,7 +423,8 @@ public sealed class TextLine
                     within[c] = offset + run.Advances[g] * size;
                 }
             }
-            if (ids.Count > 0) glyphs.Add(new PlacedGlyphs(run.Face!, ids.ToArray(), points.ToArray(), any ? ink : SKRect.Empty));
+            if (ids.Count > 0)
+                glyphs.Add(new PlacedGlyphs(run.Face!, ids.ToArray(), points.ToArray(), any ? ink : SKRect.Empty, p.Text[segFrom..segTo], clusters.ToArray()));
         }
         return (glyphs, objects);
     }
@@ -449,7 +455,21 @@ public sealed class TextLine
             };
             used?.UnionWith(g.Glyphs);
             using var builder = new SKTextBlobBuilder();
-            builder.AddPositionedRun(g.Glyphs, font, g.Positions);
+            // UTF-8 text, and each glyph's cluster as a byte offset into it.
+            var bytes = Encoding.UTF8.GetBytes(g.Text);
+            var offsets = new int[g.Text.Length + 1];
+            for (int i = 0, b = 0; i < g.Text.Length; i++)
+            {
+                offsets[i] = b;
+                if (char.IsHighSurrogate(g.Text[i]) && i + 1 < g.Text.Length) { offsets[++i] = b; b += 4; }
+                else b += Encoding.UTF8.GetByteCount(g.Text.AsSpan(i, 1));
+            }
+            offsets[g.Text.Length] = bytes.Length;
+            var buffer = builder.AllocatePositionedTextRun(font, g.Glyphs.Length, bytes.Length);
+            buffer.SetGlyphs(g.Glyphs);
+            buffer.SetPositions(g.Positions);
+            buffer.SetText(bytes);
+            buffer.SetClusters(g.Clusters.Select(c => (uint)offsets[Math.Clamp(c, 0, g.Text.Length)]).ToArray());
             using var blob = builder.Build();
             if (blob != null) canvas.DrawText(blob, (float)x, (float)y, paint);
         }

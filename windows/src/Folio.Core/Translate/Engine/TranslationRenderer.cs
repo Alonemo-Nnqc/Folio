@@ -105,7 +105,7 @@ public sealed class TranslationRenderer(PdfSource source, string language)
         var subsets = new Dictionary<long, byte[]?>();
         byte[]? Subset(PStream stream)
         {
-            if (stream.Dict.RawObject("Length1") == null) return null;
+            if (stream.Dict.RawObject("Length1") == null) return ToUnicodeFix.Apply(stream.Data);
             lock (subsets)
             {
                 if (!subsets.TryGetValue(stream.Key, out var data)) subsets[stream.Key] = data = FontSubsetter.Subset(stream.Data, usedGlyphs);

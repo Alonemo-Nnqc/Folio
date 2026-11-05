@@ -334,3 +334,59 @@ public class LocalizationTests
 
     static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
 }
+
+public class TranslationEngineTests
+{
+    /// <summary>A paper made on the spot (two columns of English), translated with placeholder Chinese: the output opens,
+    /// its Chinese text can be read back (fonts embedded with their text), and the fonts are subsets, not whole fonts.</summary>
+    [Fact]
+    public void TranslatesAGeneratedPaper()
+    {
+        var paper = new MemoryStream();
+        using (var document = SkiaSharp.SKDocument.CreatePdf(paper))
+        {
+            var canvas = document.BeginPage(612, 792);
+            using var typeface = SkiaSharp.SKFontManager.Default.MatchFamily("Times New Roman") ?? SkiaSharp.SKFontManager.Default.MatchFamily("Liberation Serif") ?? SkiaSharp.SKTypeface.Default;
+            using var title = new SkiaSharp.SKFont(typeface, 17);
+            using var body = new SkiaSharp.SKFont(typeface, 10);
+            using var paint = new SkiaSharp.SKPaint { Color = SkiaSharp.SKColors.Black, IsAntialias = true };
+            canvas.DrawText("Learning to Segment Images with Few Examples", 120, 90, title, paint);
+            var words = ("Deep networks need many annotated training samples to work well. In this paper we present a network and training strategy " +
+                         "that relies on the strong use of data augmentation to use the available annotated samples more efficiently. The architecture " +
+                         "consists of a contracting path to capture context and a symmetric expanding path that enables precise localization.").Split(' ');
+            for (int column = 0; column < 2; column++)
+            {
+                float y = 140;
+                for (int paragraph = 0; paragraph < 3; paragraph++)
+                {
+                    var line = "";
+                    foreach (var word in words)
+                    {
+                        if (body.MeasureText(line + " " + word) > 240) { canvas.DrawText(line.Trim(), 60 + column * 270, y, body, paint); y += 12; line = ""; }
+                        line += " " + word;
+                    }
+                    canvas.DrawText(line.Trim(), 60 + column * 270, y, body, paint);
+                    y += 22;
+                }
+            }
+            document.EndPage();
+            document.Close();
+        }
+        using var source = Folio.Core.Translate.Pdf.PdfSource.Open(paper.ToArray());
+        var layouts = new Folio.Core.Translate.Layout.LayoutAnalyzer().Analyze(source, [1]);
+        var segments = Folio.Core.Translate.Engine.SegmentBuilder.Segments(layouts, "zh");
+        Assert.True(segments.Count >= 4, $"{segments.Count} segments");
+        var translations = segments.ToDictionary(s => s.Id, s => string.Concat(Enumerable.Repeat("深度网络需要大量带注释的训练样本。", Math.Max(1, s.Source.Length / 40))));
+        var output = new Folio.Core.Translate.Engine.TranslationRenderer(source, "zh")
+            .Render(layouts, segments, translations, true, true, Folio.Core.Translate.TranslationOptions.DualLayouts.sideBySide, null);
+        Assert.NotNull(output.Mono);
+        Assert.NotNull(output.Dual);
+        // Whole Chinese fonts are 10–20 MB; subsets of a few dozen characters, a few hundred kB at most.
+        Assert.True(output.Mono!.Length < 3_000_000, $"{output.Mono.Length} bytes");
+        using var read = UglyToad.PdfPig.PdfDocument.Open(output.Mono);
+        var text = string.Concat(read.GetPage(1).Letters.Select(l => l.Value));
+        Assert.True(text.Contains("深度网络"), "text: " + text[..Math.Min(300, text.Length)]);
+        using var dual = UglyToad.PdfPig.PdfDocument.Open(output.Dual!);
+        Assert.Equal(1224, (int)dual.GetPage(1).Width);
+    }
+}
