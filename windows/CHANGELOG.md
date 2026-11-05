@@ -14,5 +14,8 @@ Windows 版的版本号与 macOS 版相互独立，发布时推送 `win-v<版本
 - 拖入 PDF 自动识别元数据（Zotero 识别服务、Crossref、arXiv、OpenAlex、DBLP、CVF），找不到时可手动匹配
 - 内置阅读器：标签页打开论文，高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，记住阅读位置
 - 笔记、引用（GB/T 7714、APA、IEEE 等）与 BibTeX / RIS / CSL JSON 导入导出
+- 全文翻译：与 macOS 版同一套自研引擎，按原版面排入译文，公式、图表和链接保持原样，生成纯译文和左右对照两种 PDF；
+  支持 Google / Microsoft 免费翻译、Ollama / LM Studio、本机已登录的 Claude Code、Codex、Gemini CLI 等智能体，
+  以及 OpenAI、DeepSeek、通义千问、DeepL 等接口；API Key 用 Windows 账户加密保存
 - 浏览器插件（Chrome、Edge、Brave、Firefox 等）一键保存到 Folio
 - 应用内自动更新
