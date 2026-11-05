@@ -17,5 +17,8 @@ Windows 版的版本号与 macOS 版相互独立，发布时推送 `win-v<版本
 - 全文翻译：与 macOS 版同一套自研引擎，按原版面排入译文，公式、图表和链接保持原样，生成纯译文和左右对照两种 PDF；
   支持 Google / Microsoft 免费翻译、Ollama / LM Studio、本机已登录的 Claude Code、Codex、Gemini CLI 等智能体，
   以及 OpenAI、DeepSeek、通义千问、DeepL 等接口；API Key 用 Windows 账户加密保存
+- AI 接入：内置 MCP 服务器和 `folio-cli`，在 设置 ▸ AI 中一键为 Claude Code、Codex、Gemini CLI、Cursor、Claude 桌面版等智能体添加 Folio，
+  让它们查找、阅读、引用和整理你的文献
+- 从 Zotero 导入：分组、标签（含颜色）、PDF 和 pdf2zh 译文一并导入，只读取 Zotero 数据库的副本
 - 浏览器插件（Chrome、Edge、Brave、Firefox 等）一键保存到 Folio
 - 应用内自动更新
