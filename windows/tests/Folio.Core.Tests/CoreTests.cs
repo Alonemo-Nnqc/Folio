@@ -288,4 +288,24 @@ public class LayoutTests
         report.Append($"mono {result.Mono!.Length} bytes, dual {result.Dual!.Length} bytes\n");
         File.WriteAllText(Path.Combine(output, "report.txt"), report.ToString());
     }
+
+    /// <summary>FOLIO_SAMPLE_PDF + FOLIO_TRANSLATE_OUT (+ FOLIO_TRANSLATE_SERVICE, default google): a real translation of pages 1–2.</summary>
+    [Fact]
+    public async Task TranslatesWithARealService()
+    {
+        var sample = Environment.GetEnvironmentVariable("FOLIO_SAMPLE_PDF");
+        var output = Environment.GetEnvironmentVariable("FOLIO_TRANSLATE_OUT");
+        if (string.IsNullOrEmpty(sample) || string.IsNullOrEmpty(output)) return;
+        Folio.Core.Translate.TranslationJob.SupportDirectory = Path.Combine(output, "support");
+        var request = new Folio.Core.Translate.TranslationRequest
+        {
+            Input = sample, OutputDirectory = output, ServiceId = Environment.GetEnvironmentVariable("FOLIO_TRANSLATE_SERVICE") ?? "google",
+            Options = new Folio.Core.Translate.TranslationOptions { Pages = "1-2", OnlyIncludeTranslatedPages = true },
+        };
+        var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var job = new Folio.Core.Translate.TranslationJob(request);
+        var last = await job.Run(e => { if (e is not Folio.Core.Translate.TranslationEvent.Progress) events.Enqueue(e.ToString()); });
+        File.WriteAllLines(Path.Combine(output, "events.txt"), events);
+        Assert.IsType<Folio.Core.Translate.TranslationEvent.Finished>(last);
+    }
 }
