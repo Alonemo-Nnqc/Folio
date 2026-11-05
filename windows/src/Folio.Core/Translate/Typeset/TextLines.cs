@@ -81,8 +81,14 @@ public static class FontCatalog
 
     internal static (HarfBuzzSharp.Font Font, int UnitsPerEm) Shaper(SKTypeface typeface) => Shapers.GetOrAdd(typeface, t =>
     {
-        using var stream = t.OpenStream(out int index);
-        var blob = stream.ToHarfBuzzBlob();
+        // HarfBuzz gets its own copy of the font: a blob made from the stream's memory would point at memory the
+        // stream frees when disposed (DirectWrite's streams on Windows do).
+        byte[] bytes;
+        int index;
+        using (var stream = t.OpenStream(out index))
+        using (var data = SKData.Create(stream))
+            bytes = data.ToArray();
+        var blob = Blob.FromStream(new MemoryStream(bytes));
         var face = new HarfBuzzSharp.Face(blob, index);
         int upem = Math.Max(t.UnitsPerEm, 16);
         face.UnitsPerEm = upem;

@@ -209,7 +209,7 @@ static class AiSettings
 
     static void Init(object picker)
     {
-        if ((Window?)SettingsWindow.Current ?? App.Current?.Window is { } window)
+        if (((Window?)SettingsWindow.Current ?? App.Current?.Window) is { } window)
             WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
     }
 
