@@ -43,17 +43,23 @@ public static class PdfAnnotations
                         foreach (var quad in a.QuadPoints)
                         {
                             var rect = Bounds(quad);
-                            foreach (var letter in page.Letters)
+                            // PDFs rarely store the spaces between words: they are the gaps between letters.
+                            var line = page.Letters.Where(l =>
                             {
-                                var c = letter.BoundingBox.Centroid;
-                                if (c.X >= rect.Left && c.X <= rect.Right && c.Y >= rect.Bottom && c.Y <= rect.Top) sb.Append(letter.Value);
+                                var c = l.BoundingBox.Centroid;
+                                return c.X >= rect.Left && c.X <= rect.Right && c.Y >= rect.Bottom && c.Y <= rect.Top;
+                            }).OrderBy(l => l.BoundingBox.Left).ToList();
+                            for (int i = 0; i < line.Count; i++)
+                            {
+                                if (i > 0 && line[i].BoundingBox.Left - line[i - 1].BoundingBox.Right > Math.Max(line[i - 1].BoundingBox.Width, line[i].BoundingBox.Width) * 0.3) sb.Append(' ');
+                                sb.Append(line[i].Value);
                             }
                             sb.Append(' ');
                         }
                         covered = Text.CollapseWhitespace(sb.ToString());
                     }
                     var comment = Text.NonEmpty(a.Content);
-                    string? author = a.AnnotationDictionary.TryGet(NameToken.T, out StringToken? t) ? t.Data : null;
+                    string? author = a.AnnotationDictionary.Data.TryGetValue("T", out var t) ? (t as IDataToken<string>)?.Data : null;
                     result.Add(new PdfAnnotation(p, kind, Color(a), Text.NonEmpty(covered), comment, author, null));
                 }
             }

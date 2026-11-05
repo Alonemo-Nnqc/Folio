@@ -56,10 +56,10 @@ public sealed class Updater
     public void StartAutomaticChecks()
     {
         if (!_model.Settings.AutoCheckUpdates || !IsInstalled) return;
-        _ = Check(userInitiated: false);
+        Check(userInitiated: false).Fire();
         _timer = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread().CreateTimer();
         _timer.Interval = TimeSpan.FromHours(24);
-        _timer.Tick += (_, _) => { if (_model.Settings.AutoCheckUpdates) _ = Check(userInitiated: false); };
+        _timer.Tick += (_, _) => { if (_model.Settings.AutoCheckUpdates) Check(userInitiated: false).Fire(); };
         _timer.Start();
     }
 

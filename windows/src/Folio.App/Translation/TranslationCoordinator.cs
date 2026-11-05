@@ -141,7 +141,7 @@ public sealed class TranslationCoordinator(AppModel model)
         var current = new Running(itemId);
         _running = current;
         var source = model.Library.FilePath(file);
-        _ = Task.Run(async () =>
+        Task.Run(async () =>
         {
             try
             {
@@ -171,7 +171,7 @@ public sealed class TranslationCoordinator(AppModel model)
                 _running = null;
                 Pump();
             });
-        });
+        }).Fire();
     }
 
     void Handle(TranslationEvent e, string itemId, string fileId, TranslationNaming.Provider provider, TranslationOptions options)
@@ -198,11 +198,11 @@ public sealed class TranslationCoordinator(AppModel model)
             {
                 var notices = job?.Notices ?? [];
                 Remove(itemId);
-                File(finished.Mono, finished.Dual, fileId, provider, options, notices);
+                File(finished.Mono, finished.Dual, fileId, provider, options, notices).Fire();
                 break;
             }
             case TranslationEvent.Failed failed:
-                _ = Fail(itemId, fileId, failed.Message, failed.LogPath);
+                Fail(itemId, fileId, failed.Message, failed.LogPath).Fire();
                 break;
             case TranslationEvent.Cancelled:
                 Remove(itemId);
@@ -212,7 +212,7 @@ public sealed class TranslationCoordinator(AppModel model)
     }
 
     /// <summary>Copies the results into the library next to the original, named by language, provider and model.</summary>
-    void File(string? mono, string? dual, string fileId, TranslationNaming.Provider provider, TranslationOptions options, List<string> notices)
+    async Task File(string? mono, string? dual, string fileId, TranslationNaming.Provider provider, TranslationOptions options, List<string> notices)
     {
         if (!model.Snapshot.Files.TryGetValue(fileId, out var source)) return;
         var @base = Path.GetFileNameWithoutExtension(source.FileName);
@@ -224,8 +224,14 @@ public sealed class TranslationCoordinator(AppModel model)
         var added = new List<FileRecord>();
         try
         {
-            if (mono != null) added.Add(model.Library.AddTranslatedFile(mono, fileId, TranslationKind.Mono, Name(TranslationNaming.Kind.Mono), provider.Label));
-            if (dual != null) added.Add(model.Library.AddTranslatedFile(dual, fileId, TranslationKind.Dual, Name(TranslationNaming.Kind.Dual), provider.Label));
+            var library = model.Library;
+            string? monoName = mono != null ? Name(TranslationNaming.Kind.Mono) : null, dualName = dual != null ? Name(TranslationNaming.Kind.Dual) : null;
+            // Hashing and copying large files: not on the UI thread.
+            await Task.Run(() =>
+            {
+                if (mono != null) added.Add(library.AddTranslatedFile(mono, fileId, TranslationKind.Mono, monoName!, provider.Label));
+                if (dual != null) added.Add(library.AddTranslatedFile(dual, fileId, TranslationKind.Dual, dualName!, provider.Label));
+            });
         }
         catch (Exception e)
         {
@@ -249,7 +255,7 @@ public sealed class TranslationCoordinator(AppModel model)
         var title = model.Snapshot.Items.TryGetValue(itemId, out var item) ? item.Title : "";
         var dialog = new ContentDialog
         {
-            Title = Loc.S("「%@」翻译失败", title),
+            Title = Dialogs.Heading(Loc.S("「%@」翻译失败", title)),
             Content = new TextBlock { Text = message, TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap, IsTextSelectionEnabled = true },
             PrimaryButtonText = Loc.S("重试"),
             CloseButtonText = Loc.S("取消"),

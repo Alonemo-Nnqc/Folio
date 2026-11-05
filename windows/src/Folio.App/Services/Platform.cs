@@ -23,6 +23,13 @@ static class Shell
         catch (Exception e) { App.Current?.Model.Toasts.Show(e.Message, "warning"); }
     }
 
+    /// <summary>Windows' "open with" dialog.</summary>
+    public static void OpenWithDialog(string path)
+    {
+        try { Process.Start(new ProcessStartInfo("rundll32.exe") { ArgumentList = { "shell32.dll,OpenAs_RunDLL", path }, UseShellExecute = false }); }
+        catch (Exception e) { App.Current?.Model.Toasts.Show(e.Message, "warning"); }
+    }
+
     /// <summary>Opens File Explorer with the file selected.</summary>
     public static void Reveal(string path)
     {
@@ -52,7 +59,8 @@ public sealed class ToastCenter(DispatcherQueue ui)
 /// <summary>Content dialogs on the main window.</summary>
 static class Dialogs
 {
-    static XamlRoot? Root => App.Current?.Window?.Content?.XamlRoot;
+    static Window? Owner => SettingsWindow.IsActive && SettingsWindow.Current is { } settings ? settings : App.Current?.Window;
+    static XamlRoot? Root => Owner?.Content?.XamlRoot;
     static readonly SemaphoreSlim Gate = new(1, 1);
 
     static async Task<ContentDialogResult> Show(ContentDialog dialog)
@@ -61,37 +69,44 @@ static class Dialogs
         try
         {
             dialog.XamlRoot = Root;
-            dialog.RequestedTheme = (App.Current?.Window?.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default;
-            return await dialog.ShowAsync();
+            dialog.RequestedTheme = (Owner?.Content as FrameworkElement)?.ActualTheme ?? ElementTheme.Default;
+            var owner = Owner;
+            var result = await dialog.ShowAsync();
+            // Windows gives focus to the first button of the window, with a keyboard ring; it belongs where the user was.
+            if (owner == App.Current?.Window) App.Current?.Window?.RestoreFocus();
+            return result;
         }
         finally { Gate.Release(); }
     }
 
     public static async Task Message(string title, string message) =>
-        await Show(new ContentDialog { Title = title, Content = Wrap(message), CloseButtonText = Loc.S("好"), DefaultButton = ContentDialogButton.Close });
+        await Show(new ContentDialog { Title = Heading(title), Content = Wrap(message), CloseButtonText = Loc.S("好"), DefaultButton = ContentDialogButton.Close });
 
     public static async Task<bool> Confirm(string title, string message, string primary, string cancel, bool destructive = false)
     {
-        var dialog = new ContentDialog { Title = title, Content = Wrap(message), PrimaryButtonText = primary, CloseButtonText = cancel, DefaultButton = ContentDialogButton.Primary };
+        var dialog = new ContentDialog { Title = Heading(title), Content = Wrap(message), PrimaryButtonText = primary, CloseButtonText = cancel, DefaultButton = ContentDialogButton.Primary };
         if (destructive) dialog.PrimaryButtonStyle = (Style)Application.Current.Resources["AccentButtonStyle"];
         return await Show(dialog) == ContentDialogResult.Primary;
     }
 
     /// <summary>Three choices: Primary, Secondary or Close (cancel).</summary>
     public static async Task<ContentDialogResult> Choose(string title, string message, string primary, string secondary, string cancel) =>
-        await Show(new ContentDialog { Title = title, Content = Wrap(message), PrimaryButtonText = primary, SecondaryButtonText = secondary, CloseButtonText = cancel, DefaultButton = ContentDialogButton.Primary });
+        await Show(new ContentDialog { Title = Heading(title), Content = Wrap(message), PrimaryButtonText = primary, SecondaryButtonText = secondary, CloseButtonText = cancel, DefaultButton = ContentDialogButton.Primary });
 
     public static async Task<string?> Ask(string title, string placeholder, string initial = "", string primary = "")
     {
         var box = new TextBox { Text = initial, PlaceholderText = placeholder, MinWidth = 320 };
         box.Loaded += (_, _) => { box.Focus(FocusState.Programmatic); box.SelectAll(); };
-        var dialog = new ContentDialog { Title = title, Content = box, PrimaryButtonText = primary.Length > 0 ? primary : Loc.S("好"), CloseButtonText = Loc.S("取消"), DefaultButton = ContentDialogButton.Primary };
+        var dialog = new ContentDialog { Title = Heading(title), Content = box, PrimaryButtonText = primary.Length > 0 ? primary : Loc.S("好"), CloseButtonText = Loc.S("取消"), DefaultButton = ContentDialogButton.Primary };
         return await Show(dialog) == ContentDialogResult.Primary ? box.Text : null;
     }
 
     public static Task<ContentDialogResult> Custom(ContentDialog dialog) => Show(dialog);
 
     static TextBlock Wrap(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 460 };
+
+    /// <summary>A plain title is cut after two lines, and titles here often quote a paper's whole name.</summary>
+    public static TextBlock Heading(string text) => new() { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 460, FontSize = 18, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
 }
 
 /// <summary>The browser extension, installed unpacked from the copy Folio ships (shared with the macOS app).</summary>

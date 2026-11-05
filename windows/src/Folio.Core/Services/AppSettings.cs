@@ -80,6 +80,9 @@ public sealed class AppSettings
         Changed?.Invoke(key);
     }
 
+    /// <summary>Where Folio keeps its library when the chosen one cannot be opened.</summary>
+    public static string FallbackLibrary => DefaultLibrary;
+
     static string DefaultLibrary => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Folio");
 
     /// <summary>FOLIO_LIBRARY (tests, development) overrides the stored location.</summary>
@@ -99,6 +102,8 @@ public sealed class AppSettings
     public ReaderZoom ReaderZoom { get => Get("readerZoom", "fitWidth") == "actualSize" ? ReaderZoom.ActualSize : ReaderZoom.FitWidth; set => Set("readerZoom", value == ReaderZoom.ActualSize ? "actualSize" : "fitWidth"); }
     public ReaderLayout ReaderLayout { get => Get("readerLayout", "single") == "twoUp" ? ReaderLayout.TwoUp : ReaderLayout.Single; set => Set("readerLayout", value == ReaderLayout.TwoUp ? "twoUp" : "single"); }
     public bool ReopenReaderTabs { get => Get("reopenReaderTabs", true); set => Set("reopenReaderTabs", value); }
+    /// <summary>How much of the desktop shows through the windows: 0 (opaque) to 1.</summary>
+    public double WindowTransparency { get => Math.Clamp(Get("windowTransparency", 0.2), 0, 1); set => Set("windowTransparency", Math.Clamp(value, 0, 1)); }
     public string HighlightColor { get => Get("highlightColor", "yellow"); set => Set("highlightColor", value); }
     public bool UseZoteroRecognizer { get => Get("useZoteroRecognizer", true); set => Set("useZoteroRecognizer", value); }
     public bool MarkReadingOnOpen { get => Get("markReadingOnOpen", true); set => Set("markReadingOnOpen", value); }

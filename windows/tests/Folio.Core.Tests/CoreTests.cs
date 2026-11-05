@@ -6,6 +6,80 @@ namespace Folio.Core.Tests;
 
 public class LibraryTests
 {
+    static FileRecord TabFile(string id, TranslationKind? kind = null, string? by = null, string? of = null) =>
+        new("i", $"Files/{id}.pdf", $"{id}.pdf", 0, id, DateTime.UtcNow, id: id) { TranslationKind = kind, TranslatedBy = by, TranslationOf = of };
+
+    [Theory]
+    [InlineData("SnakeSAM: A topology-preserving foundation model", "SnakeSAM")]
+    [InlineData("视网膜分割：一种新方法", "视网膜分割")]
+    [InlineData(" Attention Is All You Need ", "Attention Is All You Need")]
+    [InlineData("Sleeping at 10:30 in Teens", "Sleeping at 10:30 in Teens")]
+    [InlineData("Trailing:", "Trailing:")]
+    [InlineData("X: a study", "X: a study")]
+    public void ShortTitlesStopAtTheSubtitle(string title, string expected) => Assert.Equal(expected, FileLabel.ShortTitle(title));
+
+    [Fact]
+    public void TabsTellPapersAndTranslationsApart()
+    {
+        Loc.Override = "zh-Hans";
+        var item = new Item(ItemKind.Regular, "SnakeSAM: A topology-preserving model", id: "i") { DefaultFileId = "p" };
+        var original = TabFile("p");
+        var mono = TabFile("m", TranslationKind.Mono, "Google", "p");
+        var dual = TabFile("d", TranslationKind.Dual, "Google", "p");
+        List<FileRecord> files = [original, mono, dual];
+        Assert.Equal("SnakeSAM", FileLabel.TabTitle(original, item, files));
+        // The kind comes first, so a narrow tab still shows it.
+        Assert.Equal("译文 · SnakeSAM", FileLabel.TabTitle(mono, item, files));
+        Assert.Equal("双语对照 · SnakeSAM", FileLabel.TabTitle(dual, item, files));
+        // Several of a kind: the service tells them apart; the same service: the time.
+        var other = TabFile("o", TranslationKind.Mono, "DeepSeek", "p");
+        Assert.Equal("译文 · Google · SnakeSAM", FileLabel.TabTitle(mono, item, [.. files, other]));
+        Assert.Equal("译文 · DeepSeek · SnakeSAM", FileLabel.TabTitle(other, item, [.. files, other]));
+        var again = TabFile("a", TranslationKind.Mono, "Google", "p");
+        again.DateAdded = mono.DateAdded.AddHours(3);
+        Assert.NotEqual(FileLabel.TabTitle(mono, item, [.. files, again]), FileLabel.TabTitle(again, item, [.. files, again]));
+        Assert.StartsWith("译文 · ", FileLabel.TabTitle(again, item, [.. files, again]));
+        Assert.DoesNotContain("Google", FileLabel.TabTitle(again, item, [.. files, again]));
+        Assert.EndsWith(" · SnakeSAM", FileLabel.TabTitle(again, item, [.. files, again]));
+        // Within one service, the model; the same service and model, the time, and nothing that is the same for all.
+        var low = TabFile("l", TranslationKind.Dual, "Agent · low", "p");
+        var high = TabFile("h", TranslationKind.Dual, "Agent · high", "p");
+        Assert.Equal("双语对照 · low · SnakeSAM", FileLabel.TabTitle(low, item, [original, low, high]));
+        var later = TabFile("t", TranslationKind.Dual, "Agent · low", "p");
+        later.DateAdded = low.DateAdded.AddHours(3);
+        var timed = FileLabel.TabTitle(later, item, [original, low, later]);
+        Assert.StartsWith("双语对照 · ", timed);
+        Assert.EndsWith(" · SnakeSAM", timed);
+        Assert.DoesNotContain("Agent", timed);
+        Assert.DoesNotContain("low", timed);
+        Assert.NotEqual(timed, FileLabel.TabTitle(low, item, [original, low, later]));
+        // Another file of the paper keeps its own name.
+        var supplement = TabFile("Supplement");
+        Assert.Equal("Supplement", FileLabel.TabTitle(supplement, item, [.. files, supplement]));
+    }
+
+    [Fact]
+    public void TabsOfLooseFilesUseTheirNames()
+    {
+        Loc.Override = "zh-Hans";
+        var item = new Item(ItemKind.Standalone, "scan.pdf", id: "i") { DefaultFileId = "scan" };
+        var scan = TabFile("scan");
+        var translated = TabFile("scan（译文）", TranslationKind.Mono, null, "scan");
+        Assert.Equal("scan", FileLabel.TabTitle(scan, item, [scan, translated]));
+        Assert.Equal("译文 · scan", FileLabel.TabTitle(translated, item, [scan, translated]));
+        Assert.Equal("scan", FileLabel.TabTitle(scan, null, []));
+    }
+
+    [Fact]
+    public void TabToolTipsCarryWhatTheTabLeavesOut()
+    {
+        Loc.Override = "zh-Hans";
+        var item = new Item(ItemKind.Regular, "SnakeSAM: A topology-preserving model", id: "i") { DefaultFileId = "p", Authors = [new("Li", "Jingwen")], Year = 2026 };
+        var original = TabFile("p");
+        var mono = TabFile("m", TranslationKind.Mono, "Google", "p");
+        Assert.Equal("SnakeSAM: A topology-preserving model\nLi 2026 · 译文 · Google", FileLabel.TabToolTip(mono, item, [original, mono]));
+    }
+
     static Metadata Paper(string title = "Spectral Dynamic Attention Network for Hyperspectral Image Super-Resolution") => new(title)
     {
         Type = ItemType.Preprint,
@@ -214,6 +288,48 @@ public class AnnotationTests
         Assert.Contains(after, a => a.Kind == "highlight" && a.Author == "Folio Test" && !string.IsNullOrEmpty(a.Text));
         Assert.Equal(PdfText.PageCount(sample), PdfText.PageCount(copy));
         File.Copy(copy, Path.Combine(Path.GetTempPath(), "folio-annotated-latest.pdf"), true);
+    }
+
+    /// <summary>The reader's editing: recolour, comment, move and delete by object number; undo by cutting the end off.</summary>
+    [Fact]
+    public void ModifiesRemovesAndUndoesAnnotations()
+    {
+        var original = TestPdfs.OnePage();
+        var copy = Path.Combine(Path.GetTempPath(), $"folio-annotation-{Guid.NewGuid():N}.pdf");
+        File.WriteAllBytes(copy, original);
+        try
+        {
+            AnnotationWriter.Add(copy, [new NewAnnotation(1, "Highlight", "yellow", Quads: [[10, 100, 200, 100, 10, 80, 200, 80]], Author: "作者")]);
+            long afterAdd = new FileInfo(copy).Length;
+            long number = ObjectNumberOfFirstAnnotation(copy);
+            Assert.True(AnnotationWriter.Modify(copy, 1, number, color: "green"));
+            var green = Assert.Single(PdfAnnotations.Read(copy));
+            Assert.Equal(AnnotationColors.Hex("green").ToUpperInvariant(), MaskToHex(green.ColorHex));
+            Assert.Equal("作者", green.Author);
+            Assert.True(AnnotationWriter.Modify(copy, 1, number, contents: "评论 comment"));
+            Assert.Equal("评论 comment", Assert.Single(PdfAnnotations.Read(copy)).Comment);
+            Assert.True(AnnotationWriter.Modify(copy, 1, number, dx: 5, dy: -5));
+            Assert.Single(PdfAnnotations.Read(copy));
+            // Undo is exact: back to the earlier bytes.
+            var tail = AnnotationWriter.TruncateTo(copy, afterAdd);
+            Assert.Equal(AnnotationColors.Hex("yellow").ToUpperInvariant(), MaskToHex(Assert.Single(PdfAnnotations.Read(copy)).ColorHex));
+            AnnotationWriter.Append(copy, tail);
+            Assert.Equal("评论 comment", Assert.Single(PdfAnnotations.Read(copy)).Comment);
+            Assert.True(AnnotationWriter.Remove(copy, 1, number));
+            Assert.Empty(PdfAnnotations.Read(copy));
+            Assert.False(AnnotationWriter.Remove(copy, 1, number));
+        }
+        finally { File.Delete(copy); }
+    }
+
+    static string MaskToHex(string hex) => hex.ToUpperInvariant();
+
+    static long ObjectNumberOfFirstAnnotation(string path)
+    {
+        using var document = UglyToad.PdfPig.PdfDocument.Open(path);
+        var page = document.GetPage(1);
+        var annots = page.Dictionary.Data["Annots"] as UglyToad.PdfPig.Tokens.ArrayToken;
+        return ((UglyToad.PdfPig.Tokens.IndirectReferenceToken)annots!.Data[0]).Data.ObjectNumber;
     }
 }
 
@@ -558,5 +674,31 @@ public class ZoteroTests
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             Directory.Delete(dir, true);
         }
+    }
+}
+
+static class TestPdfs
+{
+    /// <summary>A one-page PDF with a classic cross-reference table.</summary>
+    public static byte[] OnePage()
+    {
+        var objects = new[]
+        {
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] >>",
+        };
+        var sb = new System.Text.StringBuilder("%PDF-1.4\n");
+        var offsets = new List<int>();
+        for (int i = 0; i < objects.Length; i++)
+        {
+            offsets.Add(sb.Length);
+            sb.Append($"{i + 1} 0 obj\n{objects[i]}\nendobj\n");
+        }
+        int xref = sb.Length;
+        sb.Append($"xref\n0 {objects.Length + 1}\n0000000000 65535 f \n");
+        foreach (var o in offsets) sb.Append($"{o:D10} 00000 n \n");
+        sb.Append($"trailer\n<< /Size {objects.Length + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        return System.Text.Encoding.ASCII.GetBytes(sb.ToString());
     }
 }

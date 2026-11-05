@@ -163,6 +163,7 @@ public sealed class Importer
             if (!_queued.Add(id)) return;
             _queue.Enqueue(id);
         }
+        RetrievalChanged?.Invoke();
         Pump();
     }
 
@@ -184,11 +185,15 @@ public sealed class Importer
                 finally
                 {
                     lock (_lock) { _running--; _queued.Remove(id); }
+                    RetrievalChanged?.Invoke();
                     Pump();
                 }
             });
         }
     }
+
+    /// <summary>An item started or finished being looked up (any thread).</summary>
+    public event Action? RetrievalChanged;
 
     public bool IsRetrieving(string id) { lock (_lock) return _queued.Contains(id); }
 
@@ -209,7 +214,9 @@ public sealed class Importer
                 break;
             default:
                 library.SetMetadataState(MetadataState.NetworkFailed, id, incrementRetry: true);
-                ReportFailure(item.Title);
+                // Slow or rate-limited services usually answer a little later.
+                if (item.RetryCount == 0) ReportNetworkFailure(item.Title);
+                ScheduleNetworkRetry(item.RetryCount);
                 break;
         }
     }
@@ -274,6 +281,20 @@ public sealed class Importer
             List<string> names;
             lock (_lock) { names = [.. _failedNames]; _failedNames.Clear(); }
             _ui.Toast(names.Count == 1 ? Loc.S("未检索到「%@」的元数据，已保留为独立文件", names[0]) : Loc.S("%lld 个文件未检索到元数据，已保留为独立文件", names.Count), "question");
+        });
+    }
+
+    void ReportNetworkFailure(string name) =>
+        _ui.Toast(Loc.S("暂时连不上检索服务，稍后会自动重试「%@」", name), "offline");
+
+    /// <summary>Tries again after 20 s, 1 min, 3 min…, while Folio runs, even if the network never "came back".</summary>
+    void ScheduleNetworkRetry(int attempt)
+    {
+        var delay = TimeSpan.FromSeconds(Math.Min(600, 20 * Math.Pow(3, Math.Clamp(attempt, 0, 4))));
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(delay);
+            RetryNetworkFailures();
         });
     }
 

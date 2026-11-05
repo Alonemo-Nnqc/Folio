@@ -35,7 +35,7 @@ static class AiIntegration
     public static void RepairAfterLaunch()
     {
         if (!File.Exists(CliPath)) return;
-        _ = Task.Run(() =>
+        Task.Run(() =>
         {
             try
             {
@@ -44,7 +44,7 @@ static class AiIntegration
                 integrator.RefreshInstalledSkills();
             }
             catch { }
-        });
+        }).Fire();
     }
 }
 
@@ -103,7 +103,7 @@ static class AiSettings
         page.Children.Add(SettingsWindow.Note(Loc.S("智能体通过 MCP 查找、阅读、引用和整理你的文献\nFolio 技能教它正确地使用")));
 
         // Agents.
-        var agentsHeader = new Grid { Margin = new Thickness(0, 18, 0, 4) };
+        var agentsHeader = new Grid { Margin = new Thickness(0, 18, 0, 4), Tag = "plain" };
         agentsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         agentsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         var title = SettingsWindow.Header(Loc.S("这台电脑上的智能体"));
@@ -133,7 +133,7 @@ static class AiSettings
             if (detected.Count == 0)
             {
                 agents.Children.Add(UI.Label(Loc.S("没有在这台电脑上找到可用的智能体")));
-                agents.Children.Add(SettingsWindow.Note(Loc.S("支持 %@\n安装后点\"重新检测\"", string.Join("、", AgentIntegrator.Catalog.Select(d => d.Name)))));
+                agents.Children.Add(SettingsWindow.Note(Loc.S("支持 %@\n安装后点\"重新检测\"", Loc.JoinList(AgentIntegrator.Catalog.Select(d => d.Name)))));
             }
             foreach (var status in detected) agents.Children.Add(AgentRow(model, status, Detect));
         }
@@ -204,7 +204,7 @@ static class AiSettings
         page.Children.Add(SettingsWindow.Note(Loc.S("用于列表之外的应用，如 VS Code、Zed、Windsurf")));
         if (!File.Exists(AiIntegration.CliPath))
             page.Children.Insert(1, SettingsWindow.Note(Loc.S("找不到 folio-cli：%@", AiIntegration.CliPath)));
-        return page;
+        return SettingsWindow.Grouped(page);
     }
 
     static void Init(object picker)
@@ -308,7 +308,7 @@ static class AiSettings
                 // The skill may live in a folder other agents read too (~/.agents/skills, ~/.claude/skills).
                 var detected = (_statuses ?? []).Where(x => x.IsDetected).Select(x => x.Id).ToHashSet();
                 var losing = integrator.AgentsLosingSkill(d).Where(x => detected.Contains(x.Id)).ToList();
-                if (losing.Count > 0 && !await Dialogs.Confirm(Loc.S("同时从 %@ 移除 Folio 技能？", string.Join("、", losing.Select(x => x.Name))),
+                if (losing.Count > 0 && !await Dialogs.Confirm(Loc.S("同时从 %@ 移除 Folio 技能？", Loc.JoinList(losing.Select(x => x.Name))),
                         Loc.S("%@ 与它们共用技能文件夹 %@，移除后这些智能体也将看不到 Folio 技能。", d.Name, integrator.Display(status.SkillFolder ?? "")), Loc.S("移除"), Loc.S("取消")))
                 {
                     settling = true;

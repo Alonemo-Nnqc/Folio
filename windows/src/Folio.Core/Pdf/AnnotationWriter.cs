@@ -25,7 +25,7 @@ public static class AnnotationColors
     public static string Hex(string key)
     {
         var (r, g, b) = Rgb(key);
-        return $"#{(int)(r * 255):X2}{(int)(g * 255):X2}{(int)(b * 255):X2}";
+        return $"#{(int)Math.Round(r * 255):X2}{(int)Math.Round(g * 255):X2}{(int)Math.Round(b * 255):X2}";
     }
 }
 
@@ -53,10 +53,12 @@ public static class AnnotationWriter
 {
     sealed record PageInfo(long Number, int Generation, DictionaryToken Dictionary, List<IToken> Annots);
 
-    public static void Add(string path, IReadOnlyList<NewAnnotation> annotations)
+    /// <summary>Appends annotations; returns their object numbers, in order.</summary>
+    public static List<long> Add(string path, IReadOnlyList<NewAnnotation> annotations)
     {
-        if (annotations.Count == 0) return;
-        Update(path, (pages, nextObject, write) =>
+        var numbers = new List<long>();
+        if (annotations.Count == 0) return numbers;
+        Update(path, (_, pages, nextObject, write) =>
         {
             var changed = new Dictionary<int, List<IToken>>();
             foreach (var a in annotations)
@@ -65,26 +67,32 @@ public static class AnnotationWriter
                 var (obj, appearance) = Build(a, nextObject);
                 if (appearance != null) write(appearance.Value.Number, appearance.Value.Body);
                 write(obj.Number, obj.Body);
+                numbers.Add(obj.Number);
                 if (!changed.TryGetValue(a.Page, out var annots)) changed[a.Page] = annots = [.. page.Annots];
                 annots.Add(new IndirectReferenceToken(new IndirectReference(obj.Number, 0)));
             }
             return changed;
         });
+        return numbers;
     }
 
-    /// <summary>Removes the annotation with the given /NM name (Folio's own) from a page.</summary>
-    public static bool Remove(string path, int page, string name)
+    /// <summary>Removes an annotation from a page, by its object number (the annotation stays in the file's history,
+    /// as with any incremental update, but is no longer on the page). A note's popup goes with it.</summary>
+    public static bool Remove(string path, int page, long objectNumber)
     {
         bool removed = false;
-        Update(path, (pages, _, _) =>
+        Update(path, (document, pages, _, _) =>
         {
             var info = pages(page);
             var kept = new List<IToken>();
-            using var doc = PdfDocument.Open(path);
             foreach (var token in info.Annots)
             {
-                if (token is IndirectReferenceToken r && doc.Structure.GetObject(r.Data).Data is DictionaryToken d
-                    && d.TryGet(NameToken.Nm, out StringToken? nm) && nm.Data == name) { removed = true; continue; }
+                if (token is IndirectReferenceToken r)
+                {
+                    if (r.Data.ObjectNumber == objectNumber) { removed = true; continue; }
+                    if (document.Structure.GetObject(r.Data).Data is DictionaryToken d && d.TryGet(NameToken.Create("Parent"), out IndirectReferenceToken? parent)
+                        && parent.Data.ObjectNumber == objectNumber) continue;
+                }
                 kept.Add(token);
             }
             return removed ? new Dictionary<int, List<IToken>> { [page] = kept } : [];
@@ -92,7 +100,102 @@ public static class AnnotationWriter
         return removed;
     }
 
-    delegate Dictionary<int, List<IToken>> Edit(Func<int, PageInfo> page, Func<long> nextObject, Action<long, string> write);
+    /// <summary>Changes an annotation in place: colour, text (null leaves it, empty clears it) and position.</summary>
+    public static bool Modify(string path, int page, long objectNumber, string? color = null, string? contents = null, double dx = 0, double dy = 0)
+    {
+        bool modified = false;
+        Update(path, (document, pages, next, write) =>
+        {
+            var info = pages(page);
+            var reference = info.Annots.OfType<IndirectReferenceToken>().FirstOrDefault(r => r.Data.ObjectNumber == objectNumber);
+            if (reference == null || document.Structure.GetObject(reference.Data).Data is not DictionaryToken dict) return [];
+            var entries = dict.Data.ToDictionary(kv => kv.Key, kv => kv.Value);
+            IToken Resolve(IToken t) => t is IndirectReferenceToken r ? document.Structure.GetObject(r.Data).Data : t;
+            double[] Numbers(string key) => entries.TryGetValue(key, out var t) && Resolve(t) is ArrayToken a ? a.Data.Select(Resolve).OfType<NumericToken>().Select(n => n.Double).ToArray() : [];
+            var subtype = entries.TryGetValue("Subtype", out var st) && Resolve(st) is NameToken stn ? stn.Data : "";
+            if (dx != 0 || dy != 0)
+            {
+                var rect = Numbers("Rect");
+                if (rect.Length == 4) entries["Rect"] = Array(rect[0] + dx, rect[1] + dy, rect[2] + dx, rect[3] + dy);
+                var quads = Numbers("QuadPoints");
+                if (quads.Length > 0) entries["QuadPoints"] = Array(quads.Select((v, i) => v + (i % 2 == 0 ? dx : dy)).ToArray());
+                if (entries.TryGetValue("InkList", out var inkRaw) && Resolve(inkRaw) is ArrayToken ink)
+                    entries["InkList"] = new ArrayToken(ink.Data.Select(Resolve).OfType<ArrayToken>()
+                        .Select(s => (IToken)Array(s.Data.Select(Resolve).OfType<NumericToken>().Select((n, i) => n.Double + (i % 2 == 0 ? dx : dy)).ToArray())).ToList());
+            }
+            if (color != null)
+            {
+                var (r, g, b) = AnnotationColors.Rgb(color);
+                entries["C"] = Array(r, g, b);
+            }
+            if (contents != null)
+            {
+                if (contents.Length == 0) entries.Remove("Contents");
+                else entries["Contents"] = new HexToken(Convert.ToHexString(new byte[] { 0xFE, 0xFF }.Concat(Encoding.BigEndianUnicode.GetBytes(contents)).ToArray()).ToCharArray());
+                // A text box's picture holds its text: readers draw it afresh without one.
+                if (subtype == "FreeText") entries.Remove("AP");
+            }
+            entries["M"] = new StringToken(PdfDate(DateTime.Now));
+            if (subtype is "Highlight" or "Underline" or "StrikeOut" or "Ink" && (color != null || dx != 0 || dy != 0))
+            {
+                var c = Numbers("C");
+                var (r, g, b) = c.Length == 3 ? (c[0], c[1], c[2]) : (1.0, 0.85, 0.2);
+                var rect = Numbers("Rect");
+                var flat = Numbers("QuadPoints");
+                var quads = Enumerable.Range(0, flat.Length / 8).Select(i => flat.Skip(i * 8).Take(8).ToArray()).ToList();
+                var strokes = entries.TryGetValue("InkList", out var inkToken) && Resolve(inkToken) is ArrayToken inkList
+                    ? inkList.Data.Select(Resolve).OfType<ArrayToken>().Select(s => s.Data.Select(Resolve).OfType<NumericToken>().Select(n => n.Double).ToArray()).ToList() : [];
+                var stream = Appearance(subtype, quads, strokes, r, g, b);
+                if (rect.Length == 4 && stream != null)
+                {
+                    long ap = next();
+                    write(ap, AppearanceObject(subtype, rect, stream));
+                    entries["AP"] = new DictionaryToken(new Dictionary<NameToken, IToken> { [NameToken.Create("N")] = new IndirectReferenceToken(new IndirectReference(ap, 0)) });
+                }
+            }
+            var body = new StringBuilder("<<");
+            foreach (var (key, value) in entries) body.Append('/').Append(EscapeName(key)).Append(' ').Append(Serialize(value)).Append(' ');
+            body.Append(">>");
+            write(objectNumber, body.ToString());
+            modified = true;
+            return [];
+        });
+        return modified;
+    }
+
+    static ArrayToken Array(params double[] values) => new(values.Select(v => (IToken)new NumericToken(v)).ToList());
+
+    /// <summary>Takes the file back to its earlier length: every annotation change appends, so this undoes them.</summary>
+    public static byte[] TruncateTo(string path, long length)
+    {
+        var data = File.ReadAllBytes(path);
+        if (length < 0 || length > data.Length) throw new InvalidDataException("The file changed.");
+        var tail = data[(int)length..];
+        Swap(path, output => output.Write(data, 0, (int)length));
+        return tail;
+    }
+
+    /// <summary>Puts back what <see cref="TruncateTo"/> took away.</summary>
+    public static void Append(string path, byte[] tail)
+    {
+        var data = File.ReadAllBytes(path);
+        Swap(path, output => { output.Write(data); output.Write(tail); });
+    }
+
+    /// <summary>Writes next to the file and swaps, so a crash never leaves half a PDF.</summary>
+    static void Swap(string path, Action<Stream> write)
+    {
+        var temp = path + ".folio-tmp";
+        using (var output = File.Create(temp)) write(output);
+        for (int attempt = 0; ; attempt++)
+        {
+            // The reader or a sync client may have the file open for a moment.
+            try { File.Move(temp, path, overwrite: true); return; }
+            catch (Exception e) when (attempt < 10 && e is IOException or UnauthorizedAccessException) { Thread.Sleep(60); }
+        }
+    }
+
+    delegate Dictionary<int, List<IToken>> Edit(PdfDocument document, Func<int, PageInfo> page, Func<long> nextObject, Action<long, string> write);
 
     static void Update(string path, Edit edit)
     {
@@ -124,7 +227,7 @@ public static class AnnotationWriter
         Dictionary<int, List<IToken>> changed;
         try
         {
-            changed = edit(PageAt, NextObject, Write);
+            changed = edit(document, PageAt, NextObject, Write);
             foreach (var (number, annots) in changed)
             {
                 var page = PageAt(number);
@@ -137,7 +240,7 @@ public static class AnnotationWriter
             }
         }
         finally { document.Dispose(); }
-        if (changed.Count == 0) return;
+        if (changed.Count == 0 && offsets.Count == 0) return;
 
         // Cross-reference section and trailer for the update.
         long xrefOffset = original.Length + body.Length;
@@ -150,17 +253,13 @@ public static class AnnotationWriter
         if (trailer.Identifier is { Count: > 0 } ids) xref.Append(" /ID [").Append(string.Join(' ', ids.Select(Serialize))).Append(']');
         xref.Append(CultureInfo.InvariantCulture, $">>\nstartxref\n{xrefOffset}\n%%EOF\n");
 
-        // Write next to the file and swap, so a crash never leaves half a PDF.
-        var temp = path + ".folio-tmp";
-        using (var output = File.Create(temp))
+        Swap(path, output =>
         {
             output.Write(original);
-            if (original.Length > 0 && original[^1] != '\n') { }
             body.Position = 0;
             body.CopyTo(output);
             output.Write(Encoding.ASCII.GetBytes(xref.ToString()));
-        }
-        File.Move(temp, path, overwrite: true);
+        });
     }
 
     /// <summary>The page tree's leaves in page order: (object reference, page dictionary).</summary>
@@ -213,23 +312,7 @@ public static class AnnotationWriter
                 var quads = a.Quads ?? [];
                 rect = Bounds(quads.SelectMany(q => Pairs(q)));
                 extra = $"/QuadPoints [{string.Join(' ', quads.SelectMany(q => q).Select(N))}]";
-                var sb = new StringBuilder();
-                if (a.Subtype == "Highlight")
-                {
-                    sb.Append($"/GS0 gs {N(r)} {N(g)} {N(b)} rg ");
-                    foreach (var q in quads) sb.Append($"{N(q[0])} {N(q[1])} m {N(q[2])} {N(q[3])} l {N(q[6])} {N(q[7])} l {N(q[4])} {N(q[5])} l h f ");
-                }
-                else
-                {
-                    sb.Append($"{N(r)} {N(g)} {N(b)} RG ");
-                    foreach (var q in quads)
-                    {
-                        double height = Math.Abs(q[1] - q[5]);
-                        double y = a.Subtype == "Underline" ? Math.Min(q[5], q[7]) + height * 0.08 : (q[1] + q[5]) / 2;
-                        sb.Append($"{N(Math.Max(0.6, height * 0.07))} w {N(q[4])} {N(y)} m {N(q[6])} {N(y)} l S ");
-                    }
-                }
-                stream = sb.ToString();
+                stream = Appearance(a.Subtype, quads, [], r, g, b);
                 break;
             }
             case "Ink":
@@ -237,13 +320,7 @@ public static class AnnotationWriter
                 var strokes = a.Strokes ?? [];
                 rect = Bounds(strokes.SelectMany(s => Pairs(s)), pad: 2);
                 extra = $"/InkList [{string.Join(' ', strokes.Select(s => "[" + string.Join(' ', s.Select(N)) + "]"))}] /BS << /W 2 >>";
-                var sb = new StringBuilder($"{N(r)} {N(g)} {N(b)} RG 2 w 1 J 1 j ");
-                foreach (var s in strokes)
-                {
-                    for (int i = 0; i + 1 < s.Length; i += 2) sb.Append($"{N(s[i])} {N(s[i + 1])} {(i == 0 ? "m" : "l")} ");
-                    sb.Append("S ");
-                }
-                stream = sb.ToString();
+                stream = Appearance("Ink", [], strokes, r, g, b);
                 break;
             }
             case "FreeText":
@@ -260,9 +337,7 @@ public static class AnnotationWriter
         if (stream != null)
         {
             long apNumber = next();
-            var gs = a.Subtype == "Highlight" ? "/Resources << /ExtGState << /GS0 << /BM /Multiply /CA 0.5 /ca 0.5 >> >> >> " : "";
-            var bytes = Encoding.ASCII.GetBytes(stream);
-            appearance = (apNumber, $"<< /Type /XObject /Subtype /Form /BBox [{string.Join(' ', rect.Select(N))}] {gs}/Length {bytes.Length} >>\nstream\n{stream}\nendstream");
+            appearance = (apNumber, AppearanceObject(a.Subtype, rect, stream));
             ap = $"/AP << /N {apNumber} 0 R >>";
         }
         var subtype = a.Subtype == "Note" ? "Text" : a.Subtype;
@@ -272,6 +347,46 @@ public static class AnnotationWriter
         if (a.Author is { Length: > 0 } author) body.Append("/T ").Append(Str(author)).Append(' ');
         body.Append(extra).Append(' ').Append(ap).Append(" >>");
         return ((number, body.ToString()), appearance);
+    }
+
+    /// <summary>The drawing of a markup or ink annotation in page coordinates.</summary>
+    static string? Appearance(string subtype, IReadOnlyList<double[]> quads, IReadOnlyList<double[]> strokes, double r, double g, double b)
+    {
+        var sb = new StringBuilder();
+        switch (subtype)
+        {
+            case "Highlight":
+                sb.Append(CultureInfo.InvariantCulture, $"/GS0 gs {N(r)} {N(g)} {N(b)} rg ");
+                foreach (var q in quads) sb.Append(CultureInfo.InvariantCulture, $"{N(q[0])} {N(q[1])} m {N(q[2])} {N(q[3])} l {N(q[6])} {N(q[7])} l {N(q[4])} {N(q[5])} l h f ");
+                break;
+            case "Underline" or "StrikeOut":
+                sb.Append(CultureInfo.InvariantCulture, $"{N(r)} {N(g)} {N(b)} RG ");
+                foreach (var q in quads)
+                {
+                    double height = Math.Abs(q[1] - q[5]);
+                    double y = subtype == "Underline" ? Math.Min(q[5], q[7]) + height * 0.08 : (q[1] + q[5]) / 2;
+                    sb.Append(CultureInfo.InvariantCulture, $"{N(Math.Max(0.6, height * 0.07))} w {N(q[4])} {N(y)} m {N(q[6])} {N(y)} l S ");
+                }
+                break;
+            case "Ink":
+                sb.Append(CultureInfo.InvariantCulture, $"{N(r)} {N(g)} {N(b)} RG 2 w 1 J 1 j ");
+                foreach (var s in strokes)
+                {
+                    for (int i = 0; i + 1 < s.Length; i += 2) sb.Append(CultureInfo.InvariantCulture, $"{N(s[i])} {N(s[i + 1])} {(i == 0 ? "m" : "l")} ");
+                    sb.Append("S ");
+                }
+                break;
+            default:
+                return null;
+        }
+        return sb.ToString();
+    }
+
+    static string AppearanceObject(string subtype, double[] rect, string stream)
+    {
+        // The form's coordinates are the page's: BBox = Rect, and Matrix stays the identity.
+        var gs = subtype == "Highlight" ? "/Resources << /ExtGState << /GS0 << /BM /Multiply /CA 0.5 /ca 0.5 >> >> >> " : "";
+        return $"<< /Type /XObject /Subtype /Form /BBox [{string.Join(' ', rect.Select(N))}] {gs}/Length {Encoding.ASCII.GetByteCount(stream)} >>\nstream\n{stream}\nendstream";
     }
 
     static IEnumerable<(double X, double Y)> Pairs(double[] values)
@@ -322,7 +437,7 @@ public static class AnnotationWriter
         NullToken => "null",
         IndirectReferenceToken r => $"{r.Data.ObjectNumber} {r.Data.Generation} R",
         HexToken h => "<" + Convert.ToHexString(h.Bytes.ToArray()) + ">",
-        StringToken s => "<" + Convert.ToHexString(s.GetBytes()) + ">",
+        StringToken s => s.Data.All(c => c is >= ' ' and <= '~') ? Str(s.Data) : "<" + Convert.ToHexString(s.GetBytes()) + ">",
         ArrayToken a => "[" + string.Join(' ', a.Data.Select(Serialize)) + "]",
         DictionaryToken d => "<<" + string.Concat(d.Data.Select(kv => $"/{EscapeName(kv.Key)} {Serialize(kv.Value)} ")) + ">>",
         _ => throw new NotSupportedException(token.GetType().Name),

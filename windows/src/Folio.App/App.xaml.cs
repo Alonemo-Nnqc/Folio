@@ -47,12 +47,7 @@ public partial class App : Application
     {
         Current = this;
         Loc.Override = AppSettings.Shared.Language is { Length: > 0 } language ? language : null;
-        RequestedTheme = AppSettings.Shared.Appearance switch
-        {
-            Appearance.Light => ApplicationTheme.Light,
-            Appearance.Dark => ApplicationTheme.Dark,
-            _ => RequestedTheme,
-        };
+        // The application's theme stays the system's (it cannot change later): the windows' roots apply the setting.
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
@@ -60,6 +55,18 @@ public partial class App : Application
             e.Handled = true;
             Model?.Toasts.Show(e.Message, "warning");
         };
+    }
+
+    /// <summary>Starts a new Folio once this one has gone (a language change).</summary>
+    public static void Restart()
+    {
+        if (Environment.ProcessPath is { } exe)
+        {
+            var script = $"Start-Sleep -Milliseconds 800; Start-Process '{exe.Replace("'", "''")}'";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("powershell.exe") { ArgumentList = { "-NoProfile", "-WindowStyle", "Hidden", "-Command", script }, UseShellExecute = false, CreateNoWindow = true });
+        }
+        Current?.Window?.Close();
+        Current?.Exit();
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -77,9 +84,13 @@ public partial class App : Application
         catch (Exception e)
         {
             CrashLog.Write(e);
+            MessageBoxW(0, Loc.S("Folio 无法启动：%@", e.Message), "Folio", 0x10);
             throw;
         }
     }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern int MessageBoxW(nint owner, string text, string caption, uint type);
 
     /// <summary>Files and folio:// links from Explorer, the browser extension or a second launch.</summary>
     public void HandleActivation(AppActivationArguments e)
@@ -92,7 +103,7 @@ public partial class App : Application
                 foreach (var arg in CommandLine.Split(launch.Arguments))
                 {
                     if (arg.StartsWith("folio://", StringComparison.OrdinalIgnoreCase)) Model.OpenLink(arg);
-                    else if (File.Exists(arg) && arg.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) _ = Model.Importer.ImportFiles([arg], null);
+                    else if (File.Exists(arg) && arg.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) Model.Importer.ImportFiles([arg], null).Fire();
                 }
             }
         });

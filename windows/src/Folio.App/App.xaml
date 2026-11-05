@@ -14,9 +14,6 @@
             <DataTemplate x:Key="ItemRowTemplate">
                 <local:ItemRow />
             </DataTemplate>
-            <DataTemplate x:Key="SidebarRowTemplate">
-                <local:SidebarRow />
-            </DataTemplate>
 
             <!-- Folio's colours, the same as the macOS app's. -->
             <ResourceDictionary.ThemeDictionaries>
@@ -29,6 +26,12 @@
                     <SolidColorBrush x:Key="FolioSelectionBrush" Color="#FFE3E3E8" />
                     <SolidColorBrush x:Key="FolioSecondaryTextBrush" Color="#FF6E6E73" />
                     <SolidColorBrush x:Key="FolioSeparatorBrush" Color="#FFE5E5EA" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#FFE3E3E8" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#FFDCDCE2" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#FFD4D4DA" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorPointerOverBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorPressedBrush" Color="Transparent" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <Color x:Key="FolioAccent">#FF0A84FF</Color>
@@ -39,6 +42,12 @@
                     <SolidColorBrush x:Key="FolioSelectionBrush" Color="#FF3A3A3C" />
                     <SolidColorBrush x:Key="FolioSecondaryTextBrush" Color="#FF98989D" />
                     <SolidColorBrush x:Key="FolioSeparatorBrush" Color="#FF38383A" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#FF3A3A3C" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#FF414143" />
+                    <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#FF48484A" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorPointerOverBrush" Color="Transparent" />
+                    <SolidColorBrush x:Key="ListViewItemSelectionIndicatorPressedBrush" Color="Transparent" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

@@ -16,7 +16,10 @@ public sealed partial class AppModel : IImportUi
     readonly DispatcherQueue _ui;
     readonly DispatcherQueueTimer _externalChanges;
     long _dataVersion = -1;
-    bool _refreshQueued;
+    bool _refreshQueued, _building, _buildAgain;
+    long _changes;
+    readonly object _refreshLock = new();
+    Microsoft.Data.Sqlite.SqliteConnection? _watcher;
 
     public AppSettings Settings { get; } = AppSettings.Shared;
     public Library Library { get; private set; } = null!;
@@ -59,80 +62,179 @@ public sealed partial class AppModel : IImportUi
         _externalChanges.Tick += (_, _) => CheckExternalChanges();
     }
 
+    /// <summary>Why the chosen library could not be opened at launch, to tell the user once the window is up.</summary>
+    public string? StartupProblem { get; private set; }
+
     public void Start()
     {
-        OpenLibrary(Settings.LibraryPath);
+        try { OpenLibrary(Settings.LibraryPath); }
+        catch (Exception e)
+        {
+            // A library on a drive that is gone, or a damaged one: Folio still starts, and says so. The setting stays, for when
+            // the drive comes back.
+            CrashLog.Write(e);
+            StartupProblem = Loc.S("无法打开文献库：%@", $"{Settings.LibraryPath}\n{e.Message}");
+            OpenLibrary(AppSettings.FallbackLibrary);
+        }
+        Importer.RetrievalChanged += () => _ui.TryEnqueue(() => SnapshotChanged?.Invoke());
         _externalChanges.Start();
         if (Settings.BrowserConnectorEnabled) Connector.Start();
         Updater.StartAutomaticChecks();
         // Warm citeproc up so the first copy is instant.
-        _ = Task.Run(() => { lock (_cslLock) _ = _csl.Value; });
+        Task.Run(() => { lock (_cslLock) _ = _csl.Value; }).Fire();
     }
 
     void OpenLibrary(string path)
     {
+        // A library that cannot be opened leaves the current one in place.
+        var library = new Library(path);
+        _watcher?.Dispose();
+        _watcher = null;
         Library?.Dispose();
-        Library = new Library(path);
+        Library = library;
+        try { _watcher = library.Database.OpenWatcher(); } catch (Exception e) { CrashLog.Write(e); }
         Library.Changed += QueueRefresh;
         RefreshNow();
         Importer.LibraryDidLoad(Snapshot);
     }
 
-    /// <summary>Moves the library folder (Settings ▸ General).</summary>
-    public void RelocateLibrary(string newParent)
+    /// <summary>Raised before the library's folder or database goes away: readers close their files.</summary>
+    public event Action? LibraryWillChange;
+
+    /// <summary>Moves the whole library folder into another folder and reopens it there (Settings ▸ 文献库).</summary>
+    public async Task RelocateLibrary(string newParent)
     {
-        var target = Path.Combine(newParent, Path.GetFileName(Library.Root.TrimEnd(Path.DirectorySeparatorChar)));
+        var old = Library.Root.TrimEnd(Path.DirectorySeparatorChar);
+        var target = Path.Combine(newParent, Path.GetFileName(old));
+        if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(old), StringComparison.OrdinalIgnoreCase)) return;
         if (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
             throw new IOException(Loc.S("目标位置已有同名文件夹"));
-        var old = Library.Root;
+        if (Path.GetFullPath(target).StartsWith(Path.GetFullPath(old) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new IOException(Loc.S("不能把文献库移到它自己里面"));
+        LibraryWillChange?.Invoke();
+        _watcher?.Dispose();
+        _watcher = null;
         Library.Dispose();
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        Directory.Move(old, target);
-        Settings.LibraryPath = target;
-        OpenLibrary(target);
+        try
+        {
+            await Task.Run(() =>
+            {
+                if (Directory.Exists(target)) Directory.Delete(target);
+                if (string.Equals(Path.GetPathRoot(old), Path.GetPathRoot(target), StringComparison.OrdinalIgnoreCase)) Directory.Move(old, target);
+                else
+                {
+                    // Directory.Move cannot cross drives: copy everything first, so a failure leaves the original whole.
+                    try { CopyDirectory(old, target); }
+                    catch { try { Directory.Delete(target, true); } catch { } throw; }
+                    Directory.Delete(old, true);
+                }
+            });
+            Settings.LibraryPath = target;
+            OpenLibrary(target);
+        }
+        catch
+        {
+            OpenLibrary(old);
+            throw;
+        }
+    }
+
+    static void CopyDirectory(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var file in Directory.GetFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
+        foreach (var dir in Directory.GetDirectories(from)) CopyDirectory(dir, Path.Combine(to, Path.GetFileName(dir)));
     }
 
     public void SwitchLibrary(string path)
     {
-        Settings.LibraryPath = path;
+        LibraryWillChange?.Invoke();
         OpenLibrary(path);
+        Settings.LibraryPath = path;
     }
 
     // MARK: Snapshot
 
+    /// <summary>Rebuilds the snapshot off the UI thread; changes arriving meanwhile start one more round afterwards.</summary>
     void QueueRefresh()
     {
-        lock (this)
+        Interlocked.Increment(ref _changes);
+        lock (_refreshLock)
         {
             if (_refreshQueued) return;
             _refreshQueued = true;
         }
-        _ui.TryEnqueue(DispatcherQueuePriority.Low, () =>
-        {
-            lock (this) _refreshQueued = false;
-            RefreshNow();
-        });
+        _ui.TryEnqueue(DispatcherQueuePriority.Low, () => BuildSnapshot().Fire());
     }
 
-    void RefreshNow()
+    async Task BuildSnapshot()
     {
-        Snapshot = Library.Snapshot();
-        _dataVersion = Library.Database.Read(Library.Database.DataVersion);
-        Counts = SidebarCounts.Compute(Snapshot, Settings.IncludeSubgroupItems);
-        if (Scope is ViewScope.GroupScope g && !Snapshot.GroupsById.ContainsKey(g.Id)) Scope = ViewScope.All;
-        if (Scope is ViewScope.TagScope t && !Snapshot.TagsById.ContainsKey(t.Id)) Scope = ViewScope.All;
+        var library = Library;
+        lock (_refreshLock) _refreshQueued = false;
+        if (_building) { _buildAgain = true; return; }
+        _building = true;
+        try
+        {
+            while (true)
+            {
+                _buildAgain = false;
+                long changes = Interlocked.Read(ref _changes);
+                long version = WatchedVersion();
+                var includeSubgroups = Settings.IncludeSubgroupItems;
+                var (snapshot, counts) = await Task.Run(() =>
+                {
+                    var built = library.Snapshot();
+                    return (built, SidebarCounts.Compute(built, includeSubgroups));
+                });
+                if (library != Library) return;
+                Apply(snapshot, counts, version, latest: changes == Interlocked.Read(ref _changes));
+                if (!_buildAgain && changes == Interlocked.Read(ref _changes)) return;
+            }
+        }
+        catch (Exception e) when (e is not OutOfMemoryException) { CrashLog.Write(e); }
+        finally { _building = false; }
+    }
+
+    void Apply(LibrarySnapshot snapshot, Dictionary<string, int> counts, long version, bool latest)
+    {
+        Snapshot = snapshot;
+        Counts = counts;
+        _dataVersion = version;
+        // A group or tag made a moment ago may not be in an older snapshot.
+        if (latest && Scope is ViewScope.GroupScope g && !Snapshot.GroupsById.ContainsKey(g.Id)) Scope = ViewScope.All;
+        if (latest && Scope is ViewScope.TagScope t && !Snapshot.TagsById.ContainsKey(t.Id)) Scope = ViewScope.All;
         ResolveRows();
         SnapshotChanged?.Invoke();
     }
 
+    /// <summary>First load, on the spot: the window needs it.</summary>
+    void RefreshNow()
+    {
+        var snapshot = Library.Snapshot();
+        Apply(snapshot, SidebarCounts.Compute(snapshot, Settings.IncludeSubgroupItems), WatchedVersion(), latest: true);
+    }
+
+    long WatchedVersion()
+    {
+        try { return _watcher != null ? Library.Database.DataVersion(_watcher) : -1; }
+        catch (Exception e) when (e is Microsoft.Data.Sqlite.SqliteException or InvalidOperationException) { return -1; }
+    }
+
+    /// <summary>folio-cli and other processes writing to the library.</summary>
     void CheckExternalChanges()
     {
-        try
-        {
-            var version = Library.Database.Read(Library.Database.DataVersion);
-            if (version != _dataVersion) QueueRefresh();
-        }
-        catch { }
+        long version = WatchedVersion();
+        if (version != -1 && version != _dataVersion) QueueRefresh();
+    }
+
+    /// <summary>Reading positions change all the time while scrolling and show nowhere in the library: they refresh nothing.</summary>
+    public void SaveReadingState(ReadingState state)
+    {
+        CheckExternalChanges();
+        bool current = WatchedVersion() == _dataVersion;
+        Perform(() => Library.SaveReadingState(state));
+        if (current) _dataVersion = WatchedVersion();
     }
 
     public void ResolveRows()
@@ -149,22 +251,34 @@ public sealed partial class AppModel : IImportUi
         ResolveRows();
     }
 
+    /// <summary>"包含 PDF 全文" in the search bar.</summary>
+    public bool IncludeFulltext { get; private set; }
+
+    public void SetFulltextSearch(bool on)
+    {
+        IncludeFulltext = on;
+        Search(SearchText);
+    }
+
     public void Search(string text)
     {
         SearchText = text;
         _fulltextMatches = null;
         ResolveRows();
-        if (text.Trim().Length < 2) return;
-        _ = Task.Run(() =>
+        if (!IncludeFulltext || text.Trim().Length < 2) return;
+        var library = Library;
+        Task.Run(() =>
         {
-            var ids = Library.FulltextItemIds(text);
+            IReadOnlySet<string> ids;
+            try { ids = library.FulltextItemIds(text); }
+            catch (Exception e) { CrashLog.Write(e); return; }
             _ui.TryEnqueue(() =>
             {
                 if (SearchText != text) return;
                 _fulltextMatches = ids;
                 ResolveRows();
             });
-        });
+        }).Fire();
     }
 
     public void SetSelection(IReadOnlyList<string> ids)
@@ -211,8 +325,9 @@ public sealed partial class AppModel : IImportUi
             Toasts.Show(Loc.S("找不到文件「%@」", file.FileName), "warning");
             return;
         }
+        // After the reader is up: the paper should appear first.
         if (Settings.MarkReadingOnOpen && Snapshot.Items.TryGetValue(file.ItemId, out var item) && item.Kind == ItemKind.Regular && item.ReadStatus == ReadStatus.Unread)
-            Perform(() => Library.UpdateItem(item.Id, i => i.ReadStatus = ReadStatus.Reading));
+            _ui.TryEnqueue(DispatcherQueuePriority.Low, () => Perform(() => Library.UpdateItem(item.Id, i => i.ReadStatus = ReadStatus.Reading)));
         if (file.IsPdf && Settings.OpenWith == OpenWith.Folio) OpenInReaderRequested?.Invoke(file, page);
         else if (Settings.OpenWith == OpenWith.Custom && Settings.OpenWithAppPath is { Length: > 0 } app) Shell.OpenWith(app, path);
         else Shell.Open(path);
@@ -236,7 +351,7 @@ public sealed partial class AppModel : IImportUi
     public void Reveal(string itemId)
     {
         if (Snapshot.Items.TryGetValue(itemId, out var item) && item.IsTrashed) SelectScope(ViewScope.Trash);
-        else if (!Rows.Contains(itemId)) { SearchText = ""; SelectScope(ViewScope.All); ResolveRows(); }
+        else if (!Rows.Contains(itemId)) { SearchText = ""; _fulltextMatches = null; SelectScope(ViewScope.All); ResolveRows(); }
         RevealRequested?.Invoke(itemId);
     }
 
@@ -273,10 +388,25 @@ public sealed partial class AppModel : IImportUi
 
     void IImportUi.Toast(string message, string icon, string? actionTitle, Action? action) => Toasts.Show(message, icon, actionTitle, action);
 
-    Task<bool> IImportUi.AskRestore(string title) => Dialogs.Confirm(Loc.S("「%@」在回收站中", title), Loc.S("要将它恢复到文献库吗？"), Loc.S("恢复"), Loc.S("取消"));
+    Task<bool> IImportUi.AskRestore(string title) =>
+        AskOnUi(() => Dialogs.Confirm(Loc.S("「%@」在回收站中", title), Loc.S("要将它恢复到文献库吗？"), Loc.S("恢复"), Loc.S("取消")));
 
     Task<bool> IImportUi.AskAttachDuplicate(string title) =>
-        Dialogs.Confirm(Loc.S("文献库中已有「%@」", title), Loc.S("可以把这个文件作为附件添加到该条目，或者放弃它。"), Loc.S("作为附件添加到该条目"), Loc.S("放弃"));
+        AskOnUi(() => Dialogs.Confirm(Loc.S("文献库中已有「%@」", title), Loc.S("可以把这个文件作为附件添加到该条目，或者放弃它。"), Loc.S("作为附件添加到该条目"), Loc.S("放弃")));
+
+    /// <summary>The importer asks from its background lookups, and a dialog can only live on the UI thread.</summary>
+    Task<bool> AskOnUi(Func<Task<bool>> ask)
+    {
+        if (_ui.HasThreadAccess) return ask();
+        var answer = new TaskCompletionSource<bool>();
+        bool queued = _ui.TryEnqueue(async () =>
+        {
+            try { answer.SetResult(await ask()); }
+            catch (Exception e) { answer.SetException(e); }
+        });
+        if (!queued) answer.SetResult(false);
+        return answer.Task;
+    }
 
     public void RunOnUi(Action action) => _ui.TryEnqueue(() => action());
 }

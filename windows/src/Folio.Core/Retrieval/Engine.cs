@@ -26,8 +26,8 @@ public sealed class MetadataEngineConfiguration
     /// <summary>Contact address for the Crossref / OpenAlex polite pool; also sent in the User-Agent.</summary>
     public string? Mailto { get; set; }
     public string? OpenAlexApiKey { get; set; }
-    public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(6);
-    public TimeSpan OverallTimeout { get; set; } = TimeSpan.FromSeconds(15);
+    public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(15);
+    public TimeSpan OverallTimeout { get; set; } = TimeSpan.FromSeconds(35);
     /// <summary>Also sends the layout of a PDF's first five pages to Zotero's recognizer service.</summary>
     public bool UseZoteroRecognizer { get; set; } = true;
 }
@@ -177,8 +177,8 @@ public sealed class MetadataEngine
     readonly CvfClient _cvf;
     readonly ZoteroRecognizerClient _recognizer;
     static readonly TimeSpan SearchGrace = TimeSpan.FromMilliseconds(800);
-    static readonly TimeSpan RecognizerTimeout = TimeSpan.FromSeconds(4);
-    static readonly TimeSpan RecognizerLookupTimeout = TimeSpan.FromSeconds(5);
+    static readonly TimeSpan RecognizerTimeout = TimeSpan.FromSeconds(10);
+    static readonly TimeSpan RecognizerLookupTimeout = TimeSpan.FromSeconds(12);
     const int MaxSearchRounds = 2;
     static readonly TimeSpan MinimumTimeForRound = TimeSpan.FromMilliseconds(2500);
 

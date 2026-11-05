@@ -58,9 +58,12 @@ static class TranslationSettings
     public static UIElement Page(AppModel model)
     {
         var page = new StackPanel { Spacing = 6, MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        page.Children.Add(SettingsWindow.Header(Loc.S("翻译服务")));
         page.Children.Add(ServiceSection(model, compact: false));
-        page.Children.Add(OptionsSection(model, compact: false));
+        // The options bring their own headers: their rows join the page's cards.
+        var options = (StackPanel)OptionsSection(model, compact: false);
+        var rows = options.Children.ToList();
+        options.Children.Clear();
+        foreach (var row in rows) page.Children.Add(row);
         page.Children.Add(SettingsWindow.Header(Loc.S("翻译引擎")));
         var logs = new Button { Content = Loc.S("在资源管理器中显示") };
         logs.Click += (_, _) =>
@@ -70,7 +73,7 @@ static class TranslationSettings
         };
         page.Children.Add(Labeled(Loc.S("翻译日志"), logs));
         page.Children.Add(SettingsWindow.Note(Loc.S("Folio 内置的翻译引擎直接解析 PDF 版面并按原样排入译文，图表内文字和公式保持原样，无需下载任何组件")));
-        return page;
+        return SettingsWindow.Grouped(page);
     }
 
     static FrameworkElement Labeled(string title, FrameworkElement control)
@@ -129,7 +132,7 @@ static class TranslationSettings
     public static FrameworkElement ServiceSection(AppModel model, bool compact)
     {
         var root = new StackPanel { Spacing = 6 };
-        var picker = new ComboBox { Header = Loc.S("翻译服务"), MinWidth = 320 };
+        var picker = new ComboBox { Header = compact ? Loc.S("翻译服务") : null, MinWidth = 320 };
         var note = SettingsWindow.Note("");
         var body = new StackPanel { Spacing = 6 };
         root.Children.Add(picker);
@@ -151,7 +154,7 @@ static class TranslationSettings
                 {
                     var names = profiles.Where(p => p.ServiceId == service.Id).Select(p => p.Name).ToList();
                     var label = configured.Contains(service.Id) && names.Count > 0
-                        ? service.DisplayName + " · " + string.Join("、", names.Take(3)) + (names.Count > 3 ? "…" : "") : service.DisplayName;
+                        ? service.DisplayName + " · " + Loc.JoinList(names.Take(3)) + (names.Count > 3 ? "…" : "") : service.DisplayName;
                     picker.Items.Add(new ComboBoxItem { Content = label, Tag = service.Id, Padding = new Thickness(20, 6, 8, 6) });
                     if (service.Id == model.Settings.TranslationService) selected = picker.Items.Count - 1;
                 }
@@ -194,10 +197,10 @@ static class TranslationSettings
         if (_installedAgents == null)
         {
             // Finding agents may ask each for its --help: off the UI thread, then the list is sorted again.
-            _ = Task.Run(() => LocalAgents.Installed().Select(a => a.ServiceId()).ToHashSet()).ContinueWith(t =>
+            Task.Run(() => LocalAgents.Installed().Select(a => a.ServiceId()).ToHashSet()).ContinueWith(t =>
             {
                 if (t.IsCompletedSuccessfully) model.RunOnUi(() => { _installedAgents = t.Result; FillPicker(); });
-            });
+            }).Fire();
         }
         return root;
     }
@@ -347,7 +350,7 @@ static class TranslationSettings
             Show("", null, null, busy: true);
             var pathOption = service.Fields.FirstOrDefault(f => f.Option.EndsWith("-path"))?.Option;
             var path = pathOption != null ? Fields(model, service.Id).GetValueOrDefault(pathOption) : null;
-            _ = Task.Run(() =>
+            Task.Run(() =>
             {
                 var found = which.Locate(path);
                 var version = found != null ? which.Version(found) : null;
@@ -356,7 +359,7 @@ static class TranslationSettings
                     if (found == null) Show(Loc.S("没有在这台电脑上找到 %@，请先安装并登录", which.Command()), "warning", "#FF9500");
                     else Show(version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found), "checkmark", "#34C759");
                 });
-            });
+            }).Fire();
         }
         else Show(Loc.S("翻译一句话，确认这个服务能用"), null, null);
         if (canTest)
@@ -456,13 +459,10 @@ static class TranslationSettings
         var languages = TranslationOptions.CommonLanguages.Select(l => (l.Code, l.Name)).ToList();
         if (!compact) panel.Children.Add(SettingsWindow.Header(Loc.S("语言")));
         else panel.Children.Add(SettingsWindow.Header(Loc.S("选项")));
-        var languageRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
         var from = SettingsWindow.Choice(Loc.S("原文语言"), languages, o.LangIn, v => Update(x => x.LangIn = v));
         var to = SettingsWindow.Choice(Loc.S("译文语言"), languages, o.LangOut, v => Update(x => x.LangOut = v));
-        from.MinWidth = to.MinWidth = 180;
-        languageRow.Children.Add(from);
-        languageRow.Children.Add(to);
-        panel.Children.Add(languageRow);
+        panel.Children.Add(from);
+        panel.Children.Add(to);
 
         if (!compact) panel.Children.Add(SettingsWindow.Header(Loc.S("输出")));
         FrameworkElement? layout = null;

@@ -34,7 +34,7 @@ public sealed class ConnectorServer(AppModel model)
             _cts = new CancellationTokenSource();
             State = ServerState.Running;
             FailureReason = null;
-            _ = AcceptLoop(listener, _cts.Token);
+            AcceptLoop(listener, _cts.Token).Fire();
         }
         catch (SocketException e)
         {
@@ -62,7 +62,7 @@ public sealed class ConnectorServer(AppModel model)
             TcpClient client;
             try { client = await listener.AcceptTcpClientAsync(ct); }
             catch { return; }
-            _ = Handle(client);
+            Handle(client).Fire();
         }
     }
 
@@ -249,7 +249,7 @@ public sealed class ConnectorServer(AppModel model)
             model.Toasts.Show(existing > 0 ? Loc.S("已从浏览器保存 %lld 篇，%lld 篇已在文献库中", created, existing) : Loc.S("已从浏览器保存 %lld 篇文献", created),
                               "globe", Loc.S("显示"), () => model.Reveal(first));
         }
-        if (body["pdf"]?.GetValue<bool>() == true && saved.Count > 0) _ = AttachOpenAccessPdfs(saved);
+        if (body["pdf"]?.GetValue<bool>() == true && saved.Count > 0) AttachOpenAccessPdfs(saved).Fire();
         return Response.Json(new JsonObject { ["results"] = results, ["group"] = groupId == null ? null : model.Snapshot.GroupsById.GetValueOrDefault(groupId)?.Name });
     }
 
@@ -320,7 +320,7 @@ public sealed class ConnectorServer(AppModel model)
         var path = await TemporaryFile(request.Body, request.Query.GetValueOrDefault("filename"));
         var groupId = ValidGroup(request.Query.GetValueOrDefault("groupId"));
         await OnUi(async () => { await model.Importer.ImportFiles([path], groupId); return true; });
-        _ = Task.Delay(30_000).ContinueWith(_ => { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } });
+        Task.Delay(30_000).ContinueWith(_ => { try { Directory.Delete(Path.GetDirectoryName(path)!, true); } catch { } }).Fire();
         return Response.Json(new JsonObject { ["status"] = "importing", ["group"] = groupId == null ? null : model.Snapshot.GroupsById.GetValueOrDefault(groupId)?.Name });
     }
 

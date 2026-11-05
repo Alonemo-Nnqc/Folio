@@ -55,6 +55,51 @@ static class TagEditor
     }
 }
 
+/// <summary>A new group: its name and a colour, or the default.</summary>
+static class GroupEditor
+{
+    public static async Task<LibraryGroup?> Create(AppModel model, string? parentId)
+    {
+        var name = new TextBox { PlaceholderText = Loc.S("分组名称"), Width = 320 };
+        string? color = null;
+        var swatches = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        void Paint()
+        {
+            foreach (var b in swatches.Children.OfType<Button>()) b.BorderThickness = new Thickness((string?)b.Tag == color ? 2 : 0);
+        }
+        Button Swatch(string? hex, string title)
+        {
+            var b = new Button { Width = 24, Height = 24, MinWidth = 0, Padding = new Thickness(0), CornerRadius = new CornerRadius(12), Background = hex != null ? UI.Hex(hex) : UI.Brush("FolioAccentBrush"), BorderBrush = UI.Brush("TextFillColorPrimaryBrush"), Tag = hex };
+            ToolTipService.SetToolTip(b, title);
+            b.Click += (_, _) => { color = hex; Paint(); };
+            return b;
+        }
+        swatches.Children.Add(Swatch(null, Loc.S("默认")));
+        foreach (var (title, hex) in TagPalette.Presets) swatches.Children.Add(Swatch(hex, Loc.S(title)));
+        Paint();
+        var panel = new StackPanel { Spacing = 12 };
+        panel.Children.Add(name);
+        panel.Children.Add(swatches);
+        var dialog = new ContentDialog
+        {
+            Title = parentId == null ? Loc.S("新建分组") : Loc.S("新建子分组"),
+            Content = panel,
+            PrimaryButtonText = Loc.S("创建"),
+            CloseButtonText = Loc.S("取消"),
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        name.Loaded += (_, _) => name.Focus(FocusState.Programmatic);
+        if (await Dialogs.Custom(dialog) != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(name.Text)) return null;
+        LibraryGroup? group = null;
+        model.Perform(() =>
+        {
+            group = model.Library.CreateGroup(name.Text.Trim(), parentId);
+            if (color != null) model.Library.SetGroupColor(group.Id, color);
+        });
+        return group;
+    }
+}
+
 /// <summary>Adding a paper by DOI, arXiv ID or ISBN (several, one per line).</summary>
 static class IdentifierSheet
 {
@@ -64,7 +109,7 @@ static class IdentifierSheet
         var dialog = new ContentDialog { Title = Loc.S("通过标识符添加"), Content = box, PrimaryButtonText = Loc.S("添加"), CloseButtonText = Loc.S("取消"), DefaultButton = ContentDialogButton.Primary };
         box.Loaded += (_, _) => box.Focus(FocusState.Programmatic);
         if (await Dialogs.Custom(dialog) != ContentDialogResult.Primary) return;
-        var lines = box.Text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Distinct().ToList();
+        var lines = box.Text.Split(['\r', '\n']).Select(l => l.Trim()).Where(l => l.Length > 0).Distinct().ToList();
         if (lines.Count == 0) return;
         model.Toasts.Show(Loc.S("正在检索…"), "search");
         int added = 0, existing = 0, failed = 0;

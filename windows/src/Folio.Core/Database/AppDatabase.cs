@@ -47,6 +47,16 @@ public sealed class AppDatabase : IDisposable
         return new AppDatabase(cs, keep);
     }
 
+    /// <summary>A connection of its own for watching data_version: the number is only comparable within one connection,
+    /// and pooled connections take turns.</summary>
+    public SqliteConnection OpenWatcher()
+    {
+        var builder = new SqliteConnectionStringBuilder(_connectionString) { Pooling = false, Mode = SqliteOpenMode.ReadOnly };
+        var c = new SqliteConnection(builder.ToString());
+        c.Open();
+        return c;
+    }
+
     public SqliteConnection Connect()
     {
         var c = new SqliteConnection(_connectionString);

@@ -331,8 +331,79 @@ public static class FileLabel
     public static string Title(FileRecord file, IReadOnlyList<FileRecord> files, string? defaultFileId)
     {
         if (file.TranslationKind is { } kind)
-            return string.IsNullOrEmpty(file.TranslatedBy) ? KindName(kind) : $"{KindName(kind)} · {file.TranslatedBy}";
+        {
+            var name = string.IsNullOrEmpty(file.TranslatedBy) ? KindName(kind) : $"{KindName(kind)} · {file.TranslatedBy}";
+            // Two of the same kind by the same service and model: the time each was made tells them apart.
+            var alike = files.Where(f => f.Id != file.Id && f.TranslationKind == kind && f.TranslatedBy == file.TranslatedBy && f.TranslationOf == file.TranslationOf).ToList();
+            if (alike.Count == 0) return name;
+            return $"{name} · {MadeAt(file, alike)}";
+        }
         return IsOriginal(file, files, defaultFileId) ? Loc.S("原文") : file.FileName;
+    }
+
+    /// <summary>A reader tab's name: what tells the papers and their translations apart when tabs are narrow, so the kind of
+    /// translation comes first and the paper's short title last: SnakeSAM, 译文 · SnakeSAM, 译文 · Google · SnakeSAM.</summary>
+    public static string TabTitle(FileRecord file, Item? item, IReadOnlyList<FileRecord> files)
+    {
+        var stem = Path.GetFileNameWithoutExtension(file.FileName);
+        if (item == null) return stem;
+        var paper = ShortTitle(item.Title);
+        if (item.Kind != ItemKind.Regular || paper.Length == 0)
+            paper = Path.GetFileNameWithoutExtension((files.FirstOrDefault(f => f.Id == file.TranslationOf) ?? file).FileName);
+        if (file.TranslationKind is { } kind)
+        {
+            var others = files.Where(f => f.Id != file.Id && f.TranslationKind == kind).ToList();
+            return string.Join(" · ", [KindName(kind), .. Differences(file, others), paper]);
+        }
+        return IsOriginal(file, files, item.DefaultFileId) ? paper : stem;
+    }
+
+    /// <summary>Only what tells a translation from the others of its kind: the service, the model within a service, or the time.</summary>
+    static List<string> Differences(FileRecord file, List<FileRecord> others)
+    {
+        static (string Service, string Model) Parts(FileRecord f)
+        {
+            var parts = (f.TranslatedBy ?? "").Split(" · ", 2);
+            return (parts[0], parts.Length > 1 ? parts[1] : "");
+        }
+        var own = Parts(file);
+        var sameService = others.Where(f => Parts(f).Service == own.Service).ToList();
+        var sameModel = sameService.Where(f => Parts(f).Model == own.Model).ToList();
+        var result = new List<string>();
+        if (sameService.Count < others.Count && own.Service.Length > 0) result.Add(own.Service);
+        if (sameModel.Count < sameService.Count && own.Model.Length > 0) result.Add(own.Model);
+        if (sameModel.Count > 0) result.Add(MadeAt(file, sameModel));
+        return result;
+    }
+
+    static string MadeAt(FileRecord file, List<FileRecord> alike)
+    {
+        bool close = alike.Any(f => Math.Abs((f.DateAdded - file.DateAdded).TotalSeconds) < 60);
+        var culture = System.Globalization.CultureInfo.GetCultureInfo(Loc.IsEnglish ? "en-US" : "zh-Hans");
+        return file.DateAdded.ToLocalTime().ToString((Loc.IsEnglish ? "MMM d" : "M月d日") + (close ? " HH:mm:ss" : " HH:mm"), culture);
+    }
+
+    /// <summary>The tab's tooltip: the whole title, then who and which file.</summary>
+    public static string TabToolTip(FileRecord file, Item? item, IReadOnlyList<FileRecord> files)
+    {
+        if (item == null) return file.FileName;
+        var author = item.Authors.FirstOrDefault()?.Family;
+        var citation = author == null ? null : item.Year is { } year ? $"{author} {year}" : author;
+        var label = Title(file, files, item.DefaultFileId);
+        return $"{item.Title}\n{(citation == null ? label : $"{citation} · {label}")}";
+    }
+
+    /// <summary>A paper's name before its subtitle ("SnakeSAM: A topology-preserving…" is SnakeSAM), or the whole title.</summary>
+    public static string ShortTitle(string title)
+    {
+        var whole = title.Trim();
+        int colon = -1;
+        for (int i = 0; i < whole.Length && colon < 0; i++)
+            if (whole[i] == '：' || (whole[i] == ':' && (i + 1 == whole.Length || char.IsWhiteSpace(whole[i + 1])))) colon = i;
+        if (colon < 0) return whole;
+        var head = whole[..colon].Trim();
+        var length = new System.Globalization.StringInfo(head).LengthInTextElements;
+        return length is >= 2 and <= 40 && whole[(colon + 1)..].Trim().Length > 0 ? head : whole;
     }
 
     public static bool IsOriginal(FileRecord file, IReadOnlyList<FileRecord> files, string? defaultFileId)

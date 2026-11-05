@@ -10,23 +10,23 @@
 <body>
   <aside id="sidebar">
     <nav id="sidebarTabs">
-      <button data-pane="thumbnails" title="Thumbnails" class="active">&#xE8A9;</button>
-      <button data-pane="outline" title="Outline">&#xE8FD;</button>
-      <button data-pane="annotations" title="Annotations">&#xE70F;</button>
-      <button data-pane="search" title="Search">&#xE721;</button>
+      <button data-pane="thumbnails" class="active">&#xE8A9;</button>
+      <button data-pane="outline">&#xE8FD;</button>
+      <button data-pane="annotations">&#xE70F;</button>
+      <button data-pane="hits">&#xE721;</button>
     </nav>
     <section id="thumbnails" class="pane active"></section>
     <section id="outline" class="pane"></section>
     <section id="annotations" class="pane"></section>
-    <section id="search" class="pane">
-      <input id="searchBox" type="search" autocomplete="off">
-      <div id="searchStatus"></div>
-    </section>
+    <section id="hits" class="pane"></section>
   </aside>
-  <main id="viewerContainer">
+  <div id="sidebarDivider"></div>
+  <div id="viewerContainer">
     <div id="viewer" class="pdfViewer"></div>
-  </main>
-  <div id="loading"></div>
+  </div>
+  <div id="message" hidden></div>
+  <div id="tip" hidden></div>
+  <div id="printContainer"></div>
   <script type="module" src="viewer.js"></script>
 </body>
 </html>
