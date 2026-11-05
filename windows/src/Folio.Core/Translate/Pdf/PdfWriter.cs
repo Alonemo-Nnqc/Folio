@@ -201,6 +201,8 @@ public sealed class PdfCopier(PdfWriter writer, PdfSource source)
     public PdfWriter Writer { get; } = writer;
     public PdfSource Source { get; } = source;
     public StreamDataCache? StreamCache { get; set; }
+    /// <summary>New data for a stream (decoded), or null to copy it as it is: subsets of embedded fonts, for example.</summary>
+    public Func<PStream, byte[]?>? Transform { get; set; }
     readonly Dictionary<long, int> _copied = [];
     /// <summary>Output page object for each source page dictionary; page references elsewhere point at it.</summary>
     public Dictionary<long, int> PageMap { get; } = [];
@@ -262,6 +264,11 @@ public sealed class PdfCopier(PdfWriter writer, PdfSource source)
         }
         var data = stream.Data;
         var format = stream.Format;
+        if (format != StreamFormat.Jpeg && format != StreamFormat.Jpeg2000 && Transform?.Invoke(stream) is { } replaced)
+        {
+            data = replaced;
+            if (dict.ContainsKey("Length1")) dict["Length1"] = PdfValue.Int(data.Length);
+        }
         switch (format)
         {
             case StreamFormat.Jpeg:
@@ -272,11 +279,21 @@ public sealed class PdfCopier(PdfWriter writer, PdfSource source)
                 dict["Filter"] = PdfValue.Name("JPXDecode");
                 Writer.SetStream(number, dict, data, compress: false);
                 break;
+            case StreamFormat.Encoded:
+            {
+                var remaining = stream.Remaining;
+                dict["Filter"] = remaining.Count == 1 ? PdfValue.Name(remaining[0].Filter) : PdfValue.Array(remaining.Select(r => PdfValue.Name(r.Filter)));
+                if (remaining.Any(r => r.Parms != null))
+                    dict["DecodeParms"] = remaining.Count == 1 ? Copy(remaining[0].Parms!)
+                        : PdfValue.Array(remaining.Select(r => r.Parms is { } p ? Copy(p) : PdfValue.Null));
+                Writer.SetStream(number, dict, data, compress: false);
+                break;
+            }
             default:
                 Writer.SetStream(number, dict, data);
                 break;
         }
-        if (StreamCache != null && Writer.Raw(number) is { } body && Payload(body) is { } payload)
+        if (StreamCache != null && format != StreamFormat.Encoded && Writer.Raw(number) is { } body && Payload(body) is { } payload)
         {
             string? filter = format switch
             {
@@ -479,9 +496,9 @@ public sealed class PdfComposer
     }
 
     /// <summary>A form XObject showing page number of another document (for example text drawn for the translation).</summary>
-    public int? ForeignPageForm(PdfSource document, int number)
+    public int? ForeignPageForm(PdfSource document, int number, Func<PStream, byte[]?>? transform = null)
     {
-        if (!_foreign.TryGetValue(document, out var foreign)) _foreign[document] = foreign = new PdfCopier(Writer, document);
+        if (!_foreign.TryGetValue(document, out var foreign)) _foreign[document] = foreign = new PdfCopier(Writer, document) { Transform = transform };
         if (number < 1 || number > document.Pages.Count) return null;
         var dict = document.Pages[number - 1];
         var media = Geometry(dict).MediaBox;

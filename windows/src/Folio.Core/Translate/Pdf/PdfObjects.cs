@@ -204,7 +204,9 @@ public sealed class PArray(PdfSource source, ArrayToken token)
     public List<double> Numbers() => Enumerable.Range(0, Count).Select(i => Number(i) ?? 0).ToList();
 }
 
-public enum StreamFormat { Raw, Jpeg, Jpeg2000 }
+/// <summary>Raw: decoded. Jpeg / Jpeg2000: the image file. Encoded: still in filters Folio does not decode
+/// (CCITT fax, JBIG2): <see cref="PStream.Remaining"/> names them.</summary>
+public enum StreamFormat { Raw, Jpeg, Jpeg2000, Encoded }
 
 /// <summary>A stream of a PdfSource; Data is decoded (except JPEG / JPEG 2000 images, which stay as they are).</summary>
 public sealed class PStream
@@ -228,6 +230,9 @@ public sealed class PStream
 
     public byte[] Data { get { Decode(); return _data!; } }
     public StreamFormat Format { get { Decode(); return _format; } }
+    /// <summary>For <see cref="StreamFormat.Encoded"/>: the filters (and their parameters) still applied to Data.</summary>
+    public List<(string Filter, PDict? Parms)> Remaining { get { Decode(); return _remaining; } }
+    List<(string, PDict?)> _remaining = [];
 
     void Decode()
     {
@@ -235,7 +240,7 @@ public sealed class PStream
         lock (this)
         {
             if (_data != null) return;
-            (_data, _format) = Filters.Decode(_token.Data.ToArray(), Dict);
+            (_data, _format, _remaining) = Filters.Decode(_token.Data.ToArray(), Dict);
         }
     }
 }
@@ -243,7 +248,7 @@ public sealed class PStream
 /// <summary>Stream filters used by content streams, fonts and images (PDF 32000-1 §7.4).</summary>
 static class Filters
 {
-    public static (byte[] Data, StreamFormat Format) Decode(byte[] data, PDict dict)
+    public static (byte[] Data, StreamFormat Format, List<(string, PDict?)> Remaining) Decode(byte[] data, PDict dict)
     {
         var filters = new List<string>();
         var parms = new List<PDict?>();
@@ -262,12 +267,13 @@ static class Filters
                 case "ASCIIHexDecode" or "AHx": data = AsciiHex(data); break;
                 case "ASCII85Decode" or "A85": data = Ascii85(data); break;
                 case "RunLengthDecode" or "RL": data = RunLength(data); break;
-                case "DCTDecode" or "DCT": return (data, StreamFormat.Jpeg);
-                case "JPXDecode": return (data, StreamFormat.Jpeg2000);
-                default: return (data, StreamFormat.Raw);
+                case "DCTDecode" or "DCT": return (data, StreamFormat.Jpeg, []);
+                case "JPXDecode": return (data, StreamFormat.Jpeg2000, []);
+                default:
+                    return (data, StreamFormat.Encoded, Enumerable.Range(i, filters.Count - i).Select(k => (filters[k], parms[k])).ToList());
             }
         }
-        return (data, StreamFormat.Raw);
+        return (data, StreamFormat.Raw, []);
     }
 
     public static byte[] Inflate(byte[] data)

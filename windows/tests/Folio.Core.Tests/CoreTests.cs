@@ -247,4 +247,45 @@ public class LayoutTests
         }
         File.WriteAllText(output, sb.ToString());
     }
+
+    /// <summary>FOLIO_SAMPLE_PDF + FOLIO_FAKE_OUT: the macOS engine's `folio-translate fake` (placeholder Chinese), for comparing renders.</summary>
+    [Fact]
+    public void RendersAFakeTranslationLikeTheMacEngine()
+    {
+        var sample = Environment.GetEnvironmentVariable("FOLIO_SAMPLE_PDF");
+        var output = Environment.GetEnvironmentVariable("FOLIO_FAKE_OUT");
+        if (string.IsNullOrEmpty(sample) || string.IsNullOrEmpty(output)) return;
+        using var source = Folio.Core.Translate.Pdf.PdfSource.Open(sample);
+        var analyzer = new Folio.Core.Translate.Layout.LayoutAnalyzer();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var layouts = analyzer.Analyze(source, Enumerable.Range(1, source.Pages.Count).ToList());
+        var report = new System.Text.StringBuilder($"layout {watch.Elapsed.TotalSeconds:F2} s\n");
+        var segments = Folio.Core.Translate.Engine.SegmentBuilder.Segments(layouts, "zh");
+        const string text0 = "本文提出了一种简单而有效的方法，用于在未知目标域上提升语义分割模型的泛化能力。我们在多个基准数据集上进行了大量实验，结果表明该方法优于现有技术。";
+        var translations = new Dictionary<string, string>();
+        foreach (var segment in segments)
+        {
+            int letters = segment.Source.Count(char.IsLetter);
+            int length = Math.Max(2, (int)(letters * 0.42));
+            var text = new System.Text.StringBuilder();
+            int pieces = segment.Formulas.Count + 1;
+            for (int k = 0; k < pieces; k++)
+            {
+                int n = length / pieces;
+                for (int i = 0; i < n; i++) text.Append(text0[(k * 7 + i) % text0.Length]);
+                if (k < segment.Formulas.Count) text.Append($"{{v{k + 1}}}");
+            }
+            translations[segment.Id] = text.ToString();
+        }
+        watch.Restart();
+        var renderer = new Folio.Core.Translate.Engine.TranslationRenderer(source, "zh");
+        var result = renderer.Render(layouts, segments, translations, true, true, Folio.Core.Translate.TranslationOptions.DualLayouts.sideBySide, null);
+        report.Append($"render {watch.Elapsed.TotalSeconds:F2} s, {segments.Count} segments, {segments.Sum(s => s.Formulas.Count)} formulas\n");
+        Directory.CreateDirectory(output);
+        var name = Path.GetFileNameWithoutExtension(sample);
+        File.WriteAllBytes(Path.Combine(output, name + ".mono.pdf"), result.Mono!);
+        File.WriteAllBytes(Path.Combine(output, name + ".dual.pdf"), result.Dual!);
+        report.Append($"mono {result.Mono!.Length} bytes, dual {result.Dual!.Length} bytes\n");
+        File.WriteAllText(Path.Combine(output, "report.txt"), report.ToString());
+    }
 }
