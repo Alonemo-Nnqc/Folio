@@ -196,3 +196,76 @@ extension FileLabelTests {
         #expect(try FileHasher.sha256(of: url) == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
     }
 }
+
+extension FileLabelTests {
+    private func tabFile(_ id: String, kind: TranslationKind? = nil, by: String? = nil, of source: String? = nil) -> FileRecord {
+        var file = FileRecord(id: id, itemId: "i", relativePath: "Files/\(id).pdf", originalName: "\(id).pdf", size: 0, sha256: id, modifiedAt: Date())
+        file.translationKind = kind
+        file.translatedBy = by
+        file.translationOf = source
+        return file
+    }
+
+    private func paper(_ title: String, kind: ItemKind = .regular, defaultFile: String = "p") -> Item {
+        var item = Item(id: "i", kind: kind, title: title)
+        item.defaultFileId = defaultFile
+        return item
+    }
+
+    @Test func shortTitlesStopAtTheSubtitle() {
+        #expect(FileLabel.shortTitle("SnakeSAM: A topology-preserving foundation model") == "SnakeSAM")
+        #expect(FileLabel.shortTitle("视网膜分割：一种新方法") == "视网膜分割")
+        #expect(FileLabel.shortTitle(" Attention Is All You Need ") == "Attention Is All You Need")
+        // Not a subtitle: a time or a ratio, nothing after the colon, or a name too long or too short to stand for the paper.
+        #expect(FileLabel.shortTitle("Sleeping at 10:30 in Teens") == "Sleeping at 10:30 in Teens")
+        #expect(FileLabel.shortTitle("Trailing:") == "Trailing:")
+        #expect(FileLabel.shortTitle("X: a study") == "X: a study")
+        let long = String(repeating: "a", count: 41) + ": rest"
+        #expect(FileLabel.shortTitle(long) == long)
+    }
+
+    @Test func tabsTellPapersAndTranslationsApart() {
+        let item = paper("SnakeSAM: A topology-preserving model")
+        let original = tabFile("p")
+        let mono = tabFile("m", kind: .mono, by: "Google", of: "p")
+        let dual = tabFile("d", kind: .dual, by: "Google", of: "p")
+        let files = [original, mono, dual]
+        #expect(FileLabel.tabTitle(of: original, item: item, among: files) == "SnakeSAM")
+        // The kind comes first, so a narrow tab still shows it.
+        #expect(FileLabel.tabTitle(of: mono, item: item, among: files) == "Translation · SnakeSAM")
+        #expect(FileLabel.tabTitle(of: dual, item: item, among: files) == "Bilingual · SnakeSAM")
+        // Several of a kind: the service tells them apart.
+        let other = tabFile("o", kind: .mono, by: "DeepSeek", of: "p")
+        #expect(FileLabel.tabTitle(of: mono, item: item, among: files + [other]) == "Translation · Google · SnakeSAM")
+        #expect(FileLabel.tabTitle(of: other, item: item, among: files + [other]) == "Translation · DeepSeek · SnakeSAM")
+        // Within one service, the model; the same service and model, the time, and nothing that is the same for all.
+        let low = tabFile("l", kind: .dual, by: "Agent · low", of: "p"), high = tabFile("h", kind: .dual, by: "Agent · high", of: "p")
+        #expect(FileLabel.tabTitle(of: low, item: item, among: [original, low, high]) == "Bilingual · low · SnakeSAM")
+        var later = tabFile("t", kind: .dual, by: "Agent · low", of: "p")
+        later.dateAdded = low.dateAdded.addingTimeInterval(3 * 3600)
+        let timed = FileLabel.tabTitle(of: later, item: item, among: [original, low, later])
+        #expect(timed.hasPrefix("Bilingual · ") && timed.hasSuffix(" · SnakeSAM") && !timed.contains("Agent") && !timed.contains("low"))
+        #expect(timed != FileLabel.tabTitle(of: low, item: item, among: [original, low, later]))
+        // Another file of the paper keeps its own name.
+        let supplement = tabFile("Supplement")
+        #expect(FileLabel.tabTitle(of: supplement, item: item, among: files + [supplement]) == "Supplement")
+    }
+
+    @Test func tabsOfLooseFilesUseTheirNames() {
+        let item = paper("scan.pdf", kind: .standalone, defaultFile: "scan")
+        let scan = tabFile("scan")
+        let translated = tabFile("scan（译文）", kind: .mono, of: "scan")
+        #expect(FileLabel.tabTitle(of: scan, item: item, among: [scan, translated]) == "scan")
+        #expect(FileLabel.tabTitle(of: translated, item: item, among: [scan, translated]) == "Translation · scan")
+        #expect(FileLabel.tabTitle(of: scan, item: nil, among: []) == "scan")
+    }
+
+    @Test func tabToolTipsCarryWhatTheTabLeavesOut() {
+        var item = paper("SnakeSAM: A topology-preserving model")
+        item.authors = [Author(family: "Li", given: "Jingwen")]
+        item.year = 2026
+        let original = tabFile("p"), mono = tabFile("m", kind: .mono, by: "Google", of: "p")
+        #expect(FileLabel.tabToolTip(of: mono, item: item, among: [original, mono])
+                == "SnakeSAM: A topology-preserving model\nLi 2026 · Translation · Google")
+    }
+}

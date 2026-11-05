@@ -333,9 +333,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
         // Translation progress of this paper (TRANS-04).
         content.showTranslation(model.translations.jobs[itemId])
-        let short = item.map { $0.authors.first.map { "\($0.family) \(item?.year.map(String.init) ?? "")" } ?? $0.title } ?? fileURL.lastPathComponent
-        window.tab.title = short.trimmingCharacters(in: .whitespaces)
-        window.tab.toolTip = window.title
+        if let file = model.snapshot.files[fileId] {
+            let files = model.snapshot.files(of: itemId)
+            window.tab.title = FileLabel.tabTitle(of: file, item: item, among: files)
+            window.tab.toolTip = FileLabel.tabToolTip(of: file, item: item, among: files)
+        } else {
+            window.tab.title = fileURL.lastPathComponent
+            window.tab.toolTip = window.title
+        }
     }
 
     private func refreshAnnotationRows() {
