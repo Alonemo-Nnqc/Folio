@@ -31,6 +31,7 @@ static class UI
         "settings" => "",
         "download" => "",
         "info" => "",
+        "checkmark" => "\uE73E",
         "warning" => "",
         "check" => "",
         "globe" => "",

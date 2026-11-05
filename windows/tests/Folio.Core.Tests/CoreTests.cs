@@ -309,3 +309,28 @@ public class LayoutTests
         Assert.IsType<Folio.Core.Translate.TranslationEvent.Finished>(last);
     }
 }
+
+public class LocalizationTests
+{
+    /// <summary>Every interface string of the Windows app has an English translation (in the macOS tables or Windows.xcstrings).</summary>
+    [Fact]
+    public void EveryStringHasAnEnglishTranslation()
+    {
+        var here = Here();
+        var src = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "src"));
+        var english = Loc.EnglishTable;
+        var missing = new SortedSet<string>();
+        foreach (var file in Directory.EnumerateFiles(src, "*.cs", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")) continue;
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(File.ReadAllText(file), @"Loc\.S\(\s*""((?:[^""\\]|\\.)*)"""))
+            {
+                var key = System.Text.RegularExpressions.Regex.Unescape(m.Groups[1].Value);
+                if (System.Text.RegularExpressions.Regex.IsMatch(key, @"\p{IsCJKUnifiedIdeographs}") && !english.ContainsKey(key)) missing.Add(key);
+            }
+        }
+        Assert.True(missing.Count == 0, "No English for: " + string.Join(" | ", missing));
+    }
+
+    static string Here([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+}

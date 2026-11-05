@@ -132,6 +132,7 @@ public sealed partial class ItemRow : Grid
                 if (item.Kind == ItemKind.Standalone && owner.Model.Importer.IsRetrieving(item.Id))
                     panel.Children.Add(new ProgressRing { Width = 12, Height = 12, IsActive = true });
                 panel.Children.Add(title);
+                if (owner.Model.Translations.JobOf(item.Id) != null) panel.Children.Add(new TranslationProgressView(owner.Model, item.Id));
                 return panel;
             case "tags":
                 var tags = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
@@ -293,6 +294,7 @@ public sealed partial class ItemList : Grid
         Columns.Changed += () => { BuildHeader(); RefreshRows(); };
         model.RowsChanged += Reload;
         model.SnapshotChanged += RefreshRows;
+        model.Translations.JobsChanged += RefreshRows;
         model.RevealRequested += Reveal;
         BuildHeader();
         Reload();

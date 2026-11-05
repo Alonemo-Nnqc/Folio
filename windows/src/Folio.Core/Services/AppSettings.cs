@@ -122,4 +122,24 @@ public sealed class AppSettings
     public double InspectorWidth { get => Get("inspectorWidth", 320.0); set => Set("inspectorWidth", value); }
     public bool InspectorVisible { get => Get("inspectorVisible", true); set => Set("inspectorVisible", value); }
     public bool SidebarVisible { get => Get("sidebarVisible", true); set => Set("sidebarVisible", value); }
+
+    // Translation (same keys and shapes as the macOS app).
+    public string TranslationService
+    {
+        get => Translate.Services.TranslationServiceCatalog.Resolve(Get("translationService", Translate.Services.TranslationServiceCatalog.DefaultServiceId)).Id;
+        set => Set("translationService", value);
+    }
+    /// <summary>Service id → option → value (keys are kept in the secret store, not here).</summary>
+    public Dictionary<string, Dictionary<string, string>> TranslationFields { get => Get<Dictionary<string, Dictionary<string, string>>>("translationFields", []); set => Set("translationFields", value); }
+    public Dictionary<string, string> FieldsOf(string serviceId) => TranslationFields.GetValueOrDefault(serviceId) ?? [];
+    public void SetFields(string serviceId, Dictionary<string, string> fields)
+    {
+        var all = TranslationFields;
+        all[serviceId] = fields;
+        TranslationFields = all;
+    }
+    public Translate.TranslationOptions TranslationOptions { get => Get("translationOptions", new Translate.TranslationOptions()); set => Set("translationOptions", value); }
+    public List<Translate.Services.TranslationProfile> TranslationProfiles { get => Get<List<Translate.Services.TranslationProfile>>("translationProfiles", []); set => Set("translationProfiles", value); }
+    /// <summary>The configuration in use per service: service id → profile id.</summary>
+    public Dictionary<string, string> SelectedTranslationProfiles { get => Get<Dictionary<string, string>>("selectedTranslationProfiles", []); set => Set("selectedTranslationProfiles", value); }
 }

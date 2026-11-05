@@ -25,6 +25,7 @@ public sealed partial class AppModel : IImportUi
     public ToastCenter Toasts { get; }
     public Updater Updater { get; }
     public ConnectorServer Connector { get; }
+    public TranslationCoordinator Translations { get; }
     readonly Lazy<CslRenderer> _csl = new(() => new CslRenderer());
     readonly object _cslLock = new();
 
@@ -52,6 +53,7 @@ public sealed partial class AppModel : IImportUi
         Importer = new Importer(() => Library, Settings, this);
         Updater = new Updater(this);
         Connector = new ConnectorServer(this);
+        Translations = new TranslationCoordinator(this);
         _externalChanges = ui.CreateTimer();
         _externalChanges.Interval = TimeSpan.FromSeconds(1.5);
         _externalChanges.Tick += (_, _) => CheckExternalChanges();

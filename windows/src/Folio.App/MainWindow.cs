@@ -112,7 +112,11 @@ public sealed class MainWindow : Window
         ApplyTheme();
         model.Settings.Changed += key => { if (key == "appearance") DispatcherQueue.TryEnqueue(ApplyTheme); };
         model.OpenInReaderRequested += file => OpenReader(file);
-        Closed += (_, _) => SaveBounds();
+        Closed += (_, _) =>
+        {
+            SaveBounds();
+            _model.Translations.CancelAll();
+        };
         if (model.Settings.ReopenReaderTabs) DispatcherQueue.TryEnqueue(ReopenTabs);
     }
 

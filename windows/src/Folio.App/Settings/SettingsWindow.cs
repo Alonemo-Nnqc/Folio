@@ -12,6 +12,8 @@ namespace Folio.App;
 public sealed class SettingsWindow : Window
 {
     static SettingsWindow? _shared;
+    /// <summary>The settings window when it is open (file pickers belong to it).</summary>
+    internal static SettingsWindow? Current => _shared;
     readonly AppModel _model;
     readonly NavigationView _nav;
     readonly ScrollViewer _page;
