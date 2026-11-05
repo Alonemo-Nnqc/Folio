@@ -390,3 +390,61 @@ public class TranslationEngineTests
         Assert.Equal(1224, (int)dual.GetPage(1).Width);
     }
 }
+
+public class AgentTests
+{
+    [Fact]
+    public void EditsJsonWithCommentsKeepingEverythingElse()
+    {
+        const string original = "{\n  // my servers\n  \"mcpServers\": {\n    \"other\": { \"command\": \"x\" }, // keep\n  },\n  \"theme\": \"dark\"\n}\n";
+        var home = Path.Combine(Path.GetTempPath(), $"folio-home-{Guid.NewGuid()}");
+        Directory.CreateDirectory(Path.Combine(home, ".gemini"));
+        File.WriteAllText(Path.Combine(home, ".gemini", "settings.json"), original);
+        var integrator = new Folio.Core.Agent.AgentIntegrator(home, @"C:\Program Files\Folio\folio-cli.exe", useAgentCommands: false) { VerifiesCommands = false, CommandFoldersOverride = [] };
+        var gemini = Folio.Core.Agent.AgentIntegrator.Catalog.First(d => d.Id == "gemini-cli");
+        integrator.SetMcp(true, gemini);
+        var added = File.ReadAllText(Path.Combine(home, ".gemini", "settings.json"));
+        Assert.Contains("// my servers", added);
+        Assert.Contains("// keep", added);
+        Assert.Contains("\"folio\"", added);
+        Assert.Equal(@"C:\Program Files\Folio\folio-cli.exe", integrator.InstalledCommand(gemini));
+        integrator.SetMcp(false, gemini);
+        Assert.Equal(original, File.ReadAllText(Path.Combine(home, ".gemini", "settings.json")));
+
+        var codex = Folio.Core.Agent.AgentIntegrator.Catalog.First(d => d.Id == "codex");
+        integrator.SetMcp(true, codex);
+        Assert.Equal(@"C:\Program Files\Folio\folio-cli.exe", integrator.InstalledCommand(codex));
+        integrator.SetMcp(false, codex);
+        Assert.Null(integrator.InstalledCommand(codex));
+
+        var claude = Folio.Core.Agent.AgentIntegrator.Catalog.First(d => d.Id == "claude-code");
+        integrator.SetSkill(true, claude);
+        Assert.True(integrator.Status(claude).SkillInstalled);
+        integrator.SetSkill(false, claude);
+        Assert.False(integrator.Status(claude).SkillInstalled);
+        Directory.Delete(home, true);
+    }
+
+    [Fact]
+    public async Task ServesMcpAgainstALibrary()
+    {
+        using var library = Library.Temporary();
+        library.CreateItem(new Metadata("Attention Is All You Need") { Authors = [new Author("Vaswani", "Ashish")], Year = 2017, Doi = "10.48550/arxiv.1706.03762" });
+        var toolbox = new Folio.Core.Agent.LibraryToolbox(library, new Folio.Core.Agent.AgentConfiguration(library.Root));
+        var server = new Folio.Core.Agent.McpServer(toolbox);
+        var init = await server.Receive("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}""");
+        Assert.Equal("2025-06-18", init!["result"]!["protocolVersion"]!.GetValue<string>());
+        var tools = await server.Receive("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+        Assert.Equal(26, tools!["result"]!["tools"]!.AsArray().Count);
+        var call = await server.Receive("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_library","arguments":{"query":"attention vaswani","limit":5}}}""");
+        var text = call!["result"]!["content"]![0]!["text"]!.GetValue<string>();
+        Assert.Contains("Attention Is All You Need", text);
+        var cite = await server.Receive("""{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"format_citations","arguments":{"items":["10.48550/arxiv.1706.03762"],"style":"apa"}}}""");
+        Assert.Contains("Vaswani", cite!["result"]!["content"]![0]!["text"]!.GetValue<string>());
+        var bad = await server.Receive("""{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_item","arguments":{"itme":"x"}}}""");
+        Assert.True(bad!["result"]!["isError"]!.GetValue<bool>());
+        var modern = await server.Receive("""{"jsonrpc":"2.0","id":6,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}""");
+        Assert.Equal("complete", modern!["result"]!["resultType"]!.GetValue<string>());
+        Assert.Null(await server.Receive("""{"jsonrpc":"2.0","method":"notifications/initialized"}"""));
+    }
+}

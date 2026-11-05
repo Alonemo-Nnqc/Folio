@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- folio-cli: Folio's AI interface (MCP server and commands). Shipped next to Folio.exe; agents start it. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>folio-cli</AssemblyName>
+    <RootNamespace>Folio.Cli</RootNamespace>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Folio.Core\Folio.Core.csproj" />
+  </ItemGroup>
+</Project>
