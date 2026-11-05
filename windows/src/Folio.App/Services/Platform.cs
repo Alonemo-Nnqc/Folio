@@ -211,3 +211,31 @@ public static class BrowserExtensions
         catch { Shell.CopyText(browser.ExtensionsPage); }
     }
 }
+
+/// <summary>folio:// links (agents, the browser extension, notes) open in Folio: registered for this Windows user at each
+/// launch, so the command follows Folio wherever it is installed; removed on uninstall.</summary>
+static class UrlProtocol
+{
+    const string Key = @"Software\Classes\folio";
+
+    public static void Register()
+    {
+        try
+        {
+            if (Environment.ProcessPath is not { } exe) return;
+            using var root = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Key);
+            root.SetValue("", "URL:Folio");
+            root.SetValue("URL Protocol", "");
+            using (var icon = root.CreateSubKey("DefaultIcon")) icon.SetValue("", $"\"{exe}\",0");
+            using var command = root.CreateSubKey(@"shell\open\command");
+            var value = $"\"{exe}\" \"%1\"";
+            if (command.GetValue("") as string != value) command.SetValue("", value);
+        }
+        catch { }
+    }
+
+    public static void Unregister()
+    {
+        try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(Key, false); } catch { }
+    }
+}

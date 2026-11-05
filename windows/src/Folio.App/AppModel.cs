@@ -44,7 +44,7 @@ public sealed partial class AppModel : IImportUi
     public event Action<string>? RevealRequested;
 
     /// <summary>Opening papers in the reader is the window's job.</summary>
-    public event Action<FileRecord>? OpenInReaderRequested;
+    public event Action<FileRecord, int?>? OpenInReaderRequested;
 
     public AppModel(DispatcherQueue ui)
     {
@@ -189,7 +189,7 @@ public sealed partial class AppModel : IImportUi
         catch (Exception e) { Toasts.Show(e.Message, "warning"); }
     }
 
-    public void OpenItem(string itemId)
+    public void OpenItem(string itemId, int? page = null)
     {
         if (!Snapshot.Items.TryGetValue(itemId, out var item)) return;
         var files = Snapshot.FilesOf(itemId);
@@ -200,10 +200,10 @@ public sealed partial class AppModel : IImportUi
             else Toasts.Show(Loc.S("该条目没有附件"), "info");
             return;
         }
-        OpenFile(file);
+        OpenFile(file, page);
     }
 
-    public void OpenFile(FileRecord file)
+    public void OpenFile(FileRecord file, int? page = null)
     {
         var path = Library.FilePath(file);
         if (!File.Exists(path))
@@ -213,7 +213,7 @@ public sealed partial class AppModel : IImportUi
         }
         if (Settings.MarkReadingOnOpen && Snapshot.Items.TryGetValue(file.ItemId, out var item) && item.Kind == ItemKind.Regular && item.ReadStatus == ReadStatus.Unread)
             Perform(() => Library.UpdateItem(item.Id, i => i.ReadStatus = ReadStatus.Reading));
-        if (file.IsPdf && Settings.OpenWith == OpenWith.Folio) OpenInReaderRequested?.Invoke(file);
+        if (file.IsPdf && Settings.OpenWith == OpenWith.Folio) OpenInReaderRequested?.Invoke(file, page);
         else if (Settings.OpenWith == OpenWith.Custom && Settings.OpenWithAppPath is { Length: > 0 } app) Shell.OpenWith(app, path);
         else Shell.Open(path);
     }
@@ -246,7 +246,7 @@ public sealed partial class AppModel : IImportUi
         if (!Uri.TryCreate(link, UriKind.Absolute, out var uri)) return;
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         if (uri.Host is "select" or "item" && query["item"] is { } id) Reveal(id);
-        else if (uri.Host == "open" && query["item"] is { } open) OpenItem(open);
+        else if (uri.Host == "open" && query["item"] is { } open) OpenItem(open, int.TryParse(query["page"], out var page) ? page : null);
     }
 
     // MARK: Citations

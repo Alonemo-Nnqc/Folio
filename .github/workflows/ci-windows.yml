@@ -55,6 +55,9 @@ jobs:
         shell: pwsh
         run: |
           dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} -p:Version=0.0.1 -o publish
+          # folio-cli (the AI interface) ships next to Folio.exe.
+          dotnet publish windows/src/Folio.Cli/Folio.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained -p:Version=0.0.1 -o publish
+          if (-not (Test-Path publish/folio-cli.exe)) { throw "folio-cli.exe missing" }
           dotnet tool install -g vpk --version 1.2.161
           vpk pack --packId Folio --packVersion 0.0.1-ci.${{ github.run_number }} --packDir publish --mainExe Folio.exe --packTitle Folio --packAuthors Folio `
             --icon windows/src/Folio.App/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --outputDir releases

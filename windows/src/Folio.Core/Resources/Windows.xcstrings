@@ -145,7 +145,14 @@
     "页面布局" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Page layout" } }} },
     "页面阴影" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Page shadows" } }} },
     "默认引用样式" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Default citation style" } }} },
-    "默认缩放" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Default zoom" } }} }
+    "默认缩放" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Default zoom" } }} },
+    "%@ 与它们共用技能文件夹 %@，移除后这些智能体也将看不到 Folio 技能。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ shares the skills folder %@ with them; after removing it, these agents will not see the Folio skill either." } }} },
+    "正在检查…" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Checking…" } }} },
+    "在资源管理器中显示配置文件" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Show Configuration File in File Explorer" } }} },
+    "技能：%@" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Skill: %@" } }} },
+    "技能：%@（共享）" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Skill: %@ (shared)" } }} },
+    "没有在这台电脑上找到可用的智能体" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No usable agent was found on this computer" } }} },
+    "这台电脑上的智能体" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Agents on This Computer" } }} }
   },
   "version" : "1.0"
 }

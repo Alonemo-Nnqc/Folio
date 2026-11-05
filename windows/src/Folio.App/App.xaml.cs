@@ -12,7 +12,9 @@ public static class Program
     static int Main(string[] args)
     {
         // Velopack's install / update / uninstall hooks run here and exit before any window appears.
-        VelopackApp.Build().Run();
+        VelopackApp.Build()
+            .OnBeforeUninstallFastCallback(_ => UrlProtocol.Unregister())
+            .Run();
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write(e.ExceptionObject as Exception);
         WinRT.ComWrappersSupport.InitializeComWrappers();
 
@@ -68,6 +70,8 @@ public partial class App : Application
             Window = new MainWindow(Model);
             Model.Start();
             Window.Activate();
+            UrlProtocol.Register();
+            AiIntegration.RepairAfterLaunch();
             HandleActivation(AppInstance.GetCurrent().GetActivatedEventArgs());
         }
         catch (Exception e)

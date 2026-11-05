@@ -111,7 +111,7 @@ public sealed class MainWindow : Window
         Content = _root;
         ApplyTheme();
         model.Settings.Changed += key => { if (key == "appearance") DispatcherQueue.TryEnqueue(ApplyTheme); };
-        model.OpenInReaderRequested += file => OpenReader(file);
+        model.OpenInReaderRequested += (file, page) => OpenReader(file, page);
         Closed += (_, _) =>
         {
             SaveBounds();

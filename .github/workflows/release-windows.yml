@@ -63,6 +63,10 @@ jobs:
         run: |
           dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r win-${{ matrix.arch }} `
             -p:Platform=${{ matrix.platform }} -p:Version=${{ steps.version.outputs.value }} -o publish
+          # folio-cli (the AI interface) ships next to Folio.exe.
+          dotnet publish windows/src/Folio.Cli/Folio.Cli.csproj -c Release -r win-${{ matrix.arch }} --self-contained `
+            -p:Version=${{ steps.version.outputs.value }} -o publish
+          if (-not (Test-Path publish/folio-cli.exe)) { throw "folio-cli.exe missing" }
 
       - name: Package (Velopack)
         shell: pwsh
