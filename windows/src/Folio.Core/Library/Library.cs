@@ -55,7 +55,7 @@ public sealed record FulltextHit(string ItemId, double Rank, string Snippet);
 /// The library service: every change to the user's data goes through here. Same operations and rules as the macOS
 /// Library (Packages/FolioCore/Sources/FolioCore/Library). Thread-safe; callers run slow ones off the UI thread.
 /// </summary>
-public sealed class Library : IDisposable
+public sealed partial class Library : IDisposable
 {
     public const string DatabaseFileName = "Folio.sqlite";
 

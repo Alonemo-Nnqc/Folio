@@ -152,7 +152,9 @@
     "技能：%@" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Skill: %@" } }} },
     "技能：%@（共享）" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Skill: %@ (shared)" } }} },
     "没有在这台电脑上找到可用的智能体" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No usable agent was found on this computer" } }} },
-    "这台电脑上的智能体" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Agents on This Computer" } }} }
+    "这台电脑上的智能体" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Agents on This Computer" } }} },
+    "在 %@ 中找不到 zotero.sqlite" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "zotero.sqlite was not found in %@" } }} },
+    "Zotero 数据库中没有个人文库" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The Zotero database has no personal library" } }} }
   },
   "version" : "1.0"
 }

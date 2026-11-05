@@ -448,3 +448,115 @@ public class AgentTests
         Assert.Null(await server.Receive("""{"jsonrpc":"2.0","method":"notifications/initialized"}"""));
     }
 }
+
+public class ZoteroTests
+{
+    static void Exec(Microsoft.Data.Sqlite.SqliteConnection c, string sql)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    [Fact]
+    public void ImportsAZoteroLibrary()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), $"zotero-{Guid.NewGuid()}");
+        Directory.CreateDirectory(Path.Combine(dir, "storage", "ATT1"));
+        Directory.CreateDirectory(Path.Combine(dir, "storage", "ATT2"));
+        File.WriteAllBytes(Path.Combine(dir, "storage", "ATT1", "paper.pdf"), "%PDF-1.4 original"u8.ToArray());
+        File.WriteAllBytes(Path.Combine(dir, "storage", "ATT2", "paper.zh.dual.pdf"), "%PDF-1.4 translated"u8.ToArray());
+        using (var c = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(dir, "zotero.sqlite")};Pooling=False"))
+        {
+            c.Open();
+            Exec(c, """
+            CREATE TABLE libraries (libraryID INTEGER PRIMARY KEY, type TEXT NOT NULL);
+            CREATE TABLE itemTypes (itemTypeID INTEGER PRIMARY KEY, typeName TEXT);
+            CREATE TABLE items (itemID INTEGER PRIMARY KEY, itemTypeID INT NOT NULL, dateAdded TIMESTAMP NOT NULL, dateModified TIMESTAMP NOT NULL, libraryID INT NOT NULL, key TEXT NOT NULL);
+            CREATE TABLE deletedItems (itemID INTEGER PRIMARY KEY, dateDeleted TEXT);
+            CREATE TABLE fields (fieldID INTEGER PRIMARY KEY, fieldName TEXT);
+            CREATE TABLE itemDataValues (valueID INTEGER PRIMARY KEY, value);
+            CREATE TABLE itemData (itemID INT, fieldID INT, valueID INT, PRIMARY KEY (itemID, fieldID));
+            CREATE TABLE creatorTypes (creatorTypeID INTEGER PRIMARY KEY, creatorType TEXT);
+            CREATE TABLE creators (creatorID INTEGER PRIMARY KEY, firstName TEXT, lastName TEXT, fieldMode INT);
+            CREATE TABLE itemCreators (itemID INT, creatorID INT, creatorTypeID INT, orderIndex INT);
+            CREATE TABLE itemAttachments (itemID INTEGER PRIMARY KEY, parentItemID INT, linkMode INT, path TEXT, contentType TEXT);
+            CREATE TABLE collections (collectionID INTEGER PRIMARY KEY, key TEXT, collectionName TEXT, parentCollectionID INT, libraryID INT);
+            CREATE TABLE collectionItems (collectionID INT, itemID INT);
+            CREATE TABLE tags (tagID INTEGER PRIMARY KEY, name TEXT);
+            CREATE TABLE itemTags (itemID INT, tagID INT, type INT);
+            CREATE TABLE syncedSettings (setting TEXT, libraryID INT, value);
+            INSERT INTO libraries VALUES (1, 'user');
+            INSERT INTO itemTypes VALUES (3, 'attachment'), (28, 'note'), (22, 'journalArticle');
+            INSERT INTO creatorTypes VALUES (10, 'author');
+            INSERT INTO fields VALUES (1, 'title'), (6, 'date'), (8, 'DOI'), (100, 'publicationTitle'), (19, 'extra');
+            INSERT INTO items VALUES (1, 22, '2024-03-01 10:00:00', '2024-03-02 10:00:00', 1, 'ITEM1');
+            INSERT INTO itemDataValues VALUES (1, 'U-Net: Convolutional Networks'), (2, '2015-05-00 May 2015'), (3, 'https://doi.org/10.1007/978-3-319-24574-4_28'), (4, 'MICCAI'), (5, 'arXiv:1505.04597 [cs]');
+            INSERT INTO itemData VALUES (1, 1, 1), (1, 6, 2), (1, 8, 3), (1, 100, 4), (1, 19, 5);
+            INSERT INTO creators VALUES (1, 'Olaf', 'Ronneberger', 0), (2, NULL, 'BIOSS Centre', 1);
+            INSERT INTO itemCreators VALUES (1, 1, 10, 0), (1, 2, 10, 1);
+            INSERT INTO items VALUES (2, 3, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'ATT1');
+            INSERT INTO itemAttachments VALUES (2, 1, 0, 'storage:paper.pdf', 'application/pdf');
+            INSERT INTO items VALUES (3, 3, '2024-03-05 10:00:00', '2024-03-05 10:00:00', 1, 'ATT2');
+            INSERT INTO itemAttachments VALUES (3, 1, 0, 'storage:paper.zh.dual.pdf', 'application/pdf');
+            INSERT INTO itemDataValues VALUES (6, 'paper-google-compare');
+            INSERT INTO itemData VALUES (3, 1, 6);
+            INSERT INTO items VALUES (4, 3, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'SNAP');
+            INSERT INTO itemAttachments VALUES (4, 1, 1, 'storage:page.html', 'text/html');
+            INSERT INTO items VALUES (5, 3, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'LINK');
+            INSERT INTO itemAttachments VALUES (5, 1, 3, 'https://example.com', NULL);
+            INSERT INTO items VALUES (6, 28, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'NOTE');
+            INSERT INTO items VALUES (7, 22, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'GONE');
+            INSERT INTO deletedItems VALUES (7, '2024-04-01');
+            INSERT INTO collections VALUES (1, 'C1', 'Vision', NULL, 1), (2, 'C2', 'Segmentation', 1, 1), (3, 'C3', 'Medical', 2, 1);
+            INSERT INTO collectionItems VALUES (3, 1);
+            INSERT INTO tags VALUES (1, 'Important'), (2, 'Computer Science - CV');
+            INSERT INTO itemTags VALUES (1, 1, 0), (1, 2, 1);
+            INSERT INTO syncedSettings VALUES ('tagColors', 1, '[{"name":"Important","color":"#FF3B30"}]');
+            """);
+        }
+        try
+        {
+            using var reader = new Folio.Core.Zotero.ZoteroReader(dir);
+            var (prepared, report) = reader.Read(new Folio.Core.Zotero.ZoteroReadOptions());
+            Assert.Equal(1, report.RegularItems);
+            Assert.Equal(2, report.Collections);
+            Assert.Equal(1, report.SkippedSnapshots);
+            Assert.Equal(1, report.SkippedLinks);
+            Assert.Equal(1, report.SkippedNotes);
+            Assert.Equal(1, report.SkippedTrashed);
+            Assert.Equal(1, report.AutomaticTagsAvailable);
+            var entry = prepared.Entries.Single();
+            Assert.Equal("10.1007/978-3-319-24574-4_28", entry.Metadata!.Doi);
+            Assert.Equal("1505.04597", entry.Metadata.ArxivId);
+            Assert.Equal("2015-05", entry.Metadata.Date);
+            Assert.Equal("BIOSS Centre", entry.Metadata.Authors[1].Family);
+            Assert.Equal(["C2"], entry.GroupKeys);
+            Assert.Equal(["Important"], entry.TagNames);
+            Assert.Null(entry.Files[0].TranslationKind);
+            Assert.Equal(TranslationKind.Dual, entry.Files[1].TranslationKind);
+            Assert.Equal("Google", entry.Files[1].TranslatedBy);
+
+            using var library = Library.Temporary();
+            var summary = library.ImportPrepared(prepared);
+            Assert.Equal(1, summary.ItemsImported);
+            Assert.Equal(2, summary.FilesImported);
+            Assert.Equal(2, summary.GroupsCreated);
+            Assert.Equal(1, summary.TagsCreated);
+            var s = library.Snapshot();
+            var item = s.Items.Values.Single();
+            Assert.Equal("#FF3B30", s.Tags.Single().ColorHex);
+            Assert.Single(s.ItemGroups[item.Id]);
+            var files = s.FilesOf(item.Id);
+            Assert.Equal(files.Single(f => f.TranslationKind == null).Id, item.DefaultFileId);
+            Assert.Equal(item.DefaultFileId, files.Single(f => f.TranslationKind == TranslationKind.Dual).TranslationOf);
+            // Importing again finds everything already there.
+            Assert.Equal(1, library.ImportPrepared(prepared).DuplicatesSkipped);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            Directory.Delete(dir, true);
+        }
+    }
+}
