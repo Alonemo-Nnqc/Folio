@@ -1,7 +1,15 @@
 name: Release
 
-# Push a tag such as v1.2.0 (matching a "## [1.2.0]" section in CHANGELOG.md) to publish a release.
-# The appcast.xml attached to the newest release is the feed every installed copy of Folio checks.
+# Push a tag such as v1.2.0 to publish Folio for macOS and Windows as one GitHub release, marked "latest".
+# CHANGELOG.md needs a "## [1.2.0]" section (the macOS notes, also shown in the app's update window);
+# windows/CHANGELOG.md may have one too (the Windows notes).
+#
+# The release holds the installers and one feed, nothing else:
+#   Folio-1.2.0-macOS.dmg                 the Mac download, and the update Sparkle installs
+#   Folio-1.2.0-Windows-x64-Setup.exe     Windows on Intel and AMD
+#   Folio-1.2.0-Windows-ARM64-Setup.exe   Windows on ARM
+#   appcast.xml                           what installed Macs check: releases/latest/download/appcast.xml
+# Installed Windows copies find their installer in the newest release themselves (Updater.cs).
 on:
   push:
     tags: ['v*']
@@ -15,8 +23,29 @@ on:
 permissions:
   contents: write
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+  INNO_TAG: 'is-7_1_1'
+  INNO_FILE: 'innosetup-7.1.1-x64.exe'
+  # The installer that builds ours runs on the build machine: only this exact file.
+  INNO_SHA256: '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0'
+
 jobs:
-  release:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      value: ${{ steps.version.outputs.value }}
+    steps:
+      - id: version
+        run: |
+          V="${{ inputs.version }}"
+          [ -n "$V" ] || V="${GITHUB_REF_NAME#v}"
+          [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::Bad version: $V"; exit 1; }
+          echo "value=$V" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: version
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -37,36 +66,140 @@ jobs:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           if [ -z "$SPARKLE_ED_PRIVATE_KEY" ]; then
-            echo "::error::Secret SPARKLE_ED_PRIVATE_KEY is missing (run script/setup-release-secret.sh)"
+            echo "::error::Secret SPARKLE_ED_PRIVATE_KEY is missing (run macos/script/setup-release-secret.sh)"
             exit 1
           fi
-          VERSION="${{ inputs.version }}"
-          script/release.sh "${VERSION:-${GITHUB_REF_NAME#v}}"
+          macos/script/release.sh "${{ needs.version.outputs.value }}"
 
       - name: Upload the build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: release-build-log
-          path: build/ReleaseDerivedData.log
+          path: macos/build/ReleaseDerivedData.log
 
-      - name: Package browser extensions
-        run: script/package-extensions.sh
-
-      - name: Upload the trial build
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: folio-trial-build
-          path: dist/
+          name: folio-macos
+          path: |
+            macos/dist/Folio-*-macOS.dmg
+            macos/dist/appcast.xml
+            macos/dist/release-notes.md
 
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
+  windows:
+    needs: version
+    name: windows (${{ matrix.arch }})
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            platform: x64
+          - arch: arm64
+            platform: ARM64
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build the interface
+        shell: pwsh
+        run: |
+          corepack enable
+          pnpm --dir windows/web install --frozen-lockfile
+          pnpm --dir windows/web build
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          $v = '${{ needs.version.outputs.value }}'
+          dotnet publish windows/src/Folio.Desktop/Folio.Desktop.csproj -c Release -r win-${{ matrix.arch }} -p:Platform=${{ matrix.platform }} -p:Version=$v -o publish
+          # folio-cli (the AI interface) ships next to Folio.exe.
+          dotnet publish windows/src/Folio.Cli/Folio.Cli.csproj -c Release -r win-${{ matrix.arch }} --self-contained -p:Version=$v -o publish
+          if (-not (Test-Path publish/folio-cli.exe)) { throw "folio-cli.exe missing" }
+
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          gh release download $env:INNO_TAG --repo jrsoftware/issrc --pattern $env:INNO_FILE --dir inno
+          if ((Get-FileHash "inno\$env:INNO_FILE" -Algorithm SHA256).Hash -ne $env:INNO_SHA256) { throw "Inno Setup download does not match its pinned SHA-256" }
+          $setup = Start-Process "inno\$env:INNO_FILE" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/NOICONS', "/DIR=$PWD\inno\app" -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Inno Setup install failed: $($setup.ExitCode)" }
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile MicrosoftEdgeWebview2Setup.exe
+          $webview2 = Get-AuthenticodeSignature MicrosoftEdgeWebview2Setup.exe
+          if ($webview2.Status -ne 'Valid' -or $webview2.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw "WebView2 bootstrapper is not signed by Microsoft" }
+          # Optional code signing: add the certificate as secrets to remove SmartScreen's "unknown publisher" warning.
+          $signtool = $null
+          if ($env:WINDOWS_PFX_BASE64) {
+            [IO.File]::WriteAllBytes("$PWD\sign.pfx", [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+            $signtool = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match '\\x64\\' | Select-Object -Last 1).FullName
+            Get-ChildItem publish -Include Folio.exe, folio-cli.exe, Folio.dll, Folio.Core.dll -Recurse |
+              ForEach-Object { & $signtool sign /f sign.pfx /p $env:WINDOWS_PFX_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 $_.FullName }
+          }
+          & "$PWD\inno\app\ISCC.exe" /Qp "/DArch=${{ matrix.arch }}" "/DAppVersion=${{ needs.version.outputs.value }}" "/DSourceDir=$PWD\publish" "/DOutputDir=$PWD\release" "/DWebView2Bootstrapper=$PWD\MicrosoftEdgeWebview2Setup.exe" windows/installer/Folio.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
+          if ($signtool) { Get-ChildItem release/*.exe | ForEach-Object { & $signtool sign /f sign.pfx /p $env:WINDOWS_PFX_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 $_.FullName } }
+          Remove-Item sign.pfx -ErrorAction SilentlyContinue
+          Get-ChildItem release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: folio-windows-${{ matrix.arch }}
+          path: release/*.exe
+
+  publish:
+    name: Publish GitHub release
+    needs: [version, macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Release notes (macOS, then Windows)
+        run: |
+          python3 - "${{ needs.version.outputs.value }}" <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          def section(path):
+              text = open(path, encoding="utf-8").read()
+              m = re.search(r"^## \[" + re.escape(version) + r"\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+              return re.sub(r"^\[[^\]]+\]: \S+\s*$", "", m.group(1), flags=re.M).strip() if m else ""
+          demote = lambda text: re.sub(r"^### ", "#### ", text, flags=re.M)
+          mac = open("release/release-notes.md", encoding="utf-8").read().strip()
+          windows = section("windows/CHANGELOG.md")
+          notes = "## macOS\n\n" + demote(mac)
+          if windows:
+              notes += "\n\n## Windows\n\n" + demote(windows)
+          open("notes.md", "w", encoding="utf-8").write(notes + "\n")
+          PY
+
+      - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.version.outputs.value }}"
           FLAGS=()
-          [[ "$VERSION" == *-* ]] && FLAGS+=(--prerelease)
-          gh release create "$GITHUB_REF_NAME" --title "Folio $VERSION" --notes-file dist/release-notes.md "${FLAGS[@]}" \
-            dist/Folio-*.dmg dist/Folio-*.zip dist/appcast.xml dist/folio-chromium-*.zip dist/folio-firefox-*.xpi
+          # A final release is always "latest": installed Macs read its appcast.xml, and Windows copies its installers.
+          if [[ "$VERSION" == *-* ]]; then FLAGS+=(--prerelease); else FLAGS+=(--latest); fi
+          ls -la release
+          gh release create "$GITHUB_REF_NAME" --title "Folio $VERSION" --notes-file notes.md "${FLAGS[@]}" \
+            "release/Folio-$VERSION-macOS.dmg" \
+            "release/Folio-$VERSION-Windows-x64-Setup.exe" \
+            "release/Folio-$VERSION-Windows-ARM64-Setup.exe" \
+            release/appcast.xml

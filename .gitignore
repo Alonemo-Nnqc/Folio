@@ -14,6 +14,7 @@ dist/
 
 # Personal signing settings (see Config/Local.xcconfig.example)
 Config/Local.xcconfig
+macos/Config/Local.xcconfig
 
 # Local development notes and agent instructions, kept out of the public repository
 doc/

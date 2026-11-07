@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Folio Reader</title>
+  <link rel="stylesheet" href="../pdfjs/web/pdf_viewer.css">
+  <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <nav id="sidebarTabs">
+      <button data-pane="thumbnails" class="active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+      <button data-pane="outline"><svg viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
+      <button data-pane="annotations"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+      <button data-pane="hits"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></button>
+    </nav>
+    <section id="thumbnails" class="pane active"></section>
+    <section id="outline" class="pane"></section>
+    <section id="annotations" class="pane"></section>
+    <section id="hits" class="pane"></section>
+  </aside>
+  <div id="sidebarDivider"></div>
+  <div id="viewerContainer">
+    <div id="viewer" class="pdfViewer"></div>
+  </div>
+  <div id="message" hidden></div>
+  <div id="tip" hidden></div>
+  <div id="printContainer"></div>
+  <script type="module" src="viewer.js"></script>
+</body>
+</html>

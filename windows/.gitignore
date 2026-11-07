@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+.vs/
+artifacts/
+Releases/
+TestResults/
+src/Folio.Desktop/wwwroot/
+web/node_modules/
+web/dist/

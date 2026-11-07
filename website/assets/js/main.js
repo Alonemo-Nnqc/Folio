@@ -64,7 +64,7 @@
     "tr.eyebrow": "Full-paper translation",
     "tr.title": "Translate the whole paper.<br>Keep every layout.",
     "tr.lede":
-      "Built on pdf2zh_next / BabelDOC, translation keeps formulas, figures and layout exactly where they were. Choose from 20+ translation services, or Apple’s on-device translation. Read the translation side by side with the original.",
+      "A built-in native engine, nothing to download: formulas, figures and layout stay exactly where they were, and you can read side by side while it translates. Free services, Apple’s on-device translation, 20+ LLM and translation APIs, or the Claude Code and Codex already on your Mac.",
     "cite.eyebrow": "Citations",
     "cite.title": "Copy a citation in one click.",
     "cite.lede":
@@ -109,6 +109,9 @@
     "dl.firstBody":
       "Folio isn’t notarized by Apple yet. The first time you open it, go to System Settings ▸ Privacy &amp; Security and click “Open Anyway” near the bottom. Or run this in Terminal:",
     "dl.copy": "Copy",
+    "dl.winFirstTitle": "Installing",
+    "dl.winFirstBody":
+      "Run the downloaded Folio-…-Windows-…-Setup.exe; no administrator rights are needed. If Windows says “Windows protected your PC”, click “More info”, then “Run anyway”.",
     "dl.firstNote": "Later versions install themselves through in-app updates, so you only do this once.",
     "dl.l1": "All releases &amp; changelog",
     "dl.l2": "Browser extension packages",
@@ -127,6 +130,12 @@
       toggle: "EN",
       copied: "已拷贝",
       version: (v, size, date) => `版本 ${v} · ${size} · 发布于 ${date}`,
+      windowsButton: "下载 Windows 版",
+      windowsMeta: "Windows 10 / 11 · x64 与 ARM64 · 免费开源",
+      windowsLede: "免费、开源，适用于 Windows 10 与 Windows 11（x64 与 ARM64），文献库与 Mac 版通用。",
+      windowsSoon: "Windows 版即将发布，可以先在 GitHub 上查看所有版本。",
+      macLink: (v) => `下载 macOS 版 ${v}`,
+      windowsLink: (v) => `下载 Windows 版 ${v}`,
       locale: "zh-CN",
     },
     en: {
@@ -134,6 +143,12 @@
       toggle: "中文",
       copied: "Copied",
       version: (v, size, date) => `Version ${v} · ${size} · Released ${date}`,
+      windowsButton: "Download for Windows",
+      windowsMeta: "Windows 10 / 11 · x64 & ARM64 · Free and open source",
+      windowsLede: "Free and open source. For Windows 10 and Windows 11 (x64 and ARM64); libraries work with the Mac app too.",
+      windowsSoon: "Folio for Windows is coming soon. See all releases on GitHub.",
+      macLink: (v) => `Download for macOS ${v}`,
+      windowsLink: (v) => `Download for Windows ${v}`,
       locale: "en-US",
     },
   };
@@ -595,53 +610,123 @@
     );
   });
 
-  /* ---------------- Latest release ---------------- */
+  /* ---------------- Latest release (per platform) ---------------- */
 
-  let release = null;
+  // One release (tag v1.2.0) carries both apps: Folio-1.2.0-macOS.dmg and Folio-1.2.0-Windows-x64-Setup.exe /
+  // -ARM64-Setup.exe. The page lists the releases, picks the newest with a file for each platform and offers the one
+  // for this computer. Without JavaScript or the API the links still lead to the releases page.
+  const platform = (() => {
+    const ua = navigator.userAgent || "";
+    const hinted = navigator.userAgentData && navigator.userAgentData.platform;
+    if (hinted === "Windows" || /Windows NT/.test(ua)) return "windows";
+    return "mac";
+  })();
+  document.documentElement.dataset.platform = platform;
+
+  async function windowsArch() {
+    try {
+      if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+        const v = await navigator.userAgentData.getHighEntropyValues(["architecture"]);
+        if (v.architecture === "arm") return "arm64";
+      }
+    } catch (e) {
+      /* hints not available */
+    }
+    // x64 also runs on Windows on ARM (emulated), so it is the safe default.
+    return "x64";
+  }
+
+  let releases = null;
+  function describe(info) {
+    const date = new Date(info.date).toLocaleDateString(t("locale"), { year: "numeric", month: "long", day: "numeric" });
+    return t("version")(info.version, info.size, date);
+  }
+
   function renderRelease() {
-    if (!release) return;
-    $$(".js-dl-label").forEach((el) => (el.textContent = `${lang === "en" ? EN["dl.button"] : zhSource.get(el)} ${release.version}`));
-    const date = new Date(release.date).toLocaleDateString(t("locale"), { year: "numeric", month: "long", day: "numeric" });
-    $("#dlMeta").textContent = t("version")(release.version, release.size, date);
+    if (!releases) return;
+    const own = platform === "windows" ? releases.windows : releases.mac;
+    const other = platform === "windows" ? releases.mac : releases.windows;
+    const label = platform === "windows" ? t("windowsButton") : lang === "en" ? EN["dl.button"] : null;
+    $$(".js-dl-label").forEach((el) => {
+      const base = label || zhSource.get(el);
+      el.textContent = own ? `${base} ${own.version}` : base;
+    });
+    const meta = $("#dlMeta");
+    if (own) meta.textContent = describe(own);
+    else if (platform === "windows") meta.textContent = t("windowsSoon");
+    const alt = $("#altPlatform");
+    if (alt && other) {
+      alt.hidden = false;
+      const link = alt.querySelector("a");
+      link.setAttribute("href", other.url);
+      link.textContent = platform === "windows" ? t("macLink")(other.version) : t("windowsLink")(other.version);
+    }
+    $$(".js-platform-mac").forEach((el) => (el.hidden = platform === "windows"));
+    $$(".js-platform-windows").forEach((el) => (el.hidden = platform !== "windows"));
+    if (platform === "windows") {
+      $$(".js-version").forEach((el) => (el.textContent = t("windowsMeta")));
+      const lede = $("[data-i18n='dl.lede']");
+      if (lede) lede.textContent = t("windowsLede");
+    }
   }
   onLang.push(renderRelease);
 
-  async function loadRelease() {
-    const KEY = "folio-release";
+  function pick(list, tagPattern, assetPattern) {
+    for (const r of list) {
+      if (r.draft || r.prerelease || !tagPattern.test(r.tag_name || "")) continue;
+      const asset = (r.assets || []).find((a) => assetPattern.test(a.name));
+      if (!asset) continue;
+      return {
+        version: String(r.tag_name).replace(/^v/, ""),
+        url: asset.browser_download_url,
+        size: `${(asset.size / 1048576).toFixed(1)} MB`,
+        date: r.published_at,
+      };
+    }
+    return null;
+  }
+
+  async function loadReleases() {
+    const KEY = "folio-releases-v2";
+    const arch = await windowsArch();
+    let list = null;
     try {
-      const cached = JSON.parse(sessionStorage.getItem(KEY) || "null");
-      if (cached) return cached;
+      list = JSON.parse(sessionStorage.getItem(KEY) || "null");
     } catch (e) {
       /* no cache available */
     }
-    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-      headers: { Accept: "application/vnd.github+json" },
-    });
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
-    const dmg = (data.assets || []).find((a) => /\.dmg$/i.test(a.name));
-    if (!dmg) throw new Error("no dmg");
-    const info = {
-      version: String(data.tag_name || "").replace(/^v/, ""),
-      url: dmg.browser_download_url,
-      size: `${(dmg.size / 1048576).toFixed(1)} MB`,
-      date: data.published_at,
-    };
-    try {
-      sessionStorage.setItem(KEY, JSON.stringify(info));
-    } catch (e) {
-      /* fine without a cache */
+    if (!list) {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=40`, {
+        headers: { Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) throw new Error(res.status);
+      list = (await res.json()).map((r) => ({
+        tag_name: r.tag_name, draft: r.draft, prerelease: r.prerelease, published_at: r.published_at,
+        assets: (r.assets || []).map((a) => ({ name: a.name, size: a.size, browser_download_url: a.browser_download_url })),
+      }));
+      try {
+        sessionStorage.setItem(KEY, JSON.stringify(list));
+      } catch (e) {
+        /* fine without a cache */
+      }
     }
-    return info;
+    const archAsset = new RegExp(`-Windows-${arch}-Setup\\.exe$`, "i");
+    return {
+      mac: pick(list, /^v\d/, /\.dmg$/i),
+      windows: pick(list, /^v\d/, archAsset) || pick(list, /^v\d/, /-Windows-x64-Setup\.exe$/i),
+    };
   }
-  loadRelease()
+  loadReleases()
     .then((info) => {
-      release = info;
-      $$(".js-download").forEach((a) => a.setAttribute("href", info.url));
+      releases = info;
+      const own = platform === "windows" ? info.windows : info.mac;
+      if (own) $$(".js-download").forEach((a) => a.setAttribute("href", own.url));
+      else if (platform === "windows") $$(".js-download").forEach((a) => a.setAttribute("href", `https://github.com/${REPO}/releases`));
       renderRelease();
     })
     .catch(() => {
-      /* Links keep pointing at the latest release page. */
+      /* Links keep pointing at the releases page. */
+      if (platform === "windows") $$(".js-download").forEach((a) => a.setAttribute("href", `https://github.com/${REPO}/releases`));
     });
 
   /* ---------------- Copy ---------------- */

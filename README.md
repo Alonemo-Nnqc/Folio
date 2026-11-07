@@ -23,7 +23,7 @@
 
 - **自动识别**：拖入 PDF 后几秒内识别标题、作者、期刊、DOI 等元数据并创建条目（Zotero 识别服务 + Crossref / arXiv / OpenAlex / DBLP / CVF），找不到时可手动匹配
 - **内置阅读器**：与“预览”同一引擎（PDFKit），论文以原生标签页打开；高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF，与“预览”互通；记住每篇论文的阅读位置
-- **整篇翻译**：保留排版的全文翻译（[pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next)），支持 20 多种翻译服务，译文与原文可并排对照阅读
+- **整篇翻译**：内置原生翻译引擎，保留原文排版、公式和图表（图内文字不动，表格逐格翻译），翻译过程中即可并排对照阅读；支持免费服务、Apple 离线翻译、20 多家大模型和机器翻译 API，也可以直接调用这台 Mac 上已登录的 Claude Code、Codex、Gemini CLI 等智能体
 - **笔记**：每个条目一篇 Markdown 笔记，阅读时可把选中的文字一键加入笔记
 - **整理**：两级分组（可自定义颜色）、彩色标签、回收站、全文搜索、阅读状态与星级评分；一个条目可挂多个文件
 - **引用与导出**：复制 GB/T 7714-2015、APA、IEEE、MLA、Chicago、Harvard、Vancouver、Nature 和 BibTeX 引用，导出 BibTeX / RIS / CSL JSON
@@ -59,7 +59,7 @@
 
 系统要求：macOS 14 Sonoma 及以上（Apple 芯片或 Intel）。在 macOS 26 上使用 Liquid Glass 外观。
 
-1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest) 下载最新的 `Folio-x.y.z.dmg`
+1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest) 下载最新的 `Folio-x.y.z-macOS.dmg`
 2. 打开 DMG，把 **Folio** 拖到“应用程序”文件夹
 3. 首次打开：Folio 目前没有经过 Apple 公证，macOS 会提示“无法验证开发者”。请打开 **系统设置 ▸ 隐私与安全性**，在页面底部点 **仍要打开**，再确认一次即可（macOS 14 上也可以在 Finder 中按住 Control 点按 Folio，选择“打开”）。
 
@@ -70,6 +70,8 @@
    ```
 
 之后的版本会通过应用内更新自动安装，不需要再重复这一步。
+
+Windows 版在同一个 Release 中：下载与电脑架构相符的 `Folio-x.y.z-Windows-x64-Setup.exe` 或 `Folio-x.y.z-Windows-ARM64-Setup.exe`，详见 [windows/README.md](windows/README.md#安装)。
 
 ### 更新
 
@@ -82,7 +84,7 @@ Folio 每天自动检查一次更新，也可以随时点 **Folio ▸ 检查更�
 - **添加文献**：把 PDF 拖进窗口，或 文件 ▸ 添加文件…（⌘O）、通过 DOI / arXiv 编号 / ISBN 添加（⇧⌘O）
 - **文献库位置**：默认 `~/Folio`，可在 设置 ▸ 文献库 中更改
 - **界面语言**：默认跟随系统；在 设置 ▸ 通用 ▸ 语言 中可固定为简体中文或 English，重新启动后生效
-- **整篇翻译**：在条目上右键 ▸ 翻译全文…。首次使用时按提示下载翻译组件（约 1.4 GB，存放在 `~/Library/Application Support/Folio/Translator`），在 设置 ▸ 翻译 中选择翻译服务。离线的 Apple 系统翻译需要 macOS 26
+- **整篇翻译**：在条目上右键 ▸ 翻译全文…。引擎内置，无需下载；在 设置 ▸ 翻译 中选择翻译服务（免费服务、本机智能体或自己的 API Key）。离线的 Apple 系统翻译需要 macOS 26
 
 ### AI 接入
 
@@ -102,8 +104,6 @@ Folio 运行时在 `127.0.0.1:23120` 提供本地连接服务（只接受浏览�
 - **Chrome / Edge / Brave / Arc 等**：在设置中点“安装…”，然后在浏览器扩展页打开“开发者模式”，“加载已解压的扩展程序”，选择 Folio 准备好的文件夹。Folio 更新后扩展文件会自动更新
 - **Firefox**：在 `about:debugging` 中“临时载入附加组件”
 
-每个版本的 Releases 页面也附带了扩展的 `.zip`（Chromium）和 `.xpi`（Firefox）安装包。
-
 ## 隐私
 
 Folio 不收集任何使用数据，文献库完全保存在你的 Mac 上。只有以下情况会访问网络：
@@ -120,7 +120,7 @@ Folio 不收集任何使用数据，文献库完全保存在你的 Mac 上。只
 
 ```bash
 git clone https://github.com/Alonemo-Nnqc/Folio.git
-cd Folio
+cd Folio/macos
 script/build_and_run.sh
 ```
 
@@ -140,10 +140,9 @@ Folio 使用了以下开源项目和服务：
 | [Sparkle](https://github.com/sparkle-project/Sparkle) | 应用内更新 | MIT |
 | [citeproc-js](https://github.com/Juris-M/citeproc-js) | 引用格式生成（随 App 打包） | CPAL-1.0 / AGPL-1.0 |
 | [CSL 样式与 locale](https://citationstyles.org) | 引用样式 | CC BY-SA 3.0 |
-| [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next) | 整篇翻译（不随 App 打包，首次使用时按需下载） | AGPL-3.0 |
 | [Zotero 识别服务](https://www.zotero.org) | PDF 元数据识别 | — |
 
-资源文件的详细出处见 [`LICENSES.md`](Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md)。
+资源文件的详细出处见 [`LICENSES.md`](macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md)。
 
 ## 许可证
 

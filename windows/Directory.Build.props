@@ -1,0 +1,17 @@
+<Project>
+  <!-- Shared settings for every project of Folio for Windows. -->
+  <PropertyGroup>
+    <!-- The Windows version, independent of the macOS one. Release builds pass -p:Version=x.y.z from the win-v tag. -->
+    <Version Condition="'$(Version)' == ''">1.0.0</Version>
+    <Authors>Folio</Authors>
+    <Product>Folio</Product>
+    <Copyright>Folio contributors</Copyright>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA1416;NU1701</NoWarn>
+    <!-- The macOS app's sources, read (never modified) for shared resources: strings, citation styles. -->
+    <FolioMacRoot>$(MSBuildThisFileDirectory)..\macos\</FolioMacRoot>
+  </PropertyGroup>
+</Project>

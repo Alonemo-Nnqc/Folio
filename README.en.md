@@ -23,7 +23,7 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 
 - **Automatic metadata**: drop a PDF and Folio identifies its title, authors, venue and DOI within seconds (Zotero recognizer + Crossref / arXiv / OpenAlex / DBLP / CVF), with manual matching as a fallback
 - **Built-in reader**: PDFKit, the same engine as Preview. Papers open in native tabs; highlights, underlines, strike-throughs, notes, text boxes and ink are written back into the PDF and stay compatible with Preview. Folio remembers where you stopped reading
-- **Full-paper translation**: layout-preserving translation with [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next) and 20+ translation services, read side by side with the original
+- **Full-paper translation**: a built-in native engine keeps the layout, formulas and figures (text inside figures untouched, tables translated cell by cell); read side by side while it translates. Free services, Apple's offline translation, 20+ LLM and machine translation APIs, or the Claude Code, Codex or Gemini CLI already signed in on your Mac
 - **Notes**: one Markdown note per item; send selected text from the reader to the note in one click
 - **Organization**: two-level colored groups, colored tags, trash, full-text search, reading status and ratings; several files per item
 - **Citations and export**: copy GB/T 7714-2015, APA, IEEE, MLA, Chicago, Harvard, Vancouver, Nature or BibTeX citations; export BibTeX / RIS / CSL JSON
@@ -59,7 +59,7 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 
 Requires macOS 14 Sonoma or later (Apple silicon or Intel). On macOS 26 Folio uses the Liquid Glass design.
 
-1. Download the latest `Folio-x.y.z.dmg` from [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
+1. Download the latest `Folio-x.y.z-macOS.dmg` from [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 2. Open the disk image and drag **Folio** into Applications
 3. First launch: Folio is not notarized by Apple yet, so macOS says it can't verify the developer. Open **System Settings ▸ Privacy & Security**, scroll down and click **Open Anyway**, then confirm. (On macOS 14 you can also Control-click Folio in Finder and choose Open.)
 
@@ -70,6 +70,8 @@ Requires macOS 14 Sonoma or later (Apple silicon or Intel). On macOS 26 Folio us
    ```
 
 Later versions install through the in-app updater, so you only need to do this once.
+
+For Folio on Windows, see [windows/README.md](windows/README.md#安装): Windows 10 2004 or later, x64 or ARM64, installer `Folio-x.y.z-Windows-x64-Setup.exe` or `Folio-x.y.z-Windows-ARM64-Setup.exe` from the same [release](https://github.com/Alonemo-Nnqc/Folio/releases/latest). It is not code-signed yet: on the SmartScreen warning choose **More info ▸ Run anyway**.
 
 ### Updates
 
@@ -82,7 +84,7 @@ The first time you open Folio, a welcome guide walks you through a few settings 
 - **Add papers**: drag PDFs into the window, or use File ▸ Add Files (⌘O) or Add by Identifier (DOI, arXiv ID or ISBN, ⇧⌘O)
 - **Library location**: `~/Folio` by default; change it in Settings ▸ Library
 - **Language**: follows the system; pin Simplified Chinese or English in Settings ▸ General ▸ Language (applies after a restart)
-- **Translation**: right-click an item ▸ Translate Paper…. The first time, Folio offers to download the translation engine (about 1.4 GB, stored in `~/Library/Application Support/Folio/Translator`); pick a service in Settings ▸ Translation. Apple's offline translation needs macOS 26
+- **Translation**: right-click an item ▸ Translate Paper…. The engine is built in, nothing to download; pick a service in Settings ▸ Translation (a free service, an agent on your Mac or your own API key). Apple's offline translation needs macOS 26
 
 ### AI integration
 
@@ -102,8 +104,6 @@ While Folio runs, it serves a local connector at `127.0.0.1:23120` that only acc
 - **Chrome / Edge / Brave / Arc**: click “Install…” in Settings, enable Developer mode on the browser's extensions page and "Load unpacked" the folder Folio prepares. The extension updates itself with Folio
 - **Firefox**: "Load Temporary Add-on" from `about:debugging`
 
-Each release also includes the extension as a `.zip` (Chromium) and an `.xpi` (Firefox).
-
 ## Privacy
 
 Folio collects no usage data, and your library stays on your Mac. Folio only goes online to:
@@ -120,7 +120,7 @@ Requires Xcode 27 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
 ```bash
 git clone https://github.com/Alonemo-Nnqc/Folio.git
-cd Folio
+cd Folio/macos
 script/build_and_run.sh
 ```
 
@@ -138,10 +138,9 @@ No Apple Developer account is needed. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 | [Sparkle](https://github.com/sparkle-project/Sparkle) | In-app updates | MIT |
 | [citeproc-js](https://github.com/Juris-M/citeproc-js) | Citation formatting (bundled) | CPAL-1.0 / AGPL-1.0 |
 | [CSL styles and locales](https://citationstyles.org) | Citation styles | CC BY-SA 3.0 |
-| [pdf2zh_next / BabelDOC](https://github.com/PDFMathTranslate/PDFMathTranslate-next) | Full-paper translation (not bundled; downloaded on first use) | AGPL-3.0 |
 | [Zotero recognizer](https://www.zotero.org) | PDF metadata recognition | — |
 
-See [`LICENSES.md`](Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) for the bundled resources.
+See [`LICENSES.md`](macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) for the bundled resources.
 
 ## License
 

@@ -8,27 +8,43 @@
 - **新功能**：使用 [功能建议模板](https://github.com/Alonemo-Nnqc/Folio/issues/new?template=feature_request.yml)，先说明要解决的问题，再说明设想的方案。
 - **安全漏洞**：请勿公开提交，见 [SECURITY.md](SECURITY.md)。
 
-## 开发环境
+## 仓库结构
+
+| 目录 | 内容 |
+| --- | --- |
+| `macos/` | macOS 版：App、Swift 包（`Packages/FolioCore`）、测试、Xcode 工程、脚本 |
+| `windows/` | Windows 版：WebView2 外壳与 React 界面（`web/`）、核心库、`folio-cli`、安装程序、测试（见 [windows/README.md](windows/README.md)） |
+| `BrowserExtension/`、`BrowserExtensionTests/` | 两个平台共用的浏览器扩展及其回归测试 |
+| `website/` | 产品主页（GitHub Pages） |
+| `assets/` | 图标与截图 |
+
+以下“开发环境”到“测试”各节针对 macOS 版，命令都在 `macos/` 目录中运行。
+
+## 开发环境（macOS 版）
 
 - 开发环境：macOS 26 及以上，Xcode 27 及以上
-- App 需要能在 macOS 14 上运行：使用 macOS 15 / 26 才有的 API（如 Liquid Glass）时请用 `if #available` 提供替代，`Folio/Support/GlassCompatibility.swift` 中有现成的写法
+- App 需要能在 macOS 14 上运行：使用 macOS 15 / 26 才有的 API（如 Liquid Glass）时请用 `if #available` 提供替代，`macos/Folio/Support/GlassCompatibility.swift` 中有现成的写法
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)：`brew install xcodegen`
 
-`Folio.xcodeproj` 由 `project.yml` 生成，**修改工程设置请改 `project.yml`**，然后运行 `xcodegen generate`。
+`macos/Folio.xcodeproj` 由 `macos/project.yml` 生成，**修改工程设置请改 `project.yml`**，然后在 `macos/` 中运行 `xcodegen generate`。
 
 ### 签名
 
 克隆下来即可构建：默认使用“本地运行签名”（ad-hoc），不需要 Apple 开发者账号。如果想用自己的证书签名（例如调试 Safari 扩展），复制一份本地配置并填入你的 Team ID：
 
 ```bash
+cd macos
 cp Config/Local.xcconfig.example Config/Local.xcconfig
 ```
 
-`Config/Local.xcconfig` 已被 `.gitignore` 忽略，不会被提交。
+`macos/Config/Local.xcconfig` 已被 `.gitignore` 忽略，不会被提交。
+
+用自己的开发证书签名的构建只能在你自己的 Mac 上运行，不要发给别人。要分发请用 `script/release.sh`，它打出的通用二进制（Apple 芯片和 Intel）是 ad-hoc 签名，可以在别的 Mac 上运行。
 
 ## 构建与运行
 
 ```bash
+cd macos
 script/build_and_run.sh               # 生成工程 → 构建 Debug → 启动
 script/build_and_run.sh --build-only  # 只构建
 script/build_and_run.sh --logs        # 启动并输出日志
@@ -41,7 +57,7 @@ FOLIO_LIBRARY=/tmp/folio-dev script/build_and_run.sh
 swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo   # 生成演示文献库
 ```
 
-## 工程结构
+## 工程结构（`macos/` 内）
 
 | 路径 | 内容 |
 | --- | --- |
@@ -56,10 +72,9 @@ swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo   # 
 | `Packages/FolioCore/Sources/FolioMetadata` | 元数据检索引擎：PDF 信息提取、标识符识别、多数据源检索与打分 |
 | `Packages/FolioCore/Sources/FolioCitation` | BibTeX 与 citeproc-js 引用生成 |
 | `Packages/FolioCore/Sources/FolioZotero` | Zotero 数据库读取 |
-| `Packages/FolioCore/Sources/FolioTranslate` | pdf2zh_next 翻译组件的安装与调用 |
+| `Packages/FolioCore/Sources/FolioTranslate` | 自研翻译引擎：版面分析、翻译服务、排版与 PDF 写出 |
 | `Packages/FolioCore/Sources/FolioAgent` | AI 接入：MCP 服务器、`folio-cli`、技能、智能体配置 |
-| `BrowserExtension/`、`SafariExtension/` | 浏览器扩展（Manifest V3）与 Safari Web Extension |
-| `BrowserExtensionTests/` | 页面识别回归测试 |
+| `SafariExtension/` | Safari Web Extension（扩展本身在仓库根目录的 `BrowserExtension/`） |
 | `FolioTests/`、`FolioUITests/` | App 层单元测试与 XCUITest 界面测试 |
 | `script/` | 构建、测试、截图、发布脚本 |
 
@@ -68,6 +83,7 @@ swift run --package-path Packages/FolioCore folio-seed demo /tmp/folio-demo   # 
 提交 Pull Request 前请至少运行前两项（CI 也会运行）：
 
 ```bash
+cd macos
 cd Packages/FolioCore && xcodebuild test -scheme FolioCore-Package -destination 'platform=macOS' -testLanguage en && cd ../..
 xcodebuild -project Folio.xcodeproj -scheme Folio -destination 'platform=macOS' -testLanguage en test -only-testing:FolioTests
 ```
@@ -135,7 +151,7 @@ swift script/compose-screenshot.swift /tmp/reader.png <壁纸> assets/screenshot
    git tag v1.2.0 && git push origin main v1.2.0
    ```
 
-3. [Release 工作流](.github/workflows/release.yml) 会构建、打包 `Folio-1.2.0.dmg` / `.zip`、用 Sparkle 密钥签名更新、生成 `appcast.xml`，并创建 GitHub Release。已安装的 Folio 会在一天内自动发现新版本。
+3. [Release 工作流](.github/workflows/release.yml) 会同时构建 macOS 和 Windows 版，生成一个只含安装包的 GitHub Release：`Folio-1.2.0-macOS.dmg`（用 Sparkle 密钥签名，也是 Mac 的更新包）、`Folio-1.2.0-Windows-x64-Setup.exe`、`Folio-1.2.0-Windows-ARM64-Setup.exe`，外加已安装的 Mac 检查更新用的 `appcast.xml`。发布说明取 `CHANGELOG.md`（macOS）和 `windows/CHANGELOG.md`（Windows）中同一版本的小节。已安装的 Folio 会在一天内自动发现新版本。
 
 版本号中带 `-`（如 `v1.3.0-beta.1`）会发布为预发布版本，不会推送给普通用户。
 
@@ -145,4 +161,4 @@ swift script/compose-screenshot.swift /tmp/reader.png <壁纸> assets/screenshot
 script/setup-release-secret.sh
 ```
 
-本地试打包：`script/release.sh 1.2.0`（产物在 `dist/`）。
+本地试打包：`script/release.sh 1.2.0`（产物在 `dist/`）。没有 Sparkle 私钥时（比如 fork 或自用）加上 `FOLIO_SKIP_UPDATE_SIGNING=1`，只生成 `.dmg`，不生成 `appcast.xml`。已安装的副本只接受用 `Folio/Info.plist` 中 `SUPublicEDKey` 对应私钥签名的更新，所以要发布自己更新的 fork 需要换成自己的密钥。

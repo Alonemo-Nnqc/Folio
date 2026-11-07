@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Builds a release of Folio and everything Sparkle needs to offer it as an update:
+#   script/release.sh <version>            e.g. script/release.sh 1.2.0
+#
+# Output in dist/:
+#   Folio-<version>-macOS.dmg   the drag-to-Applications disk image: the download, and the update Sparkle installs
+#   appcast.xml                 the update feed installed copies read, attached to the GitHub release
+#   release-notes.md            this version's section of CHANGELOG.md
+#
+# The app is ad-hoc signed (no Apple Developer Program needed) and built without the hardened runtime:
+# its library validation only loads code signed by the app's own team, an ad-hoc signature has no team,
+# and so on a Mac with SIP enabled Folio could not load Sparkle.framework and quit at launch.
+# (The hardened runtime is only required for notarization, which needs a Developer ID anyway.)
+#
+# The disk image is signed with the Sparkle EdDSA key: from $SPARKLE_ED_PRIVATE_KEY when set (CI),
+# otherwise from the login keychain (account "Folio", created by Sparkle's generate_keys). Set
+# FOLIO_DOWNLOAD_BASE to point the feed at another server when testing an update locally.
+# Without either key (a fork, or a build for your own use) set FOLIO_SKIP_UPDATE_SIGNING=1: you get the .dmg,
+# which works as it is, but no appcast.xml. Installed copies only accept updates signed with the key whose
+# public half is in Folio/Info.plist (SUPublicEDKey), so a fork that publishes updates needs its own key there.
+set -euo pipefail
+
+VERSION="${1:?usage: script/release.sh <version>}"
+VERSION="${VERSION#v}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="${GITHUB_REPOSITORY:-Alonemo-Nnqc/Folio}"
+DOWNLOAD_BASE="${FOLIO_DOWNLOAD_BASE:-https://github.com/$REPO/releases/download/v$VERSION}"
+DERIVED="$ROOT/build/ReleaseDerivedData"
+OUT="$ROOT/dist"
+APP="$DERIVED/Build/Products/Release/Folio.app"
+# Sparkle compares CFBundleVersion, so it has to grow with every release: the commit count does.
+BUILD="${FOLIO_BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD)}"
+
+cd "$ROOT"
+echo "▶ Folio $VERSION (build $BUILD)"
+xcodegen generate --quiet
+rm -rf "$DERIVED/Build/Products/Release"
+mkdir -p "$DERIVED"
+xcodebuild -project Folio.xcodeproj -scheme Folio -configuration Release -derivedDataPath "$DERIVED" \
+  -destination 'generic/platform=macOS' \
+  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+  CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+  ENABLE_HARDENED_RUNTIME=NO \
+  build > "$DERIVED.log" 2>&1 && BUILD_STATUS=0 || BUILD_STATUS=$?
+grep -E "error:|BUILD (SUCCEEDED|FAILED)" "$DERIVED.log" || true
+if [[ $BUILD_STATUS -ne 0 || ! -d "$APP" ]]; then
+  # Compiler crashes have no "error:" line; show what was being compiled.
+  grep -E "While (evaluating|emitting|silgen|type-checking)|Apple Swift version|^[0-9]+\.\s|LLVM ERROR|Assertion failed|Command .* failed" "$DERIVED.log" | head -40 >&2
+  tail -40 "$DERIVED.log" >&2
+  echo "build failed (full log: $DERIVED.log)" >&2
+  exit 1
+fi
+codesign --verify --deep --strict "$APP"
+# A Mac with SIP disabled loads Sparkle either way, so check the flag rather than trusting a test launch.
+if codesign -dv "$APP" 2>&1 | grep -q "flags=.*runtime"; then
+  echo "Folio.app was signed with the hardened runtime: ad-hoc signed, it cannot load Sparkle.framework" >&2
+  exit 1
+fi
+
+SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
+rm -rf "$OUT" && mkdir -p "$OUT"
+DMG_NAME="Folio-$VERSION-macOS.dmg"
+DMG="$OUT/$DMG_NAME"
+
+echo "▶ packaging"
+STAGE="$(mktemp -d)"
+ditto "$APP" "$STAGE/Folio.app"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -quiet -volname "Folio $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
+rm -rf "$STAGE"
+
+if [[ "${FOLIO_SKIP_UPDATE_SIGNING:-}" == 1 ]]; then
+  echo "▶ no update signature, so no appcast.xml (FOLIO_SKIP_UPDATE_SIGNING)"
+  ls -lh "$OUT"
+  exit 0
+fi
+
+echo "▶ signing the update"
+if [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
+  SIGNATURE=$(printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_BIN/sign_update" --ed-key-file - "$DMG")
+else
+  SIGNATURE=$("$SPARKLE_BIN/sign_update" --account Folio "$DMG")
+fi
+
+echo "▶ release notes and appcast"
+python3 - "$ROOT/../CHANGELOG.md" "$VERSION" "$BUILD" "$DOWNLOAD_BASE/$DMG_NAME" "$SIGNATURE" "$OUT" "$REPO" <<'PY'
+import datetime, html, re, sys
+changelog, version, build, url, signature, out, repo = sys.argv[1:]
+
+# This version's section of CHANGELOG.md (Keep a Changelog: "## [1.2.0] - 2026-10-15").
+text = open(changelog, encoding="utf-8").read()
+match = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n(.*?)(?=^## \[|\Z)", text, re.M | re.S)
+notes = match.group(1) if match else ""
+notes = re.sub(r"^\[[^\]]+\]: \S+\s*$", "", notes, flags=re.M).strip()  # link definitions at the end
+if not notes:
+    sys.exit(f"CHANGELOG.md has no section for [{version}]")
+open(f"{out}/release-notes.md", "w", encoding="utf-8").write(notes + "\n")
+
+# Minimal Markdown → HTML for Sparkle's release-notes view: ### headings, "- " lists, `code`, **bold**.
+def inline(s):
+    s = html.escape(s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", s)
+    return re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
+parts, in_list = [], False
+for line in notes.splitlines():
+    if line.startswith("- "):
+        if not in_list: parts.append("<ul>"); in_list = True
+        parts.append(f"<li>{inline(line[2:])}</li>")
+        continue
+    if in_list: parts.append("</ul>"); in_list = False
+    if line.startswith("### "): parts.append(f"<h3>{inline(line[4:])}</h3>")
+    elif line.strip(): parts.append(f"<p>{inline(line)}</p>")
+if in_list: parts.append("</ul>")
+
+date = datetime.datetime.now(datetime.timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+appcast = f"""<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Folio</title>
+    <link>https://github.com/{repo}</link>
+    <language>zh-cn</language>
+    <item>
+      <title>Folio {version}</title>
+      <pubDate>{date}</pubDate>
+      <sparkle:version>{build}</sparkle:version>
+      <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/{repo}/releases</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[{"".join(parts)}]]></description>
+      <enclosure url="{html.escape(url)}" type="application/octet-stream" {signature} />
+    </item>
+  </channel>
+</rss>
+"""
+open(f"{out}/appcast.xml", "w", encoding="utf-8").write(appcast)
+PY
+
+ls -lh "$OUT"

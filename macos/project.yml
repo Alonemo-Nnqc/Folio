@@ -1,0 +1,172 @@
+name: Folio
+options:
+  bundleIdPrefix: com.nnqc
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: zh-Hans
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    DEAD_CODE_STRIPPING: YES
+    # String Catalogs (Localizable.xcstrings): extract Swift strings at build time.
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+packages:
+  FolioCore:
+    path: Packages/FolioCore
+  # In-app updates from GitHub Releases.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
+targets:
+  Folio:
+    type: application
+    platform: macOS
+    sources:
+      - path: Folio
+        excludes:
+          - Resources/Folio.icon
+          - Resources/Folio.icon/**
+      - path: Folio/Resources/Folio.icon
+        type: file
+        buildPhase: resources
+      # What the app must carry for the open-source software in it.
+      - path: ../LICENSE
+        type: file
+        buildPhase: resources
+      - path: ../THIRD-PARTY-NOTICES.md
+        type: file
+        buildPhase: resources
+      # Browser extension sources, copied out for Chrome / Edge / Firefox installs (WEB-05).
+      - path: ../BrowserExtension
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: FolioCore
+        product: FolioCore
+      - package: FolioCore
+        product: FolioMetadata
+      - package: FolioCore
+        product: FolioCitation
+      - package: FolioCore
+        product: FolioZotero
+      - package: FolioCore
+        product: FolioTranslate
+      - package: FolioCore
+        product: FolioAgent
+      - package: Sparkle
+      # Safari Web Extension (WEB-05).
+      - target: FolioSafariExtension
+        embed: true
+        codeSign: true
+      # folio-cli: MCP server and command line for AI agents (AI-01/02).
+      - target: folio-cli
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio
+        PRODUCT_NAME: Folio
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: Folio/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Folio/Folio.entitlements
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: Folio
+  FolioSafariExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: SafariExtension
+        excludes:
+          - Info.plist
+          - SafariExtension.entitlements
+      # The web extension itself: shared files plus Safari's manifest, at the bundle's Resources root.
+      - path: ../BrowserExtension/shared
+        buildPhase: resources
+        excludes:
+          - _locales/**
+      # Localized extension strings keep their folder structure (_locales/<language>/messages.json).
+      - path: ../BrowserExtension/shared/_locales
+        type: folder
+        buildPhase: resources
+      - path: ../BrowserExtension/safari/manifest.json
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: FolioSafariExtension
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio.SafariExtension
+        INFOPLIST_FILE: SafariExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: SafariExtension/SafariExtension.entitlements
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SKIP_INSTALL: YES
+  folio-cli:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Packages/FolioCore/Sources/FolioCLI
+    dependencies:
+      - package: FolioCore
+        product: FolioAgent
+    settings:
+      base:
+        PRODUCT_NAME: folio-cli
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.Folio.cli
+        SKIP_INSTALL: YES
+  FolioTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: FolioTests
+      - path: Folio/Views/Sidebar/SidebarDragRules.swift
+      - path: Folio/Views/ItemList/ItemMenuBuilder.swift
+      - path: Folio/Views/ItemList/ListDropRules.swift
+      - path: Folio/App/CitationStyleOption.swift
+      - path: Folio/Support/AppKitExtensions.swift
+      - path: Folio/Services/CitationService.swift
+    dependencies:
+      - package: FolioCore
+        product: FolioCore
+      - package: FolioCore
+        product: FolioCitation
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.FolioTests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_APPROACHABLE_CONCURRENCY: YES
+  FolioUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: FolioUITests
+    dependencies:
+      - target: Folio
+      - package: FolioCore
+        product: FolioCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nnqc.FolioUITests
+        TEST_TARGET_NAME: Folio
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Folio:
+    build:
+      targets:
+        Folio: all
+        FolioUITests: [test]
+        FolioTests: [test]
+    test:
+      targets:
+        - FolioTests
+        - FolioUITests

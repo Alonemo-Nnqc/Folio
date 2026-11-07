@@ -1,9 +1,12 @@
 name: CI
 
+# The macOS app (macos/). Folio for Windows has its own workflow (ci-windows.yml).
 on:
   push:
     branches: [main]
+    paths-ignore: ['windows/**', 'website/**', '.github/workflows/*windows*.yml', '.github/workflows/pages.yml']
   pull_request:
+    paths-ignore: ['windows/**', 'website/**', '.github/workflows/*windows*.yml', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 concurrency:
@@ -31,15 +34,17 @@ jobs:
 
       # xcodebuild compiles the String Catalogs (some SwiftPM versions only copy them); tests expect English.
       - name: Package tests (FolioCore)
-        working-directory: Packages/FolioCore
+        working-directory: macos/Packages/FolioCore
         run: |
           xcodebuild test -scheme FolioCore-Package -destination 'platform=macOS' \
             -derivedDataPath ../../build/PackageDerivedData -testLanguage en -testRegion US
 
       - name: Generate project
+        working-directory: macos
         run: xcodegen generate
 
       - name: App unit tests
+        working-directory: macos
         run: |
           xcodebuild -project Folio.xcodeproj -scheme Folio -destination 'platform=macOS' \
             -derivedDataPath build/DerivedData \

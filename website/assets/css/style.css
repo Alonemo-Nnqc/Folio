@@ -1752,3 +1752,6 @@ html[data-lang="zh"] .headline {
     transform: none !important;
   }
 }
+
+/* Platform-specific blocks (main.js shows the one for this computer). */
+[hidden] { display: none !important; }
