@@ -111,7 +111,7 @@
     "dl.copy": "Copy",
     "dl.winFirstTitle": "Installing",
     "dl.winFirstBody":
-      "Run the downloaded Folio-win-…-Setup.exe; no administrator rights are needed. If Windows says “Windows protected your PC”, click “More info”, then “Run anyway”.",
+      "Run the downloaded Folio-…-Windows-…-Setup.exe; no administrator rights are needed. If Windows says “Windows protected your PC”, click “More info”, then “Run anyway”.",
     "dl.firstNote": "Later versions install themselves through in-app updates, so you only do this once.",
     "dl.l1": "All releases &amp; changelog",
     "dl.l2": "Browser extension packages",
@@ -612,10 +612,9 @@
 
   /* ---------------- Latest release (per platform) ---------------- */
 
-  // One repository publishes both apps: macOS releases are tagged v1.2.0 (and are GitHub's "latest", whose
-  // appcast.xml installed Macs read), Windows releases win-v1.0.0 (never "latest"). The page lists the releases,
-  // picks the newest of each and offers the one for this computer: a .dmg on a Mac, the Setup.exe for x64 or ARM64
-  // on Windows. Without JavaScript or the API the links still lead to the releases page.
+  // One release (tag v1.2.0) carries both apps: Folio-1.2.0-macOS.dmg and Folio-1.2.0-Windows-x64-Setup.exe /
+  // -ARM64-Setup.exe. The page lists the releases, picks the newest with a file for each platform and offers the one
+  // for this computer. Without JavaScript or the API the links still lead to the releases page.
   const platform = (() => {
     const ua = navigator.userAgent || "";
     const hinted = navigator.userAgentData && navigator.userAgentData.platform;
@@ -678,7 +677,7 @@
       const asset = (r.assets || []).find((a) => assetPattern.test(a.name));
       if (!asset) continue;
       return {
-        version: String(r.tag_name).replace(/^(win-)?v/, ""),
+        version: String(r.tag_name).replace(/^v/, ""),
         url: asset.browser_download_url,
         size: `${(asset.size / 1048576).toFixed(1)} MB`,
         date: r.published_at,
@@ -711,10 +710,10 @@
         /* fine without a cache */
       }
     }
-    const archAsset = new RegExp(`^Folio-win-${arch}-Setup\\.exe$`, "i");
+    const archAsset = new RegExp(`-Windows-${arch}-Setup\\.exe$`, "i");
     return {
       mac: pick(list, /^v\d/, /\.dmg$/i),
-      windows: pick(list, /^win-v\d/, archAsset) || pick(list, /^win-v\d/, /^Folio-win-x64-Setup\.exe$/i),
+      windows: pick(list, /^v\d/, archAsset) || pick(list, /^v\d/, /-Windows-x64-Setup\.exe$/i),
     };
   }
   loadReleases()

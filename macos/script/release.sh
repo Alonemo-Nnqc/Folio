@@ -3,21 +3,20 @@
 #   script/release.sh <version>            e.g. script/release.sh 1.2.0
 #
 # Output in dist/:
-#   Folio-<version>.zip     the update archive (Sparkle) and a plain download
-#   Folio-<version>.dmg     the drag-to-Applications disk image
-#   appcast.xml             the update feed, attached to the GitHub release
-#   release-notes.md        this version's section of CHANGELOG.md
+#   Folio-<version>-macOS.dmg   the drag-to-Applications disk image: the download, and the update Sparkle installs
+#   appcast.xml                 the update feed installed copies read, attached to the GitHub release
+#   release-notes.md            this version's section of CHANGELOG.md
 #
 # The app is ad-hoc signed (no Apple Developer Program needed) and built without the hardened runtime:
 # its library validation only loads code signed by the app's own team, an ad-hoc signature has no team,
 # and so on a Mac with SIP enabled Folio could not load Sparkle.framework and quit at launch.
 # (The hardened runtime is only required for notarization, which needs a Developer ID anyway.)
 #
-# The archive is signed with the Sparkle EdDSA key: from $SPARKLE_ED_PRIVATE_KEY when set (CI),
+# The disk image is signed with the Sparkle EdDSA key: from $SPARKLE_ED_PRIVATE_KEY when set (CI),
 # otherwise from the login keychain (account "Folio", created by Sparkle's generate_keys). Set
 # FOLIO_DOWNLOAD_BASE to point the feed at another server when testing an update locally.
-# Without either key (a fork, or a build for your own use) set FOLIO_SKIP_UPDATE_SIGNING=1: you get the .zip and the
-# .dmg, which work as they are, but no appcast.xml. Installed copies only accept updates signed with the key whose
+# Without either key (a fork, or a build for your own use) set FOLIO_SKIP_UPDATE_SIGNING=1: you get the .dmg,
+# which works as it is, but no appcast.xml. Installed copies only accept updates signed with the key whose
 # public half is in Folio/Info.plist (SUPublicEDKey), so a fork that publishes updates needs its own key there.
 set -euo pipefail
 
@@ -60,11 +59,10 @@ fi
 
 SPARKLE_BIN="$DERIVED/SourcePackages/artifacts/sparkle/Sparkle/bin"
 rm -rf "$OUT" && mkdir -p "$OUT"
-ZIP="$OUT/Folio-$VERSION.zip"
-DMG="$OUT/Folio-$VERSION.dmg"
+DMG_NAME="Folio-$VERSION-macOS.dmg"
+DMG="$OUT/$DMG_NAME"
 
 echo "▶ packaging"
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 STAGE="$(mktemp -d)"
 ditto "$APP" "$STAGE/Folio.app"
 ln -s /Applications "$STAGE/Applications"
@@ -79,13 +77,13 @@ fi
 
 echo "▶ signing the update"
 if [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then
-  SIGNATURE=$(printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_BIN/sign_update" --ed-key-file - "$ZIP")
+  SIGNATURE=$(printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_BIN/sign_update" --ed-key-file - "$DMG")
 else
-  SIGNATURE=$("$SPARKLE_BIN/sign_update" --account Folio "$ZIP")
+  SIGNATURE=$("$SPARKLE_BIN/sign_update" --account Folio "$DMG")
 fi
 
 echo "▶ release notes and appcast"
-python3 - "$ROOT/../CHANGELOG.md" "$VERSION" "$BUILD" "$DOWNLOAD_BASE/Folio-$VERSION.zip" "$SIGNATURE" "$OUT" "$REPO" <<'PY'
+python3 - "$ROOT/../CHANGELOG.md" "$VERSION" "$BUILD" "$DOWNLOAD_BASE/$DMG_NAME" "$SIGNATURE" "$OUT" "$REPO" <<'PY'
 import datetime, html, re, sys
 changelog, version, build, url, signature, out, repo = sys.argv[1:]
 

@@ -151,7 +151,7 @@ swift script/compose-screenshot.swift /tmp/reader.png <壁纸> assets/screenshot
    git tag v1.2.0 && git push origin main v1.2.0
    ```
 
-3. [Release 工作流](.github/workflows/release.yml) 会构建、打包 `Folio-1.2.0.dmg` / `.zip`、用 Sparkle 密钥签名更新、生成 `appcast.xml`，并创建 GitHub Release。已安装的 Folio 会在一天内自动发现新版本。
+3. [Release 工作流](.github/workflows/release.yml) 会同时构建 macOS 和 Windows 版，生成一个只含安装包的 GitHub Release：`Folio-1.2.0-macOS.dmg`（用 Sparkle 密钥签名，也是 Mac 的更新包）、`Folio-1.2.0-Windows-x64-Setup.exe`、`Folio-1.2.0-Windows-ARM64-Setup.exe`，外加已安装的 Mac 检查更新用的 `appcast.xml`。发布说明取 `CHANGELOG.md`（macOS）和 `windows/CHANGELOG.md`（Windows）中同一版本的小节。已安装的 Folio 会在一天内自动发现新版本。
 
 版本号中带 `-`（如 `v1.3.0-beta.1`）会发布为预发布版本，不会推送给普通用户。
 
@@ -161,4 +161,4 @@ swift script/compose-screenshot.swift /tmp/reader.png <壁纸> assets/screenshot
 script/setup-release-secret.sh
 ```
 
-本地试打包：`script/release.sh 1.2.0`（产物在 `dist/`）。没有 Sparkle 私钥时（比如 fork 或自用）加上 `FOLIO_SKIP_UPDATE_SIGNING=1`，只生成 `.zip` 和 `.dmg`，不生成 `appcast.xml`。已安装的副本只接受用 `Folio/Info.plist` 中 `SUPublicEDKey` 对应私钥签名的更新，所以要发布自己更新的 fork 需要换成自己的密钥。
+本地试打包：`script/release.sh 1.2.0`（产物在 `dist/`）。没有 Sparkle 私钥时（比如 fork 或自用）加上 `FOLIO_SKIP_UPDATE_SIGNING=1`，只生成 `.dmg`，不生成 `appcast.xml`。已安装的副本只接受用 `Folio/Info.plist` 中 `SUPublicEDKey` 对应私钥签名的更新，所以要发布自己更新的 fork 需要换成自己的密钥。

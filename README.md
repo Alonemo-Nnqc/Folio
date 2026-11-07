@@ -59,7 +59,7 @@
 
 系统要求：macOS 14 Sonoma 及以上（Apple 芯片或 Intel）。在 macOS 26 上使用 Liquid Glass 外观。
 
-1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest) 下载最新的 `Folio-x.y.z.dmg`
+1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest) 下载最新的 `Folio-x.y.z-macOS.dmg`
 2. 打开 DMG，把 **Folio** 拖到“应用程序”文件夹
 3. 首次打开：Folio 目前没有经过 Apple 公证，macOS 会提示“无法验证开发者”。请打开 **系统设置 ▸ 隐私与安全性**，在页面底部点 **仍要打开**，再确认一次即可（macOS 14 上也可以在 Finder 中按住 Control 点按 Folio，选择“打开”）。
 
@@ -71,7 +71,7 @@
 
 之后的版本会通过应用内更新自动安装，不需要再重复这一步。
 
-Windows 版的安装方法见 [windows/README.md](windows/README.md#安装)。
+Windows 版在同一个 Release 中：下载与电脑架构相符的 `Folio-x.y.z-Windows-x64-Setup.exe` 或 `Folio-x.y.z-Windows-ARM64-Setup.exe`，详见 [windows/README.md](windows/README.md#安装)。
 
 ### 更新
 
@@ -103,8 +103,6 @@ Folio 运行时在 `127.0.0.1:23120` 提供本地连接服务（只接受浏览�
 - **Safari**：扩展随 Folio.app 提供。由于 Folio 未经 Apple 公证，需要先在 Safari 设置 ▸ 高级 中打开“显示网页开发者功能”，再在 开发者 中勾选“允许未签名的扩展”（每次重新打开 Safari 后需再次勾选），然后在 扩展 中启用“Folio 文献保存”
 - **Chrome / Edge / Brave / Arc 等**：在设置中点“安装…”，然后在浏览器扩展页打开“开发者模式”，“加载已解压的扩展程序”，选择 Folio 准备好的文件夹。Folio 更新后扩展文件会自动更新
 - **Firefox**：在 `about:debugging` 中“临时载入附加组件”
-
-每个版本的 Releases 页面也附带了扩展的 `.zip`（Chromium）和 `.xpi`（Firefox）安装包。
 
 ## 隐私
 

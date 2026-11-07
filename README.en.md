@@ -59,7 +59,7 @@ Drop in a PDF and get its metadata · Built-in reader and annotations · Layout-
 
 Requires macOS 14 Sonoma or later (Apple silicon or Intel). On macOS 26 Folio uses the Liquid Glass design.
 
-1. Download the latest `Folio-x.y.z.dmg` from [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
+1. Download the latest `Folio-x.y.z-macOS.dmg` from [Releases](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 2. Open the disk image and drag **Folio** into Applications
 3. First launch: Folio is not notarized by Apple yet, so macOS says it can't verify the developer. Open **System Settings ▸ Privacy & Security**, scroll down and click **Open Anyway**, then confirm. (On macOS 14 you can also Control-click Folio in Finder and choose Open.)
 
@@ -71,7 +71,7 @@ Requires macOS 14 Sonoma or later (Apple silicon or Intel). On macOS 26 Folio us
 
 Later versions install through the in-app updater, so you only need to do this once.
 
-For Folio on Windows, see [windows/README.md](windows/README.md#安装): Windows 10 2004 or later, x64 or ARM64, installer `Folio-win-<arch>-Setup.exe` from the [win-v releases](https://github.com/Alonemo-Nnqc/Folio/releases?q=win-v). It is not code-signed yet: on the SmartScreen warning choose **More info ▸ Run anyway**.
+For Folio on Windows, see [windows/README.md](windows/README.md#安装): Windows 10 2004 or later, x64 or ARM64, installer `Folio-x.y.z-Windows-x64-Setup.exe` or `Folio-x.y.z-Windows-ARM64-Setup.exe` from the same [release](https://github.com/Alonemo-Nnqc/Folio/releases/latest). It is not code-signed yet: on the SmartScreen warning choose **More info ▸ Run anyway**.
 
 ### Updates
 
@@ -103,8 +103,6 @@ While Folio runs, it serves a local connector at `127.0.0.1:23120` that only acc
 - **Safari**: the extension ships inside Folio.app. Because Folio isn't notarized, enable "Show features for web developers" in Safari Settings ▸ Advanced, then "Allow unsigned extensions" in the Developer menu (needed again after Safari restarts), and enable the Folio extension under Extensions
 - **Chrome / Edge / Brave / Arc**: click “Install…” in Settings, enable Developer mode on the browser's extensions page and "Load unpacked" the folder Folio prepares. The extension updates itself with Folio
 - **Firefox**: "Load Temporary Add-on" from `about:debugging`
-
-Each release also includes the extension as a `.zip` (Chromium) and an `.xpi` (Firefox).
 
 ## Privacy
 

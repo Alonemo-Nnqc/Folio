@@ -6,11 +6,15 @@
 
 ## [Unreleased]
 
+### 新增
+- Folio 现在也有 Windows 版（x64 和 ARM64），与 Mac 版使用同一套文献库格式，安装包在同一个 Release 中。
+
 ### 修复
 - Gemini CLI 翻译不再因“目录不受信任”失败。
 - 克隆仓库后不配置开发者账号直接运行 `script/build_and_run.sh`，构建出的 app 启动即退出（ad-hoc 签名加强化运行时无法加载 Sparkle）。
 
 ### 变更
+- Release 只提供安装包：Mac 下载 `Folio-x.y.z-macOS.dmg`（也是应用内更新使用的文件），不再单独提供 `.zip` 和浏览器扩展包，扩展在 设置 ▸ 浏览器 中安装。
 - 应用内附带 `LICENSE` 和第三方许可声明 `THIRD-PARTY-NOTICES.md`；`script/release.sh` 没有更新密钥时可用 `FOLIO_SKIP_UPDATE_SIGNING=1` 打包。
 - 阅读器标签页改用论文短标题命名，不再是难以区分的“作者 年份”：翻译版本把类型放在最前（如“译文 · SnakeSAM”），同一篇有多份同类翻译时只显示有区别的服务、模型或时间；悬停显示完整标题、作者年份和文件。
 - 整篇翻译改用 Folio 内置的原生翻译引擎，不再需要下载约 1.4 GB 的 pdf2zh_next 组件：直接解析 PDF 版面，图内文字保持原样、表格逐格翻译、行内公式原样保留，译文绝不压到其他内容；14 页论文用免费服务约 40 秒（原来约 3 分钟），内存约 0.3–0.6 GB（原来约 2 GB）。

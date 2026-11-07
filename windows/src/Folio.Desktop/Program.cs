@@ -2,7 +2,6 @@ using System.IO.Pipes;
 using System.Text;
 using System.Windows.Forms;
 using Folio.Core;
-using Velopack;
 
 namespace Folio.App;
 
@@ -13,8 +12,12 @@ public static class Program
     [STAThread]
     static int Main(string[] args)
     {
-        // Velopack's install / update / uninstall hooks run here and exit before any window appears.
-        VelopackApp.Build().OnBeforeUninstallFastCallback(_ => UrlProtocol.Unregister()).Run();
+        // The uninstaller asks Folio to remove what it registered (the folio:// link), then goes on.
+        if (args is ["--unregister"])
+        {
+            UrlProtocol.Unregister();
+            return 0;
+        }
         AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog.Write(e.ExceptionObject as Exception);
 
         // One Folio at a time: a second launch (a folio:// link, a PDF opened from Explorer) goes to the first.
@@ -24,6 +27,8 @@ public static class Program
             Forward(args);
             return 0;
         }
+        // "--quit" (the uninstaller's) with no Folio running: nothing to do.
+        if (args is ["--quit"]) return 0;
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
@@ -114,6 +119,7 @@ public static class App
         Main.FormClosed += (_, _) =>
         {
             Tray.Remove();
+            Model.Updater.InstallOnQuit();
             Model.Translations.CancelAll();
             foreach (var other in Windows.Where(w => w != Main).ToList()) other.Close();
         };
@@ -181,6 +187,12 @@ public static class App
     /// <summary>Files and folio:// links from Explorer, the browser extension or a second launch.</summary>
     public static void HandleActivation(IReadOnlyList<string> args)
     {
+        // The uninstaller asks the running Folio to finish (saving what is in flight) before it removes the files.
+        if (args is ["--quit"])
+        {
+            Quit();
+            return;
+        }
         Main.BringForward();
         foreach (var arg in args)
         {

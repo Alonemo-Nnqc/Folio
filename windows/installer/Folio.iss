@@ -1,11 +1,11 @@
-; Folio for Windows: the installer people run.
+; Folio for Windows: the installer people run, and the one Folio's updater runs too.
 ;
-; Velopack builds the app (Folio-win-<arch>-Portable.zip: Update.exe, Folio.exe, current\) and keeps it up to date;
-; this wizard puts that folder where the user chooses, with the usual pages: welcome, licence, location, shortcuts,
-; and Folio started at the end. Updates then come from inside Folio as before (Velopack's portable layout).
+; It puts the published app (dotnet publish of Folio.Desktop and folio-cli) where the user chooses, with the usual
+; pages: welcome, licence, location, shortcuts, and Folio started at the end. An update is this same installer run
+; quietly by Folio (/SILENT or /VERYSILENT); /RELAUNCH then starts Folio again.
 ;
-; Built by .github/workflows/release-windows.yml:
-;   ISCC.exe /DArch=arm64 /DAppVersion=1.2.0 /DSourceDir=<unzipped Portable.zip> /DOutputDir=releases windows\installer\Folio.iss
+; Built by .github/workflows/release.yml:
+;   ISCC.exe /DArch=arm64 /DAppVersion=1.2.0 /DSourceDir=publish /DOutputDir=release windows\installer\Folio.iss
 
 #ifndef Arch
   #define Arch "x64"
@@ -14,7 +14,7 @@
   #define AppVersion "0.0.0"
 #endif
 #ifndef SourceDir
-  #define SourceDir "portable"
+  #define SourceDir "publish"
 #endif
 #ifndef OutputDir
   #define OutputDir "."
@@ -44,9 +44,13 @@ DisableDirPage=no
 DisableReadyPage=no
 LicenseFile=..\..\LICENSE
 OutputDir={#OutputDir}
-OutputBaseFilename=Folio-win-{#Arch}-Setup
+#if Arch == "arm64"
+OutputBaseFilename=Folio-{#AppVersion}-Windows-ARM64-Setup
+#else
+OutputBaseFilename=Folio-{#AppVersion}-Windows-x64-Setup
+#endif
 SetupIconFile=..\src\Folio.Desktop\Assets\Folio.ico
-UninstallDisplayIcon={app}\current\Folio.exe
+UninstallDisplayIcon={app}\Folio.exe
 UninstallDisplayName=Folio
 WizardStyle=modern
 WizardSizePercent=110
@@ -80,27 +84,26 @@ Source: "{#WebView2Bootstrapper}"; DestName: "MicrosoftEdgeWebview2Setup.exe"; F
 #endif
 
 [Icons]
-Name: "{userprograms}\Folio"; Filename: "{app}\current\Folio.exe"; WorkingDir: "{app}\current"
-Name: "{userdesktop}\Folio"; Filename: "{app}\current\Folio.exe"; WorkingDir: "{app}\current"; Tasks: desktopicon
+Name: "{userprograms}\Folio"; Filename: "{app}\Folio.exe"; WorkingDir: "{app}"
+Name: "{userdesktop}\Folio"; Filename: "{app}\Folio.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
 ; Through Explorer, so Folio starts as from the Start menu: with the shell's environment, not the installer's (on ARM64
 ; the installer runs emulated as x64, and what it hands its children made Folio miss the user's command-line agents).
-Filename: "{win}\explorer.exe"; Parameters: """{app}\current\Folio.exe"""; Description: "{cm:LaunchProgram,Folio}"; Flags: nowait postinstall skipifsilent
+Filename: "{win}\explorer.exe"; Parameters: """{app}\Folio.exe"""; Description: "{cm:LaunchProgram,Folio}"; Flags: nowait postinstall skipifsilent
+; An update the user asked to restart for: Folio comes back by itself.
+Filename: "{win}\explorer.exe"; Parameters: """{app}\Folio.exe"""; Flags: nowait; Check: Relaunch
 
 [UninstallRun]
-; Folio's own clean-up (the folio:// link it registered), as Velopack's uninstaller would ask it to.
-Filename: "{app}\current\Folio.exe"; Parameters: "--veloapp-uninstall {#AppVersion}"; Flags: runhidden waituntilterminated; RunOnceId: "FolioUnregister"
+; Folio's own clean-up: the folio:// link it registered.
+Filename: "{app}\Folio.exe"; Parameters: "--unregister"; Flags: runhidden waituntilterminated; RunOnceId: "FolioUnregister"
 
 [UninstallDelete]
-; Updates add versions and packages the installer never wrote. The library and settings live elsewhere and stay.
-Type: filesandordirs; Name: "{app}\current"
-Type: filesandordirs; Name: "{app}\packages"
+; The library and settings live elsewhere and stay.
 Type: dirifempty; Name: "{app}"
 
 [Code]
 const
-  OneClickKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Folio';
   WebView2Client = 'Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
 
 { The WebView2 runtime, installed for the machine or for this user. }
@@ -113,18 +116,30 @@ begin
              RegQueryStringValue(HKCU, 'Software\' + WebView2Client, 'pv', Version)) and (Version <> '') and (Version <> '0.0.0.0');
 end;
 
-{ Folio used to install in one click (Velopack's Setup.exe, into %LocalAppData%\Folio). That copy is removed first, so
-  there is one Folio with one set of shortcuts; the library and settings are not in it and stay. }
+{ A running Folio (often only in the notification area) holds its files: it is asked to quit first, saving what is in
+  flight, and ended if it has not after a moment. The library and settings live elsewhere and stay. }
+function InitializeUninstall: Boolean;
+var
+  Code: Integer;
+begin
+  Result := True;
+  if Exec(ExpandConstant('{app}\Folio.exe'), '--quit', '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Sleep(2000);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/IM Folio.exe /F', '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+function Relaunch: Boolean;
+begin
+  Result := WizardSilent and (Pos('/RELAUNCH', UpperCase(GetCmdTail)) > 0);
+end;
+
+{ Folio's reader needs the WebView2 runtime; Windows 11 has it. Without it Folio still starts and says where to get it. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
-  Command: String;
   Code: Integer;
 begin
   Result := '';
-  if RegQueryStringValue(HKCU, OneClickKey, 'QuietUninstallString', Command) and (Pos('Update.exe', Command) > 0) then
-    Exec(ExpandConstant('{cmd}'), '/c "' + Command + '"', '', SW_HIDE, ewWaitUntilTerminated, Code);
 #if WebView2Bootstrapper != ""
-  { Folio's reader needs it; Windows 11 has it. Without it Folio still starts and says where to get it. }
   if not HasWebView2 then
   begin
     WizardForm.StatusLabel.Caption := 'Microsoft Edge WebView2';
