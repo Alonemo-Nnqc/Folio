@@ -6,12 +6,10 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-07
+
 ### 新增
 - Folio 现在也有 Windows 版（x64 和 ARM64），与 Mac 版使用同一套文献库格式，安装包在同一个 Release 中。
-
-### 修复
-- Gemini CLI 翻译不再因“目录不受信任”失败。
-- 克隆仓库后不配置开发者账号直接运行 `script/build_and_run.sh`，构建出的 app 启动即退出（ad-hoc 签名加强化运行时无法加载 Sparkle）。
 
 ### 变更
 - Release 只提供安装包：Mac 下载 `Folio-x.y.z-macOS.dmg`（也是应用内更新使用的文件），不再单独提供 `.zip` 和浏览器扩展包，扩展在 设置 ▸ 浏览器 中安装。
@@ -39,6 +37,8 @@
 - 设置 ▸ 翻译 可删除早期版本下载的旧翻译组件。移除 SiliconFlow 免费、AnythingLLM、Dify、Xinference（原来选择它们的会自动改用替代服务）以及 MCP 的 pdf2zh 查找工具。
 
 ### 修复
+- Gemini CLI 翻译不再因“目录不受信任”失败。
+- 克隆仓库后不配置开发者账号直接运行 `script/build_and_run.sh`，构建出的 app 启动即退出（ad-hoc 签名加强化运行时无法加载 Sparkle）。
 - 公式中离上一行更近的分子、上下限、大括号等不再错位或残留在页面上。
 - 发给模型的段落顺序在一批 10 段以上时被打乱，现在按阅读顺序发送。
 - 译文漏掉公式时会自动重新请求；个别段落被服务商内容审核拒绝时保留原文继续翻译，不再整篇失败。
@@ -90,6 +90,7 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Alonemo-Nnqc/Folio/releases/tag/v1.0.0
