@@ -12,17 +12,18 @@ Folio itself is under the MIT License (see `LICENSE`). Its apps contain the thir
 | [SkiaSharp and SkiaSharp.HarfBuzz](https://github.com/mono/SkiaSharp) | 3.119.4 | Windows | MIT |
 | [Jint](https://github.com/sebastienros/jint) | 4.17.0 | Windows | BSD-2-Clause |
 | [Velopack](https://github.com/velopack/velopack) | 1.2.161 | Windows | MIT |
-| [Windows Community Toolkit (Sizers)](https://github.com/CommunityToolkit/Windows) | 8.2.251219 | Windows | MIT |
 | [.NET runtime and libraries](https://github.com/dotnet/runtime) | 10.0 | Windows | MIT |
 | [Microsoft.Data.Sqlite](https://github.com/dotnet/efcore) | 10.0.14 | Windows | MIT |
 | [citeproc-js](https://github.com/Juris-M/citeproc-js) | 2.4.63 | macOS, Windows | CPAL-1.0 or AGPL-3.0 (dual-licensed) |
 | [CSL styles and locales](https://github.com/citation-style-language) | | macOS, Windows | CC BY-SA 3.0 |
 | [SQLite](https://www.sqlite.org/copyright.html) | | Windows | Public domain |
-| [Windows App SDK](https://github.com/microsoft/WindowsAppSDK) and WebView2 loader | 2.6.5 | Windows | Microsoft Software License Terms, redistributable |
+| [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) | 1.0.3650.58 | Windows | Microsoft Software License Terms |
+| [React](https://github.com/facebook/react) | 18.3.1 | Windows | MIT |
+| [Lucide](https://github.com/lucide-icons/lucide) | 0.468.0 | Windows | ISC |
 
 citeproc-js and the citation styles are not modified. Their sources and full terms are in the repository at [`macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md`](https://github.com/Alonemo-Nnqc/Folio/blob/main/macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) and `citeproc-LICENSE.txt` beside it.
 
-The Windows App SDK's terms come with its NuGet package (`Microsoft.WindowsAppSDK`, `license.txt`), also at <https://www.nuget.org/packages/Microsoft.WindowsAppSDK/2.6.5/License>.
+The WebView2 SDK's terms come with its NuGet package (`Microsoft.Web.WebView2`, `LICENSE.txt`).
 
 ## GRDB.swift
 

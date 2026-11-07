@@ -5,7 +5,7 @@
   </Configurations>
   <Folder Name="/src/">
     <Project Path="src/Folio.Core/Folio.Core.csproj" />
-    <Project Path="src/Folio.App/Folio.App.csproj" />
+    <Project Path="src/Folio.Desktop/Folio.Desktop.csproj" />
     <Project Path="src/Folio.Cli/Folio.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">

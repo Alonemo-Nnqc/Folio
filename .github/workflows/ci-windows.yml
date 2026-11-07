@@ -3,7 +3,7 @@ name: CI (Windows)
 # Folio for Windows (windows/): core tests on Windows, and the app built for x64 and ARM64.
 on:
   push:
-    branches: [main, feat/windows]
+    branches: [main, feat/windows, feat/windows-webui]
     paths: ['windows/**', 'BrowserExtension/**', 'macos/Folio/Resources/Localizable.xcstrings', 'macos/Packages/FolioCore/Sources/**', '.github/workflows/ci-windows.yml']
   pull_request:
     paths: ['windows/**', 'BrowserExtension/**', 'macos/Folio/Resources/Localizable.xcstrings', 'macos/Packages/FolioCore/Sources/**', '.github/workflows/ci-windows.yml']
@@ -47,20 +47,31 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build the interface
+        shell: pwsh
+        run: |
+          corepack enable
+          pnpm --dir windows/web install --frozen-lockfile
+          pnpm --dir windows/web build
+
       - name: Build
-        run: dotnet build windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }}
+        run: dotnet build windows/src/Folio.Desktop/Folio.Desktop.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }}
 
       # The same packaging as release-windows.yml, uploaded as a build artifact (nothing is published).
       - name: Package (trial)
         shell: pwsh
         run: |
-          dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} -p:Version=0.0.1 -o publish
+          dotnet publish windows/src/Folio.Desktop/Folio.Desktop.csproj -c Release -r ${{ matrix.rid }} -p:Platform=${{ matrix.platform }} -p:Version=0.0.1 -o publish
           # folio-cli (the AI interface) ships next to Folio.exe.
           dotnet publish windows/src/Folio.Cli/Folio.Cli.csproj -c Release -r ${{ matrix.rid }} --self-contained -p:Version=0.0.1 -o publish
           if (-not (Test-Path publish/folio-cli.exe)) { throw "folio-cli.exe missing" }
           dotnet tool install -g vpk --version 1.2.161
           vpk pack --packId Folio --packVersion 0.0.1-ci.${{ github.run_number }} --packDir publish --mainExe Folio.exe --packTitle Folio --packAuthors Folio `
-            --icon windows/src/Folio.App/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --framework webview2 --outputDir releases
+            --icon windows/src/Folio.Desktop/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --framework webview2 --outputDir releases
           Get-ChildItem releases
 
       - uses: actions/upload-artifact@v4

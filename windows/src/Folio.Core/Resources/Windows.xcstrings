@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "AI 智能体" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "AI Agents" } } } },
+    "从 Zotero 迁移" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Migrate from Zotero" } } } },
+    "全屏" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Full Screen" } } } },
+    "在 Folio 阅读器中添加的高亮和批注会显示在这里" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Highlights and notes added in the Folio reader appear here" } } } },
+    "在资源管理器中显示文献库" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Show Library in File Explorer" } } } },
+    "整篇翻译" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Full-Text Translation" } } } },
+    "浏览器插件" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Browser Extension" } } } },
+    "菜单" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Menu" } } } },
+    "轻量的文献管理软件" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "A lightweight reference manager" } } } },
+    "还没有文献" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "No Papers Yet" } } } },
     "在资源管理器中显示" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Show in File Explorer" } }} },
     "有新版本可用" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "A new version is available" } }} },
     "Folio %@ 已下载，重新启动即可完成安装。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Folio %@ has been downloaded. Restart to finish installing it." } }} },

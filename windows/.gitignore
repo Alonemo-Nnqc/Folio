@@ -4,5 +4,7 @@ obj/
 .vs/
 artifacts/
 Releases/
-src/Folio.App/Assets/pdfjs/
 TestResults/
+src/Folio.Desktop/wwwroot/
+web/node_modules/
+web/dist/

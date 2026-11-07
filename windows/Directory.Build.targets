@@ -1,0 +1,7 @@
+<Project>
+  <!-- Native packages bring their debug symbols along (100 MB); users have no use for them. -->
+  <Target Name="DropSymbols" AfterTargets="Publish">
+    <ItemGroup><Symbols Include="$(PublishDir)*.pdb" /></ItemGroup>
+    <Delete Files="@(Symbols)" />
+  </Target>
+</Project>

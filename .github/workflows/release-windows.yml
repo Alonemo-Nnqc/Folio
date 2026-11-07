@@ -54,14 +54,21 @@ jobs:
           if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { throw "Bad version: $v" }
           "value=$v" >> $env:GITHUB_OUTPUT
 
-      - name: Fetch pdf.js
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build the interface
         shell: pwsh
-        run: windows/scripts/fetch-pdfjs.ps1
+        run: |
+          corepack enable
+          pnpm --dir windows/web install --frozen-lockfile
+          pnpm --dir windows/web build
 
       - name: Publish
         shell: pwsh
         run: |
-          dotnet publish windows/src/Folio.App/Folio.App.csproj -c Release -r win-${{ matrix.arch }} `
+          dotnet publish windows/src/Folio.Desktop/Folio.Desktop.csproj -c Release -r win-${{ matrix.arch }} `
             -p:Platform=${{ matrix.platform }} -p:Version=${{ steps.version.outputs.value }} -o publish
           # folio-cli (the AI interface) ships next to Folio.exe.
           dotnet publish windows/src/Folio.Cli/Folio.Cli.csproj -c Release -r win-${{ matrix.arch }} --self-contained `
@@ -76,7 +83,7 @@ jobs:
         run: |
           dotnet tool install -g vpk --version $env:VPK_VERSION
           $args = @('pack', '--packId', 'Folio', '--packVersion', '${{ steps.version.outputs.value }}', '--packDir', 'publish',
-                    '--mainExe', 'Folio.exe', '--packTitle', 'Folio', '--packAuthors', 'Folio', '--icon', 'windows/src/Folio.App/Assets/Folio.ico',
+                    '--mainExe', 'Folio.exe', '--packTitle', 'Folio', '--packAuthors', 'Folio', '--icon', 'windows/src/Folio.Desktop/Assets/Folio.ico',
                     '--channel', 'win-${{ matrix.arch }}', '--runtime', 'win-${{ matrix.arch }}', '--framework', 'webview2', '--outputDir', 'releases')
           # Optional code signing: add the certificate as secrets to remove SmartScreen's "unknown publisher" warning.
           if ($env:WINDOWS_PFX_BASE64) {
