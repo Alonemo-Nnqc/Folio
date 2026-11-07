@@ -73,12 +73,12 @@ jobs:
 
       - name: Upload the build log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-build-log
           path: macos/build/ReleaseDerivedData.log
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: folio-macos
           path: |
@@ -153,7 +153,7 @@ jobs:
           Remove-Item sign.pfx -ErrorAction SilentlyContinue
           Get-ChildItem release
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: folio-windows-${{ matrix.arch }}
           path: release/*.exe
