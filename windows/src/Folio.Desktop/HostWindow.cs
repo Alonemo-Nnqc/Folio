@@ -15,10 +15,10 @@ namespace Folio.App;
 public sealed class HostWindow : Form
 {
     public sealed record Options(int Width = 1320, int Height = 820, int MinWidth = 640, int MinHeight = 420, bool Minimizable = true,
-                                 bool Maximizable = true, bool Resizable = true, bool RememberBounds = false, HostWindow? Owner = null);
+                                 bool Maximizable = true, bool Resizable = true, bool RememberBounds = false, HostWindow? Owner = null, int CaptionHeight = 40);
 
     const string ReaderHost = "folio.ui", LibraryHost = "folio.library";
-    const int CaptionHeightLogical = 40, CaptionButtonLogical = 46;
+    const int CaptionButtonLogical = 46, CaptionFadeMs = 200;
 
     static Task<CoreWebView2Environment>? _environment;
 
@@ -31,10 +31,15 @@ public sealed class HostWindow : Form
     readonly WebView2 _web = new() { Dock = DockStyle.Fill };
     public Bridge Bridge { get; }
     public event Action? Ready;
+    /// <summary>Asked when the user closes the window: true hides it instead (the main window, while Folio keeps running).</summary>
+    public Func<bool>? HideInsteadOfClosing;
+    public event Action? HiddenToTray;
     bool _fullScreen;
     FormWindowState _beforeFullScreen;
     Rectangle _normalBounds;
     Color _captionBack = Color.White, _captionText = Color.Black;
+    bool? _themeDark;
+    System.Windows.Forms.Timer? _captionFade;
     int _hover = HTNOWHERE, _pressed = HTNOWHERE;
     readonly HashSet<string> _previewHosts = [];
     bool _pageFlushed, _ready;
@@ -62,10 +67,30 @@ public sealed class HostWindow : Form
         Activated += (_, _) => { Bridge.Emit("window.active", true); InvalidateCaption(); };
         Deactivate += (_, _) => { Bridge.Emit("window.active", false); InvalidateCaption(); };
         Resize += (_, _) => { UpdateHole(); RememberNormalBounds(); Bridge.Emit("window.state", WindowStateName); };
+        // Hidden in the notification area, the page gives back what memory it can.
+        VisibleChanged += (_, _) =>
+        {
+            try
+            {
+                if (_web.CoreWebView2 is { } core)
+                    core.MemoryUsageTargetLevel = Visible ? CoreWebView2MemoryUsageTargetLevel.Normal : CoreWebView2MemoryUsageTargetLevel.Low;
+            }
+            catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
+        };
         Move += (_, _) => RememberNormalBounds();
         DpiChanged += (_, _) => UpdateHole();
         FormClosing += (_, e) =>
         {
+            if (e.CloseReason == CloseReason.UserClosing && HideInsteadOfClosing?.Invoke() == true)
+            {
+                e.Cancel = true;
+                if (options.RememberBounds) SaveBounds();
+                // What is in flight is saved as on closing (a note being typed, the reading position); the page itself stays.
+                Bridge.Emit("app.willClose", null);
+                Hide();
+                HiddenToTray?.Invoke();
+                return;
+            }
             if (options.RememberBounds) SaveBounds();
             // The page saves what is still in flight (a note being typed, the reading position), then the window goes.
             if (route != "main" || _pageFlushed || !_ready) return;
@@ -76,7 +101,7 @@ public sealed class HostWindow : Form
             timer.Tick += (_, _) => { timer.Dispose(); Close(); };
             timer.Start();
         };
-        FormClosed += (_, _) => Bridge.Core = null;
+        FormClosed += (_, _) => { Bridge.Core = null; StopCaptionFade(); };
         App.Model.Settings.Changed += OnSettingsChanged;
         FormClosed += (_, _) => App.Model.Settings.Changed -= OnSettingsChanged;
     }
@@ -126,7 +151,7 @@ public sealed class HostWindow : Form
             // Windows 10 without the WebView2 runtime, or a broken one.
             CrashLog.Write(e);
             if (MessageBox.Show(this, Loc.S("无法打开阅读器：这台电脑缺少 Microsoft Edge WebView2 运行时。") + "\n\n" + Loc.S("下载 WebView2 运行时"), "Folio", MessageBoxButtons.OKCancel, MessageBoxIcon.Error) == DialogResult.OK)
-                Shell.Open("https://developer.microsoft.com/microsoft-edge/webview2/");
+                Shell.OpenUrl("https://developer.microsoft.com/microsoft-edge/webview2/");
             Close();
             return;
         }
@@ -152,13 +177,20 @@ public sealed class HostWindow : Form
         core.Profile.PreferredColorScheme = ColorScheme(App.Model.Settings.Appearance);
         core.SetVirtualHostNameToFolderMapping(ReaderHost, Path.Combine(AppContext.BaseDirectory, "wwwroot"), CoreWebView2HostResourceAccessKind.Allow);
         MapLibrary();
-        core.NewWindowRequested += (_, e) => { e.Handled = true; Shell.Open(e.Uri); };
+        core.NewWindowRequested += (_, e) => { e.Handled = true; Shell.OpenUrl(e.Uri); };
         // Anything that would leave the interface (a dropped file, a link) opens outside instead.
         core.NavigationStarting += (_, e) =>
         {
             if (e.Uri.StartsWith($"https://{ReaderHost}/", StringComparison.OrdinalIgnoreCase)) return;
             e.Cancel = true;
-            if (e.Uri.StartsWith("http", StringComparison.OrdinalIgnoreCase)) Shell.Open(e.Uri);
+            if (IsWebLink(e.Uri)) Shell.OpenUrl(e.Uri);
+        };
+        // The readers' frames stay on Folio's pages too.
+        core.FrameNavigationStarting += (_, e) =>
+        {
+            if (e.Uri.StartsWith($"https://{ReaderHost}/", StringComparison.OrdinalIgnoreCase) || e.Uri.StartsWith("about:", StringComparison.OrdinalIgnoreCase)) return;
+            e.Cancel = true;
+            if (IsWebLink(e.Uri)) Shell.OpenUrl(e.Uri);
         };
         core.WebMessageReceived += (_, e) => Bridge.Receive(e);
         core.ProcessFailed += (_, e) =>
@@ -171,6 +203,9 @@ public sealed class HostWindow : Form
         FormClosed += (_, _) => App.Model.LibraryOpened -= MapLibrary;
         core.Navigate($"https://{ReaderHost}/index.html#{_route}");
     }
+
+    static bool IsWebLink(string uri) =>
+        uri.StartsWith("http:", StringComparison.OrdinalIgnoreCase) || uri.StartsWith("https:", StringComparison.OrdinalIgnoreCase) || uri.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase);
 
     public void MapLibrary()
     {
@@ -200,27 +235,59 @@ public sealed class HostWindow : Form
 
     public void BringForward()
     {
+        if (!Visible) Show();
         if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
         Activate();
         // A window activated from another process's request only flashes without this.
         SetForegroundWindow(Handle);
     }
 
-    public void FocusPage() => _web.Focus();
-
     /// <summary>Colours of the buttons' part of the title bar, from what the page shows there.</summary>
-    public void SetCaptionColors(string background, string foreground)
+    public void SetCaptionColors(string background, string foreground, bool animate = false)
     {
-        _captionBack = ColorTranslator.FromHtml(background);
+        var to = ColorTranslator.FromHtml(background);
         _captionText = ColorTranslator.FromHtml(foreground);
-        BackColor = _captionBack;
-        InvalidateCaption();
+        StopCaptionFade();
+        if (!animate || !Visible || to == _captionBack)
+        {
+            _captionBack = to;
+            BackColor = to;
+            InvalidateCaption();
+            return;
+        }
+        // Keeps pace with the panel sliding in underneath.
+        var from = _captionBack;
+        long start = System.Environment.TickCount64;
+        _captionFade = new System.Windows.Forms.Timer { Interval = 15 };
+        _captionFade.Tick += (_, _) =>
+        {
+            double t = Math.Min(1, (System.Environment.TickCount64 - start) / (double)CaptionFadeMs);
+            double eased = 1 - (1 - t) * (1 - t);
+            int Mix(byte a, byte b) => (int)Math.Round(a + (b - a) * eased);
+            _captionBack = Color.FromArgb(Mix(from.R, to.R), Mix(from.G, to.G), Mix(from.B, to.B));
+            InvalidateCaption();
+            if (t < 1) return;
+            StopCaptionFade();
+            _captionBack = to;
+            BackColor = to;
+        };
+        _captionFade.Start();
+    }
+
+    void StopCaptionFade()
+    {
+        _captionFade?.Dispose();
+        _captionFade = null;
     }
 
     public void ApplyTheme(bool dark)
     {
         int on = dark ? 1 : 0;
         if (IsHandleCreated) DwmSetWindowAttribute(Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref on, sizeof(int));
+        // The page sends this after every change of settings: only a real change of theme may reset the colours it chose for the buttons.
+        if (_themeDark == dark) return;
+        _themeDark = dark;
+        StopCaptionFade();
         _captionBack = dark ? ColorTranslator.FromHtml("#1E1E1E") : Color.White;
         _captionText = dark ? Color.White : Color.Black;
         BackColor = _captionBack;
@@ -315,7 +382,7 @@ public sealed class HostWindow : Form
     // MARK: The buttons
 
     int ButtonWidth => (int)Math.Round(CaptionButtonLogical * DeviceDpi / 96.0);
-    int CaptionHeight => (int)Math.Round(CaptionHeightLogical * DeviceDpi / 96.0);
+    int CaptionHeight => (int)Math.Round(_options.CaptionHeight * DeviceDpi / 96.0);
     int ButtonCount => 1 + (_options.Minimizable ? 1 : 0) + (_options.Maximizable ? 1 : 0);
     /// <summary>The caption area's width in the page's units.</summary>
     public int CaptionWidthLogical => _fullScreen ? 0 : ButtonCount * CaptionButtonLogical;

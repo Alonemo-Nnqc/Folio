@@ -66,7 +66,7 @@ public static partial class Api
                 var folder = BrowserExtensions.PrepareCopy(browser.Family);
                 Shell.CopyText(folder);
                 BrowserExtensions.OpenExtensionsPage(browser);
-                Shell.Open(folder);
+                Shell.OpenPath(folder);
                 M.Toasts.Show(Loc.S("插件文件夹的路径已复制，在扩展页面中选择“加载已解压的扩展程序”"), "copy");
             }
             catch (Exception e) { M.Toasts.Show(e.Message, "warning"); }
@@ -118,7 +118,7 @@ public static partial class Api
             var config = a.Str("path");
             var path = config.StartsWith('~') ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + config[1..] : config;
             if (File.Exists(path)) Shell.Reveal(path);
-            else if (Path.GetDirectoryName(path) is { } folder && Directory.Exists(folder)) Shell.Open(folder);
+            else if (Path.GetDirectoryName(path) is { } folder && Directory.Exists(folder)) Shell.OpenPath(folder);
             return null;
         });
         Bridge.OnAsync("ai.check", async _ =>

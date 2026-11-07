@@ -3,9 +3,6 @@ using Folio.Core.Citation;
 
 namespace Folio.App;
 
-/// <summary>What the sidebar has selected.</summary>
-public sealed record SidebarSelection(ViewScope Scope);
-
 /// <summary>
 /// The app's state and actions, shared by every view (the macOS AppModel). The snapshot is rebuilt after every change —
 /// ours, or another process's (folio-cli used by AI agents), noticed through SQLite's data_version.
@@ -315,7 +312,7 @@ public sealed partial class AppModel : IImportUi
         var file = files.FirstOrDefault(f => f.Id == item.DefaultFileId) ?? files.FirstOrDefault(f => f.IsPdf) ?? files.FirstOrDefault();
         if (file == null)
         {
-            if (item.Url is { Length: > 0 } url) Shell.Open(url);
+            if (item.Url is { Length: > 0 } url) Shell.OpenUrl(url);
             else Toasts.Show(Loc.S("该条目没有附件"), "info");
             return;
         }
@@ -335,7 +332,7 @@ public sealed partial class AppModel : IImportUi
             _ui.TryEnqueue(() => Perform(() => Library.UpdateItem(item.Id, i => i.ReadStatus = ReadStatus.Reading)));
         if (file.IsPdf && Settings.OpenWith == OpenWith.Folio) OpenInReaderRequested?.Invoke(file, page);
         else if (Settings.OpenWith == OpenWith.Custom && Settings.OpenWithAppPath is { Length: > 0 } app) Shell.OpenWith(app, path);
-        else Shell.Open(path);
+        else Shell.OpenPath(path);
     }
 
     public void Retrieve(IEnumerable<string> itemIds)

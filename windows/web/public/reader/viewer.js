@@ -208,9 +208,41 @@ function currentPosition() {
 // The zoom follows the window while it is on "fit width", also when the tab first shows (a hidden tab has no size).
 new ResizeObserver(() => {
   if (!pdf || container.clientWidth === 0) return;
+  if (hold) { followHold(); return; }
   if (autoFit) viewer.currentScaleValue = autoFit;
   viewer.update();
 }).observe(container);
+
+// While the panes beside the pages slide, refitting for real on every frame would redraw them all. pdf.js stretches what it has drawn
+// (the same way as during a pinch), and draws afresh once, at the end.
+const HOLD_MS = 220;
+const FIT_PADDING = 40; // what pdf.js leaves beside a page when it fits the width
+let hold = null;
+
+function holdFit() {
+  clearTimeout(hold?.timer);
+  document.body.classList.add("moving");
+  hold = {
+    scale: hold?.scale ?? viewer.currentScale,
+    width: hold?.width ?? container.clientWidth,
+    timer: setTimeout(() => {
+      hold = null;
+      document.body.classList.remove("moving");
+      if (!pdf || container.clientWidth === 0) return;
+      if (autoFit) viewer.currentScaleValue = autoFit;
+      viewer.update();
+    }, HOLD_MS),
+  };
+}
+
+function followHold() {
+  if (autoFit !== "page-width" || hold.width <= FIT_PADDING) return;
+  const target = hold.scale * Math.max(1, container.clientWidth - FIT_PADDING) / (hold.width - FIT_PADDING);
+  const factor = target / viewer.currentScale;
+  if (Math.abs(factor - 1) < 0.005) return;
+  const box = container.getBoundingClientRect();
+  viewer.updateScale({ scaleFactor: factor, origin: [box.left + box.width / 2, box.top + box.height / 2], drawingDelay: HOLD_MS * 2 });
+}
 
 // MARK: Events to the app
 
@@ -1551,7 +1583,11 @@ host.addEventListener("message", async (e) => {
     }
     case "theme": document.documentElement.dataset.theme = m.dark ? "dark" : "light"; break;
     case "shadows": document.body.classList.toggle("no-shadows", !m.on); break;
-    case "sidebar": document.body.classList.toggle("no-sidebar", !m.visible); break;
+    case "sidebar":
+      if (m.animate) holdFit();
+      document.body.classList.toggle("no-sidebar", !m.visible);
+      break;
+    case "hold": holdFit(); break;
     case "sidebarTab": showSidebarTab(m.value); break;
     case "scrollTo": {
       const view = viewer.getPageView((m.page ?? 1) - 1);

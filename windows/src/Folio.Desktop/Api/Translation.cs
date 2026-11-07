@@ -8,6 +8,8 @@ namespace Folio.App;
 public static partial class Api
 {
     static HashSet<string>? _installedAgents;
+    static DateTime _agentsCheckedAt;
+    static bool _checkingAgents;
 
     static object JobsState() => M.Translations.ActiveItemIds.ToDictionary(id => id, id =>
     {
@@ -112,14 +114,21 @@ public static partial class Api
     {
         Bridge.On("translation.services", _ =>
         {
-            if (_installedAgents == null)
+            // Looked for again each time the list is shown (not more than every few seconds): one installed while Folio runs
+            // must not stay under "not found on this computer" until a restart.
+            if (!_checkingAgents && (_installedAgents == null || DateTime.UtcNow - _agentsCheckedAt > TimeSpan.FromSeconds(5)))
             {
                 // Finding agents may ask each for its --help: off the interface thread, then the list is sorted again.
-                _installedAgents = [];
-                Task.Run(() => LocalAgents.Installed().Select(a => a.ServiceId()).ToHashSet()).ContinueWith(t =>
+                _installedAgents ??= [];
+                _checkingAgents = true;
+                Task.Run(() => LocalAgents.Installed().Select(a => a.ServiceId()).ToHashSet()).ContinueWith(t => App.Ui.TryEnqueue(() =>
                 {
-                    if (t.IsCompletedSuccessfully) App.Ui.TryEnqueue(() => { _installedAgents = t.Result; App.Broadcast("translation.servicesChanged", null); });
-                }).Fire();
+                    _checkingAgents = false;
+                    _agentsCheckedAt = DateTime.UtcNow;
+                    if (!t.IsCompletedSuccessfully || t.Result.SetEquals(_installedAgents)) return;
+                    _installedAgents = t.Result;
+                    App.Broadcast("translation.servicesChanged", null);
+                })).Fire();
             }
             return new { groups = ServiceGroups(), current = M.Settings.TranslationService, options = M.Settings.TranslationOptions, languages = TranslationOptions.CommonLanguages.Select(l => new { code = l.Code, name = l.Name }), detail = ServiceDetail(M.Settings.TranslationService) };
         });
@@ -188,7 +197,7 @@ public static partial class Api
         Bridge.On("translation.revealLogs", _ =>
         {
             Directory.CreateDirectory(TranslationCoordinator.LogsDirectory);
-            Shell.Open(TranslationCoordinator.LogsDirectory);
+            Shell.OpenPath(TranslationCoordinator.LogsDirectory);
             return null;
         });
 

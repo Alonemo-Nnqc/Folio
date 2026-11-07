@@ -28,9 +28,9 @@ public class LibraryTests
         var dual = TabFile("d", TranslationKind.Dual, "Google", "p");
         List<FileRecord> files = [original, mono, dual];
         Assert.Equal("SnakeSAM", FileLabel.TabTitle(original, item, files));
-        // The kind comes first, so a narrow tab still shows it.
-        Assert.Equal("译文 · SnakeSAM", FileLabel.TabTitle(mono, item, files));
-        Assert.Equal("双语对照 · SnakeSAM", FileLabel.TabTitle(dual, item, files));
+        // The kind comes first, so a narrow tab still shows it, then who translated it.
+        Assert.Equal("译文 · Google · SnakeSAM", FileLabel.TabTitle(mono, item, files));
+        Assert.Equal("双语对照 · Google · SnakeSAM", FileLabel.TabTitle(dual, item, files));
         // Several of a kind: the service tells them apart; the same service: the time.
         var other = TabFile("o", TranslationKind.Mono, "DeepSeek", "p");
         Assert.Equal("译文 · Google · SnakeSAM", FileLabel.TabTitle(mono, item, [.. files, other]));
@@ -39,18 +39,18 @@ public class LibraryTests
         again.DateAdded = mono.DateAdded.AddHours(3);
         Assert.NotEqual(FileLabel.TabTitle(mono, item, [.. files, again]), FileLabel.TabTitle(again, item, [.. files, again]));
         Assert.StartsWith("译文 · ", FileLabel.TabTitle(again, item, [.. files, again]));
-        Assert.DoesNotContain("Google", FileLabel.TabTitle(again, item, [.. files, again]));
+        Assert.Contains("Google", FileLabel.TabTitle(again, item, [.. files, again]));
         Assert.EndsWith(" · SnakeSAM", FileLabel.TabTitle(again, item, [.. files, again]));
         // Within one service, the model; the same service and model, the time, and nothing that is the same for all.
         var low = TabFile("l", TranslationKind.Dual, "Agent · low", "p");
         var high = TabFile("h", TranslationKind.Dual, "Agent · high", "p");
-        Assert.Equal("双语对照 · low · SnakeSAM", FileLabel.TabTitle(low, item, [original, low, high]));
+        Assert.Equal("双语对照 · Agent · low · SnakeSAM", FileLabel.TabTitle(low, item, [original, low, high]));
         var later = TabFile("t", TranslationKind.Dual, "Agent · low", "p");
         later.DateAdded = low.DateAdded.AddHours(3);
         var timed = FileLabel.TabTitle(later, item, [original, low, later]);
         Assert.StartsWith("双语对照 · ", timed);
         Assert.EndsWith(" · SnakeSAM", timed);
-        Assert.DoesNotContain("Agent", timed);
+        Assert.Contains("Agent", timed);
         Assert.DoesNotContain("low", timed);
         Assert.NotEqual(timed, FileLabel.TabTitle(low, item, [original, low, later]));
         // Another file of the paper keeps its own name.
@@ -85,13 +85,78 @@ public class LibraryTests
         {
             var shim = Path.Combine(folder, "tool.cmd");
             File.WriteAllText(shim, "@ECHO off\r\nSETLOCAL\r\nCALL :find_dp0\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \"_prog=node\"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & " + lastLine + "\r\n");
-            var (file, arguments) = Folio.Core.Translate.Services.LocalProcess.Resolve([shim, "--flag"]);
+            var (file, arguments, _) = Folio.Core.Translate.Services.LocalProcess.Resolve([shim, "--flag"]);
             var target = (throughNode ? arguments[0] : file).Replace('\\', '/');
             Assert.EndsWith(expected, target);
             Assert.Equal("--flag", arguments[^1]);
             Assert.Equal(throughNode ? 2 : 1, arguments.Count);
         }
         finally { Directory.Delete(folder, true); }
+    }
+
+    /// <summary>Shims of other shapes run what they start, without cmd.exe (whose line ends at 8191 characters, shorter than a prompt).</summary>
+    [Fact]
+    public void OtherShimsRunWithoutCmd()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var folder = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            // Pi's: the Node it installed, when it is there.
+            var node = Path.Combine(folder, "pi-node", "node.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(node)!);
+            File.WriteAllText(node, "");
+            var pi = Path.Combine(folder, "bin", "pi.cmd");
+            Directory.CreateDirectory(Path.GetDirectoryName(pi)!);
+            File.WriteAllText(pi, "@ECHO off\nSETLOCAL\nSET \"node=node\"\nIF EXIST \"" + node + "\" SET \"node=" + node + "\"\n\"%node%\" \"%~dp0pi-launcher.js\" %*\nSET \"pi_exit_code=%ERRORLEVEL%\"\nIF \"%pi_exit_code%\"==\"9009\" (\n  GOTO node_missing\n)\nEXIT /B %pi_exit_code%\n");
+            var (file, arguments, _) = Folio.Core.Translate.Services.LocalProcess.Resolve([pi, "-p", "a prompt"]);
+            Assert.Equal(node, file);
+            Assert.Equal([Path.Combine(folder, "bin", "pi-launcher.js"), "-p", "a prompt"], arguments);
+
+            // DeepSeek Harness's: Electron run as Node, from four folders up.
+            var app = Path.Combine(folder, "DeepSeek Harness.exe");
+            File.WriteAllText(app, "");
+            var dsh = Path.Combine(folder, "resources", "runtime", "cli", "bin", "dsh.cmd");
+            Directory.CreateDirectory(Path.GetDirectoryName(dsh)!);
+            File.WriteAllText(dsh, "@echo off\r\nsetlocal DisableDelayedExpansion\r\nset \"ELECTRON_RUN_AS_NODE=1\"\r\n\"%~dp0..\\..\\..\\..\\DeepSeek Harness.exe\" --expose-internals \"%~dp0..\\..\\..\\app.asar\\dsh\\lib\\cli.js\" %*\r\nexit /b %errorlevel%\r\n");
+            var (exe, args, environment) = Folio.Core.Translate.Services.LocalProcess.Resolve([dsh, "--profile", "headless", "-"]);
+            Assert.Equal(app, exe);
+            Assert.Equal(["--expose-internals", Path.Combine(folder, "resources", "app.asar", "dsh", "lib", "cli.js"), "--profile", "headless", "-"], args);
+            Assert.Equal("1", environment["ELECTRON_RUN_AS_NODE"]);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
+    public void DeepseekHarnessKeyIsReadFromItsRefs()
+    {
+        var yaml = "version: 1\nrecords:\n  deepseek-account-platform/default:\n    kind: grant\n    payload:\n      token: abc\nrefs:\n  DEEPSEEK_API_KEY: sk-test123\n";
+        Assert.Equal("sk-test123", Folio.Core.Translate.Services.DeepseekHarness.StoredKey(yaml));
+        Assert.Equal("sk-q", Folio.Core.Translate.Services.DeepseekHarness.StoredKey("refs:\r\n  OTHER: x\r\n  DEEPSEEK_API_KEY: \"sk-q\"\r\n"));
+        Assert.Null(Folio.Core.Translate.Services.DeepseekHarness.StoredKey("records:\n  DEEPSEEK_API_KEY: nope\n"));
+    }
+
+    [Fact]
+    public void CodexProviderSectionsAreRead()
+    {
+        var toml = "model_provider = \"custom\"\nmodel = \"gpt-6-astra\"\n[tui]\nx = 1\n\n[model_providers.custom]\nname = \"custom\"\nbase_url = \"https://relay.example\"\nexperimental_bearer_token = 'sk-1'\n";
+        Assert.Equal("https://relay.example", Folio.Core.Translate.Services.AgentModels.SectionValue(toml, "model_providers.custom", "base_url"));
+        Assert.Equal("sk-1", Folio.Core.Translate.Services.AgentModels.SectionValue(toml, "model_providers.custom", "experimental_bearer_token"));
+        Assert.Null(Folio.Core.Translate.Services.AgentModels.SectionValue(toml, "tui", "base_url"));
+    }
+
+    [Fact]
+    public void CodexDroppedStreamIsExplainedNotRetried()
+    {
+        Loc.Override = "zh-Hans";
+        var printed = "OpenAI Codex v0.167.0\nuser\nTranslate this JSON object: there is no reason not to translate\nERROR: Reconnecting... 5/5\nERROR: stream disconnected before completion: stream closed before response.completed\n";
+        var error = Folio.Core.Translate.Services.AgentFailure.Classify("exit 1: " + printed, Folio.Core.Translate.Services.LocalAgent.Codex);
+        Assert.Equal(Folio.Core.Translate.Services.ProviderError.Kinds.AgentSetup, error.Kind);
+        Assert.False(error.IsRetryable);
+        var shown = Folio.Core.Translate.Services.TranslationErrorClassifier.Classify("agent-setup codex: stream-disconnected https://relay.example").Message;
+        Assert.Contains("https://relay.example/v1", shown);
+        Assert.Equal("stream disconnected before completion: stream closed before response.completed",
+            Folio.Core.Translate.Services.AgentFailure.FirstMeaningfulLine(printed).Replace("ERROR: ", ""));
     }
 
     [Fact]

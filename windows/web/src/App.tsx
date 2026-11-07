@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { call, emitLocal, on } from "./rpc";
 import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
 import { getState, setSetting, setState, useStore } from "./store";
@@ -54,7 +54,8 @@ export function MainApp() {
   const tabs = useStore((s) => s.tabs);
   const activeTab = useStore((s) => s.activeTab);
   const dark = useStore((s) => s.dark);
-  const inspectorVisible = useStore((s) => s.settings.inspectorVisible);
+  const panelUnderButtons = useStore((s) => (s.activeTab === "library" ? s.settings.inspectorVisible : s.readerNotes[s.activeTab] ?? false));
+  const captionShown = useRef({ activeTab, dark });
 
   const dispatch = (k: Key, e?: Event) => {
     const reader = readers.get(getState().activeTab);
@@ -91,11 +92,13 @@ export function MainApp() {
 
   // What is under Windows' buttons follows what the page shows there.
   useEffect(() => {
-    const onLibrary = activeTab === "library";
-    const light = onLibrary && inspectorVisible ? "#f1f1f3" : "#ffffff";
-    const night = onLibrary && inspectorVisible ? "#252527" : "#1e1e1f";
-    call("window.caption", { background: dark ? night : light, foreground: dark ? "#ffffff" : "#000000" });
-  }, [activeTab, inspectorVisible, dark]);
+    const light = panelUnderButtons ? "#f1f1f3" : "#ffffff";
+    const night = panelUnderButtons ? "#252527" : "#1e1e1f";
+    // A panel sliding in fades the colour with it; a change of tab or theme is immediate.
+    const animate = captionShown.current.activeTab === activeTab && captionShown.current.dark === dark;
+    captionShown.current = { activeTab, dark };
+    call("window.caption", { background: dark ? night : light, foreground: dark ? "#ffffff" : "#000000", animate });
+  }, [activeTab, panelUnderButtons, dark]);
 
   useEffect(() => { call("window.title", { title: "Folio" }); emitLocal("focusList", null); }, []);
   useEffect(() => { if (activeTab === "library") emitLocal("focusList", null); }, [activeTab]);

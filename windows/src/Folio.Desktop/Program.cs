@@ -102,13 +102,22 @@ public static class App
         Ui = new UiQueue(SynchronizationContext.Current!);
         Model = new AppModel(Ui);
         Api.Install(Model);
-        Main = new HostWindow("main", new HostWindow.Options(MinWidth: 900, MinHeight: 560, RememberBounds: true));
+        Main = new HostWindow("main", new HostWindow.Options(MinWidth: 900, MinHeight: 560, RememberBounds: true, CaptionHeight: 52));
         Windows.Add(Main);
+        // Closing the window keeps Folio in the notification area; Exit Folio ends it.
+        Main.HideInsteadOfClosing = () => !Quitting;
+        Main.HiddenToTray += () =>
+        {
+            foreach (var other in Windows.Where(w => w != Main).ToList()) other.Close();
+            Tray.HintOnce();
+        };
         Main.FormClosed += (_, _) =>
         {
+            Tray.Remove();
             Model.Translations.CancelAll();
             foreach (var other in Windows.Where(w => w != Main).ToList()) other.Close();
         };
+        Tray.Install();
         Model.Start();
         UrlProtocol.Register();
         AiIntegration.RepairAfterLaunch();
@@ -149,6 +158,15 @@ public static class App
 
     public static void BringToFront() => Main.BringForward();
 
+    /// <summary>Set once Folio is really going: the main window then closes instead of hiding.</summary>
+    public static bool Quitting { get; private set; }
+
+    public static void Quit()
+    {
+        Quitting = true;
+        Main.Close();
+    }
+
     /// <summary>Starts a new Folio once this one has gone (a language change).</summary>
     public static void Restart()
     {
@@ -157,7 +175,7 @@ public static class App
             var script = $"Start-Sleep -Milliseconds 800; Start-Process '{exe.Replace("'", "''")}'";
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("powershell.exe") { ArgumentList = { "-NoProfile", "-WindowStyle", "Hidden", "-Command", script }, UseShellExecute = false, CreateNoWindow = true });
         }
-        Main.Close();
+        Quit();
     }
 
     /// <summary>Files and folio:// links from Explorer, the browser extension or a second launch.</summary>

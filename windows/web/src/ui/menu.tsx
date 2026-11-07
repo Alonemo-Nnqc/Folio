@@ -11,13 +11,19 @@ export const sep: MenuEntry = { kind: "separator" };
 
 /** Opens a menu at a point of the window. */
 export function openMenu(items: MenuEntry[], x: number, y: number) {
+  anchor = null;
   emitLocal("menu.open", { items: tidy(items), x, y });
 }
 
+/** Under a button: a second click on that button closes the menu. */
 export function openMenuAt(element: Element, items: MenuEntry[]) {
+  if (anchor === element) { emitLocal("menu.close", null); return; }
   const r = element.getBoundingClientRect();
   openMenu(items, r.left, r.bottom + 4);
+  anchor = element;
 }
+
+let anchor: Element | null = null;
 
 /** No separator first, last or twice. */
 function tidy(items: MenuEntry[]): MenuEntry[] {
@@ -116,11 +122,15 @@ export function MenuHost() {
   const [menu, setMenu] = useState<{ items: MenuEntry[]; x: number; y: number; n: number } | null>(null);
   const counter = useRef(0);
   useEffect(() => on("menu.open", (m) => setMenu({ ...m, n: ++counter.current })), []);
+  useEffect(() => on("menu.close", () => setMenu(null)), []);
+  useEffect(() => { if (!menu) anchor = null; }, [menu]);
   useEffect(() => {
     if (!menu) return;
     const close = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== "Escape") return;
       if (e.target instanceof Element && e.target.closest(".menu")) return;
+      // Its button closes it on the click that follows, in openMenuAt; closing here too would open it again.
+      if (e.target instanceof Node && anchor?.contains(e.target)) return;
       if (e instanceof KeyboardEvent) { e.preventDefault(); e.stopPropagation(); }
       setMenu(null);
     };

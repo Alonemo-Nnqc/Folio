@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BookText, ChevronDown, Highlighter, MousePointer2, PenLine, Search, Strikethrough, StickyNote, Type, Underline, X } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
-import { filesOf, getState, setSetting, useStore, type FileRec, type Item } from "../store";
+import { filesOf, getState, setSetting, setState, useStore, type FileRec, type Item } from "../store";
 import { translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { askText, openSheet, Sheet } from "../ui/sheet";
-import { InspectorToggle, MenuButton, SidebarToggle, Splitter, TabBar } from "../library/LibraryPage";
+import { LEAD_ROOM, PanelToggle, SidebarButtons, Splitter, TabBar, TOGGLE_ROOM } from "../library/LibraryPage";
+import { isEntering, useMoving, usePanelPhase } from "../ui/slide";
 import { NoteEditor } from "../library/Inspector";
 import { TranslationProgress } from "../library/ItemList";
 
@@ -81,6 +82,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const toolRef = useRef(tool); toolRef.current = tool;
   const colorRef = useRef(color); colorRef.current = color;
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const sidebarRef = useRef(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(settings.readerSidebarWidth ?? 220);
   const [notesVisible, setNotesVisible] = useState(false);
   const [notesWidth, setNotesWidth] = useState(300);
@@ -109,7 +111,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     if (!sidebarVisible) toggleSidebar();
     send({ cmd: "sidebarTab", value });
   };
-  const toggleSidebar = () => setSidebarVisible((v) => { send({ cmd: "sidebar", visible: !v }); return !v; });
+  const toggleSidebar = () => { const v = !sidebarRef.current; sidebarRef.current = v; send({ cmd: "sidebar", visible: v, animate: true }); setSidebarVisible(v); };
 
   const goToPage = async () => {
     const text = await askText(t("前往页面"), pageCount.current > 0 ? t("页码（1–%lld）", pageCount.current) : t("页码"), "", t("前往"));
@@ -476,6 +478,12 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   if (!file) return null;
   const title = item?.kind === "regular" ? item.title : file.fileName;
+  const sidebarPhase = usePanelPhase(sidebarVisible);
+  const notesPhase = usePanelPhase(notesVisible);
+  // The pages keep to their size while the panes around them move, and settle at the end.
+  const moving = useMoving([sidebarVisible, notesVisible], () => sendBoth({ cmd: "hold" }));
+  useLayoutEffect(() => { setState({ readerNotes: { ...getState().readerNotes, [tabKey]: notesVisible } }); }, [notesVisible]);
+
   const left = sidebarVisible ? sidebarWidth : 0;
   const right = notesVisible ? notesWidth : 0;
   const colorHex = colors.find((c) => c.key === color)?.hex ?? "#FFD933";
@@ -485,21 +493,16 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const running = !!job;
 
   return (
-    <div className="reader" style={{ display: visible ? "block" : "none" }}>
+    <div className={`reader${moving ? " moving" : ""}`} style={{ display: visible ? "block" : "none" }}>
       {opened && <iframe ref={(el) => { main.frame = el; }} title="reader" src="reader/viewer.html" style={{ left: 0, width: leftPaneWidth }} />}
       {parallel && <iframe key={parallel.preview ?? parallel.fileId ?? "preview"} ref={(el) => { parallel.frame = el; }} title="parallel" src="reader/viewer.html" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)`, width: rightPaneWidth, borderLeft: "1px solid var(--separator)" }} />}
 
-      {sidebarVisible && (
-        <div className="reader-left-top drag" style={{ width: sidebarWidth }}>
-          <MenuButton />
-          <div className="spacer" />
-          <SidebarToggle onClick={toggleSidebar} />
-        </div>
+      {sidebarPhase !== "closed" && (
+        <div className={`reader-left-top drag${isEntering(sidebarPhase) ? " entering" : ""}`} style={{ width: sidebarWidth, transform: sidebarPhase === "closing" ? "translateX(-100%)" : undefined }} />
       )}
 
       <div className="reader-top" style={{ left, right }}>
-        <div className="reader-head drag" style={notesVisible ? undefined : { paddingRight: captionWidth + 6 }}>
-          {!sidebarVisible && <><MenuButton /><SidebarToggle onClick={toggleSidebar} /></>}
+        <div className="reader-head drag" style={{ paddingLeft: sidebarVisible ? undefined : LEAD_ROOM + 2, paddingRight: notesVisible ? undefined : captionWidth + TOGGLE_ROOM + 2 }}>
           <div className="reader-title">
             <div className="name ellipsis" title={title}>{title}</div>
             <div className="page tabular ellipsis">{pageLabel}</div>
@@ -538,18 +541,20 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
           ) : (
             <button className="glass-button" title={t("在文档中查找")} onClick={focusSearch}><Search size={17} strokeWidth={1.7} /></button>
           )}
-          {!notesVisible && <InspectorToggle onClick={toggleNotes} />}
         </div>
         <TabBar />
       </div>
 
-      {notesVisible && (
-        <div className="reader-notes" style={{ width: notesWidth }}>
-          <div className="titlebar-row drag" style={{ paddingRight: captionWidth + 6, justifyContent: "flex-end" }}><InspectorToggle onClick={toggleNotes} /></div>
+      {notesPhase !== "closed" && (
+        <div className={`reader-notes${isEntering(notesPhase) ? " entering" : ""}`} style={{ width: notesWidth, transform: notesPhase === "closing" ? "translateX(100%)" : undefined }}>
+          <div className="titlebar-row drag" />
           <NoteEditor itemId={file.itemId} title={item?.title ?? file.fileName} inputRef={noteBox} />
           <Splitter side="right" width={notesWidth} min={220} max={560} onLive={setNotesWidth} onDone={setNotesWidth} />
         </div>
       )}
+
+      <SidebarButtons visible={sidebarVisible} width={sidebarWidth} onToggle={toggleSidebar} />
+      <PanelToggle onClick={toggleNotes} />
 
       {running && <div className="hud"><TranslationProgress itemId={file.itemId} /></div>}
 

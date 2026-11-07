@@ -25,6 +25,10 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: '1'
   DOTNET_NOLOGO: '1'
   VPK_VERSION: '1.2.161'
+  INNO_TAG: 'is-7_1_1'
+  INNO_FILE: 'innosetup-7.1.1-x64.exe'
+  # The installer that builds ours runs on the build machine: only this exact file.
+  INNO_SHA256: '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0'
 
 jobs:
   build:
@@ -91,6 +95,31 @@ jobs:
             $args += @('--signParams', "/f `"$PWD\sign.pfx`" /p `"$env:WINDOWS_PFX_PASSWORD`" /fd sha256 /tr http://timestamp.digicert.com /td sha256")
           }
           vpk @args
+          Get-ChildItem releases
+
+      # The installer people download: Inno Setup's wizard (location, shortcuts, licence) around Velopack's portable
+      # package, which keeps updating itself from inside Folio. It takes the name Velopack's one-click Setup.exe had.
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+        run: |
+          gh release download $env:INNO_TAG --repo jrsoftware/issrc --pattern $env:INNO_FILE --dir inno
+          if ((Get-FileHash "inno\$env:INNO_FILE" -Algorithm SHA256).Hash -ne $env:INNO_SHA256) { throw "Inno Setup download does not match its pinned SHA-256" }
+          $setup = Start-Process "inno\$env:INNO_FILE" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/NOICONS', "/DIR=$PWD\inno\app" -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Inno Setup install failed: $($setup.ExitCode)" }
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile MicrosoftEdgeWebview2Setup.exe
+          $webview2 = Get-AuthenticodeSignature MicrosoftEdgeWebview2Setup.exe
+          if ($webview2.Status -ne 'Valid' -or $webview2.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') { throw "WebView2 bootstrapper is not signed by Microsoft" }
+          Expand-Archive releases/Folio-win-${{ matrix.arch }}-Portable.zip -DestinationPath portable
+          Remove-Item releases/Folio-win-${{ matrix.arch }}-Setup.exe
+          & "$PWD\inno\app\ISCC.exe" /Qp "/DArch=${{ matrix.arch }}" "/DAppVersion=${{ steps.version.outputs.value }}" "/DSourceDir=$PWD\portable" "/DOutputDir=$PWD\releases" "/DWebView2Bootstrapper=$PWD\MicrosoftEdgeWebview2Setup.exe" windows/installer/Folio.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
+          if (Test-Path sign.pfx) {
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe | Where-Object FullName -match '\\x64\\' | Select-Object -Last 1
+            & $signtool.FullName sign /f sign.pfx /p $env:WINDOWS_PFX_PASSWORD /fd sha256 /tr http://timestamp.digicert.com /td sha256 releases/Folio-win-${{ matrix.arch }}-Setup.exe
+          }
           Remove-Item sign.pfx -ErrorAction SilentlyContinue
           Get-ChildItem releases
 

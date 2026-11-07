@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, type FileRec } from "../store";
 import { Field, Select, Switch } from "../ui/controls";
 import { askText, confirm, Sheet } from "../ui/sheet";
+import { openMenuAt } from "../ui/menu";
 import { Card, Header, Note, Row } from "./parts";
 
 interface Detail { id: string; name: string; note?: string; category: string; isAgent: boolean; supportsProfiles: boolean; profiles: { id: string; name: string }[]; selectedProfile?: string; fields: FieldDef[]; advanced: FieldDef[]; reasoning?: any }
@@ -21,25 +22,37 @@ function FieldRow({ service, field, onDetail }: { service: string; field: FieldD
   return <Row title={field.title}><Field className="set-field" value={field.value} placeholder={field.placeholder} onCommit={(value) => call("translation.setField", { service, option: field.option, value }).then(onDetail)} /></Row>;
 }
 
-/** The model: typed, or picked from the list the service offers. */
+/** The model: typed, or picked from the whole list the service offers (a combo box, as on macOS: the list is never
+ *  narrowed to what the box already holds). */
 function ModelRow({ service, field, onDetail }: { service: string; field: FieldDef; onDetail: (d: Detail) => void }) {
   const [models, setModels] = useState<string[]>(field.remembered ?? []);
   const [status, setStatus] = useState("");
-  const id = `models-${service}-${field.option}`;
-  const fetchModels = async () => {
+  const fetchModels = async (): Promise<string[]> => {
     setStatus(t("正在获取模型列表…"));
-    try { setModels(await call("translation.fetchModels", { service })); setStatus(""); }
-    catch (e: any) { setStatus(e.message); }
+    try { const list: string[] = await call("translation.fetchModels", { service }); setModels(list); setStatus(""); return list; }
+    catch (e: any) { setStatus(e.message); return []; }
+  };
+  const choose = (value: string) => { if (value !== field.value) call("translation.setField", { service, option: field.option, value }).then(onDetail); };
+  const showList = async (anchor: HTMLElement) => {
+    const list = models.length ? models : await fetchModels();
+    if (!list.length) return;
+    openMenuAt(anchor, [...new Set(list)].map((m) => ({ label: m, checked: m === field.value, action: () => choose(m) })));
   };
   return (
     <Row title={field.title} detail={status || undefined}>
       <div style={{ width: 280, display: "flex", gap: 6 }}>
-        <input className="field" list={id} defaultValue={field.value} key={field.value} placeholder={field.placeholder} spellCheck={false}
-          onFocus={() => { if (models.length === 0) fetchModels(); }}
-          onBlur={(e) => { if (e.target.value.trim() !== field.value) call("translation.setField", { service, option: field.option, value: e.target.value.trim() }).then(onDetail); }}
-          onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") e.currentTarget.blur(); }} />
-        <datalist id={id}>{models.map((m) => <option key={m} value={m} />)}</datalist>
-        <button className="btn" onClick={fetchModels} title={t("正在获取模型列表…")}>↻</button>
+        <div className="combo">
+          <input className="field" defaultValue={field.value} key={field.value} placeholder={field.placeholder} spellCheck={false}
+            onBlur={(e) => choose(e.target.value.trim())}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "ArrowDown" && e.altKey) showList(e.currentTarget.parentElement as HTMLElement);
+            }} />
+          <button className="combo-arrow" title={t("模型")} onMouseDown={(e) => e.preventDefault()}
+            onClick={(e) => showList(e.currentTarget.parentElement as HTMLElement)}><ChevronDown size={13} /></button>
+        </div>
+        <button className="btn" onClick={() => fetchModels()} title={t("刷新")}>↻</button>
       </div>
     </Row>
   );

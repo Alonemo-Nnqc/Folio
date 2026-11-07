@@ -95,6 +95,8 @@ public sealed class Bridge(HostWindow window)
 
     public async void Receive(CoreWebView2WebMessageReceivedEventArgs e)
     {
+        // Only Folio's own pages talk to the host: never a page that got loaded some other way.
+        if (!e.Source.StartsWith("https://folio.ui/", StringComparison.OrdinalIgnoreCase)) return;
         JsonElement? id = null;
         try
         {

@@ -54,6 +54,7 @@ export interface State {
   activeTab: string; // "library" or a reader tab's key
   inspectorPage: "info" | "annotations" | "notes";
   captionWidth: number;
+  readerNotes: Record<string, boolean>; // reader tabs with their notes panel open
   windowState: string;
   active: boolean;
   dark: boolean;
@@ -75,7 +76,7 @@ let state: State = {
   items: new Map(), files: new Map(), filesByItem: {}, groups: new Map(), topGroups: [], childGroups: {}, tags: [], itemTags: {}, itemGroups: {}, noted: new Set(), counts: {}, root: "", libraryVersion: 0,
   rows: [], scope: "all", searchText: "", searchWholeLibrary: false, includeFulltext: false, sortAscending: true,
   selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info",
-  captionWidth: 138, windowState: "normal", active: true, dark: false,
+  captionWidth: 138, readerNotes: {}, windowState: "normal", active: true, dark: false,
   statics: { version: "", channel: "", annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
 };
 
@@ -198,4 +199,3 @@ export function groupsForMenus(s: State): { group: Group; depth: number }[] {
 }
 
 export function scopeGroupId(scope: string) { return scope.startsWith("group:") ? scope.slice(6) : null; }
-export function scopeTagId(scope: string) { return scope.startsWith("tag:") ? scope.slice(4) : null; }

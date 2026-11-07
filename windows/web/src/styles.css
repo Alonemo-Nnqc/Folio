@@ -50,7 +50,6 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .secondary { color: var(--secondary); }
 .mono { font-family: var(--font-mono); }
 .tabular { font-variant-numeric: tabular-nums; }
-.spacer { flex: 1; min-width: 0; }
 
 /* The window's frame. */
 .top-resize { position: fixed; left: 0; right: 0; top: 0; height: 4px; z-index: 900; cursor: ns-resize; app-region: no-drag; }
@@ -62,6 +61,23 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .column-sidebar { border-right: 1px solid var(--separator); }
 .splitter { position: absolute; top: 0; bottom: 0; width: 7px; z-index: 30; cursor: col-resize; app-region: no-drag; }
 .titlebar-row { height: var(--toolbar-h); flex: none; display: flex; align-items: center; padding: 0 10px; gap: 6px; }
+
+/* Panels that slide. Transitions run only while something is moving: dragging a splitter stays direct. */
+.slide { position: relative; flex: none; height: 100%; min-width: 0; }
+.slide.moving { overflow: hidden; transition: width .2s cubic-bezier(.2, 0, 0, 1); }
+.slide-inner { position: absolute; top: 0; bottom: 0; }
+.panel-toggle, .sidebar-menu, .sidebar-toggle { position: absolute; top: 9px; z-index: 13; height: 34px; }
+.sidebar-menu { left: 10px; }
+.window.moving .titlebar-row { transition: padding .2s cubic-bezier(.2, 0, 0, 1); }
+.window.moving .sidebar-toggle, .reader.moving .sidebar-toggle { transition: left .2s cubic-bezier(.2, 0, 0, 1); }
+.reader.moving iframe, .reader.moving .reader-top { transition: left .2s cubic-bezier(.2, 0, 0, 1), right .2s cubic-bezier(.2, 0, 0, 1), width .2s cubic-bezier(.2, 0, 0, 1); }
+.reader.moving .reader-head { transition: padding .2s cubic-bezier(.2, 0, 0, 1); }
+.reader.moving .reader-left-top, .reader.moving .reader-notes { transition: transform .2s cubic-bezier(.2, 0, 0, 1); }
+.reader-left-top.entering { animation: slide-from-left .2s cubic-bezier(.2, 0, 0, 1); }
+.reader-notes.entering { animation: slide-from-right .2s cubic-bezier(.2, 0, 0, 1); }
+@keyframes slide-from-left { from { transform: translateX(-100%); } }
+@keyframes slide-from-right { from { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .slide.moving, .window.moving .titlebar-row, .window.moving .sidebar-toggle, .reader.moving * { transition: none !important; animation: none !important; } }
 
 /* Round glass buttons of the toolbars. */
 .glass-button { width: 34px; height: 34px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 17px; background: var(--glass);
@@ -151,7 +167,6 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Inspector. */
-.inspector-top { height: var(--toolbar-h); flex: none; display: flex; align-items: center; padding: 0 10px; }
 .segmented { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--control-2); gap: 1px; }
 .segmented button { border: 0; background: transparent; border-radius: 6px; padding: 2px 12px; font-size: 12px; color: var(--text); white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; }
 .segmented button:hover:not(.on) { background: var(--hover); }
@@ -218,6 +233,11 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .select option, .select optgroup { background: var(--sheet); color: var(--text); }
 .field { height: 26px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); padding: 0 8px; width: 100%; user-select: text; cursor: text; }
 .field:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* A combo box: type a value or pick one from the whole list. */
+.combo { position: relative; flex: 1; min-width: 0; display: flex; }
+.combo .field { padding-right: 26px; }
+.combo-arrow { position: absolute; right: 2px; top: 2px; bottom: 2px; width: 22px; border: 0; border-radius: 4px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.combo-arrow:hover { background: var(--hover); color: var(--text); }
 textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .checkbox { display: inline-flex; align-items: center; gap: 6px; }
 .checkbox input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
@@ -251,7 +271,6 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .swatches { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
 .swatch { width: 22px; height: 22px; border-radius: 11px; border: 0; padding: 0; position: relative; }
 .swatch.on::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--text); opacity: .75; }
-.form-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; }
 .result-row { padding: 7px 9px; border-radius: 7px; }
 .result-row:hover { background: var(--hover); }
 .result-row.selected { background: var(--accent); color: #fff; }
@@ -283,7 +302,6 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 15; background: var(--popup); backdrop-filter: blur(24px); padding: 6px 8px 6px 14px; border-radius: 16px; box-shadow: var(--popup-shadow); }
 .note-pop { position: fixed; z-index: 950; background: var(--sheet); padding: 8px; border-radius: 10px; box-shadow: var(--popup-shadow); width: 300px; app-region: no-drag; }
 .note-pop textarea { width: 100%; height: 130px; }
-.load-error { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--secondary); }
 
 /* Settings. */
 .settings { display: flex; height: 100%; }

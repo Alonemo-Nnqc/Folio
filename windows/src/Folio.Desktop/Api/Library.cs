@@ -156,9 +156,9 @@ public static partial class Api
         Bridge.On("item.open", a => { M.OpenItem(a.Str("id"), a.OptInt("page")); return null; });
         Bridge.On("file.open", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) M.OpenFile(f, a.OptInt("page")); return null; });
         Bridge.On("file.reveal", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.Reveal(M.Library.FilePath(f)); return null; });
-        Bridge.On("file.openSystem", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.Open(M.Library.FilePath(f)); return null; });
+        Bridge.On("file.openSystem", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.OpenPath(M.Library.FilePath(f)); return null; });
         Bridge.On("file.openWithDialog", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.OpenWithDialog(M.Library.FilePath(f)); return null; });
-        Bridge.On("library.revealRoot", _ => { Shell.Open(M.Library.Root); return null; });
+        Bridge.On("library.revealRoot", _ => { Shell.OpenPath(M.Library.Root); return null; });
 
         // Items.
         Bridge.On("item.update", a =>

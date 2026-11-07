@@ -227,7 +227,8 @@ public static partial class LocalAgents
             case LocalAgent.Openclaw:
                 return ([.. WithModel(["infer", "model", "run", "--local", "--json"], "--model"), "--prompt"], true, true);
             default:
-                return (["--profile", "headless"], true, true);
+                // "-": the task from stdin, so a long prompt never meets a command line's limit.
+                return (["--profile", "headless", "-"], false, true);
         }
     }
 
@@ -289,6 +290,10 @@ public static class AgentFailure
         if (clean.Contains("{\"") || clean.Contains("{\n")) clean = said;
         var detail = $"agent {agent.Command()}: " + said;
         bool Has(string pattern) => Regex.IsMatch(clean, pattern, RegexOptions.IgnoreCase);
+        // Codex has already reconnected five times by then: retrying the batch only makes the translation look stuck.
+        // Usually its provider's address is wrong (a relay without /v1 answers with its web page).
+        if (agent == LocalAgent.Codex && Has(@"stream disconnected before completion|stream closed before response\.completed"))
+            return new ProviderError(ProviderError.Kinds.AgentSetup, ("agent-setup codex: stream-disconnected " + (AgentModels.CodexCustomProvider()?.BaseUrl ?? "")).TrimEnd());
         if (ProviderError.IsContentRefusal(clean)) return new ProviderError(ProviderError.Kinds.Refused, detail);
         if (Has(@"too many requests|rate.?limit|\b429\b|resource.?exhausted")) return ProviderError.HttpStatus(429, detail);
         if (Has(@"\b(http|status|code)[ :=]*402\b|insufficient.?(balance|quota|credit)|out of credits|usage limit|quota exceeded|exceeded your"))
@@ -298,7 +303,7 @@ public static class AgentFailure
             return ProviderError.HttpStatus(404, detail + " model_not_found");
         if (Has(@"not (logged|signed) in|please (log|sign) ?in|log ?in (first|required)|run .{0,30}(login|auth)|no inference provider|not authenticated|authentication (is )?(required|failed)|unauthori[sz]ed|\b401\b|invalid.?api.?key|no api key|missing api key|set an api key|not configured|no (provider|model) (is )?(configured|selected)|first.?run|onboard|error authenticating|failed to authenticate|oauth|session expired|ineligible|no longer supported|migrate to"))
             return Setup(agent, clean);
-        if (Has(@"unknown (option|flag|argument)|unrecognized (option|argument)|unexpected argument|invalid option|no such option|update required|please (update|upgrade)"))
+        if (Has(@"unknown (option|flag|argument)|unrecognized (option|argument)|unexpected argument|invalid option|no such option|update required|please (update|upgrade)|command line is too long"))
             return Setup(agent, clean);
         var code = Regex.Match(clean, @"(?i)\bHTTP[ /:]*(?:1\.1 )?(\d{3})\b");
         if (code.Success && int.TryParse(code.Groups[1].Value, out var status)) return ProviderError.HttpStatus(status, detail + $" http {status}");
@@ -322,6 +327,8 @@ public static class AgentFailure
         if (TranslationErrorClassifier.FirstMatch(@"""(?:message|error|detail|result)""\s*:\s*""((?:[^""\\]|\\.)+)""", cleaned) is { } message)
             return message[..Math.Min(400, message.Length)];
         var lines = cleaned.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("at ")).ToList();
+        // Codex prints the prompt back before its errors; its own lines say "ERROR:".
+        if (lines.LastOrDefault(l => l.StartsWith("ERROR:")) is { } marked) lines = [marked];
         var line = lines.FirstOrDefault(l => Regex.IsMatch(l, @"(?i)error|fail|denied|not |no |invalid|too many|unknown|please|http \d")) ?? lines.FirstOrDefault() ?? text;
         line = Regex.Replace(line, @"^(?i)(error:\s*)+", "");
         return line[..Math.Min(400, line.Length)];
@@ -358,7 +365,8 @@ public sealed class AgentProvider(LocalAgent agent, string executable, string? m
             try
             {
                 var stdout = await LocalProcess.Run([executable, .. arguments, .. promptArgument ? [prompt] : Array.Empty<string>()],
-                                                    promptArgument ? "" : prompt, 600, cancel);
+                                                    promptArgument ? "" : prompt, 600, cancel,
+                                                    agent == LocalAgent.Deepseek ? DeepseekHarness.Environment() : null);
                 var reply = AgentFailure.StripAnsi(agent.Answer(stdout, outputFile));
                 if (AgentFailure.InReply(reply, agent) is { } failure) throw failure;
                 return reply;
@@ -561,11 +569,13 @@ public static class LocalProcess
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
     }
 
-    /// <summary>The program and arguments that run <paramref name="command"/> (a .cmd shim becomes its node script).</summary>
-    public static (string File, List<string> Arguments) Resolve(IReadOnlyList<string> command)
+    /// <summary>The program and arguments that run <paramref name="command"/> (a .cmd shim becomes what it starts), and the
+    /// variables the shim sets for it. Through cmd.exe only as a last resort: its line stops at 8191 characters, and a prompt is longer.</summary>
+    public static (string File, List<string> Arguments, Dictionary<string, string> Environment) Resolve(IReadOnlyList<string> command)
     {
         var file = command[0];
         var rest = command.Skip(1).ToList();
+        var none = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var extension = Path.GetExtension(file).ToLowerInvariant();
         if (extension is ".cmd" or ".bat" && File.Exists(file))
         {
@@ -574,30 +584,34 @@ public static class LocalProcess
             // npm: "%_prog%"  "%dp0%\node_modules\@scope\pkg\cli.js" %*  (the script need not have an extension: cline's is bin\cline).
             // pnpm: "%~dp0\node.exe" "%~dp0\..\pkg\cli.js" %*
             var script = Regex.Match(text, @"(?:%_prog%|\bnode(?:\.exe)?)""?\s+""%~?dp0%?\\([^""]+)""", RegexOptions.IgnoreCase);
-            if (!script.Success) script = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.(?:js|mjs|cjs))""", RegexOptions.IgnoreCase);
-            if (script.Success)
-            {
-                var path = Path.GetFullPath(Path.Combine(folder, script.Groups[1].Value));
-                var node = Path.Combine(folder, "node.exe");
-                if (!File.Exists(node)) node = FindOnPath("node") ?? "node";
-                return (node, [path, .. rest]);
-            }
+            if (script.Success) return (NodeBeside(folder), [Path.GetFullPath(Path.Combine(folder, script.Groups[1].Value)), .. rest], none);
+            // Any other shim of the usual shape: SET lines, then one program with its arguments and %*.
+            // Pi's: "%node%" "%~dp0pi-launcher.js" %*   DeepSeek Harness's: "%~dp0..\..\DeepSeek Harness.exe" --expose-internals "%~dp0..\cli.js" %*
+            if (BatchShim.Read(file, text) is { } shim) return (shim.Program, [.. shim.Arguments, .. rest], shim.Environment);
+            script = Regex.Match(text, @"""%~?dp0%?\\?([^""]+?\.(?:js|mjs|cjs))""", RegexOptions.IgnoreCase);
+            if (script.Success) return (NodeBeside(folder), [Path.GetFullPath(Path.Combine(folder, script.Groups[1].Value)), .. rest], none);
             // A shim starting an .exe next to it: "%dp0%\bin\tool.exe" %*  (not the check for node.exe that npm's shims start with).
-            var exe = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.exe)""\s+%\*", RegexOptions.IgnoreCase);
-            if (exe.Success) return (Path.GetFullPath(Path.Combine(folder, exe.Groups[1].Value)), rest);
+            var exe = Regex.Match(text, @"""%~?dp0%?\\?([^""]+?\.exe)""\s+%\*", RegexOptions.IgnoreCase);
+            if (exe.Success) return (Path.GetFullPath(Path.Combine(folder, exe.Groups[1].Value)), rest, none);
             // A shim starting another one (yarn's global folder).
-            var inner = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.cmd)""", RegexOptions.IgnoreCase);
+            var inner = Regex.Match(text, @"""%~?dp0%?\\?([^""]+?\.cmd)""", RegexOptions.IgnoreCase);
             if (inner.Success && Path.GetFullPath(Path.Combine(folder, inner.Groups[1].Value)) is var next && File.Exists(next) && !next.Equals(file, StringComparison.OrdinalIgnoreCase))
                 return Resolve([next, .. rest]);
-            return (CommandShell, ["/d", "/s", "/c", CommandLine.ForCmd([file, .. rest])]);
+            return (CommandShell, ["/d", "/s", "/c", CommandLine.ForCmd([file, .. rest])], none);
         }
-        if (extension == ".ps1") return ("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. rest]);
-        return (file, rest);
+        if (extension == ".ps1") return ("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. rest], none);
+        return (file, rest, none);
+    }
+
+    static string NodeBeside(string folder)
+    {
+        var node = Path.Combine(folder, "node.exe");
+        return File.Exists(node) ? node : FindOnPath("node") ?? "node";
     }
 
     public static string CommandShell => Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
 
-    static string? FindOnPath(string name)
+    internal static string? FindOnPath(string name)
     {
         foreach (var folder in ShellEnvironment.SearchFolders())
             foreach (var extension in ShellEnvironment.Extensions)
@@ -608,11 +622,12 @@ public static class LocalProcess
         return null;
     }
 
-    public static async Task<string> Run(IReadOnlyList<string> command, string input, double timeout, CancellationToken cancel)
+    public static async Task<string> Run(IReadOnlyList<string> command, string input, double timeout, CancellationToken cancel,
+                                         IReadOnlyDictionary<string, string>? environment = null)
     {
         var work = Path.Combine(Path.GetTempPath(), "folio-translate-work");
         Directory.CreateDirectory(work);
-        var (file, arguments) = Resolve(command);
+        var (file, arguments, shimEnvironment) = Resolve(command);
         var info = new ProcessStartInfo(file)
         {
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false,
@@ -622,6 +637,8 @@ public static class LocalProcess
         CommandLine.Apply(info, arguments);
         info.Environment.Clear();
         foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
+        foreach (var (k, v) in shimEnvironment) info.Environment[k] = v;
+        foreach (var (k, v) in environment ?? new Dictionary<string, string>()) info.Environment[k] = v;
         Process process;
         try { process = Process.Start(info) ?? throw new InvalidOperationException(); }
         catch (Exception e)
@@ -676,6 +693,118 @@ public static class LocalProcess
     }
 }
 
+/// <summary>What a batch shim runs, read the way cmd.exe would for the simple shape installers write: SET lines (also behind
+/// IF [NOT] EXIST), then one program with its arguments and %*. Anything cleverer (GOTO, CALL, pipes) is left to cmd.exe.</summary>
+public static partial class BatchShim
+{
+    public sealed record Launch(string Program, List<string> Arguments, Dictionary<string, string> Environment);
+
+    [GeneratedRegex(@"^set\s+""?([^=\s""]+)=([^""]*)""?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex SetLine();
+    [GeneratedRegex(@"^if\s+(not\s+)?exist\s+""([^""]+)""\s+(set\s.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex IfExistLine();
+    [GeneratedRegex(@"""([^""]*)""|(\S+)")]
+    private static partial Regex Token();
+
+    public static Launch? Read(string file, string text)
+    {
+        var folder = Path.GetDirectoryName(Path.GetFullPath(file))! + Path.DirectorySeparatorChar;
+        var set = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string Expand(string value)
+        {
+            value = Regex.Replace(value, "%~dp0", _ => folder, RegexOptions.IgnoreCase);
+            return Regex.Replace(value, @"%([^%\s]+)%", m =>
+                set.TryGetValue(m.Groups[1].Value, out var v) ? v : Environment.GetEnvironmentVariable(m.Groups[1].Value) ?? m.Value);
+        }
+        bool Apply(string line)
+        {
+            var m = SetLine().Match(line);
+            if (!m.Success) return false;
+            set[m.Groups[1].Value] = Expand(m.Groups[2].Value);
+            return true;
+        }
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim().TrimStart('@').Trim();
+            if (line.Length == 0 || line.StartsWith("::") || Regex.IsMatch(line, @"^(rem\b|echo\b|setlocal\b|title\b|chcp\b)", RegexOptions.IgnoreCase)) continue;
+            if (line.Contains("%*")) return Command(line, Expand, set);
+            if (Apply(line)) continue;
+            var condition = IfExistLine().Match(line);
+            if (condition.Success)
+            {
+                var path = Expand(condition.Groups[2].Value);
+                bool exists = File.Exists(path) || Directory.Exists(path);
+                if (exists != condition.Groups[1].Success && !Apply(condition.Groups[3].Value.Trim())) return null;
+                continue;
+            }
+            // GOTO, CALL, a block: more than a list of settings before the command.
+            return null;
+        }
+        return null;
+    }
+
+    static Launch? Command(string line, Func<string, string> expand, Dictionary<string, string> set)
+    {
+        // Pipes, redirections and chained commands need cmd.exe itself.
+        bool quoted = false;
+        foreach (var c in line)
+        {
+            if (c == '"') quoted = !quoted;
+            else if (!quoted && c is '&' or '|' or '<' or '>') return null;
+        }
+        var tokens = Token().Matches(line).Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).ToList();
+        if (tokens.Count < 2 || tokens[^1] != "%*" || tokens.Take(tokens.Count - 1).Any(t => t.Contains("%*"))) return null;
+        var parts = tokens.Take(tokens.Count - 1).Select(t => expand(t)).ToList();
+        if (parts.Any(p => Regex.IsMatch(p, "%[^%]+%"))) return null;
+        var program = parts[0];
+        if (!Path.IsPathRooted(program))
+        {
+            if (program.Contains('\\') || program.Contains('/')) return null;
+            program = LocalProcess.FindOnPath(program) ?? "";
+            if (program.Length == 0) return null;
+        }
+        program = Path.GetFullPath(program);
+        if (!File.Exists(program) || Path.GetExtension(program).ToLowerInvariant() is ".cmd" or ".bat") return null;
+        var arguments = parts.Skip(1).Select(p => Path.IsPathRooted(p) && p.Contains("..") ? Path.GetFullPath(p) : p).ToList();
+        return new Launch(program, arguments, set);
+    }
+}
+
+/// <summary>DeepSeek Harness keeps the API key entered on its Models page in its credentials file, which only its desktop
+/// app reads: the headless profile takes DEEPSEEK_API_KEY from the environment it is started in. Folio hands it that key,
+/// to that process only, unless the environment already has one.</summary>
+public static partial class DeepseekHarness
+{
+    const string KeyName = "DEEPSEEK_API_KEY";
+
+    static string Home => System.Environment.GetEnvironmentVariable("DSH_HOME") is { Length: > 0 } home
+        ? home : Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile), ".dsh");
+
+    public static Dictionary<string, string> Environment()
+    {
+        if (!string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable(KeyName))
+            || !string.IsNullOrEmpty(ShellEnvironment.TerminalEnvironment().GetValueOrDefault(KeyName))) return [];
+        try
+        {
+            var file = Path.Combine(Home, ".credentials.yaml");
+            return File.Exists(file) && StoredKey(File.ReadAllText(file)) is { } key ? new() { [KeyName] = key } : [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+    }
+
+    [GeneratedRegex(@"^refs:[ \t]*\r?\n((?:[ \t]+[^\n]*\r?\n?)*)", RegexOptions.Multiline)]
+    private static partial Regex RefsSection();
+
+    /// <summary>The key under "refs:" in the credentials file.</summary>
+    public static string? StoredKey(string yaml)
+    {
+        var refs = RefsSection().Match(yaml);
+        if (!refs.Success) return null;
+        var line = Regex.Match(refs.Groups[1].Value, $@"(?m)^[ \t]+{KeyName}:[ \t]*[""']?([^""'\s]+)[""']?[ \t]*\r?$");
+        return line.Success ? line.Groups[1].Value : null;
+    }
+}
+
 /// <summary>Runs a command briefly to see what it says (its --help, its --version).</summary>
 public static class CommandProbe
 {
@@ -685,7 +814,7 @@ public static class CommandProbe
     {
         try
         {
-            var (file, args) = LocalProcess.Resolve([executable, .. arguments]);
+            var (file, args, shimEnvironment) = LocalProcess.Resolve([executable, .. arguments]);
             var info = new ProcessStartInfo(file)
             {
                 RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
@@ -694,6 +823,7 @@ public static class CommandProbe
             CommandLine.Apply(info, args);
             info.Environment.Clear();
             foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
+            foreach (var (k, v) in shimEnvironment) info.Environment[k] = v;
             using var process = Process.Start(info);
             if (process == null) return null;
             process.StandardInput.Close();
@@ -756,6 +886,8 @@ public static class AgentModels
                     var path = Path.IsPathRooted(catalog) ? catalog : Path.Combine(Home, ".codex", catalog);
                     if (JsonFile(path)?["models"] is JsonArray more) models.AddRange(more.Select(m => LocalAgents.Str(m?["slug"])).OfType<string>());
                 }
+                // A provider of the user's own (a relay set up with CC Switch, say) knows best what it serves: a catalog file lists only some.
+                if (CodexCustomProvider() is { } provider) models.AddRange(await ProviderModels(provider, cancel));
                 break;
             }
             case LocalAgent.Gemini:
@@ -830,6 +962,65 @@ public static class AgentModels
     static JsonNode? JsonFile(string path)
     {
         try { return JsonNode.Parse(File.ReadAllText(path)); } catch { return null; }
+    }
+
+    public sealed record CodexProvider(string Name, string BaseUrl, string? Token);
+
+    /// <summary>The provider codex uses when it is not OpenAI's own: [model_providers.name] in its config.</summary>
+    public static CodexProvider? CodexCustomProvider()
+    {
+        var config = Read(".codex", "config.toml");
+        var name = Value("model_provider", config);
+        if (string.IsNullOrWhiteSpace(name) || name == "openai") return null;
+        var section = $"model_providers.{name}";
+        if (SectionValue(config, section, "base_url") is not { Length: > 0 } url) return null;
+        var token = SectionValue(config, section, "experimental_bearer_token");
+        if (string.IsNullOrEmpty(token) && SectionValue(config, section, "env_key") is { Length: > 0 } variable)
+            token = Environment.GetEnvironmentVariable(variable) ?? ShellEnvironment.TerminalEnvironment().GetValueOrDefault(variable);
+        return new CodexProvider(name, url.TrimEnd('/'), string.IsNullOrEmpty(token) ? null : token);
+    }
+
+    /// <summary>What an OpenAI-compatible provider lists at /models (also under /v1, for an address given without it).</summary>
+    static async Task<List<string>> ProviderModels(CodexProvider provider, CancellationToken cancel)
+    {
+        var urls = new List<string> { provider.BaseUrl + "/models" };
+        if (Uri.TryCreate(provider.BaseUrl, UriKind.Absolute, out var uri) && uri.AbsolutePath.Trim('/').Length == 0) urls.Add(provider.BaseUrl + "/v1/models");
+        foreach (var url in urls)
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                if (provider.Token != null) request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", provider.Token);
+                using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+                limit.CancelAfter(TimeSpan.FromSeconds(10));
+                using var response = await Http.Client.SendAsync(request, limit.Token);
+                if (!response.IsSuccessStatusCode) continue;
+                if (JsonNode.Parse(await response.Content.ReadAsStringAsync(limit.Token)) is JsonObject { } body && body["data"] is JsonArray data)
+                    return data.Select(m => LocalAgents.Str(m?["id"])).OfType<string>().ToList();
+            }
+            catch (Exception e) when (e is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException) { }
+        }
+        return [];
+    }
+
+    /// <summary>key = value under [section] in a TOML file.</summary>
+    public static string? SectionValue(string toml, string section, string key)
+    {
+        bool inside = false;
+        foreach (var raw in toml.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.StartsWith('['))
+            {
+                inside = line.Trim('[', ']', ' ').Replace("\"", "").Replace("'", "") == section;
+                continue;
+            }
+            if (!inside) continue;
+            int eq = line.IndexOf('=');
+            if (eq < 0 || line[..eq].Trim() != key) continue;
+            return line[(eq + 1)..].Trim().Trim('"', '\'');
+        }
+        return null;
     }
 
     /// <summary>key = "value" in a TOML file (top level).</summary>

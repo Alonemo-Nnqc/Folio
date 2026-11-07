@@ -36,7 +36,11 @@ body { display: flex; }
 
 #sidebar { width: var(--sidebar-width); flex: none; display: flex; flex-direction: column; background: var(--sidebar);
   border-right: 1px solid var(--separator); box-sizing: border-box; user-select: none; padding-top: var(--sidebar-top); }
-body.no-sidebar #sidebar, body.no-sidebar #sidebarDivider { display: none; }
+body.no-sidebar #sidebar { transform: translateX(-100%); visibility: hidden; }
+body.no-sidebar #sidebarDivider { display: none; }
+body.moving #sidebar { transition: transform .2s cubic-bezier(.2, 0, 0, 1), visibility .2s; }
+body.moving #viewerContainer { transition: left .2s cubic-bezier(.2, 0, 0, 1); overflow-x: hidden; overflow-y: scroll; }
+@media (prefers-reduced-motion: reduce) { body.moving #sidebar, body.moving #viewerContainer { transition: none; } }
 #sidebarDivider { position: absolute; left: calc(var(--sidebar-width) - 3px); top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; }
 #sidebarTabs { display: flex; gap: 2px; margin: 4px auto 8px; padding: 2px; border-radius: 8px; background: var(--hover); flex: none; width: 128px; }
 #sidebarTabs button { flex: 1; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center;

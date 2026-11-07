@@ -7,8 +7,9 @@
 系统要求：Windows 10 2004（19041）及以上，x64 或 ARM64。
 
 1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases?q=win-v) 下载与电脑架构相符的 `Folio-win-x64-Setup.exe` 或 `Folio-win-arm64-Setup.exe`，不想安装也可以用 `Portable.zip`
-2. 运行安装程序。Folio 目前没有代码签名，SmartScreen 可能提示“已保护你的电脑”，点 **更多信息 ▸ 仍要运行**
+2. 运行安装程序，按向导选择安装位置（默认 `%LocalAppData%\Programs\Folio`）和是否创建桌面快捷方式。Folio 目前没有代码签名，SmartScreen 可能提示“已保护你的电脑”，点 **更多信息 ▸ 仍要运行**
 3. 不需要管理员权限，也不需要另外安装 .NET。阅读器依赖 Microsoft Edge WebView2 运行时：Windows 11 已自带，个别 Windows 10 上如果缺少，安装程序会自动安装；便携版则由 Folio 提示下载地址
+4. 关闭窗口后 Folio 留在通知区域继续运行；在托盘图标或左上角菜单中选择“退出 Folio”才会彻底退出。卸载在“设置 ▸ 应用”中进行，文献库和设置不会被删除
 
 之后的版本会通过应用内更新自动安装。
 
@@ -42,6 +43,6 @@ dotnet publish src/Folio.Cli -c Release -r win-x64 --self-contained -o publish
 
 ## 发布
 
-版本号与 macOS 版相互独立。在 `CHANGELOG.md` 中写好 `## [x.y.z]` 小节后推送 `win-vx.y.z` 标签，`.github/workflows/release-windows.yml` 会为 x64 和 ARM64 打包（Velopack 安装程序、便携版和增量更新包），并发布为 GitHub Release（不标记为 latest，以免影响 macOS 版的 Sparkle 更新源）。应用内更新只看 `win-v*` 发布。
+版本号与 macOS 版相互独立。在 `CHANGELOG.md` 中写好 `## [x.y.z]` 小节后推送 `win-vx.y.z` 标签，`.github/workflows/release-windows.yml` 会为 x64 和 ARM64 打包：Velopack 生成便携版和增量更新包，Inno Setup（`installer/Folio.iss`）再把便携版做成带向导的安装程序，并发布为 GitHub Release（不标记为 latest，以免影响 macOS 版的 Sparkle 更新源）。应用内更新只看 `win-v*` 发布。
 
 可选：在仓库 Secrets 中配置 `WINDOWS_PFX_BASE64` 和 `WINDOWS_PFX_PASSWORD` 为代码签名证书，可去掉 SmartScreen 的“未知发布者”提示。

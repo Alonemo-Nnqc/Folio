@@ -53,16 +53,16 @@ public static partial class Api
         Bridge.On("window.close", a => { App.Ui.TryEnqueue(() => a.Window?.Close()); return null; });
         Bridge.On("window.fullScreen", a => { a.Window?.ToggleFullScreen(); return null; });
         Bridge.On("window.resize", a => { a.Window?.BeginResize(a.Str("edge")); return null; });
-        Bridge.On("window.caption", a => { a.Window?.SetCaptionColors(a.Str("background"), a.Str("foreground")); return null; });
+        Bridge.On("window.caption", a => { a.Window?.SetCaptionColors(a.Str("background"), a.Str("foreground"), a.Bool("animate")); return null; });
         Bridge.On("window.theme", a => { a.Window?.ApplyTheme(a.Bool("dark")); return null; });
         Bridge.On("window.title", a => { if (a.Window != null) a.Window.Text = a.Str("title"); return null; });
         Bridge.On("window.settings", a => { App.OpenSettings(a.OptStr("page") ?? ""); return null; });
         Bridge.On("window.onboarding", _ => { App.OpenOnboarding(); return null; });
-        Bridge.On("window.quit", _ => { App.Main.Close(); return null; });
+        Bridge.On("window.quit", _ => { App.Quit(); return null; });
         Bridge.On("app.restart", _ => { App.Restart(); return null; });
         Bridge.On("app.onboardingDone", a => { M.Settings.OnboardingDone = true; App.Ui.TryEnqueue(() => a.Window?.Close()); return null; });
 
-        Bridge.On("shell.open", a => { Shell.Open(a.Str("target")); return null; });
+        Bridge.On("shell.open", a => { Shell.OpenUrl(a.Str("target")); return null; });
         Bridge.On("shell.reveal", a => { Shell.Reveal(a.Str("path")); return null; });
         Bridge.On("shell.copy", a => { Shell.CopyText(a.Str("text"), a.OptStr("html")); return null; });
         Bridge.On("toast.show", a => { M.Toasts.Show(a.Str("message"), a.OptStr("icon") ?? "info"); return null; });

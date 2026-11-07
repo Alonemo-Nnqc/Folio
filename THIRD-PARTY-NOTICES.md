@@ -18,12 +18,16 @@ Folio itself is under the MIT License (see `LICENSE`). Its apps contain the thir
 | [CSL styles and locales](https://github.com/citation-style-language) | | macOS, Windows | CC BY-SA 3.0 |
 | [SQLite](https://www.sqlite.org/copyright.html) | | Windows | Public domain |
 | [Microsoft.Web.WebView2](https://www.nuget.org/packages/Microsoft.Web.WebView2) | 1.0.3650.58 | Windows | Microsoft Software License Terms |
+| [Microsoft Edge WebView2 bootstrapper](https://developer.microsoft.com/microsoft-edge/webview2/) | | Windows installer | Microsoft Software License Terms (redistributable) |
+| [Inno Setup](https://jrsoftware.org/isinfo.php) | 7.1.1 | Windows installer | Inno Setup License |
 | [React](https://github.com/facebook/react) | 18.3.1 | Windows | MIT |
 | [Lucide](https://github.com/lucide-icons/lucide) | 0.468.0 | Windows | ISC |
 
 citeproc-js and the citation styles are not modified. Their sources and full terms are in the repository at [`macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md`](https://github.com/Alonemo-Nnqc/Folio/blob/main/macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) and `citeproc-LICENSE.txt` beside it.
 
 The WebView2 SDK's terms come with its NuGet package (`Microsoft.Web.WebView2`, `LICENSE.txt`).
+
+The Windows installer is built with Inno Setup (Copyright © 1997-2026 Jordan Russell and Martijn Laan, <https://jrsoftware.org/files/is/license.txt>); its setup and uninstall programs are part of the installer. Where the WebView2 runtime is missing, the installer runs Microsoft's unmodified WebView2 bootstrapper, which Microsoft permits redistributing.
 
 ## GRDB.swift
 
@@ -445,26 +449,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
-```
-
-## Windows Community Toolkit (Sizers)
-
-<https://github.com/CommunityToolkit/Windows>
-
-```text
-# Windows Community Toolkit
-
-Copyright © .NET Foundation and Contributors
-
-All rights reserved.
-
-## MIT License (MIT)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
 ## .NET runtime and libraries

@@ -28,6 +28,8 @@ public sealed class TranslationJob
     public TranslationRequest Request { get; }
     public string LogPath { get; }
     readonly CancellationTokenSource _cancel = new();
+    /// <summary>The user stopped it. The token above also stops the other batches when one fails: that is a failure, not a cancel.</summary>
+    volatile bool _cancelled;
     readonly RateGate _rateGate = new();
 
     /// <summary>Where translations are cached and logs written. Tests point it at a scratch folder.</summary>
@@ -41,11 +43,12 @@ public sealed class TranslationJob
 
     public void Cancel()
     {
+        _cancelled = true;
         _cancel.Cancel();
         LocalProcess.TerminateAll();
     }
 
-    public bool IsCancelled => _cancel.IsCancellationRequested;
+    public bool IsCancelled => _cancelled;
 
     /// <summary>Runs the job; events arrive on worker threads. The returned event is the last one (also emitted).</summary>
     public async Task<TranslationEvent> Run(Action<TranslationEvent> emit)
@@ -56,7 +59,7 @@ public sealed class TranslationJob
         {
             result = await Task.Run(() => RunJob(emit, log, _cancel.Token));
         }
-        catch (Exception e) when (IsCancelled || e is OperationCanceledException || e is ProviderError { Kind: ProviderError.Kinds.Cancelled })
+        catch (Exception e) when (IsCancelled || (!_cancel.IsCancellationRequested && (e is OperationCanceledException || e is ProviderError { Kind: ProviderError.Kinds.Cancelled })))
         {
             result = new TranslationEvent.Cancelled();
         }

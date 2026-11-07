@@ -342,7 +342,7 @@ public static class FileLabel
     }
 
     /// <summary>A reader tab's name: what tells the papers and their translations apart when tabs are narrow, so the kind of
-    /// translation comes first and the paper's short title last: SnakeSAM, 译文 · SnakeSAM, 译文 · Google · SnakeSAM.</summary>
+    /// translation comes first and the paper's short title last: SnakeSAM, 译文 · Google · SnakeSAM, 双语对照 · DeepSeek · SnakeSAM.</summary>
     public static string TabTitle(FileRecord file, Item? item, IReadOnlyList<FileRecord> files)
     {
         var stem = Path.GetFileNameWithoutExtension(file.FileName);
@@ -370,7 +370,8 @@ public static class FileLabel
         var sameService = others.Where(f => Parts(f).Service == own.Service).ToList();
         var sameModel = sameService.Where(f => Parts(f).Model == own.Model).ToList();
         var result = new List<string>();
-        if (sameService.Count < others.Count && own.Service.Length > 0) result.Add(own.Service);
+        // Who translated it is always worth seeing (on Windows the tab is all a reader shows); the model and the time only to tell it from the others.
+        if (own.Service.Length > 0) result.Add(own.Service);
         if (sameModel.Count < sameService.Count && own.Model.Length > 0) result.Add(own.Model);
         if (sameModel.Count > 0) result.Add(MadeAt(file, sameModel));
         return result;

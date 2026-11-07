@@ -20,6 +20,8 @@ const COLUMNS: { key: string; title: string; sort: string; width: number }[] = [
   { key: "citationKey", title: "引用键", sort: "citationKey", width: 140 },
 ];
 
+const TITLE_MIN = 160;
+
 const dash = (v?: string | number | null) => (v === undefined || v === null || v === "" ? "—" : String(v));
 
 function cellText(key: string, item: Item, s: State): string {
@@ -61,7 +63,7 @@ interface FlatRow { itemId: string; fileId?: string }
 
 let anchor: string | null = null;
 
-export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: { toolbarLead?: React.ReactNode; toolbarTrailing?: React.ReactNode; trailingInset?: number; tabs?: React.ReactNode }) {
+export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: number; trailingInset?: number; tabs?: React.ReactNode }) {
   const rows = useStore((s) => s.rows);
   const scope = useStore((s) => s.scope);
   const groups = useStore((s) => s.groups);
@@ -96,7 +98,36 @@ export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: 
 
   const columns = useMemo(() => visible.map((k) => COLUMNS.find((c) => c.key === k)).filter(Boolean) as typeof COLUMNS, [visible]);
   const widthOf = (key: string) => liveWidths[key] ?? widths[key] ?? COLUMNS.find((c) => c.key === key)!.width;
-  const minWidth = 12 + columns.reduce((sum, c) => sum + (c.key === "title" ? 170 : widthOf(c.key)), 0);
+  // As on macOS: the title takes what the window has left (and follows the window's width); dragging a divider moves that
+  // divider with the pointer and the columns after it along, so the table may grow wider than the window. What the user's
+  // drags added to the title's share is kept as titleExtra.
+  const [viewWidth, setViewWidth] = useState(0);
+  const [liveExtra, setLiveExtra] = useState<number | null>(null);
+  const othersWidth = columns.reduce((sum, c) => sum + (c.key === "title" ? 0 : widthOf(c.key)), 0);
+  const extra = liveExtra ?? widths.titleExtra ?? 0;
+  const titleWidth = viewWidth > 0 ? Math.max(TITLE_MIN, Math.round(viewWidth - 12 - othersWidth + extra)) : undefined;
+  const titleStyle = titleWidth ? { width: titleWidth, flex: "none" } : { minWidth: TITLE_MIN };
+  const minWidth = 12 + othersWidth + (titleWidth ?? TITLE_MIN);
+
+  const resizeColumn = (e: React.PointerEvent, key: string) => {
+    const title = titleWidth ?? TITLE_MIN;
+    const extraStart = title - (viewWidth - 12 - othersWidth);
+    const start = key === "title" ? title : widthOf(key);
+    const min = key === "title" ? TITLE_MIN : 40;
+    let latest = start, latestExtra = extraStart;
+    dragPointer(e, (dx) => {
+      latest = Math.max(min, Math.round(start + dx));
+      latestExtra = extraStart + latest - start;
+      if (key !== "title") setLiveWidths({ [key]: latest });
+      setLiveExtra(latestExtra);
+    }, () => {
+      const stored = { ...getState().settings.columnWidths, titleExtra: latestExtra };
+      if (key !== "title") stored[key] = latest;
+      setSetting("columnWidths", stored);
+      setLiveWidths({});
+      setLiveExtra(null);
+    });
+  };
 
   const flat: FlatRow[] = useMemo(() => {
     const out: FlatRow[] = [];
@@ -112,9 +143,10 @@ export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: 
 
   useLayoutEffect(() => {
     const el = scroller.current!;
-    const observer = new ResizeObserver(() => setHeight(el.clientHeight));
+    const measure = () => { setHeight(el.clientHeight); setViewWidth(el.clientWidth); };
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
-    setHeight(el.clientHeight);
+    measure();
     return () => observer.disconnect();
   }, []);
 
@@ -253,8 +285,7 @@ export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: 
 
   return (
     <>
-      <div className="titlebar-row drag" style={trailingInset ? { paddingRight: trailingInset + 6 } : undefined}>
-        {toolbarLead}
+      <div className="titlebar-row drag" style={{ paddingLeft: leadInset || undefined, paddingRight: trailingInset ? trailingInset + 6 : undefined }}>
         <div className="list-title">
           <div className="name ellipsis">{scopeName}</div>
           <div className="count tabular">{t("%lld 项", rows.length)}</div>
@@ -266,7 +297,6 @@ export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: 
           <button title={t("引用与导出")} disabled={selection.length === 0} onClick={(e) => openMenuAt(e.currentTarget, citeMenu(selection))}><Share size={16} strokeWidth={1.7} /></button>
         </div>
         <SearchBox inputRef={searchRef} value={searching} placeholder={t("搜索文献")} onChange={(v) => { typing.current = true; setSearching(v); call("library.search", { text: v }).finally(() => { typing.current = false; }); }} />
-        {toolbarTrailing}
       </div>
       {tabs}
       {searchText.trim() && (
@@ -299,16 +329,11 @@ export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: 
         <div className="table-inner" style={{ height: 28 + flat.length * ROW + 8, minWidth }}>
           <div className="table-head" onContextMenu={columnsMenu}>
             {columns.map((c) => (
-              <div key={c.key} className={`th${c.key === "title" ? " title" : ""}`} style={c.key === "title" ? { minWidth: 170 } : { width: widthOf(c.key) }}
+              <div key={c.key} className={`th${c.key === "title" ? " title" : ""}`} style={c.key === "title" ? titleStyle : { width: widthOf(c.key) }}
                 onClick={() => call("library.sort", { column: c.sort, ascending: sortColumn === c.sort ? !sortAscending : true })}>
                 <span className="ellipsis">{c.title === "DOI" ? "DOI" : t(c.title)}</span>
                 {sortColumn === c.sort && (sortAscending ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
-                {c.key !== "title" && <span className="grip" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => {
-                  const start = widthOf(c.key);
-                  let latest = start;
-                  dragPointer(e, (dx) => { latest = Math.max(40, start + dx); setLiveWidths((w) => ({ ...w, [c.key]: latest })); },
-                    () => { setSetting("columnWidths", { ...getState().settings.columnWidths, [c.key]: latest }); setLiveWidths({}); });
-                }} />}
+                <span className="grip" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => resizeColumn(e, c.key)} />
               </div>
             ))}
           </div>
@@ -359,7 +384,7 @@ export function ItemList({ toolbarLead, toolbarTrailing, trailingInset, tabs }: 
                 {columns.map((c) => {
                   if (c.key === "title") {
                     return (
-                      <div key="title" className="td title" style={{ minWidth: 170 }}>
+                      <div key="title" className="td title" style={titleStyle}>
                         {fileCount > 0 && !standalone
                           ? <button className="disc" onClick={(e) => { e.stopPropagation(); toggleExpanded(item.id); }} onDoubleClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>{expanded.has(item.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>
                           : <span className="disc-space" />}

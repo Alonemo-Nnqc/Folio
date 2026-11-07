@@ -11,10 +11,41 @@ namespace Folio.App;
 /// <summary>Opening files, folders and links with Windows.</summary>
 static class Shell
 {
-    public static void Open(string target)
+    static void Open(string target)
     {
         try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
         catch (Exception e) { App.Model?.Toasts.Show(e.Message, "warning"); }
+    }
+
+    /// <summary>A web or mail link: from a PDF, a paper's metadata, Folio's own menus. Nothing else, so that a link in a
+    /// document can never start a program (file:, ms-msdt:, search-ms: and the like go to ShellExecute too).</summary>
+    public static void OpenUrl(string url)
+    {
+        if (Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" or "mailto")
+            Open(uri.AbsoluteUri);
+        else
+            App.Model?.Toasts.Show(Loc.S("不能打开这个链接：%@", url.Length > 80 ? url[..80] + "…" : url), "warning");
+    }
+
+    /// <summary>What Windows would run rather than show.</summary>
+    static readonly HashSet<string> Runnable = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".msi", ".msp", ".msc",
+        ".scr", ".pif", ".lnk", ".url", ".hta", ".cpl", ".jar", ".reg", ".inf", ".application", ".appref-ms", ".appx",
+        ".appxbundle", ".msix", ".msixbundle", ".appinstaller", ".library-ms", ".search-ms", ".settingcontent-ms", ".gadget",
+    };
+
+    /// <summary>A folder, or a document of the library, in the app Windows uses for it. A file that would be run instead
+    /// of shown (an attachment ending in .exe or .lnk) is not opened.</summary>
+    public static void OpenPath(string path)
+    {
+        if (!Path.IsPathFullyQualified(path) || !(Directory.Exists(path) || File.Exists(path))) return;
+        if (File.Exists(path) && Runnable.Contains(Path.GetExtension(path)))
+        {
+            App.Model?.Toasts.Show(Loc.S("为了安全，Folio 不会直接运行“%@”，可以在资源管理器中查看它", Path.GetFileName(path)), "warning");
+            return;
+        }
+        Open(path);
     }
 
     public static void OpenWith(string app, string path)

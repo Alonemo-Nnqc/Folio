@@ -20,8 +20,3 @@ export function t(key: string, ...args: unknown[]): string {
   });
 }
 
-export function joinList(parts: string[]): string {
-  if (parts.length <= 1) return parts.join("");
-  if (!isEnglish) return parts.join("、");
-  return parts.slice(0, -1).join(", ") + (parts.length > 2 ? ", and " : " and ") + parts[parts.length - 1];
-}

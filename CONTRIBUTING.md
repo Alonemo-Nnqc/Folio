@@ -13,7 +13,7 @@
 | 目录 | 内容 |
 | --- | --- |
 | `macos/` | macOS 版：App、Swift 包（`Packages/FolioCore`）、测试、Xcode 工程、脚本 |
-| `windows/` | Windows 版：WinUI 3 App、核心库、`folio-cli`、测试（见 [windows/README.md](windows/README.md)） |
+| `windows/` | Windows 版：WebView2 外壳与 React 界面（`web/`）、核心库、`folio-cli`、安装程序、测试（见 [windows/README.md](windows/README.md)） |
 | `BrowserExtension/`、`BrowserExtensionTests/` | 两个平台共用的浏览器扩展及其回归测试 |
 | `website/` | 产品主页（GitHub Pages） |
 | `assets/` | 图标与截图 |
