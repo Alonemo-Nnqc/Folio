@@ -71,6 +71,8 @@ Requires macOS 14 Sonoma or later (Apple silicon or Intel). On macOS 26 Folio us
 
 Later versions install through the in-app updater, so you only need to do this once.
 
+For Folio on Windows, see [windows/README.md](windows/README.md#安装): Windows 10 2004 or later, x64 or ARM64, installer `Folio-win-<arch>-Setup.exe` from the [win-v releases](https://github.com/Alonemo-Nnqc/Folio/releases?q=win-v). It is not code-signed yet: on the SmartScreen warning choose **More info ▸ Run anyway**.
+
 ### Updates
 
 Folio checks for updates once a day; you can also choose **Folio ▸ Check for Updates…** at any time. **Settings ▸ General ▸ Software Update** controls automatic checks and background downloads (installed when you quit). Updates are downloaded from GitHub Releases and verified with an EdDSA signature before they are installed.

@@ -143,7 +143,11 @@ static class AiSettings
             redetect.IsEnabled = false;
             Show(userInitiated ? null : _statuses, true);
             var started = DateTime.UtcNow;
-            var result = await Task.Run(() => AiIntegration.Integrator.Detect());
+            var result = await Task.Run(() =>
+            {
+                Folio.Core.Translate.Services.ShellEnvironment.Reset();
+                return AiIntegration.Integrator.Detect();
+            });
             // A check that ends in an instant reads as "nothing happened".
             if (userInitiated && DateTime.UtcNow - started < TimeSpan.FromMilliseconds(600)) await Task.Delay(600);
             _statuses = result;

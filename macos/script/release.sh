@@ -16,6 +16,9 @@
 # The archive is signed with the Sparkle EdDSA key: from $SPARKLE_ED_PRIVATE_KEY when set (CI),
 # otherwise from the login keychain (account "Folio", created by Sparkle's generate_keys). Set
 # FOLIO_DOWNLOAD_BASE to point the feed at another server when testing an update locally.
+# Without either key (a fork, or a build for your own use) set FOLIO_SKIP_UPDATE_SIGNING=1: you get the .zip and the
+# .dmg, which work as they are, but no appcast.xml. Installed copies only accept updates signed with the key whose
+# public half is in Folio/Info.plist (SUPublicEDKey), so a fork that publishes updates needs its own key there.
 set -euo pipefail
 
 VERSION="${1:?usage: script/release.sh <version>}"
@@ -67,6 +70,12 @@ ditto "$APP" "$STAGE/Folio.app"
 ln -s /Applications "$STAGE/Applications"
 hdiutil create -quiet -volname "Folio $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
 rm -rf "$STAGE"
+
+if [[ "${FOLIO_SKIP_UPDATE_SIGNING:-}" == 1 ]]; then
+  echo "▶ no update signature, so no appcast.xml (FOLIO_SKIP_UPDATE_SIGNING)"
+  ls -lh "$OUT"
+  exit 0
+fi
 
 echo "▶ signing the update"
 if [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]]; then

@@ -81,14 +81,17 @@ public static class FontCatalog
 
     internal static (HarfBuzzSharp.Font Font, int UnitsPerEm) Shaper(SKTypeface typeface) => Shapers.GetOrAdd(typeface, t =>
     {
-        // HarfBuzz gets its own copy of the font: a blob made from the stream's memory would point at memory the
-        // stream frees when disposed (DirectWrite's streams on Windows do).
+        // HarfBuzz gets its own copy of the font, in native memory it keeps for as long as it needs. Not the stream's:
+        // DirectWrite's streams free theirs when disposed. And not Blob.FromStream: it pins its array only while it
+        // returns, so HarfBuzz is left pointing at managed memory that the next garbage collection frees or moves.
         byte[] bytes;
         int index;
         using (var stream = t.OpenStream(out index))
         using (var data = SKData.Create(stream))
             bytes = data.ToArray();
-        var blob = Blob.FromStream(new MemoryStream(bytes));
+        nint memory = System.Runtime.InteropServices.Marshal.AllocHGlobal(bytes.Length);
+        System.Runtime.InteropServices.Marshal.Copy(bytes, 0, memory, bytes.Length);
+        var blob = new Blob(memory, bytes.Length, MemoryMode.ReadOnly, () => System.Runtime.InteropServices.Marshal.FreeHGlobal(memory));
         var face = new HarfBuzzSharp.Face(blob, index);
         int upem = Math.Max(t.UnitsPerEm, 16);
         face.UnitsPerEm = upem;

@@ -695,10 +695,119 @@ function drawSelection(pageNumber, source) {
 let drag = null;
 let stroke = null;
 
+// MARK: Moving the page with the mouse
+//
+// Dragging from an empty part of the page moves it, as with a hand tool, while dragging from text still selects it. The
+// middle button moves the page from anywhere.
+
+let pan = null;
+
+/** Text on this row at the point or close beside it: a drag from there is a selection (from a margin, say). */
+function textBeside(x, y) {
+  for (const dx of [0, -18, 18, -36, 36]) {
+    const element = document.elementFromPoint(x + dx, y);
+    if (element?.closest?.(".textLayer") && element.tagName === "SPAN") return true;
+  }
+  return false;
+}
+
+const canScroll = () => container.scrollHeight > container.clientHeight + 1 || container.scrollWidth > container.clientWidth + 1;
+const overScrollbar = (e) => {
+  const box = container.getBoundingClientRect();
+  return e.clientX - box.left >= container.clientWidth || e.clientY - box.top >= container.clientHeight;
+};
+
+function startPan(e) {
+  pan = { x: e.clientX, y: e.clientY, left: container.scrollLeft, top: container.scrollTop };
+  container.setPointerCapture(e.pointerId);
+  document.body.classList.add("panning");
+}
+
+function panFromEmptySpace(e) {
+  if (tool !== "select" || !canScroll() || overScrollbar(e) || e.target.closest?.("a, .linkAnnotation") || textBeside(e.clientX, e.clientY)) return;
+  clearSelection();
+  startPan(e);
+}
+
+// Text selection and the browser's own middle-button scrolling start from the mouse event that follows.
+container.addEventListener("mousedown", (e) => { if (pan) e.preventDefault(); }, true);
+
+container.addEventListener("pointermove", (e) => {
+  if (pan) {
+    container.scrollLeft = pan.left - (e.clientX - pan.x);
+    container.scrollTop = pan.top - (e.clientY - pan.y);
+  } else if (!e.buttons) {
+    // A hand over what a drag would move.
+    const hand = tool === "select" && canScroll() && !overScrollbar(e) && !e.target.closest?.("a, .linkAnnotation") && !textBeside(e.clientX, e.clientY);
+    document.body.classList.toggle("can-pan", hand);
+  }
+}, true);
+container.addEventListener("pointerleave", () => document.body.classList.remove("can-pan"));
+
+function endPan() {
+  if (!pan) return false;
+  pan = null;
+  document.body.classList.remove("panning");
+  return true;
+}
+
+// MARK: Following a selection to the edge of the view
+//
+// Past the edge the browser scrolls by itself; this does it already on the way there, and brings the selection along.
+
+const edgeBand = 44;
+let selecting = false;
+let selectPoint = null;
+let edgeFrame = 0;
+
+function followSelection() {
+  edgeFrame = 0;
+  if (!selecting || !selectPoint || pan) return;
+  const box = container.getBoundingClientRect();
+  const { x, y } = selectPoint;
+  const speed = (toEdge) => toEdge >= edgeBand ? 0 : 1 + 7 * (1 - Math.max(toEdge, 0) / edgeBand);
+  const down = speed(box.top + container.clientHeight - y) - speed(y - box.top);
+  const right = speed(box.left + container.clientWidth - x) - speed(x - box.left);
+  if (down || right) {
+    const before = [container.scrollLeft, container.scrollTop];
+    container.scrollBy(right, down);
+    const moved = container.scrollLeft !== before[0] || container.scrollTop !== before[1];
+    const inside = x > box.left && x < box.left + container.clientWidth && y > box.top && y < box.top + container.clientHeight;
+    // The pointer has not moved, so the browser will not extend the selection over what just came under it.
+    if (moved && inside) {
+      const at = document.caretPositionFromPoint?.(x, y);
+      if (at?.offsetNode?.parentElement?.closest?.(".textLayer")) document.getSelection()?.extend(at.offsetNode, at.offset);
+    }
+  }
+  edgeFrame = requestAnimationFrame(followSelection);
+}
+
+document.addEventListener("pointermove", (e) => {
+  if (!selecting) return;
+  selectPoint = { x: e.clientX, y: e.clientY };
+  if (!edgeFrame) edgeFrame = requestAnimationFrame(followSelection);
+}, true);
+for (const type of ["pointerup", "pointercancel"]) {
+  document.addEventListener(type, () => {
+    selecting = false;
+    cancelAnimationFrame(edgeFrame);
+    edgeFrame = 0;
+  }, true);
+}
+
 container.addEventListener("pointerdown", (e) => {
+  if (e.button === 1 && e.pointerType === "mouse") {
+    e.preventDefault();
+    startPan(e);
+    return;
+  }
   if (e.button !== 0) return;
   const hit = pageAt(e);
-  if (!hit) { if (tool === "select") select(null); return; }
+  if (!hit) {
+    if (tool === "select") select(null);
+    panFromEmptySpace(e);
+    return;
+  }
   if (tool === "note" || tool === "textbox") {
     e.preventDefault();
     clearSelection();
@@ -717,7 +826,12 @@ container.addEventListener("pointerdown", (e) => {
   }
   if (tool !== "select") { select(null); return; }
   const annotation = annotationAt(hit);
-  if (!annotation) { select(null); return; }
+  if (!annotation) {
+    select(null);
+    panFromEmptySpace(e);
+    if (!pan) selecting = true;
+    return;
+  }
   // An annotation under the pointer wins over text selection, as in the macOS reader.
   e.preventDefault();
   clearSelection();
@@ -769,6 +883,7 @@ container.addEventListener("pointermove", (e) => {
 container.addEventListener("pointerleave", () => { clearTimeout(tipTimer); tip.hidden = true; });
 
 function finishPointer(e) {
+  if (endPan()) return;
   if (stroke) {
     const { canvas, hit, points } = stroke;
     stroke = null;

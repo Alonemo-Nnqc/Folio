@@ -77,7 +77,7 @@ jobs:
           dotnet tool install -g vpk --version $env:VPK_VERSION
           $args = @('pack', '--packId', 'Folio', '--packVersion', '${{ steps.version.outputs.value }}', '--packDir', 'publish',
                     '--mainExe', 'Folio.exe', '--packTitle', 'Folio', '--packAuthors', 'Folio', '--icon', 'windows/src/Folio.App/Assets/Folio.ico',
-                    '--channel', 'win-${{ matrix.arch }}', '--runtime', 'win-${{ matrix.arch }}', '--outputDir', 'releases')
+                    '--channel', 'win-${{ matrix.arch }}', '--runtime', 'win-${{ matrix.arch }}', '--framework', 'webview2', '--outputDir', 'releases')
           # Optional code signing: add the certificate as secrets to remove SmartScreen's "unknown publisher" warning.
           if ($env:WINDOWS_PFX_BASE64) {
             [IO.File]::WriteAllBytes("$PWD\sign.pfx", [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))

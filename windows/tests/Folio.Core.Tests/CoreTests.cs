@@ -59,6 +59,42 @@ public class LibraryTests
     }
 
     [Fact]
+    public void CommandLinesForCmdKeepQuotesAndDropLineBreaks()
+    {
+        Assert.Equal("\"C:\\my tools\\t.cmd\" \"--flag\" \"say \"\"hi\"\"\" \"one two\"",
+            Folio.Core.Translate.Services.CommandLine.ForCmd(["C:\\my tools\\t.cmd", "--flag", "say \"hi\"", "one\r\ntwo"]));
+        var plain = new System.Diagnostics.ProcessStartInfo("x");
+        Folio.Core.Translate.Services.CommandLine.Apply(plain, ["a b", "c"]);
+        Assert.Equal(["a b", "c"], plain.ArgumentList);
+        var shell = new System.Diagnostics.ProcessStartInfo("cmd.exe");
+        Folio.Core.Translate.Services.CommandLine.Apply(shell, ["/d", "/s", "/c", "findstr /r \".*\""]);
+        Assert.Equal("/d /s /c \"findstr /r \".*\"\"", shell.Arguments);
+        Assert.Empty(shell.ArgumentList);
+    }
+
+    /// <summary>The ends of real shims, from a Windows machine: npm's start with a check for node.exe, which is not what they run.</summary>
+    [Theory]
+    [InlineData("\"%_prog%\"  \"%dp0%\\node_modules\\cline\\bin\\cline\" %*", "node_modules/cline/bin/cline", true)]
+    [InlineData("\"%_prog%\"  \"%dp0%\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\bundle\\cli.js\" %*", "node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js", true)]
+    [InlineData("\"%dp0%\\node_modules\\opencode-ai\\bin\\opencode.exe\"   %*", "node_modules/opencode-ai/bin/opencode.exe", false)]
+    public void NpmShimsRunWhatTheyPointAt(string lastLine, string expected, bool throughNode)
+    {
+        if (!OperatingSystem.IsWindows()) expected = expected.Replace('\\', '/');
+        var folder = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var shim = Path.Combine(folder, "tool.cmd");
+            File.WriteAllText(shim, "@ECHO off\r\nSETLOCAL\r\nCALL :find_dp0\r\nIF EXIST \"%dp0%\\node.exe\" (\r\n  SET \"_prog=%dp0%\\node.exe\"\r\n) ELSE (\r\n  SET \"_prog=node\"\r\n)\r\nendLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & " + lastLine + "\r\n");
+            var (file, arguments) = Folio.Core.Translate.Services.LocalProcess.Resolve([shim, "--flag"]);
+            var target = (throughNode ? arguments[0] : file).Replace('\\', '/');
+            Assert.EndsWith(expected, target);
+            Assert.Equal("--flag", arguments[^1]);
+            Assert.Equal(throughNode ? 2 : 1, arguments.Count);
+        }
+        finally { Directory.Delete(folder, true); }
+    }
+
+    [Fact]
     public void TabsOfLooseFilesUseTheirNames()
     {
         Loc.Override = "zh-Hans";
@@ -335,6 +371,24 @@ public class AnnotationTests
 
 public class LayoutTests
 {
+    /// <summary>HarfBuzz keeps reading the font for as long as it shapes: a collection must not take it away (this used to crash the process).</summary>
+    [Fact]
+    public void ShapingSurvivesGarbageCollection()
+    {
+        for (int round = 0; round < 40; round++)
+        {
+            var text = $"Round {round} of shaping 第 {round} 轮排版 {Guid.NewGuid():N}";
+            var paragraph = new Folio.Core.Translate.Typeset.Paragraph(text, new bool[text.Length], new Folio.Core.Translate.Typeset.InlineObject?[text.Length], "zh-CN", round % 2 == 0, 12, default);
+            Assert.True(paragraph.Advance(0) > 0);
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            // Whatever was freed gets reused, so a stale pointer reads rubbish instead of the old font.
+            var rubbish = Enumerable.Range(0, 8).Select(_ => new byte[1 << 24]).ToList();
+            rubbish.ForEach(b => Array.Fill(b, (byte)0xFF));
+            GC.KeepAlive(rubbish);
+        }
+    }
+
     /// <summary>FOLIO_SAMPLE_PDF + FOLIO_LAYOUT_DUMP: writes the analysis in the macOS folio-translate layout DUMP format, for diffing.</summary>
     [Fact]
     public void DumpsLayoutLikeTheMacEngine()

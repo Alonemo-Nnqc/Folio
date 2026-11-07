@@ -136,12 +136,12 @@ public static partial class LocalAgents
     static bool IsGenuine(LocalAgent agent, string path, string command)
     {
         if (Signature(agent, command) is not { } signature) return true;
-        return Genuine.GetOrAdd($"{agent}|{path}", _ =>
-        {
-            if (CommandProbe.Run(path, ["--help"], 10) is not { } result) return false;
-            var head = result.Output[..Math.Min(signature.Within, result.Output.Length)];
-            return Regex.IsMatch(head, signature.Pattern);
-        });
+        var key = $"{agent}|{path}";
+        if (Genuine.TryGetValue(key, out var known)) return known;
+        // A first start can take long (a large script, an antivirus scan): no answer in time says nothing about whose command it is.
+        if (CommandProbe.Run(path, ["--help"], 30) is not { } result) return true;
+        var head = result.Output[..Math.Min(signature.Within, result.Output.Length)];
+        return Genuine[key] = Regex.IsMatch(head, signature.Pattern);
     }
 
     /// <summary>The command on this computer: customPath when it exists, else the first match on PATH and the usual install folders.</summary>
@@ -379,7 +379,84 @@ public sealed class AgentProvider(LocalAgent agent, string executable, string? m
 /// plus the folders installers use.</summary>
 public static class ShellEnvironment
 {
-    public static string[] Extensions => OperatingSystem.IsWindows() ? [".exe", ".cmd", ".bat", ".com", ""] : [""];
+    public static string[] Extensions => OperatingSystem.IsWindows() ? [".exe", ".cmd", ".bat", ".com", ".ps1", ""] : [""];
+
+    static readonly object EnvironmentLock = new();
+    static Dictionary<string, string>? _terminal;
+    static DateTime _terminalFailed;
+
+    /// <summary>Forget what was read: the user may just have installed something or changed their profile.</summary>
+    public static void Reset()
+    {
+        lock (EnvironmentLock) { _terminal = null; _terminalFailed = default; }
+    }
+
+    /// <summary>What the user's PowerShell profile adds to the environment (API keys, a proxy, a Node version manager's PATH):
+    /// a terminal has it and an app started from the desktop does not. Read once; empty without a profile.</summary>
+    public static Dictionary<string, string> TerminalEnvironment()
+    {
+        if (!OperatingSystem.IsWindows()) return [];
+        lock (EnvironmentLock)
+        {
+            if (_terminal != null) return _terminal;
+            if (DateTime.UtcNow - _terminalFailed < TimeSpan.FromMinutes(1)) return [];
+            var read = ReadTerminalEnvironment();
+            if (read == null) { _terminalFailed = DateTime.UtcNow; return []; }
+            return _terminal = read;
+        }
+    }
+
+    static Dictionary<string, string>? ReadTerminalEnvironment()
+    {
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        bool HasProfile(string folder) => Directory.Exists(Path.Combine(documents, folder))
+            && Directory.EnumerateFiles(Path.Combine(documents, folder), "*profile.ps1").Any();
+        // The shell whose profile exists: PowerShell 7, then Windows PowerShell.
+        string? shell = HasProfile("PowerShell") ? "pwsh.exe" : HasProfile("WindowsPowerShell") ? "powershell.exe" : null;
+        if (shell == null) return [];
+        const string marker = "__FOLIO_ENV__";
+        // Base64 of JSON between markers: a profile may print greetings, and the console's code page must not touch the values.
+        var script = "$e=@{};Get-ChildItem env:|ForEach-Object{$e[$_.Name]=$_.Value};" +
+                     $"'{marker}'+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($e|ConvertTo-Json -Compress)))+'{marker}'";
+        try
+        {
+            var info = new ProcessStartInfo(shell) { RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true };
+            foreach (var a in new[] { "-NoLogo", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script }) info.ArgumentList.Add(a);
+            using var process = Process.Start(info);
+            if (process == null) return null;
+            process.StandardInput.Close();
+            var output = process.StandardOutput.ReadToEndAsync();
+            var errors = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(TimeSpan.FromSeconds(15)))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                return null;
+            }
+            if (!output.Wait(2000)) return null;
+            var m = Regex.Match(output.Result, marker + "([A-Za-z0-9+/=]+)" + marker);
+            if (!m.Success) return null;
+            var json = JsonNode.Parse(Convert.FromBase64String(m.Groups[1].Value)) as JsonObject;
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (key, value) in json ?? []) if (LocalAgents.Str(value) is { } text) result[key] = text;
+            return result;
+        }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Folders named after each installed version, newest first: where version managers keep Node and global npm commands.</summary>
+    static IEnumerable<string> VersionFolders(string parent, string suffix = "")
+    {
+        try
+        {
+            return Directory.Exists(parent)
+                ? Directory.EnumerateDirectories(parent).OrderByDescending(d => d, StringComparer.OrdinalIgnoreCase).Select(d => Path.Combine(d, suffix))
+                : [];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+    }
 
     public static List<string> SearchFolders()
     {
@@ -396,6 +473,7 @@ public static class ShellEnvironment
             // Installed since Folio started: the registry has it, this process does not.
             Add(Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User));
             Add(Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.Machine));
+            Add(TerminalEnvironment().GetValueOrDefault("PATH"));
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             paths.AddRange([
@@ -403,7 +481,17 @@ public static class ShellEnvironment
                 Path.Combine(home, "scoop", "shims"), Path.Combine(local, "Microsoft", "WinGet", "Links"), Path.Combine(home, ".cargo", "bin"),
                 Path.Combine(local, "pnpm"), Path.Combine(home, ".deno", "bin"), Path.Combine(local, "Programs", "cursor-agent"),
                 Path.Combine(home, ".volta", "bin"), Path.Combine(local, "Volta", "bin"), Path.Combine(home, ".opencode", "bin"),
+                Path.Combine(home, ".claude", "local"), Path.Combine(home, ".grok", "bin"), Path.Combine(home, ".cursor", "bin"), Path.Combine(home, ".kimi", "bin"),
+                Path.Combine(home, ".kiro", "bin"), Path.Combine(home, ".factory", "bin"), Path.Combine(home, ".amp", "bin"), Path.Combine(home, ".antigravity", "antigravity", "bin"),
+                Path.Combine(home, "scoop", "apps", "nodejs", "current"), Path.Combine(home, "scoop", "apps", "nodejs-lts", "current"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs"),
             ]);
+            if (Environment.GetEnvironmentVariable("NVM_SYMLINK") is { Length: > 0 } nvmLink) paths.Add(nvmLink);
+            // A global npm install lives in the folder of each Node version a version manager keeps; pip's scripts in each Python's.
+            paths.AddRange(VersionFolders(Environment.GetEnvironmentVariable("NVM_HOME") is { Length: > 0 } nvm ? nvm : Path.Combine(appData, "nvm")));
+            paths.AddRange(VersionFolders(Path.Combine(appData, "fnm", "node-versions"), "installation"));
+            paths.AddRange(VersionFolders(Path.Combine(appData, "Python"), "Scripts"));
+            paths.AddRange(VersionFolders(Path.Combine(local, "Programs", "Python"), "Scripts"));
         }
         else
         {
@@ -420,10 +508,15 @@ public static class ShellEnvironment
         var env = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
             env[(string)e.Key] = (string?)e.Value ?? "";
+        // What the terminal has on top: a key or a proxy set in the PowerShell profile works here as it does there.
+        foreach (var (key, value) in TerminalEnvironment())
+            if (key is not ("PATH" or "PSModulePath" or "PSExecutionPolicyPreference")) env[key] = value;
         foreach (var key in new[] { "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT", "CODEX_SANDBOX", "TERM_PROGRAM", "TERM_PROGRAM_VERSION" })
             env.Remove(key);
         env["NO_COLOR"] = "1";
         env["TERM"] = "dumb";
+        // Agents run in an empty folder of Folio's, with their tools off: Gemini CLI would refuse it as "not trusted".
+        env["GEMINI_CLI_TRUST_WORKSPACE"] = "true";
         env["PATH"] = string.Join(Path.PathSeparator, SearchFolders());
         if (!OperatingSystem.IsWindows())
         {
@@ -431,6 +524,28 @@ public static class ShellEnvironment
             env["LC_ALL"] = "en_US.UTF-8";
         }
         return env;
+    }
+}
+
+/// <summary>cmd.exe does not read arguments the way programs do: \" means nothing to it, so what it runs is written out for it.</summary>
+public static class CommandLine
+{
+    /// <summary>The line for cmd /s /c: each part in its own quotes, in which cmd's special characters mean nothing.</summary>
+    public static string ForCmd(IEnumerable<string> parts) =>
+        string.Join(' ', parts.Select(part =>
+        {
+            // cmd.exe ends a command at a line break: there is no way to pass one through it.
+            var text = part.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+            return "\"" + text.Replace("\"", "\"\"") + "\"";
+        }));
+
+    /// <summary>Fills in the arguments; those for cmd.exe go as they are, since escaping them for a normal program would break them.</summary>
+    public static void Apply(ProcessStartInfo info, IReadOnlyList<string> arguments)
+    {
+        if (arguments.Count == 4 && arguments[0] == "/d" && arguments[1] == "/s" && arguments[2] == "/c")
+            info.Arguments = $"/d /s /c \"{arguments[3]}\"";
+        else
+            foreach (var a in arguments) info.ArgumentList.Add(a);
     }
 }
 
@@ -456,8 +571,10 @@ public static class LocalProcess
         {
             var folder = Path.GetDirectoryName(file)!;
             var text = File.ReadAllText(file);
-            // npm: "%_prog%"  "%dp0%\node_modules\@scope\pkg\cli.js" %*
-            var script = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.(?:js|mjs|cjs))""", RegexOptions.IgnoreCase);
+            // npm: "%_prog%"  "%dp0%\node_modules\@scope\pkg\cli.js" %*  (the script need not have an extension: cline's is bin\cline).
+            // pnpm: "%~dp0\node.exe" "%~dp0\..\pkg\cli.js" %*
+            var script = Regex.Match(text, @"(?:%_prog%|\bnode(?:\.exe)?)""?\s+""%~?dp0%?\\([^""]+)""", RegexOptions.IgnoreCase);
+            if (!script.Success) script = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.(?:js|mjs|cjs))""", RegexOptions.IgnoreCase);
             if (script.Success)
             {
                 var path = Path.GetFullPath(Path.Combine(folder, script.Groups[1].Value));
@@ -465,14 +582,20 @@ public static class LocalProcess
                 if (!File.Exists(node)) node = FindOnPath("node") ?? "node";
                 return (node, [path, .. rest]);
             }
-            // A shim starting an .exe next to it ("%dp0%\bin\tool.exe" %*).
-            var exe = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.exe)""", RegexOptions.IgnoreCase);
+            // A shim starting an .exe next to it: "%dp0%\bin\tool.exe" %*  (not the check for node.exe that npm's shims start with).
+            var exe = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.exe)""\s+%\*", RegexOptions.IgnoreCase);
             if (exe.Success) return (Path.GetFullPath(Path.Combine(folder, exe.Groups[1].Value)), rest);
-            return (Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", ["/d", "/s", "/c", file, .. rest]);
+            // A shim starting another one (yarn's global folder).
+            var inner = Regex.Match(text, @"""%~?dp0%?\\([^""]+?\.cmd)""", RegexOptions.IgnoreCase);
+            if (inner.Success && Path.GetFullPath(Path.Combine(folder, inner.Groups[1].Value)) is var next && File.Exists(next) && !next.Equals(file, StringComparison.OrdinalIgnoreCase))
+                return Resolve([next, .. rest]);
+            return (CommandShell, ["/d", "/s", "/c", CommandLine.ForCmd([file, .. rest])]);
         }
         if (extension == ".ps1") return ("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", file, .. rest]);
         return (file, rest);
     }
+
+    public static string CommandShell => Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe";
 
     static string? FindOnPath(string name)
     {
@@ -496,13 +619,16 @@ public static class LocalProcess
             CreateNoWindow = true, WorkingDirectory = work,
             StandardOutputEncoding = new UTF8Encoding(false), StandardErrorEncoding = new UTF8Encoding(false), StandardInputEncoding = new UTF8Encoding(false),
         };
-        foreach (var a in arguments) info.ArgumentList.Add(a);
+        CommandLine.Apply(info, arguments);
         info.Environment.Clear();
         foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
         Process process;
         try { process = Process.Start(info) ?? throw new InvalidOperationException(); }
         catch (Exception e)
         {
+            // The command is there; what it needs to run is not: "pi.cmd not found" would send the user looking in the wrong place.
+            if (file == "node")
+                throw new ProviderError(ProviderError.Kinds.AgentSetup, $"agent-setup {Path.GetFileNameWithoutExtension(command[0])}: " + Loc.S("没有找到它依赖的 Node.js"));
             throw new ProviderError(ProviderError.Kinds.Process, $"command '{command[0]}' not found: {e.Message}");
         }
         Running[process.Id] = process;
@@ -565,7 +691,7 @@ public static class CommandProbe
                 RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, UseShellExecute = false, CreateNoWindow = true,
                 StandardOutputEncoding = new UTF8Encoding(false), StandardErrorEncoding = new UTF8Encoding(false),
             };
-            foreach (var a in args) info.ArgumentList.Add(a);
+            CommandLine.Apply(info, args);
             info.Environment.Clear();
             foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
             using var process = Process.Start(info);

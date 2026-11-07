@@ -39,6 +39,8 @@ cp Config/Local.xcconfig.example Config/Local.xcconfig
 
 `macos/Config/Local.xcconfig` 已被 `.gitignore` 忽略，不会被提交。
 
+用自己的开发证书签名的构建只能在你自己的 Mac 上运行，不要发给别人。要分发请用 `script/release.sh`，它打出的通用二进制（Apple 芯片和 Intel）是 ad-hoc 签名，可以在别的 Mac 上运行。
+
 ## 构建与运行
 
 ```bash
@@ -159,4 +161,4 @@ swift script/compose-screenshot.swift /tmp/reader.png <壁纸> assets/screenshot
 script/setup-release-secret.sh
 ```
 
-本地试打包：`script/release.sh 1.2.0`（产物在 `dist/`）。
+本地试打包：`script/release.sh 1.2.0`（产物在 `dist/`）。没有 Sparkle 私钥时（比如 fork 或自用）加上 `FOLIO_SKIP_UPDATE_SIGNING=1`，只生成 `.zip` 和 `.dmg`，不生成 `appcast.xml`。已安装的副本只接受用 `Folio/Info.plist` 中 `SUPublicEDKey` 对应私钥签名的更新，所以要发布自己更新的 fork 需要换成自己的密钥。

@@ -189,6 +189,7 @@
     "要在这里新建一个空的文献库吗？" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Create an empty library here?" } }} },
     "新建文献库" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "New Library" } }} },
     "Folio 无法启动：%@" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Folio could not start: %@" } }} },
+    "没有找到它依赖的 Node.js" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "the Node.js it needs was not found" } }} },
     "系统默认应用" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Default App" } }} }
   },
   "version" : "1.0"

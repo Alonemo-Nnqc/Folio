@@ -60,7 +60,7 @@ jobs:
           if (-not (Test-Path publish/folio-cli.exe)) { throw "folio-cli.exe missing" }
           dotnet tool install -g vpk --version 1.2.161
           vpk pack --packId Folio --packVersion 0.0.1-ci.${{ github.run_number }} --packDir publish --mainExe Folio.exe --packTitle Folio --packAuthors Folio `
-            --icon windows/src/Folio.App/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --outputDir releases
+            --icon windows/src/Folio.App/Assets/Folio.ico --channel ${{ matrix.rid }} --runtime ${{ matrix.rid }} --framework webview2 --outputDir releases
           Get-ChildItem releases
 
       - uses: actions/upload-artifact@v4

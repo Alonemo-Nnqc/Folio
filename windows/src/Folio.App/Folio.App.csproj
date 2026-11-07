@@ -43,6 +43,9 @@
     <Content Include="Assets\**\*" CopyToOutputDirectory="PreserveNewest" />
     <!-- The reader page around pdf.js; pdf.js itself is fetched by scripts/fetch-pdfjs.ps1 into Assets\pdfjs. -->
     <Content Include="Reader\Web\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- What the app must carry for the open-source software in it. -->
+    <Content Include="..\..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
     <!-- The browser extension is shared with the macOS app; Folio installs it from this copy (unpacked). -->
     <Content Include="..\..\..\BrowserExtension\**\*" LinkBase="BrowserExtension" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

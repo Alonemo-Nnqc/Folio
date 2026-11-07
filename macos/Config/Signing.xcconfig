@@ -4,5 +4,8 @@
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =
+// The hardened runtime only loads code signed by the app's own team and an ad-hoc signature has none, so an ad-hoc
+// build with it on could not load Sparkle.framework and would quit at launch. Local.xcconfig can turn it on.
+ENABLE_HARDENED_RUNTIME = NO
 
 #include? "Local.xcconfig"

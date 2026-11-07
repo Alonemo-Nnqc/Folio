@@ -362,7 +362,8 @@ public sealed class CommandProvider(string command, double timeout) : SingleText
 
     public override async Task<string> TranslateOne(string text, TranslationContext context, CancellationToken cancel)
     {
-        var shell = OperatingSystem.IsWindows() ? new[] { Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", "/d", "/s", "/c", command } : ["/bin/sh", "-c", command];
+        // The user's own command line, as they would type it: cmd.exe reads it, quotes and all.
+        var shell = OperatingSystem.IsWindows() ? new[] { LocalProcess.CommandShell, "/d", "/s", "/c", command } : new[] { "/bin/sh", "-c", command };
         var output = await LocalProcess.Run(shell, text, timeout, cancel);
         return output.Trim();
     }

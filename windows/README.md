@@ -2,6 +2,16 @@
 
 与 macOS 版功能、界面一一对应的 Windows 版，和 macOS 版使用同一套文献库格式：同一个文献库文件夹（例如放在同步盘中）在两个平台上都能直接打开。
 
+## 安装
+
+系统要求：Windows 10 2004（19041）及以上，x64 或 ARM64。
+
+1. 在 [Releases](https://github.com/Alonemo-Nnqc/Folio/releases?q=win-v) 下载与电脑架构相符的 `Folio-win-x64-Setup.exe` 或 `Folio-win-arm64-Setup.exe`，不想安装也可以用 `Portable.zip`
+2. 运行安装程序。Folio 目前没有代码签名，SmartScreen 可能提示“已保护你的电脑”，点 **更多信息 ▸ 仍要运行**
+3. 不需要管理员权限，也不需要另外安装 .NET。阅读器依赖 Microsoft Edge WebView2 运行时：Windows 11 已自带，个别 Windows 10 上如果缺少，安装程序会自动安装；便携版则由 Folio 提示下载地址
+
+之后的版本会通过应用内更新自动安装。
+
 ## 结构
 
 | 目录 | 内容 |

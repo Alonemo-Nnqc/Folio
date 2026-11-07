@@ -94,6 +94,16 @@ body.no-shadows .pdfViewer .page { box-shadow: none; }
 .annotationLayer .linkAnnotation > a:hover { opacity: 0 !important; background: transparent !important; box-shadow: none !important; }
 .annotationLayer .linkAnnotation > a:focus, .annotationLayer .linkAnnotation > a:focus-visible, .annotationLayer section:focus { outline: none !important; }
 
+/* Only text can be selected. A drag that passes over the gaps between pages would otherwise end the selection at the start
+   of the whole viewer and turn it around. */
+.pdfViewer, .pdfViewer .page { user-select: none; }
+.pdfViewer .textLayer { user-select: text; }
+
+/* A hand over the empty parts of a page, which a drag moves. */
+body.can-pan #viewerContainer, body.can-pan .pdfViewer .page, body.can-pan .textLayer { cursor: grab; }
+body.panning, body.panning #viewerContainer, body.panning .pdfViewer .page, body.panning .textLayer, body.panning .textLayer * { cursor: grabbing !important; }
+body.panning .textLayer { user-select: none; }
+
 /* The selection is painted by Folio, line by line, without holes between words. */
 .textLayer ::selection, .textLayer span::selection, .textLayer br::selection { background: transparent !important; }
 /* The opacity is the layer's, so stacked lines read as one block; multiply keeps the text under it black. */

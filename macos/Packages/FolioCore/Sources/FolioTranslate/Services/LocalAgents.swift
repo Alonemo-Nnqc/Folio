@@ -575,6 +575,8 @@ enum LocalProcess {
         env["LC_ALL"] = "en_US.UTF-8"
         env["NO_COLOR"] = "1"
         env["TERM"] = "dumb"
+        // Agents run in an empty folder of Folio's, with their tools off: Gemini CLI would refuse it as "not trusted".
+        env["GEMINI_CLI_TRUST_WORKSPACE"] = "true"
         let home = FileManager.default.homeDirectoryForCurrentUser
         var seen: Set<String> = []
         env["PATH"] = (ShellEnvironment.loginPATH() + ShellEnvironment.fallbackFolders(home: home) + ["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
