@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-09
+
 ### 新增
 - 划词翻译：在阅读器中选中文字，点按旁边的翻译按钮、按快捷键（默认 ⌥D / Alt+D）或从右键菜单即可在浮窗中查看译文，可拷贝、加入笔记或切换服务。设置 ▸ 翻译 中可选择触发方式（显示按钮 / 自动翻译 / 仅快捷键）、单独的翻译服务和快捷键。
 - 背景透明度：设置 ▸ 通用 ▸ 外观 中可调节列表、检查器与阅读器背景的磨砂透明程度（Windows 11 使用亚克力背景）。
@@ -25,6 +27,8 @@
 - Mac：阅读器笔记栏的“笔记”标题上移到与工具栏按钮同一高度。
 - Windows：设置窗口重新设计——统一的柔和底色、彩色图标导航、大标题和浮起的分组面板。
 - 精简各页面的说明小字，保留必要提示并统一措辞。
+- 全文翻译更忠实地保留标题格式：居中的标题译后仍然居中（包括两行等宽、铺满版心或页边有 arXiv 水印的标题），是否加粗与原文一致，并能识别更多粗体字体。
+- 设置 ▸ AI 现在能检测到 Pi、Grok CLI、Hermes Agent、OpenClaw、Kimi Code、Droid、Amp、goose 和 DeepSeek Harness，并可一键添加 Folio 的 MCP 服务器与技能（DeepSeek Harness 暂只显示检测结果）。
 
 ## [1.1.0] - 2026-11-07
 
@@ -110,7 +114,8 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Alonemo-Nnqc/Folio/releases/tag/v1.0.0
