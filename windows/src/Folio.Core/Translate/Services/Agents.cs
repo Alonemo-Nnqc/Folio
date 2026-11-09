@@ -133,7 +133,7 @@ public static partial class LocalAgents
 
     static readonly ConcurrentDictionary<string, bool> Genuine = new();
 
-    static bool IsGenuine(LocalAgent agent, string path, string command)
+    public static bool IsGenuine(this LocalAgent agent, string path, string command)
     {
         if (Signature(agent, command) is not { } signature) return true;
         var key = $"{agent}|{path}";

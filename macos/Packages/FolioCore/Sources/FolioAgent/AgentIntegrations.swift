@@ -15,6 +15,21 @@ public struct AgentDescriptor: Sendable, Identifiable, Hashable {
         /// Several possible files (an agent that moved its configuration, or several editions of it):
         /// Folio reads and removes all of them and writes as `policy` says.
         case jsonAny(paths: [String], key: String, style: EntryStyle, policy: WritePolicy)
+        /// A TOML file with `[mcp_servers.<name>]` tables (Grok CLI).
+        case toml(path: String)
+        /// A YAML file with servers in the top-level map `key` (Hermes, goose).
+        case yaml(path: String, key: String, style: YAMLStyle)
+        /// `openclaw mcp set` / `unset`; read back from `~/.openclaw/openclaw.json` → mcp.servers.
+        case openClaw
+    }
+
+    public enum YAMLStyle: Sendable, Hashable {
+        /// `command: …` and `args: […]` (Hermes).
+        case commandArgs
+        /// goose's extensions: `cmd`, `args`, `envs` and how to run them.
+        case goose
+
+        var commandField: String { self == .goose ? "cmd" : "command" }
     }
 
     public enum WritePolicy: Sendable, Hashable {
@@ -151,6 +166,33 @@ public struct AgentIntegrator: Sendable {
         .init(id: "qwen-code", name: "Qwen Code", apps: [], commands: ["qwen"],
               mcp: .json(path: ".qwen/settings.json", key: "mcpServers", style: .standard),
               skillFolders: [".qwen/skills"], skillNote: nil),
+        // The ids below are the `LocalAgent` names, so these rows share the translation services' logos.
+        .init(id: "pi", name: "Pi", apps: [], commands: ["pi"],
+              mcp: .json(path: ".pi/agent/mcp.json", key: "mcpServers", style: .standard),
+              skillFolders: [".pi/agent/skills", sharedSkillsFolder], skillNote: nil),
+        .init(id: "grok", name: "Grok CLI", apps: [], commands: ["grok"],
+              mcp: .toml(path: ".grok/config.toml"), skillFolders: [".grok/skills"], skillNote: nil),
+        .init(id: "hermes", name: "Hermes Agent", apps: [], commands: ["hermes"],
+              mcp: .yaml(path: ".hermes/config.yaml", key: "mcp_servers", style: .commandArgs),
+              skillFolders: [".hermes/skills"], skillNote: nil),
+        .init(id: "openclaw", name: "OpenClaw", apps: [], commands: ["openclaw"],
+              mcp: .openClaw, skillFolders: [".openclaw/skills", sharedSkillsFolder], skillNote: nil),
+        // Kimi Code moved from ~/.kimi to ~/.kimi-code.
+        .init(id: "kimi", name: "Kimi Code", apps: [], commands: ["kimi"],
+              mcp: .jsonAny(paths: [".kimi-code/mcp.json", ".kimi/mcp.json"], key: "mcpServers", style: .standard, policy: .existingFolder),
+              skillFolders: [".kimi-code/skills", sharedSkillsFolder], skillNote: nil),
+        .init(id: "droid", name: "Droid", apps: [], commands: ["droid"],
+              mcp: .json(path: ".factory/mcp.json", key: "mcpServers", style: .claudeCode),
+              skillFolders: [".factory/skills"], skillNote: nil),
+        .init(id: "amp", name: "Amp", apps: [], commands: ["amp"],
+              mcp: .jsonAny(paths: [".config/amp/settings.json", ".config/amp/settings.jsonc"], key: "amp.mcpServers", style: .standard, policy: .existingFile),
+              skillFolders: [sharedSkillsFolder, ".config/agents/skills", ".config/amp/skills"], skillNote: nil),
+        .init(id: "goose", name: "goose", apps: [], commands: ["goose"],
+              mcp: .yaml(path: ".config/goose/config.yaml", key: "extensions", style: .goose),
+              skillFolders: [sharedSkillsFolder], skillNote: nil),
+        // Found like the others; it documents no place for a user's MCP servers or skills yet.
+        .init(id: "deepseek", name: "DeepSeek Harness", apps: [], commands: ["dsh"], mcp: nil, skillFolders: [],
+              skillNote: String(localized: "DeepSeek Harness 暂未提供用户级的 MCP 与技能配置位置。", bundle: .module)),
     ]
 
     /// Folders where earlier Folio versions installed the skill but the agent no longer reads it
@@ -196,6 +238,9 @@ public struct AgentIntegrator: Sendable {
         case let .jsonAny(paths, key, style, policy):
             paths.first { command(inJSON: $0, key: key, style: style) != nil }.map { "~/" + $0 }
                 ?? targets(paths, policy).first.map { "~/" + $0 }
+        case let .toml(path): "~/" + path
+        case let .yaml(path, _, _): "~/" + path
+        case .openClaw: "~/.openclaw/openclaw.json"
         }
     }
 
@@ -207,11 +252,18 @@ public struct AgentIntegrator: Sendable {
         case .claudeCode:
             return command(inJSON: ".claude.json", key: "mcpServers", style: .claudeCode)
         case .codex:
-            return codexCommand()
+            return tomlCommand(codexConfig)
         case let .json(path, key, style):
             return command(inJSON: path, key: key, style: style)
         case let .jsonAny(paths, key, style, _):
             return paths.lazy.compactMap { command(inJSON: $0, key: key, style: style) }.first
+        case let .toml(path):
+            return tomlCommand(home.appending(path: path))
+        case let .yaml(path, key, style):
+            return (try? String(contentsOf: home.appending(path: path), encoding: .utf8))
+                .flatMap { YAMLServers.value(of: style.commandField, in: $0, key: key, name: Self.serverName) }
+        case .openClaw:
+            return openClawCommand()
         }
     }
 
@@ -231,7 +283,7 @@ public struct AgentIntegrator: Sendable {
             if enabled { try? runAgentCommand("codex", ["mcp", "remove", Self.serverName]) }
             let args = enabled ? ["mcp", "add", Self.serverName, "--", cliPath, "mcp"] : ["mcp", "remove", Self.serverName]
             if try !runAgentCommand("codex", args) {
-                try editCodexTOML(enabled: enabled)
+                try editTOML(codexConfig, enabled: enabled)
             }
         case let .json(path, key, style):
             try editJSON(path, key: key, style: style, enabled: enabled)
@@ -242,6 +294,15 @@ public struct AgentIntegrator: Sendable {
                 for path in paths where FileManager.default.fileExists(atPath: home.appending(path: path).path) {
                     try editJSON(path, key: key, style: style, enabled: false)
                 }
+            }
+        case let .toml(path):
+            try editTOML(home.appending(path: path), enabled: enabled)
+        case let .yaml(path, key, style):
+            try editYAML(path, key: key, style: style, enabled: enabled)
+        case .openClaw:
+            let arguments = enabled ? ["mcp", "set", Self.serverName, entry(.standard).render(indent: "", unit: "")] : ["mcp", "unset", Self.serverName]
+            guard try runAgentCommand("openclaw", arguments) else {
+                throw AgentIntegrationError(message: String(localized: "未能添加 \(descriptor.name) 的配置，请检查 ~/.openclaw/openclaw.json。", bundle: .module))
             }
         }
         // Trust but verify: the agent's own tool may have written somewhere else.
@@ -365,13 +426,45 @@ public struct AgentIntegrator: Sendable {
         }
     }
 
-    // MARK: Codex TOML
+    // MARK: YAML and OpenClaw
+
+    private func editYAML(_ path: String, key: String, style: AgentDescriptor.YAMLStyle, enabled: Bool) throws {
+        let url = home.appending(path: path)
+        let existing = FileManager.default.contents(atPath: url.path).map { String(decoding: $0, as: UTF8.self) }
+        guard existing != nil || enabled else { return }
+        let command = YAMLServers.quoted(cliPath)
+        let fields = switch style {
+        case .commandArgs: ["command: \(command)", "args: [\"mcp\"]"]
+        case .goose: ["enabled: true", "type: stdio", "name: \(Self.serverName)", "description: Folio library", "cmd: \(command)", "args: [\"mcp\"]",
+                      "envs: {}", "env_keys: []", "timeout: 300", "bundled: null", "available_tools: []"]
+        }
+        let text: String
+        do {
+            text = try YAMLServers.edited(existing ?? "", key: key, name: Self.serverName, fields: enabled ? fields : nil)
+        } catch {
+            throw AgentIntegrationError(message: String(localized: "无法解析 \(url.path)（\(error.localizedDescription)），为避免破坏它，请手动添加：\n\(manualConfiguration)", bundle: .module))
+        }
+        guard text != existing else { return }
+        if existing != nil { try backUp(url) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func openClawCommand() -> String? {
+        guard let data = FileManager.default.contents(atPath: home.appending(path: ".openclaw/openclaw.json").path),
+              let root = try? JSONCDocument(String(decoding: data, as: UTF8.self)).object(),
+              let servers = (root["mcp"] as? [String: Any])?["servers"] as? [String: Any],
+              let entry = servers[Self.serverName] as? [String: Any] else { return nil }
+        return entry["command"] as? String
+    }
+
+    // MARK: TOML
 
     private var codexConfig: URL { home.appending(path: ".codex/config.toml") }
     private static let codexHeader = "[mcp_servers.\(serverName)]"
 
-    func codexCommand() -> String? {
-        guard let text = try? String(contentsOf: codexConfig, encoding: .utf8) else { return nil }
+    func tomlCommand(_ file: URL) -> String? {
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }
         let lines = text.components(separatedBy: "\n")
         guard let start = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == Self.codexHeader }) else { return nil }
         for line in lines[(start + 1)...] {
@@ -386,9 +479,9 @@ public struct AgentIntegrator: Sendable {
         return ""
     }
 
-    func editCodexTOML(enabled: Bool) throws {
-        var text = (try? String(contentsOf: codexConfig, encoding: .utf8)) ?? ""
-        if !text.isEmpty { try backUp(codexConfig) }
+    func editTOML(_ file: URL, enabled: Bool) throws {
+        var text = (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+        if !text.isEmpty { try backUp(file) }
         var lines = text.components(separatedBy: "\n")
         if let start = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == Self.codexHeader }) {
             var end = start + 1
@@ -405,8 +498,8 @@ public struct AgentIntegrator: Sendable {
             let escaped = cliPath.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
             text += (text.isEmpty ? "" : "\n\n") + "\(Self.codexHeader)\ncommand = \"\(escaped)\"\nargs = [\"mcp\"]"
         }
-        try FileManager.default.createDirectory(at: codexConfig.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try (text + "\n").write(to: codexConfig, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (text + "\n").write(to: file, atomically: true, encoding: .utf8)
     }
 
     // MARK: Skills

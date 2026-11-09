@@ -10,6 +10,7 @@ namespace Folio.Core.Agent;
 
 public enum EntryStyle { Standard, ClaudeCode, Opencode, CopilotCli }
 public enum WritePolicy { ExistingFile, ExistingFolder, EveryExistingFolder }
+public enum YamlStyle { CommandArgs, Goose }
 
 public abstract record McpTarget
 {
@@ -17,6 +18,9 @@ public abstract record McpTarget
     public sealed record Codex : McpTarget;
     public sealed record JsonFile(string Path, string Key, EntryStyle Style) : McpTarget;
     public sealed record JsonAny(string[] Paths, string Key, EntryStyle Style, WritePolicy Policy) : McpTarget;
+    public sealed record Toml(string Path) : McpTarget;
+    public sealed record Yaml(string Path, string Key, YamlStyle Style) : McpTarget;
+    public sealed record OpenClaw : McpTarget;
 }
 
 /// <summary>An AI agent Folio can configure.</summary>
@@ -70,6 +74,20 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
             new McpTarget.JsonAny([".gemini/config/mcp_config.json", ".gemini/antigravity/mcp_config.json"], "mcpServers", EntryStyle.Standard, WritePolicy.ExistingFolder),
             [".gemini/config/skills", ".gemini/antigravity/skills", ".gemini/antigravity-cli/skills"], null),
         new("qwen-code", "Qwen Code", [], ["qwen"], new McpTarget.JsonFile(".qwen/settings.json", "mcpServers", EntryStyle.Standard), [".qwen/skills"], null),
+        // The ids below are the LocalAgent names, so these rows share the translation services' logos.
+        new("pi", "Pi", [], ["pi"], new McpTarget.JsonFile(".pi/agent/mcp.json", "mcpServers", EntryStyle.Standard), [".pi/agent/skills", SharedSkillsFolder], null),
+        new("grok", "Grok CLI", [], ["grok"], new McpTarget.Toml(".grok/config.toml"), [".grok/skills"], null),
+        new("hermes", "Hermes Agent", [], ["hermes"], new McpTarget.Yaml(".hermes/config.yaml", "mcp_servers", YamlStyle.CommandArgs), [".hermes/skills"], null),
+        new("openclaw", "OpenClaw", [], ["openclaw"], new McpTarget.OpenClaw(), [".openclaw/skills", SharedSkillsFolder], null),
+        // Kimi Code moved from ~/.kimi to ~/.kimi-code.
+        new("kimi", "Kimi Code", [], ["kimi"], new McpTarget.JsonAny([".kimi-code/mcp.json", ".kimi/mcp.json"], "mcpServers", EntryStyle.Standard, WritePolicy.ExistingFolder),
+            [".kimi-code/skills", SharedSkillsFolder], null),
+        new("droid", "Droid", [], ["droid"], new McpTarget.JsonFile(".factory/mcp.json", "mcpServers", EntryStyle.ClaudeCode), [".factory/skills"], null),
+        new("amp", "Amp", [], ["amp"], new McpTarget.JsonAny([".config/amp/settings.json", ".config/amp/settings.jsonc"], "amp.mcpServers", EntryStyle.Standard, WritePolicy.ExistingFile),
+            [SharedSkillsFolder, ".config/agents/skills", ".config/amp/skills"], null),
+        new("goose", "goose", [], ["goose"], new McpTarget.Yaml("%APPDATA%/Block/goose/config/config.yaml", "extensions", YamlStyle.Goose), [SharedSkillsFolder], null),
+        // Found like the others; it documents no place for a user's MCP servers or skills yet.
+        new("deepseek", "DeepSeek Harness", [], ["dsh"], null, [], Loc.S("DeepSeek Harness 暂未提供用户级的 MCP 与技能配置位置。")),
     ];
 
     static readonly string[] RetiredSkillFolders = [".codex/skills"];
@@ -114,6 +132,8 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
         {
             if (FindCommand(command) is not { } path) continue;
             if (!VerifiesCommands) return (path, null, false);
+            // "pi", "goose", "amp" are also the names of unrelated programs.
+            if (Enum.GetValues<LocalAgent>().Where(a => a.Commands().Contains(command)).Any(a => !a.IsGenuine(path, command))) continue;
             foreach (var arguments in d.VersionArguments)
                 if (CommandProbe.Run(path, arguments, 8) is { Status: 0 } result) return (path, CommandProbe.VersionIn(result.Output), false);
         }
@@ -147,13 +167,19 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
         McpTarget.JsonFile j => Display(j.Path),
         McpTarget.JsonAny a => a.Paths.FirstOrDefault(p => CommandInJson(p, a.Key, a.Style) != null) is { } found ? Display(found)
             : Targets(a.Paths, a.Policy).Select(Display).FirstOrDefault(),
+        McpTarget.Toml t => Display(t.Path),
+        McpTarget.Yaml y => Display(y.Path),
+        McpTarget.OpenClaw => Display(".openclaw/openclaw.json"),
         _ => null,
     };
 
     public string? InstalledCommand(AgentDescriptor d) => d.Mcp switch
     {
         McpTarget.ClaudeCode => CommandInJson(".claude.json", "mcpServers", EntryStyle.ClaudeCode),
-        McpTarget.Codex => CodexCommand(),
+        McpTarget.Codex => TomlCommand(CodexConfig),
+        McpTarget.Toml t => TomlCommand(Resolve(t.Path)),
+        McpTarget.Yaml y => File.Exists(Resolve(y.Path)) ? YamlServers.Value(y.Style == YamlStyle.Goose ? "cmd" : "command", File.ReadAllText(Resolve(y.Path)), y.Key, ServerName) : null,
+        McpTarget.OpenClaw => OpenClawCommand(),
         McpTarget.JsonFile j => CommandInJson(j.Path, j.Key, j.Style),
         McpTarget.JsonAny a => a.Paths.Select(p => CommandInJson(p, a.Key, a.Style)).FirstOrDefault(c => c != null),
         _ => null,
@@ -173,7 +199,7 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
             case McpTarget.Codex:
                 if (enabled) { try { RunAgentCommand("codex", ["mcp", "remove", ServerName]); } catch { } }
                 if (!RunAgentCommand("codex", enabled ? ["mcp", "add", ServerName, "--", CliPath, "mcp"] : ["mcp", "remove", ServerName]))
-                    EditCodexToml(enabled);
+                    EditToml(CodexConfig, enabled);
                 break;
             case McpTarget.JsonFile j:
                 EditJson(j.Path, j.Key, j.Style, enabled);
@@ -181,6 +207,16 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
             case McpTarget.JsonAny a:
                 if (enabled) foreach (var path in Targets(a.Paths, a.Policy)) EditJson(path, a.Key, a.Style, true);
                 else foreach (var path in a.Paths.Where(p => File.Exists(Resolve(p)))) EditJson(path, a.Key, a.Style, false);
+                break;
+            case McpTarget.Toml t:
+                EditToml(Resolve(t.Path), enabled);
+                break;
+            case McpTarget.Yaml y:
+                EditYaml(y, enabled);
+                break;
+            case McpTarget.OpenClaw:
+                if (!RunAgentCommand("openclaw", enabled ? ["mcp", "set", ServerName, Entry(EntryStyle.Standard).Render("", "")] : ["mcp", "unset", ServerName]))
+                    throw new AgentIntegrationError(Loc.S("未能添加 %@ 的配置，请检查 %@。", d.Name, Display(".openclaw/openclaw.json")));
                 break;
         }
         // Trust but verify: the agent's own tool may have written somewhere else.
@@ -276,13 +312,39 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
 
     // MARK: Codex TOML
 
+    void EditYaml(McpTarget.Yaml y, bool enabled)
+    {
+        var file = Resolve(y.Path);
+        var existing = File.Exists(file) ? File.ReadAllText(file) : null;
+        if (existing == null && !enabled) return;
+        var command = YamlServers.Quoted(CliPath);
+        string[] fields = y.Style == YamlStyle.Goose
+            ? ["enabled: true", "type: stdio", $"name: {ServerName}", "description: Folio library", $"cmd: {command}", "args: [\"mcp\"]", "envs: {}", "env_keys: []", "timeout: 300", "bundled: null", "available_tools: []"]
+            : [$"command: {command}", "args: [\"mcp\"]"];
+        string text;
+        try { text = YamlServers.Edited(existing ?? "", y.Key, ServerName, enabled ? fields : null); }
+        catch (YamlServers.Unsupported e) { throw new AgentIntegrationError(Loc.S("无法解析 %@（%@），为避免破坏它，请手动添加：\n%@", file, e.Message, ManualConfiguration)); }
+        if (text == existing) return;
+        if (existing != null) BackUp(file);
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, text);
+    }
+
+    string? OpenClawCommand()
+    {
+        var file = Resolve(".openclaw/openclaw.json");
+        if (!File.Exists(file)) return null;
+        try { return new JsoncDocument(File.ReadAllText(file)).Object()["mcp"]?["servers"]?[ServerName]?["command"].Str(); }
+        catch { return null; }
+    }
+
     string CodexConfig => Resolve(".codex/config.toml");
     static string CodexHeader => $"[mcp_servers.{ServerName}]";
 
-    public string? CodexCommand()
+    public string? TomlCommand(string file)
     {
-        if (!File.Exists(CodexConfig)) return null;
-        var lines = File.ReadAllText(CodexConfig).Split('\n');
+        if (!File.Exists(file)) return null;
+        var lines = File.ReadAllText(file).Split('\n');
         int start = Array.FindIndex(lines, l => l.Trim() == CodexHeader);
         if (start < 0) return null;
         foreach (var line in lines.Skip(start + 1))
@@ -305,10 +367,10 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
         return "";
     }
 
-    public void EditCodexToml(bool enabled)
+    public void EditToml(string file, bool enabled)
     {
-        var text = File.Exists(CodexConfig) ? File.ReadAllText(CodexConfig) : "";
-        if (text.Length > 0) BackUp(CodexConfig);
+        var text = File.Exists(file) ? File.ReadAllText(file) : "";
+        if (text.Length > 0) BackUp(file);
         var lines = text.Replace("\r\n", "\n").Split('\n').ToList();
         int start = lines.FindIndex(l => l.Trim() == CodexHeader);
         if (start >= 0)
@@ -328,8 +390,8 @@ public sealed class AgentIntegrator(string home, string cliPath, bool useAgentCo
             var escaped = CliPath.Replace("\\", "\\\\").Replace("\"", "\\\"");
             text += (text.Length == 0 ? "" : "\n\n") + $"{CodexHeader}\ncommand = \"{escaped}\"\nargs = [\"mcp\"]";
         }
-        Directory.CreateDirectory(Path.GetDirectoryName(CodexConfig)!);
-        File.WriteAllText(CodexConfig, text + "\n");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, text + "\n");
     }
 
     // MARK: Skills

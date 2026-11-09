@@ -137,6 +137,17 @@ public class LibraryTests
     }
 
     [Fact]
+    public void YamlServersKeepTheRestOfTheFile()
+    {
+        var text = "model: gpt\nmcp_servers: {}\n# keep\nother:\n  a: 1\n";
+        string[] fields = ["command: \"C:\\\\x\\\\folio-cli.exe\"", "args: [\"mcp\"]"];
+        var added = Folio.Core.Agent.YamlServers.Edited(text, "mcp_servers", "folio", fields);
+        Assert.Equal("C:\\x\\folio-cli.exe", Folio.Core.Agent.YamlServers.Value("command", added, "mcp_servers", "folio"));
+        Assert.Equal(text, Folio.Core.Agent.YamlServers.Edited(added, "mcp_servers", "folio", null));
+        Assert.Throws<Folio.Core.Agent.YamlServers.Unsupported>(() => Folio.Core.Agent.YamlServers.Edited("mcp_servers: {a: 1}\n", "mcp_servers", "folio", fields));
+    }
+
+    [Fact]
     public void CodexProviderSectionsAreRead()
     {
         var toml = "model_provider = \"custom\"\nmodel = \"gpt-6-astra\"\n[tui]\nx = 1\n\n[model_providers.custom]\nname = \"custom\"\nbase_url = \"https://relay.example\"\nexperimental_bearer_token = 'sk-1'\n";

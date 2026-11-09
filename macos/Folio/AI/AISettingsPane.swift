@@ -1,5 +1,6 @@
 import AppKit
 import FolioAgent
+import FolioTranslate
 import SwiftUI
 
 /// 设置 ▸ AI (AI-04): Folio's MCP server and skill, installed per agent with one switch each.
@@ -236,9 +237,15 @@ struct AgentLogoTile: View {
         let shape = RoundedRectangle(cornerRadius: Self.size * 0.24, style: .continuous)
         Group {
             if NSImage(named: "agent-\(id)") == nil {
-                Image(systemName: "terminal")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
+                // The agents that are translation services too have that service's logo.
+                if let service = LocalAgent(rawValue: id).map({ "service-\($0.serviceID)" }), NSImage(named: service) != nil {
+                    Image(service).resizable().interpolation(.high)
+                        .frame(width: Self.size * 0.72, height: Self.size * 0.72)
+                } else {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
             } else if Self.fullBleed.contains(id) {
                 Image("agent-\(id)").resizable().interpolation(.high)
             } else {

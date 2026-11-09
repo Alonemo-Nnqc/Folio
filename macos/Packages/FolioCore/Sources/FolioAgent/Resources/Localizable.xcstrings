@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "DeepSeek Harness 暂未提供用户级的 MCP 与技能配置位置。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DeepSeek Harness has no user-level place for MCP servers or skills yet."
+          }
+        }
+      }
+    },
     "%@ %@ 失败：%@" : {
       "localizations" : {
         "zh-Hans" : {

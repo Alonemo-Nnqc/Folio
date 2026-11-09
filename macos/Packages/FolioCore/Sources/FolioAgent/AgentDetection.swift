@@ -56,6 +56,8 @@ extension AgentIntegrator {
         for command in descriptor.commands {
             guard let path = findCommand(command) else { continue }
             guard verifiesCommands else { return AgentInstallation(location: path, version: nil, isApp: false) }
+            // "pi", "goose", "amp" are also the names of unrelated programs.
+            if let agent = LocalAgent.allCases.first(where: { $0.commands.contains(command) }), !agent.isGenuine(path: path, command: command) { continue }
             let environment = commandEnvironment
             for arguments in descriptor.versionArguments {
                 guard let result = CommandProbe.run(path, arguments, environment: environment, timeout: 8), result.status == 0 else { continue }

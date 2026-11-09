@@ -6,6 +6,7 @@ import { getState, setSetting, useStore } from "../store";
 import { Field, Select, Slider, Switch } from "../ui/controls";
 import { confirm, dialog, openSheet } from "../ui/sheet";
 import { openMenu } from "../ui/menu";
+import { ServiceLogo } from "../ui/serviceLogo";
 import { Card, Header, Note, Row } from "./parts";
 import { TranslationPane } from "./TranslationPane";
 import { SelectionTranslationPane } from "./SelectionPane";
@@ -205,6 +206,10 @@ const LOGOS: Record<string, "fill" | "mark" | "template"> = {
   codex: "fill", "gemini-cli": "fill", kiro: "fill", "claude-code": "mark", "claude-desktop": "mark", antigravity: "mark", "qwen-code": "mark",
   cline: "template", "copilot-cli": "template", cursor: "template", opencode: "template",
 };
+/** Agents that are translation services too: the service's logo. */
+const SERVICE_LOGOS: Record<string, string> = {
+  pi: "picli", grok: "grokcli", hermes: "hermesagent", openclaw: "openclawagent", kimi: "kimicli", amp: "ampcli", goose: "gooseagent", deepseek: "deepseekharness",
+};
 function AgentLogo({ id, name }: { id: string; name: string }) {
   const kind = LOGOS[id];
   const file = `agents/${id === "claude-desktop" ? "claude-code" : id}.png`;
@@ -212,6 +217,7 @@ function AgentLogo({ id, name }: { id: string; name: string }) {
     <span className={`agent-icon${kind ? ` logo-${kind}` : ""}`} aria-hidden>
       {kind === "fill" || kind === "mark" ? <img src={file} alt="" draggable={false} />
         : kind === "template" ? <i style={{ WebkitMaskImage: `url(${file})`, maskImage: `url(${file})` }} />
+        : SERVICE_LOGOS[id] ? <ServiceLogo id={SERVICE_LOGOS[id]} size={18} />
         : <TerminalSquare size={15} strokeWidth={1.7} />}
       <span className="sr-only">{name}</span>
     </span>
