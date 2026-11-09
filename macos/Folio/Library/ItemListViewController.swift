@@ -8,6 +8,8 @@ final class ItemListViewController: NSViewController {
     private let model: AppModel
     private var observers: [ObservationLoop] = []
     private let scroll = NSScrollView()
+    private let backdrop = TranslucentBackdrop()
+    private var opaqueListColor: NSColor?
     private var scopeBar: NSView!
     private var scrollTopToView: NSLayoutConstraint!
     private var scrollTopToScopeBar: NSLayoutConstraint!
@@ -36,7 +38,7 @@ final class ItemListViewController: NSViewController {
         let toast = NSHostingView(rootView: ToastOverlay(center: model.toasts))
         toast.sizingOptions = [.intrinsicContentSize]
 
-        for view in [scroll, bar, overlay, toast] as [NSView] {
+        for view in [backdrop, scroll, bar, overlay, toast] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(view)
         }
@@ -47,6 +49,10 @@ final class ItemListViewController: NSViewController {
             bar.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
             bar.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: root.topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            backdrop.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             scrollTopToView,
             scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
@@ -87,6 +93,15 @@ final class ItemListViewController: NSViewController {
         scopeBar.isHidden = !visible
         scrollTopToView.isActive = !visible
         scrollTopToScopeBar.isActive = visible
+    }
+
+    /// 背景透明度: the list's own background gives way to the frosted backdrop.
+    func setTranslucency(_ amount: Double) {
+        let outline = controller.outline
+        if opaqueListColor == nil { opaqueListColor = outline.backgroundColor }
+        backdrop.baseColor = opaqueListColor ?? .controlBackgroundColor
+        backdrop.amount = amount
+        outline.backgroundColor = backdrop.isActive ? .clear : (opaqueListColor ?? .controlBackgroundColor)
     }
 
     func focusList() {

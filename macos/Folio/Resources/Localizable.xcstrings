@@ -53,6 +53,16 @@
         }
       }
     },
+    "%@ → %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ → %2$@"
+          }
+        }
+      }
+    },
     "%@ 与它们共用技能文件夹 ~/%@，移除后这些智能体也将看不到 Folio 技能。" : {
       "localizations" : {
         "en" : {
@@ -426,6 +436,16 @@
         }
       }
     },
+    "CSV：原文, 译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CSV: source, translation"
+          }
+        }
+      }
+    },
     "Crossref 会更快地响应带联系邮箱的请求；邮箱只发送给 Crossref 和 OpenAlex" : {
       "localizations" : {
         "en" : {
@@ -442,6 +462,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Firefox doesn't let other apps open this page. Paste this address into the address bar: %@"
+          }
+        }
+      }
+    },
+    "Folio %@ 可供更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folio %@ is available"
+          }
+        }
+      }
+    },
+    "Folio %@ 已下载，点按重新启动并安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folio %@ is downloaded. Click to restart and install."
           }
         }
       }
@@ -881,6 +921,16 @@
         }
       }
     },
+    "不会改动 Zotero 数据" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zotero's data is left unchanged"
+          }
+        }
+      }
+    },
     "不支持技能" : {
       "localizations" : {
         "en" : {
@@ -907,6 +957,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shares ~/.kiro/settings/mcp.json with the Kiro editor"
+          }
+        }
+      }
+    },
+    "与全文翻译相同" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same as Full-Text Translation"
           }
         }
       }
@@ -967,6 +1027,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Or let an agent find it: send this to an agent that has Folio's MCP server"
+          }
+        }
+      }
+    },
+    "仅使用快捷键" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcut Only"
           }
         }
       }
@@ -1389,6 +1459,16 @@
         }
       }
     },
+    "保留版面、公式与图表，译文将作为附件加入该条目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keeps the layout, formulas and figures. The translation is added to the item."
+          }
+        }
+      }
+    },
     "信息" : {
       "localizations" : {
         "en" : {
@@ -1545,6 +1625,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Close"
+          }
+        }
+      }
+    },
+    "关闭后仅可检索、阅读与引用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When off, AI can only search, read and cite"
           }
         }
       }
@@ -1711,6 +1801,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Items in the group stay in the library. To delete them too, choose “Also move items to the Trash”."
+          }
+        }
+      }
+    },
+    "划词翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selection Translation"
           }
         }
       }
@@ -2161,6 +2261,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Right-click to add to groups, tag or delete in bulk"
+          }
+        }
+      }
+    },
+    "同一服务与模型重复翻译时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When translating again with the same service and model"
           }
         }
       }
@@ -3039,6 +3149,16 @@
         }
       }
     },
+    "将发送 PDF 前 5 页文字，无需账号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sends the text of the PDF's first 5 pages. No account needed."
+          }
+        }
+      }
+    },
     "将导入 %lld 个条目、%lld 个独立文件、%lld 个分组、%lld 个标签。" : {
       "localizations" : {
         "en" : {
@@ -3735,6 +3855,16 @@
         }
       }
     },
+    "开关会写入或移除该智能体的配置（修改前自动备份），重启智能体后生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The switches add Folio to the agent's configuration or remove it (backed up first). Restart the agent to apply."
+          }
+        }
+      }
+    },
     "开发版本不自动检查更新" : {
       "localizations" : {
         "en" : {
@@ -3863,6 +3993,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Permanently delete this item?"
+          }
+        }
+      }
+    },
+    "快捷键" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcut"
           }
         }
       }
@@ -4223,6 +4363,16 @@
         }
       }
     },
+    "扩展未上架商店，请按引导安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The extension isn't in the stores yet. Follow the guide to install it."
+          }
+        }
+      }
+    },
     "扩展随 Folio 提供，按下面三步打开即可" : {
       "localizations" : {
         "en" : {
@@ -4461,6 +4611,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copy Text"
+          }
+        }
+      }
+    },
+    "拷贝译文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Translation"
           }
         }
       }
@@ -5349,6 +5509,16 @@
         }
       }
     },
+    "更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update"
+          }
+        }
+      }
+    },
     "更新从 GitHub 发布页下载，安装前会校验签名。" : {
       "localizations" : {
         "en" : {
@@ -5883,6 +6053,16 @@
         }
       }
     },
+    "检查器标签" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspector Tabs"
+          }
+        }
+      }
+    },
     "检查更新…" : {
       "localizations" : {
         "en" : {
@@ -6387,6 +6567,16 @@
         }
       }
     },
+    "测试服务是否可用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check that the service works"
+          }
+        }
+      }
+    },
     "浏览器" : {
       "localizations" : {
         "en" : {
@@ -6663,6 +6853,16 @@
         }
       }
     },
+    "点按后按下新的快捷键；⌫ 恢复默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click, then press a new shortcut. ⌫ restores the default."
+          }
+        }
+      }
+    },
     "父分组中显示子分组的条目" : {
       "localizations" : {
         "en" : {
@@ -6759,6 +6959,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Layout-preserving translation by pdf2zh_next (BabelDOC, AGPL-3.0)\nThe built-in components are downloaded on first use, about 1.4 GB"
+          }
+        }
+      }
+    },
+    "由所选模型决定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set by the selected model"
           }
         }
       }
@@ -6885,6 +7095,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove tag %@"
+          }
+        }
+      }
+    },
+    "空格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Space"
           }
         }
       }
@@ -7377,6 +7597,16 @@
         }
       }
     },
+    "翻译所选文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate Selection"
+          }
+        }
+      }
+    },
     "翻译日志" : {
       "localizations" : {
         "en" : {
@@ -7497,6 +7727,16 @@
         }
       }
     },
+    "翻译设置…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation Settings…"
+          }
+        }
+      }
+    },
     "翻译：%@" : {
       "localizations" : {
         "en" : {
@@ -7513,6 +7753,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Contact email (optional)"
+          }
+        }
+      }
+    },
+    "背景透明度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background Transparency"
           }
         }
       }
@@ -7623,6 +7873,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mint"
+          }
+        }
+      }
+    },
+    "触发方式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trigger"
           }
         }
       }
@@ -7821,6 +8081,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choose a translation service in Settings."
+          }
+        }
+      }
+    },
+    "请按下快捷键…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press a Shortcut…"
           }
         }
       }
@@ -8231,6 +8501,36 @@
         }
       }
     },
+    "适用于 VS Code、Zed、Windsurf 等" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For VS Code, Zed, Windsurf and others"
+          }
+        }
+      }
+    },
+    "选中后显示翻译按钮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show a Translate Button"
+          }
+        }
+      }
+    },
+    "选中后自动翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate Right Away"
+          }
+        }
+      }
+    },
     "选填，可让检索更快、更稳定\n不填也能正常检索" : {
       "localizations" : {
         "en" : {
@@ -8341,6 +8641,16 @@
         }
       }
     },
+    "选择翻译服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Translation Service"
+          }
+        }
+      }
+    },
     "选择要添加到 Folio 的文献" : {
       "localizations" : {
         "en" : {
@@ -8433,6 +8743,16 @@
         }
       }
     },
+    "遇到限流时调小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lower it if the service rate-limits you"
+          }
+        }
+      }
+    },
     "部分批注无法保存" : {
       "localizations" : {
         "en" : {
@@ -8503,6 +8823,16 @@
         }
       }
     },
+    "重新启动以更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart to Update"
+          }
+        }
+      }
+    },
     "重新安装" : {
       "localizations" : {
         "en" : {
@@ -8559,6 +8889,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retrieve Metadata Again"
+          }
+        }
+      }
+    },
+    "重新翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate Again"
           }
         }
       }

@@ -90,3 +90,15 @@ export function Chip({ label, color, dark, onRemove, title }: { label: string; c
     </span>
   );
 }
+
+/** A range slider that saves when released and shows the value while dragged. */
+export function Slider({ value, onChange, onCommit, min = 0, max = 1, step = 0.01, label }: { value: number; onChange?: (v: number) => void; onCommit: (v: number) => void; min?: number; max?: number; step?: number; label?: string }) {
+  const fraction = (value - min) / (max - min);
+  return (
+    <input type="range" className="slider" aria-label={label} min={min} max={max} step={step} value={value}
+      style={{ ["--fill" as any]: `${fraction * 100}%` }}
+      onChange={(e) => onChange?.(Number(e.target.value))}
+      onPointerUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))}
+      onKeyUp={(e) => onCommit(Number((e.target as HTMLInputElement).value))} />
+  );
+}

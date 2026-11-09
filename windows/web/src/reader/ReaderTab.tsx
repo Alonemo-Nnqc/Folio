@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookText, ChevronDown, Highlighter, MousePointer2, PenLine, Search, Strikethrough, StickyNote, Type, Underline, X } from "lucide-react";
+import { BookText, ChevronDown, ChevronUp, Columns2, Highlighter, Languages, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
+import { CustomizeToolbarSheet, TOOLBAR_ITEMS, toolbarIds } from "./toolbar";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
-import { filesOf, getState, setSetting, setState, useStore, type FileRec, type Item } from "../store";
+import { filesOf, getState, setSetting, setState, useStore, veilFor, type FileRec, type Item } from "../store";
 import { translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { askText, openSheet, Sheet } from "../ui/sheet";
@@ -10,6 +11,13 @@ import { LEAD_ROOM, PanelToggle, SidebarButtons, Splitter, TabBar, TOGGLE_ROOM }
 import { isEntering, useMoving, usePanelPhase } from "../ui/slide";
 import { NoteEditor } from "../library/Inspector";
 import { TranslationProgress } from "../library/ItemList";
+import { TranslateBadge, TranslatePopover, type Anchor } from "./SelectionTranslate";
+
+/** "Alt+D": the modifiers and the key, as 设置 stores 划词翻译's shortcut. */
+export function shortcutOf(k: { code: string; ctrl: boolean; alt: boolean; shift: boolean }) {
+  const key = k.code.replace(/^Key|^Digit/, "");
+  return [k.ctrl && "Ctrl", k.alt && "Alt", k.shift && "Shift", key].filter(Boolean).join("+");
+}
 
 /** One iframe with the pdf.js page. */
 class Pane {
@@ -38,7 +46,7 @@ const TOOLS: { key: string; icon: any; tip: string; shortcut: string; group: num
 ];
 
 let labels: Record<string, string> | null = null;
-async function readerLabels() { return (labels ??= await call("reader.labels")); }
+export async function readerLabels() { return (labels ??= await call("reader.labels")); }
 
 export interface ReaderApi {
   handleKey(e: { key: string; code: string; ctrl: boolean; alt: boolean; shift: boolean }): boolean;
@@ -95,6 +103,9 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const selection = useRef<any>(null);
   const pageCount = useRef(0);
   const [editor, setEditor] = useState<{ x: number; y: number; text: string; done: (text: string) => void } | null>(null);
+  const [badge, setBadge] = useState<{ x: number; y: number; anchor: Anchor; text: string; page: number } | null>(null);
+  const [translation, setTranslation] = useState<{ anchor: Anchor; text: string; page: number } | null>(null);
+  const autoTranslate = useRef(0);
   const [opened, setOpened] = useState(false);
 
   // A tab left alone has no page until it is first shown.
@@ -148,6 +159,43 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     const citation = reference ? `${reference}, p. ${pageNumber}` : `p. ${pageNumber}`;
     call("shell.copy", { text: t("“%1$@”（%2$@）", text, citation) });
     call("toast.show", { message: t("已拷贝为引用"), icon: "cite" });
+  };
+
+  // MARK: 划词翻译
+
+  /** A rectangle of the page in the iframe, in this window's coordinates. */
+  const toWindow = (pane: Pane, r: Anchor): Anchor => {
+    const f = pane.frame?.getBoundingClientRect();
+    const dx = f?.left ?? 0, dy = f?.top ?? 0;
+    return { left: r.left + dx, top: r.top + dy, right: r.right + dx, bottom: r.bottom + dy };
+  };
+  const openTranslation = (anchor: Anchor, text: string, page: number) => {
+    clearTimeout(autoTranslate.current);
+    setBadge(null);
+    setTranslation({ anchor, text, page });
+  };
+  const addTranslationToNote = async (source: string, translated: string, pageNumber: number) => {
+    const f = fileRef.current;
+    if (!f) return;
+    setNotesVisible(true);
+    const current = (await call<string>("note.get", { item: f.itemId })).trimEnd();
+    const addition = t("%@\n> —— 第 %lld 页", "> " + source.replace(/\n/g, "\n> "), pageNumber) + "\n\n" + translated;
+    await call("note.set", { item: f.itemId, text: (current ? current + "\n\n" + addition : addition) + "\n" });
+    call("toast.show", { message: t("已添加到笔记"), icon: "note" });
+  };
+  const onSelectionDone = (pane: Pane, m: any) => {
+    const s = getState().settings;
+    if (!s.selectionTranslationEnabled || toolRef.current !== "select" || !m.rect || !m.end) return;
+    const anchor = toWindow(pane, m.rect);
+    const end = toWindow(pane, { left: m.end.x, top: m.end.y, right: m.end.x, bottom: m.end.bottom });
+    const page = m.pages?.[0]?.page ?? 1;
+    if (s.selectionTranslationTrigger === "automatic") {
+      // A double or triple click is still under way: wait for the selection to settle.
+      clearTimeout(autoTranslate.current);
+      autoTranslate.current = window.setTimeout(() => openTranslation(anchor, m.text, page), 220);
+    } else if (s.selectionTranslationTrigger !== "shortcut") {
+      setBadge({ x: end.right, y: (end.top + end.bottom) / 2 - 14, anchor, text: m.text, page });
+    }
   };
 
   // MARK: Parallel reading
@@ -277,7 +325,10 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     } else if (m.kind === "selection") {
       const text: string = m.text;
       const pageNumber = m.pages?.[0]?.page ?? 1;
+      const anchor = m.rect ? toWindow(pane, m.rect) : { left: x, top: y, right: x, bottom: y };
       entries = [
+        { label: t("翻译"), action: () => openTranslation(anchor, text, pageNumber) },
+        sep,
         { label: t("拷贝"), action: () => call("shell.copy", { text }) },
         { label: t("拷贝为引用"), action: () => copyAsCitation(text, pageNumber) },
         sep,
@@ -318,6 +369,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       ] },
       sep,
       { label: t("添加到笔记"), key: "Ctrl+Alt+M", action: addSelectionToNote },
+      { label: t("自定义工具栏…"), action: () => customizeToolbarRef.current() },
       { label: t("打印…"), key: "Ctrl+P", action: () => send({ cmd: "print" }) },
       ...(f ? [{ label: t("在资源管理器中显示"), action: () => call("file.reveal", { id: f.id }) } as MenuEntry] : []),
     ];
@@ -353,7 +405,16 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         if (pane === main && pane.fileId) call("reader.savePosition", { file: pane.fileId, page: m.page, left: m.left ?? 0, top: m.top ?? 0, scale: m.scale ?? 1, autoScale: m.autoScale ?? true });
         break;
       case "scroll": (pane === main ? parallelRef.current : main)?.send({ cmd: "scrollTo", page: m.page, fraction: m.fraction }); break;
-      case "selection": selection.current = m.text ? m : null; break;
+      case "selection":
+        selection.current = m.text ? m : null;
+        if (!m.text) { setBadge(null); clearTimeout(autoTranslate.current); }
+        else if (m.done) onSelectionDone(pane, m);
+        break;
+      case "pointerDown": setBadge(null); setTranslation(null); clearTimeout(autoTranslate.current); break;
+      case "viewMoved": setBadge(null); break;
+      case "translateSelection":
+        if (m.rect) openTranslation(toWindow(pane, m.rect), m.text, m.page ?? 1);
+        break;
       case "markup": call("reader.markup", { session: pane.session, subtype: m.subtype, color: m.color ?? colorRef.current, pages: m.pages }).then((r) => applyResult(pane, r)); break;
       case "ink": call("reader.ink", { session: pane.session, page: m.page, color: m.color ?? colorRef.current, strokes: m.strokes, temp: m.temp }).then((r) => applyResult(pane, r)); break;
       case "note":
@@ -418,6 +479,9 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   useEffect(() => { main.send({ cmd: "theme", dark }); parallelRef.current?.send({ cmd: "theme", dark }); }, [dark]);
   useEffect(() => { main.send({ cmd: "shadows", on: settings.readerPageShadows }); }, [settings.readerPageShadows]);
+  // 背景透明度: the grey around the pages and the reader's sidebar let the desktop through.
+  const surface = veilFor(getState().statics.translucency ? settings.backgroundTranslucency ?? 0 : 0);
+  useEffect(() => { main.send({ cmd: "surface", alpha: surface }); parallelRef.current?.send({ cmd: "surface", alpha: surface }); }, [surface, parallel]);
   useEffect(() => { if (page !== undefined && main.session) main.send({ cmd: "goto", page }); }, [page]);
 
   const checkForChanges = async () => {
@@ -432,6 +496,11 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   // Keys of the reader. True when the key was used.
   const handleKey: ReaderApi["handleKey"] = ({ code, ctrl, alt, shift }) => {
+    const st = getState().settings;
+    if (st.selectionTranslationEnabled && shortcutOf({ code, ctrl, alt, shift }) === (st.selectionTranslationShortcut || "Alt+D")) {
+      if (translation) setTranslation(null); else main.send({ cmd: "translateSelection" });
+      return true;
+    }
     if (code === "F3") { find(shift); return true; }
     if (ctrl && alt) {
       const digit = code.startsWith("Digit") ? Number(code.slice(5)) : -1;
@@ -472,9 +541,52 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     readers.set(tabKey, { handleKey: (e) => handleKeyRef.current(e), toggleSidebar: () => toggleSidebarRef.current(), toggleNotes, checkForChanges: () => checkRef.current(), focusPage: () => main.frame?.contentWindow?.focus(), flush: () => main.send({ cmd: "flushPosition" }) });
     return () => { readers.delete(tabKey); };
   }, [tabKey]);
+  const customizeToolbarRef = useRef(() => {});
   const handleKeyRef = useRef(handleKey); handleKeyRef.current = handleKey;
   const toggleSidebarRef = useRef(toggleSidebar); toggleSidebarRef.current = toggleSidebar;
   const checkRef = useRef(checkForChanges); checkRef.current = checkForChanges;
+
+  customizeToolbarRef.current = () => openSheet((close) => <CustomizeToolbarSheet current={toolbarIds(getState().settings.readerToolbar)} close={close} />);
+
+  /** One of the toolbar's buttons other than the tools. */
+  const toolbarButton = (id: string) => {
+    const icon = (Icon: any, size = 17) => <Icon size={size} strokeWidth={1.7} />;
+    const plain = (title: string, Icon: any, action: () => void, extra?: string) => <button className={`glass-button${extra ?? ""}`} title={title} onClick={action}>{icon(Icon)}</button>;
+    switch (id) {
+      case "view": return <button className="glass-button" style={{ width: 52 }} title={t("显示")} onClick={(e) => openMenuAt(e.currentTarget, viewMenu())}><ChevronDown size={14} /></button>;
+      case "color": return <button className="glass-button" title={t("批注颜色")} onClick={(e) => openMenuAt(e.currentTarget, colors.map((c) => ({
+        label: c.title, dot: c.hex, checked: c.key === color,
+        action: () => { setColor(c.key); setSetting("highlightColor", c.key); main.send({ cmd: "tool", tool: toolRef.current, color: c.key }); },
+      })))}><span className="color-dot" style={{ background: colorHex }} /></button>;
+      case "translate": return <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><BookText size={17} strokeWidth={1.7} /></button>;
+      case "selectionTranslate": return plain(t("翻译所选文字"), Languages, () => main.send({ cmd: "translateSelection" }));
+      case "search": return searchOpen || query ? (
+        <label className="search-field" style={{ flex: "0 1 200px", minWidth: 130 }}>
+          <Search size={14} />
+          <input ref={searchRef} value={query} placeholder={t("在文档中查找")} spellCheck={false}
+            onChange={(e) => { setQuery(e.target.value); if (!e.target.value) send({ cmd: "find", query: "" }); }}
+            onBlur={() => { if (!query) setSearchOpen(false); }}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") find(e.shiftKey);
+              else if (e.key === "Escape") { setQuery(""); send({ cmd: "find", query: "" }); setSearchOpen(false); main.frame?.contentWindow?.focus(); }
+            }} />
+          {findCount && <span className="tabular" style={{ fontSize: 11, flex: "none" }}>{findCount}</span>}
+          {query && <button className="clear-button" onMouseDown={(e) => { e.preventDefault(); setQuery(""); send({ cmd: "find", query: "" }); }}><X size={10} strokeWidth={3} /></button>}
+        </label>
+      ) : plain(t("在文档中查找"), Search, focusSearch);
+      case "zoomOut": return plain(t("缩小"), ZoomOut, () => zoom("out"));
+      case "zoomIn": return plain(t("放大"), ZoomIn, () => zoom("in"));
+      case "fitWidth": return plain(t("适合页宽"), MoveHorizontal, () => zoom("page-width"));
+      case "previousPage": return plain(t("上一页"), ChevronUp, () => step("previous"));
+      case "nextPage": return plain(t("下一页"), ChevronDown, () => step("next"));
+      case "parallel": return plain(t("对照阅读"), Columns2, toggleParallel, parallel ? " on" : "");
+      case "addNote": return plain(t("添加到笔记"), NotebookPen, addSelectionToNote);
+      case "notes": return plain(t("笔记"), PanelRight, toggleNotes, notesVisible ? " on" : "");
+      case "print": return plain(t("打印…"), Printer, () => send({ cmd: "print" }));
+    }
+    return null;
+  };
 
   if (!file) return null;
   const title = item?.kind === "regular" ? item.title : file.fileName;
@@ -502,45 +614,31 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       )}
 
       <div className="reader-top" style={{ left, right }}>
-        <div className="reader-head drag" style={{ paddingLeft: sidebarVisible ? undefined : LEAD_ROOM + 2, paddingRight: notesVisible ? undefined : captionWidth + TOGGLE_ROOM + 2 }}>
+        <div className="reader-head drag" onContextMenu={(e) => { e.preventDefault(); openMenu([{ label: t("自定义工具栏…"), action: () => customizeToolbarRef.current() }], e.clientX, e.clientY); }} style={{ paddingLeft: sidebarVisible ? undefined : LEAD_ROOM + 2, paddingRight: notesVisible ? undefined : captionWidth + TOGGLE_ROOM + 2 }}>
           <div className="reader-title">
             <div className="name ellipsis" title={title}>{title}</div>
             <div className="page tabular ellipsis">{pageLabel}</div>
           </div>
-          <button className="glass-button" style={{ width: 52 }} title={t("显示")} onClick={(e) => openMenuAt(e.currentTarget, viewMenu())}><ChevronDown size={14} /></button>
-          <div className="glass-group">
-            {TOOLS.map((x, i) => {
-              const Icon = x.icon;
-              return (
-                <span key={x.key} style={{ display: "contents" }}>
-                  {i === 4 && <span className="sep" />}
-                  <button className={tool === x.key ? "on" : ""} title={`${t(x.tip)}（Ctrl+Alt+${x.shortcut}）`} onClick={() => applyTool(x.key)}><Icon size={16} strokeWidth={1.8} /></button>
-                </span>
-              );
-            })}
-          </div>
-          <button className="glass-button" title={t("批注颜色")} onClick={(e) => openMenuAt(e.currentTarget, colors.map((c) => ({
-            label: c.title, dot: c.hex, checked: c.key === color,
-            action: () => { setColor(c.key); setSetting("highlightColor", c.key); main.send({ cmd: "tool", tool: toolRef.current, color: c.key }); },
-          })))}><span className="color-dot" style={{ background: colorHex }} /></button>
-          <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><BookText size={17} strokeWidth={1.7} /></button>
-          {searchOpen || query ? (
-            <label className="search-field" style={{ flex: "0 1 200px", minWidth: 130 }}>
-              <Search size={14} />
-              <input ref={searchRef} value={query} placeholder={t("在文档中查找")} spellCheck={false}
-                onChange={(e) => { setQuery(e.target.value); if (!e.target.value) send({ cmd: "find", query: "" }); }}
-                onBlur={() => { if (!query) setSearchOpen(false); }}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (e.key === "Enter") find(e.shiftKey);
-                  else if (e.key === "Escape") { setQuery(""); send({ cmd: "find", query: "" }); setSearchOpen(false); main.frame?.contentWindow?.focus(); }
-                }} />
-              {findCount && <span className="tabular" style={{ fontSize: 11, flex: "none" }}>{findCount}</span>}
-              {query && <button className="clear-button" onMouseDown={(e) => { e.preventDefault(); setQuery(""); send({ cmd: "find", query: "" }); }}><X size={10} strokeWidth={3} /></button>}
-            </label>
-          ) : (
-            <button className="glass-button" title={t("在文档中查找")} onClick={focusSearch}><Search size={17} strokeWidth={1.7} /></button>
-          )}
+          {toolbarIds(settings.readerToolbar).reduce<{ id: string; tools: string[] }[]>((groups, id) => {
+            const tool = TOOLBAR_ITEMS.find((x) => x.id === id)?.tool;
+            const last = groups[groups.length - 1];
+            if (tool && last?.tools.length) last.tools.push(id); else groups.push({ id, tools: tool ? [id] : [] });
+            return groups;
+          }, []).map((g) => g.tools.length ? (
+            <div key={g.id} className="glass-group">
+              {g.tools.map((id, i) => {
+                const x = TOOLS.find((tt) => tt.key === id)!;
+                const Icon = x.icon;
+                const previous = i > 0 ? TOOLS.find((tt) => tt.key === g.tools[i - 1]) : undefined;
+                return (
+                  <span key={id} style={{ display: "contents" }}>
+                    {previous && previous.group !== x.group && <span className="sep" />}
+                    <button className={tool === x.key ? "on" : ""} title={`${t(x.tip)}（Ctrl+Alt+${x.shortcut}）`} onClick={() => applyTool(x.key)}><Icon size={16} strokeWidth={1.8} /></button>
+                  </span>
+                );
+              })}
+            </div>
+          ) : <span key={g.id} style={{ display: "contents" }}>{toolbarButton(g.id)}</span>)}
         </div>
         <TabBar />
       </div>
@@ -558,6 +656,9 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
       {running && <div className="hud"><TranslationProgress itemId={file.itemId} /></div>}
 
+      {badge && visible && <TranslateBadge x={badge.x} y={badge.y} onClick={() => openTranslation(badge.anchor, badge.text, badge.page)} />}
+      {translation && visible && <TranslatePopover anchor={translation.anchor} text={translation.text} close={() => { setTranslation(null); main.frame?.contentWindow?.focus(); }}
+        addToNote={(source, translated) => addTranslationToNote(source, translated, translation.page)} />}
       {editor && <NotePopover {...editor} close={() => { setEditor(null); main.frame?.contentWindow?.focus(); }} />}
     </div>
   );

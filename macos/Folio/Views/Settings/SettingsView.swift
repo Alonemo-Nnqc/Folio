@@ -214,6 +214,18 @@ struct GeneralSettings: View {
         Form {
             Section("外观") {
                 AppearancePicker(settings: settings)
+                LabeledContent("背景透明度") {
+                    Slider(value: $settings.backgroundTranslucency, in: 0...1) {
+                        Text("背景透明度")
+                    } minimumValueLabel: {
+                        Image(systemName: "circle.fill").font(.caption2).foregroundStyle(.secondary)
+                    } maximumValueLabel: {
+                        Image(systemName: "circle.dotted").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 220)
+                    .accessibilityIdentifier("backgroundTranslucency")
+                }
                 LabeledContent("边栏图标大小") {
                     Button("在系统设置中更改…") {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!)
@@ -328,8 +340,6 @@ private struct UpdateSettingsSection: View {
                 .disabled(!updater.automaticallyChecks)
         } header: {
             Text("软件更新")
-        } footer: {
-            Text("更新从 GitHub 发布页下载，安装前会校验签名。")
         }
     }
 }
@@ -408,7 +418,7 @@ struct LibrarySettings: View {
             } header: {
                 Text("导入")
             } footer: {
-                Text("导入条目、PDF、分组和标签，不会修改 Zotero")
+                Text("不会改动 Zotero 数据")
             }
         }
         .formStyle(.grouped)
@@ -447,7 +457,7 @@ struct RetrievalSettings: View {
                 Toggle("添加 PDF 后自动检索元数据", isOn: $settings.autoRetrieveOnImport)
                 Toggle(isOn: $settings.useZoteroRecognizer) {
                     Text("使用 Zotero 识别服务")
-                    Text("会把 PDF 前 5 页的文字发送给 Zotero，无需账号")
+                    Text("将发送 PDF 前 5 页文字，无需账号")
                 }
             }
             Section {
@@ -455,8 +465,6 @@ struct RetrievalSettings: View {
                     .help("Crossref 会更快地响应带联系邮箱的请求；邮箱只发送给 Crossref 和 OpenAlex")
                 SecureField("OpenAlex API Key（选填）", text: $settings.openAlexAPIKey)
                     .help("可在 openalex.org 免费申请，用于提高 OpenAlex 的访问额度")
-            } footer: {
-                Text("选填，可让检索更快、更稳定\n不填也能正常检索")
             }
         }
         .formStyle(.grouped)

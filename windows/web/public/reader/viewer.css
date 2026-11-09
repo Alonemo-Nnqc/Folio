@@ -30,11 +30,11 @@
   --tip: #2c2c2e;
   color-scheme: dark;
 }
-html, body { touch-action: pan-x pan-y; margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+html, body { touch-action: pan-x pan-y; margin: 0; height: 100%; overflow: hidden; background: color-mix(in srgb, var(--bg) calc(var(--surface-alpha) * 100%), transparent); color: var(--text);
   font: 13px "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", -apple-system, sans-serif; }
 body { display: flex; }
 
-#sidebar { width: var(--sidebar-width); flex: none; display: flex; flex-direction: column; background: var(--sidebar);
+#sidebar { width: var(--sidebar-width); flex: none; display: flex; flex-direction: column; background: color-mix(in srgb, var(--sidebar) calc(var(--surface-alpha) * 100%), transparent);
   border-right: 1px solid var(--separator); box-sizing: border-box; user-select: none; padding-top: var(--sidebar-top); }
 body.no-sidebar #sidebar { transform: translateX(-100%); visibility: hidden; }
 body.no-sidebar #sidebarDivider { display: none; }

@@ -460,11 +460,28 @@ document.addEventListener("mouseup", (e) => {
     if (["highlight", "underline", "strike"].includes(tool)) {
       addMarkup({ highlight: "Highlight", underline: "Underline", strike: "StrikeOut" }[tool], found);
       clearSelection();
+      post({ type: "selection", text: "" });
     } else {
-      post({ type: "selection", text: found.text, pages: found.pages });
+      post({ type: "selection", text: found.text, pages: found.pages, done: true, ...selectionGeometry(), clickCount: e.detail });
     }
   }, 0);
 });
+
+/** Where the selection is on screen (this page's coordinates): all of it, and the end of its last line (for 划词翻译). */
+function selectionGeometry() {
+  const selection = document.getSelection();
+  if (!selection?.rangeCount) return {};
+  const rects = [...selection.getRangeAt(0).getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5);
+  if (!rects.length) return {};
+  const visible = rects.filter((r) => r.bottom > 0 && r.top < innerHeight);
+  const use = visible.length ? visible : rects;
+  const last = use[use.length - 1];
+  const union = use.reduce((a, r) => ({ left: Math.min(a.left, r.left), top: Math.min(a.top, r.top), right: Math.max(a.right, r.right), bottom: Math.max(a.bottom, r.bottom) }),
+    { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+  return { rect: union, end: { x: last.right, y: last.top, bottom: last.bottom } };
+}
+document.addEventListener("pointerdown", (e) => { if (e.button === 0) post({ type: "pointerDown" }); }, true);
+container.addEventListener("scroll", () => post({ type: "viewMoved" }), { passive: true });
 
 // MARK: Annotations added or changed since the file was loaded
 //
@@ -967,7 +984,7 @@ document.addEventListener("contextmenu", (e) => {
       select(annotation, hit.number);
       Object.assign(message, { kind: "annotation", page: hit.number, id: annotation.id, subtype: annotation.subtype, contents: annotation.contents, quoted: annotation.quoted, colorKey: annotation.colorKey });
     } else if (info?.text) {
-      Object.assign(message, { kind: "selection", text: info.text, pages: info.pages });
+      Object.assign(message, { kind: "selection", text: info.text, pages: info.pages, ...selectionGeometry() });
     } else {
       Object.assign(message, { kind: "page", page: hit.number });
     }
@@ -1529,10 +1546,17 @@ host.addEventListener("message", async (e) => {
       commit([{ page: m.page, before: entry, after: null }]);
       break;
     }
+    case "translateSelection": {
+      // 划词翻译 by shortcut or menu: the selection as it is now, with where it is.
+      const found = selectionInfo() ?? lastSelection;
+      if (found?.text) post({ type: "translateSelection", text: found.text, page: found.pages?.[0]?.page ?? 1, ...selectionGeometry() });
+      break;
+    }
     case "markSelection": {
       if (!lastSelection) break;
       addMarkup(m.subtype, lastSelection);
       clearSelection();
+      post({ type: "selection", text: "" });
       break;
     }
     case "insets":
@@ -1548,11 +1572,19 @@ host.addEventListener("message", async (e) => {
       else { pendingPassword?.task.destroy(); showMessage(label("encrypted")); }
       pendingPassword = null;
       break;
-    case "tool":
+    case "tool": {
+      const changed = m.tool !== tool;
       tool = m.tool; color = m.color ?? color;
       document.body.className = document.body.className.replace(/\btool-\S+/g, "").trim() + ` tool-${tool}`;
       if (tool !== "select") select(null);
+      // Choosing a markup tool with text already selected marks that text right away, as in the macOS reader.
+      const markup = { highlight: "Highlight", underline: "Underline", strike: "StrikeOut" }[tool];
+      if (changed && markup) {
+        const found = selectionInfo();
+        if (found) { addMarkup(markup, found); clearSelection(); post({ type: "selection", text: "" }); }
+      }
       break;
+    }
     case "zoom":
       if (m.value === "in") { autoFit = null; viewer.increaseScale(); }
       else if (m.value === "out") { autoFit = null; viewer.decreaseScale(); }

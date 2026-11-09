@@ -12,12 +12,15 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     let pdfView = ReaderPDFView()
     private let editor: AnnotationEditor
     private let content: ReaderContentViewController
-    private let split = NSSplitViewController()
+    private let split = SmoothSplitViewController()
+    private var notesPane: PaneContainerController!
     private var sidebarItem: NSSplitViewItem!
     private var notesItem: NSSplitViewItem!
     private var notesHost: NSHostingController<ReaderNotesPanel>!
     private var notesFocusRequest = 0
     private var observers: [ObservationLoop] = []
+    private var selectionTranslation: SelectionTranslationController!
+    private var keyMonitor: Any?
     private weak var toolGroup: NSToolbarItemGroup?
     private weak var colorItem: NSMenuToolbarItem?
     private weak var searchItem: NSSearchToolbarItem?
@@ -74,26 +77,45 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         editor.onChange = { [weak self] in self?.documentChanged() }
         editor.onAddToNote = { [weak self] text, page in self?.addToNote(text, pageIndex: page) }
         editor.onCopyAsCitation = { [weak self] text, page in self?.copyAsCitation(text, pageIndex: page) }
+        editor.onTranslateSelection = { [weak self] in self?.selectionTranslation.translateCurrentSelection() }
+        selectionTranslation = SelectionTranslationController(model: model, pdfView: pdfView)
+        selectionTranslation.onAddToNote = { [weak self] source, translation, page in
+            self?.addTranslationToNote(source: source, translation: translation, pageIndex: page)
+        }
+        pdfView.onMouseDown = { [weak self] in self?.selectionTranslation.mouseWentDown() }
+        pdfView.onSelectionFinished = { [weak self] in self?.selectionTranslation.selectionFinished() }
+        // 划词翻译's shortcut, while this reader is the key window.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.window === self.window, self.model.settings.selectionTranslationEnabled,
+                  self.model.settings.selectionTranslationShortcut.matches(event),
+                  !(self.window?.firstResponder is NSTextView) else { return event }
+            return self.selectionTranslation.translateCurrentSelection() ? nil : event
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(pageChanged(_:)), name: .PDFViewPageChanged, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(scaleChanged(_:)), name: .PDFViewScaleChanged, object: pdfView)
     }
 
     private func buildSplit() {
         let sidebar = NSHostingController(rootView: ReaderSidebarView(state: state, pdfView: pdfView, actions: sidebarActions))
-        sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebar)
+        sidebarItem = NSSplitViewItem(sidebarWithViewController: PaneContainerController(child: sidebar, edge: .leading))
         sidebarItem.minimumThickness = 180
         sidebarItem.maximumThickness = 360
         sidebarItem.canCollapse = true
         let main = NSSplitViewItem(viewController: content)
         main.minimumThickness = 360
         notesHost = NSHostingController(rootView: ReaderNotesPanel(model: model, itemId: itemId, focusRequest: 0))
-        notesItem = NSSplitViewItem(inspectorWithViewController: notesHost)
+        notesPane = PaneContainerController(child: notesHost, edge: .trailing)
+        notesPane.backdrop.baseColor = .windowBackgroundColor
+        notesItem = NSSplitViewItem(inspectorWithViewController: notesPane)
         notesItem.minimumThickness = 260
         notesItem.maximumThickness = 480
         notesItem.canCollapse = true
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(main)
         split.addSplitViewItem(notesItem)
+        // The pages keep their scale while the panes beside them slide, and fit the new width at the end.
+        split.onAnimationBegan = { [weak self] in self?.content.holdScale() }
+        split.onAnimationEnded = { [weak self] in self?.content.releaseScale() }
         window?.contentViewController = split
         window?.setContentSize(NSSize(width: 1200, height: 860))
         if !UserDefaults.standard.bool(forKey: "FolioUITesting") { split.splitView.autosaveName = "FolioReaderSplit" }
@@ -139,6 +161,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             let color = self.state.color
             self.pdfView.inkColor = color.nsColor
             self.colorItem?.image = Self.colorSwatch(color)
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let amount = self.model.settings.backgroundTranslucency
+            self.notesPane.backdrop.amount = amount
+            self.content.setTranslucency(amount)
         })
     }
 
@@ -408,6 +436,22 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         showNotes()
     }
 
+    /// Preview hook: selects `text` and shows 划词翻译 for it.
+    func previewSelectionTranslation(_ text: String, badgeOnly: Bool) {
+        guard let selection = pdfView.document?.findString(text, withOptions: .caseInsensitive).first else { return }
+        pdfView.setCurrentSelection(selection, animate: false)
+        if let page = selection.pages.first { pdfView.go(to: selection.bounds(for: page), on: page) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [self] in
+            if badgeOnly { selectionTranslation.selectionFinished() } else { selectionTranslation.translateCurrentSelection() }
+        }
+    }
+
+    private func addTranslationToNote(source: String, translation: String, pageIndex: Int) {
+        let quote = source.split(separator: "\n").map { "> \($0)" }.joined(separator: "\n")
+        model.appendToNote(itemId: itemId, String(localized: "\(quote)\n> —— 第 \(pageIndex + 1) 页") + "\n\n" + translation)
+        showNotes()
+    }
+
     private func copyAsCitation(_ text: String, pageIndex: Int) {
         var reference = ""
         if let item = model.snapshot.items[itemId], item.kind == .regular {
@@ -421,7 +465,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     private func showNotes() {
-        if notesItem.isCollapsed { notesItem.animator().isCollapsed = false }
+        if notesItem.isCollapsed { split.setCollapsed(notesItem, false) }
         notesFocusRequest += 1
         notesHost.rootView = ReaderNotesPanel(model: model, itemId: itemId, focusRequest: notesFocusRequest)
     }
@@ -467,6 +511,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     func windowWillClose(_ notification: Notification) {
         savePosition()
+        selectionTranslation.close()
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        keyMonitor = nil
         observers.forEach { $0.cancel() }
         model.readers.readerDidClose(self)
     }
@@ -506,7 +553,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
         state.isSearching = true
         state.sidebarTab = .search
-        if sidebarItem.isCollapsed { sidebarItem.animator().isCollapsed = false }
+        if sidebarItem.isCollapsed { split.setCollapsed(sidebarItem, false) }
         document.beginFindString(text, withOptions: [.caseInsensitive, .diacriticInsensitive])
     }
 
@@ -577,7 +624,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     @objc func showReaderSidebarTab(_ sender: Any?) {
         guard let item = sender as? NSMenuItem, let tab = ReaderSidebarTab(rawValue: item.tag) else { return }
         state.sidebarTab = tab
-        if sidebarItem.isCollapsed { sidebarItem.animator().isCollapsed = false }
+        if sidebarItem.isCollapsed { split.setCollapsed(sidebarItem, false) }
     }
 
     /// 边翻边看: while this paper is being translated, 对照阅读 shows the pages done so far and follows new ones;
@@ -797,6 +844,11 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                                            target: nil, action: #selector(zoomFromToolbar(_:)))
             group.label = String(localized: "缩放")
             group.paletteLabel = String(localized: "缩放")
+            // Where the toolbar runs out of room (the notes panel open), the pair folds into one menu button: it shows a
+            // magnifier, not an empty button with an arrow.
+            group.image = NSImage(systemSymbolName: "plus.magnifyingglass", accessibilityDescription: String(localized: "缩放"))
+            group.toolTip = String(localized: "缩放")
+            group.visibilityPriority = .low
             return group
         case .readerTools:
             let tools = AnnotationTool.allCases
@@ -900,18 +952,55 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
 
     /// Shown over the pages while this paper is being translated.
     private let translationHUD = TranslationProgressHUD()
+    private let backdrop = TranslucentBackdrop()
+    private var opaqueBackground: NSColor?
+    /// Views whose automatic scale is held while the panes around them move.
+    private var heldAutoScale: [PDFView] = []
+
+    func holdScale() {
+        for view in [pdfView, parallelView].compactMap({ $0 }) where view.autoScales {
+            let scale = view.scaleFactor
+            view.autoScales = false
+            view.scaleFactor = scale
+            heldAutoScale.append(view)
+        }
+    }
+
+    func releaseScale() {
+        let views = heldAutoScale
+        heldAutoScale = []
+        for view in views {
+            // Keep the reading position while the page settles at its new width.
+            let destination = view.currentDestination
+            view.autoScales = true
+            if let destination { view.go(to: destination) }
+        }
+    }
+
+    /// 背景透明度: the grey around the pages becomes frosted glass; the pages stay as they are.
+    func setTranslucency(_ amount: Double) {
+        if opaqueBackground == nil { opaqueBackground = pdfView.backgroundColor }
+        backdrop.baseColor = opaqueBackground ?? .underPageBackgroundColor
+        backdrop.amount = amount
+        let background = backdrop.isActive ? NSColor.clear : (opaqueBackground ?? .underPageBackgroundColor)
+        for view in [pdfView, parallelView].compactMap({ $0 }) { view.backgroundColor = background }
+    }
 
     override func loadView() {
         splitView.isVertical = true
         splitView.dividerStyle = .thin
         splitView.addArrangedSubview(pdfView)
         let container = NSView()
-        for subview in [splitView, translationHUD] as [NSView] {
+        for subview in [backdrop, splitView, translationHUD] as [NSView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(subview)
         }
         translationHUD.isHidden = true
         NSLayoutConstraint.activate([
+            backdrop.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            backdrop.topAnchor.constraint(equalTo: container.topAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
             splitView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             splitView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             splitView.topAnchor.constraint(equalTo: container.topAnchor),
@@ -955,6 +1044,7 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
         view.displayMode = .singlePageContinuous
         view.displaysPageBreaks = true
         view.setAccessibilityIdentifier("parallelPDFView")
+        if backdrop.isActive { view.backgroundColor = .clear }
         splitView.addArrangedSubview(view)
         // A view added later starts with zero width: split the space evenly.
         splitView.layoutSubtreeIfNeeded()

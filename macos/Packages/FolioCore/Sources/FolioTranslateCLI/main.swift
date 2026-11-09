@@ -98,6 +98,14 @@ case "audit":
     let model = arguments.count > 3 && !arguments[3].hasPrefix("--") ? arguments[3] : ""
     print(try EngineDiagnostics.audit(input: url(arguments[1]), serviceID: arguments[2], model: model, output: out,
                                       verbose: arguments.contains("--verbose")))
+case "selection":
+    // selection <service> <text> [--to zh]: 划词翻译 of one passage
+    let target = arguments.firstIndex(of: "--to").map { arguments[$0 + 1] } ?? "zh"
+    do {
+        print(try await SelectionTranslator.translate(arguments[2], serviceID: arguments[1], fields: [:], secrets: [:], from: "en", to: target))
+    } catch {
+        print("error: \(error.localizedDescription)")
+    }
 default:
     print("usage: folio-translate roundtrip|compare …")
 }

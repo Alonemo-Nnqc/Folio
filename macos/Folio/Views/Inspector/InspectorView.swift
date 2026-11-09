@@ -7,14 +7,18 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("检查器", selection: $model.inspectorTab) {
-                ForEach(InspectorTab.allCases, id: \.self) { Text($0.title).tag($0) }
+            if !model.inspectorTabsInToolbar {
+                Picker("检查器", selection: $model.inspectorTab) {
+                    ForEach(InspectorTab.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .accessibilityIdentifier("inspectorTabs")
+            } else {
+                Color.clear.frame(height: 6)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .accessibilityIdentifier("inspectorTabs")
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -39,11 +43,9 @@ struct InspectorView: View {
                     .padding(.horizontal, 8)
             }
         } else if model.selectionCount > 1 {
-            ContentUnavailableView("已选择 \(model.selectionCount) 项", systemImage: "square.stack.3d.up",
-                                   description: Text("右键可批量添加到分组、添加标签或删除"))
+            ContentUnavailableView("已选择 \(model.selectionCount) 项", systemImage: "square.stack.3d.up")
         } else {
-            ContentUnavailableView("未选择条目", systemImage: "doc.text.magnifyingglass",
-                                   description: Text("在列表中选择一篇文献以查看详情"))
+            ContentUnavailableView("未选择条目", systemImage: "doc.text.magnifyingglass")
         }
     }
 }

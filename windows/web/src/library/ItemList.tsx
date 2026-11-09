@@ -8,6 +8,8 @@ import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, SearchBox, Segmented } from "../ui/controls";
 import { dragPointer, formatDate } from "../ui/util";
 import { ITEMS_MIME, setDraggingItems } from "./Sidebar";
+import { UpdateButton } from "../ui/update";
+import { toggleQuickLook } from "./QuickLook";
 
 const ROW = 32;
 
@@ -225,6 +227,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       case "ArrowRight": { const next = new Set(expanded); ids.forEach((i) => next.add(i)); setState({ expanded: next }); break; }
       case "ArrowLeft": { const next = new Set(expanded); ids.forEach((i) => next.delete(i)); setState({ expanded: next }); break; }
       case "Enter": openItems(ids); break;
+      case " ": toggleQuickLook(); break;
       case "a": if (e.ctrlKey) setSelection(rows); else return; break;
       case "Delete": case "Backspace": {
         if (ids.length === 0) return;
@@ -296,6 +299,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
           <button title={t("翻译")} disabled={selection.length === 0} onClick={() => translate(selection)}><BookText size={17} strokeWidth={1.7} /></button>
           <button title={t("引用与导出")} disabled={selection.length === 0} onClick={(e) => openMenuAt(e.currentTarget, citeMenu(selection))}><Share size={16} strokeWidth={1.7} /></button>
         </div>
+        <UpdateButton />
         <SearchBox inputRef={searchRef} value={searching} placeholder={t("搜索文献")} onChange={(v) => { typing.current = true; setSearching(v); call("library.search", { text: v }).finally(() => { typing.current = false; }); }} />
       </div>
       {tabs}
@@ -347,6 +351,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
               if (!file) return null;
               return (
                 <div key={row.fileId} className={`tr${fileSelection === row.fileId ? " selected" : ""}`} style={{ top, transform: "none" }} onClick={(e) => clickRow(e, row)} onDoubleClick={() => openRow(row)}
+                  onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }} onAuxClick={(e) => { if (e.button === 1) { setSelection([row.itemId], row.fileId); setState({ quickLook: true }); } }}
                   onContextMenu={(e) => { e.preventDefault(); setSelection([row.itemId], row.fileId); openMenu(scope === "trash" ? itemMenu([row.itemId]) : fileMenu(file), e.clientX, e.clientY); }}>
                   <span style={{ width: 44, flex: "none" }} />
                   <FileText size={14} className="secondary" style={{ flex: "none" }} />
@@ -358,7 +363,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
             const standalone = item.kind === "standalone";
             return (
               <div key={item.id} className={`tr${selectedSet.has(item.id) && !fileSelection ? " selected" : ""}`} style={{ top }} draggable
-                onMouseDown={(e) => { pendingDragSelect.current = selectedSet.has(item.id) && !e.shiftKey && !e.ctrlKey && e.button === 0; if (!selectedSet.has(item.id) && e.button === 0 && !e.shiftKey && !e.ctrlKey) { setSelection([item.id]); anchor = item.id; } }}
+                onAuxClick={(e) => { if (e.button === 1) { setSelection([item.id]); anchor = item.id; setState({ quickLook: true }); } }}
+                onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); pendingDragSelect.current = selectedSet.has(item.id) && !e.shiftKey && !e.ctrlKey && e.button === 0; if (!selectedSet.has(item.id) && e.button === 0 && !e.shiftKey && !e.ctrlKey) { setSelection([item.id]); anchor = item.id; } }}
                 onMouseUp={(e) => { if (pendingDragSelect.current && e.button === 0) { pendingDragSelect.current = false; clickRow(e, row); } }}
                 onClick={(e) => { if (e.shiftKey || e.ctrlKey) clickRow(e, row); }}
                 onDoubleClick={(e) => { if (!(e.target as Element).closest("button")) openRow(row); }}

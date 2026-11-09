@@ -11,6 +11,8 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     let splitViewController: LibrarySplitViewController
     private var observers: [ObservationLoop] = []
     private weak var searchItem: NSSearchToolbarItem?
+    private weak var inspectorTabsItem: NSToolbarItem?
+    private var inspectorCollapse: NSKeyValueObservation?
     private var lastSearchFocusRequest = 0
     private var presentedSheet: NSViewController?
     private var shownLoadError: String?
@@ -39,6 +41,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         // UI tests must not overwrite the user's toolbar layout.
         toolbar.autosavesConfiguration = !UserDefaults.standard.bool(forKey: "FolioUITesting")
         window.toolbar = toolbar
+        addInspectorTabsToSavedToolbar(toolbar)
 
         if !window.setFrameUsingName("FolioLibraryWindow") {
             window.setContentSize(NSSize(width: 1320, height: 820))
@@ -73,6 +76,15 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             self.syncSheet(self.model.activeSheet)
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            self.showUpdateButton(AppDelegate.shared.updater.pendingUpdate)
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let index = InspectorTab.allCases.firstIndex(of: self.model.inspectorTab) ?? 0
+            (self.inspectorTabsItem?.view as? NSSegmentedControl)?.selectedSegment = index
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self, let message = self.model.loadError, message != self.shownLoadError else { return }
@@ -203,7 +215,82 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         // The flexible space before the sidebar button pins it to the sidebar's trailing edge; when the
         // sidebar collapses, AppKit moves it next to the window controls.
         [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .folioAdd, .space, .folioRead,
-         .folioTranslate, .folioExport, .space, .folioSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
+         .folioTranslate, .folioExport, .space, .folioSearch, .inspectorTrackingSeparator, .flexibleSpace, .folioInspectorTabs,
+         .flexibleSpace, .toggleInspector]
+    }
+
+    /// Toolbars saved before the inspector's tabs moved up get them once, centred over the inspector.
+    private func addInspectorTabsToSavedToolbar(_ toolbar: NSToolbar) {
+        let defaults = UserDefaults.standard
+        let key = "FolioInspectorTabsInToolbar"
+        guard !defaults.bool(forKey: key) else { return }
+        if !UserDefaults.standard.bool(forKey: "FolioUITesting") { defaults.set(true, forKey: key) }
+        let ids = toolbar.items.map(\.itemIdentifier)
+        guard !ids.contains(.folioInspectorTabs), let separator = ids.firstIndex(of: .inspectorTrackingSeparator) else { return }
+        let next = separator + 1 < ids.count ? ids[separator + 1] : nil
+        if next == .flexibleSpace {
+            toolbar.insertItem(withItemIdentifier: .flexibleSpace, at: separator + 2)
+            toolbar.insertItem(withItemIdentifier: .folioInspectorTabs, at: separator + 2)
+        } else {
+            toolbar.insertItem(withItemIdentifier: .folioInspectorTabs, at: separator + 1)
+        }
+    }
+
+    func toolbarWillAddItem(_ notification: Notification) {
+        guard let item = notification.userInfo?["item"] as? NSToolbarItem, item.itemIdentifier == .folioInspectorTabs else { return }
+        if #available(macOS 15, *) {
+            model.inspectorTabsInToolbar = true
+            DispatchQueue.main.async { [weak self] in self?.followInspector() }
+        } else {
+            // Without hidden toolbar items the tabs would stay when the inspector closes: they stay in the inspector.
+            item.view?.isHidden = true
+        }
+    }
+
+    func toolbarDidRemoveItem(_ notification: Notification) {
+        guard let item = notification.userInfo?["item"] as? NSToolbarItem, item.itemIdentifier == .folioInspectorTabs else { return }
+        model.inspectorTabsInToolbar = false
+    }
+
+    /// The tabs show only while the inspector is open.
+    private func followInspector() {
+        guard #available(macOS 15, *), let inspector = splitViewController.splitViewItems.last else { return }
+        inspectorCollapse = inspector.observe(\.isCollapsed, options: [.initial, .new]) { [weak self] _, change in
+            let collapsed = change.newValue ?? false
+            MainActor.assumeIsolated { self?.inspectorTabsItem?.isHidden = collapsed }
+        }
+    }
+
+    /// The 更新 button: there while an update waits, just before the search field.
+    private func showUpdateButton(_ update: SoftwareUpdater.PendingUpdate?) {
+        guard let toolbar = window?.toolbar else { return }
+        let index = toolbar.items.firstIndex { $0.itemIdentifier == .folioUpdate }
+        if let update {
+            if index == nil {
+                let search = toolbar.items.firstIndex { $0.itemIdentifier == .folioSearch } ?? toolbar.items.count
+                toolbar.insertItem(withItemIdentifier: .folioUpdate, at: search)
+            }
+            if let item = toolbar.items.first(where: { $0.itemIdentifier == .folioUpdate }) { configureUpdate(item, update) }
+        } else if let index {
+            toolbar.removeItem(at: index)
+        }
+    }
+
+    private func configureUpdate(_ item: NSToolbarItem, _ update: SoftwareUpdater.PendingUpdate) {
+        item.label = update.isDownloaded ? String(localized: "重新启动以更新") : String(localized: "更新")
+        item.toolTip = update.isDownloaded ? String(localized: "Folio \(update.version) 已下载，点按重新启动并安装")
+                                           : String(localized: "Folio \(update.version) 可供更新")
+        item.image = NSImage(systemSymbolName: update.isDownloaded ? "arrow.clockwise.circle" : "arrow.down.circle",
+                             accessibilityDescription: item.label)
+    }
+
+    @objc func installUpdate(_ sender: Any?) {
+        AppDelegate.shared.updater.checkForUpdates(sender)
+    }
+
+    @objc private func inspectorTabChosen(_ sender: NSSegmentedControl) {
+        guard InspectorTab.allCases.indices.contains(sender.selectedSegment) else { return }
+        model.inspectorTab = InspectorTab.allCases[sender.selectedSegment]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -257,6 +344,33 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             // The field would otherwise stretch over all free toolbar space.
             item.searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
             searchItem = item
+            return item
+        case .folioUpdate:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.paletteLabel = String(localized: "更新")
+            item.action = #selector(installUpdate(_:))
+            item.target = self
+            item.isBordered = true
+            if #available(macOS 26, *) {
+                item.style = .prominent
+            }
+            if let update = AppDelegate.shared.updater.pendingUpdate { configureUpdate(item, update) } else {
+                item.label = String(localized: "更新")
+                item.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: item.label)
+            }
+            return item
+        case .folioInspectorTabs:
+            let control = NSSegmentedControl(labels: InspectorTab.allCases.map(\.title), trackingMode: .selectOne,
+                                             target: self, action: #selector(inspectorTabChosen(_:)))
+            control.selectedSegment = InspectorTab.allCases.firstIndex(of: model.inspectorTab) ?? 0
+            control.setAccessibilityIdentifier("inspectorTabs")
+            for index in InspectorTab.allCases.indices { control.setWidth(52, forSegment: index) }
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.view = control
+            item.label = String(localized: "检查器")
+            item.paletteLabel = String(localized: "检查器标签")
+            item.visibilityPriority = .high
+            inspectorTabsItem = item
             return item
         case .folioNote:
             let item = NSToolbarItem(itemIdentifier: id)
@@ -381,4 +495,6 @@ extension NSToolbarItem.Identifier {
     static let folioNote = NSToolbarItem.Identifier("FolioNote")
     static let folioReveal = NSToolbarItem.Identifier("FolioReveal")
     static let folioRetrieve = NSToolbarItem.Identifier("FolioRetrieve")
+    static let folioInspectorTabs = NSToolbarItem.Identifier("FolioInspectorTabs")
+    static let folioUpdate = NSToolbarItem.Identifier("FolioUpdate")
 }

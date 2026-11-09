@@ -13,7 +13,7 @@ struct AISettingsPane: View {
             Section {
                 Toggle(isOn: $settings.aiAllowWrites) {
                     Text("允许 AI 修改文献库")
-                    Text("关闭后只能搜索、阅读和引用\nAI 不能彻底删除任何内容")
+                    Text("关闭后仅可检索、阅读与引用")
                 }
                 LabeledContent("MCP 服务器") {
                     HStack {
@@ -38,8 +38,6 @@ struct AISettingsPane: View {
                 }
             } header: {
                 Text("Folio 的 AI 接口")
-            } footer: {
-                Text("智能体通过 MCP 查找、阅读、引用和整理你的文献\nFolio 技能教它正确地使用")
             }
 
             Section {
@@ -67,7 +65,7 @@ struct AISettingsPane: View {
                     }
                 }
             } footer: {
-                Text("打开开关即按官方方式写入该智能体的配置，关闭即移除，修改前会备份\n重启智能体或开始新会话后生效")
+                Text("开关会写入或移除该智能体的配置（修改前自动备份），重启智能体后生效")
             }
 
             Section {
@@ -83,7 +81,7 @@ struct AISettingsPane: View {
             } header: {
                 Text("手动配置")
             } footer: {
-                Text("用于列表之外的应用，如 VS Code、Zed、Windsurf")
+                Text("适用于 VS Code、Zed、Windsurf 等")
             }
         }
         .formStyle(.grouped)

@@ -28,6 +28,7 @@ public static partial class Api
             isEnglish = Loc.IsEnglish,
             settings = AllSettings(),
             version = Updater.CurrentVersion,
+            translucency = HostWindow.SupportsTranslucency,
             channel = Updater.Channel,
             captionWidth = a.Window?.CaptionWidthLogical ?? 138,
             windowState = a.Window?.WindowStateName,
@@ -54,6 +55,7 @@ public static partial class Api
         Bridge.On("window.fullScreen", a => { a.Window?.ToggleFullScreen(); return null; });
         Bridge.On("window.resize", a => { a.Window?.BeginResize(a.Str("edge")); return null; });
         Bridge.On("window.caption", a => { a.Window?.SetCaptionColors(a.Str("background"), a.Str("foreground"), a.Bool("animate")); return null; });
+        Bridge.On("window.translucency", a => { a.Window?.SetTranslucency(a.Num("value")); return null; });
         Bridge.On("window.theme", a => { a.Window?.ApplyTheme(a.Bool("dark")); return null; });
         Bridge.On("window.title", a => { if (a.Window != null) a.Window.Text = a.Str("title"); return null; });
         Bridge.On("window.settings", a => { App.OpenSettings(a.OptStr("page") ?? ""); return null; });
@@ -79,7 +81,8 @@ public static partial class Api
         });
 
         Bridge.OnAsync("update.check", _ => M.Updater.Check(userInitiated: true));
-        Bridge.On("update.state", _ => new { version = Updater.CurrentVersion, channel = Updater.Channel, installed = M.Updater.IsInstalled, pending = M.Updater.PendingVersion });
+        Bridge.On("update.state", _ => M.Updater.State);
+        Bridge.OnAsync("update.install", _ => M.Updater.Install());
     }
 
     /// <summary>The settings as they are stored, with the app's defaults for what was never set.</summary>
@@ -112,6 +115,13 @@ public static partial class Api
             ["citationStyle"] = s.CitationStyle,
             ["autoCheckUpdates"] = s.AutoCheckUpdates,
             ["updatePrereleases"] = s.UpdatePrereleases,
+            ["autoDownloadUpdates"] = s.AutoDownloadUpdates,
+            ["backgroundTranslucency"] = s.BackgroundTranslucency,
+            ["selectionTranslationEnabled"] = s.SelectionTranslationEnabled,
+            ["selectionTranslationTrigger"] = s.SelectionTranslationTrigger,
+            ["selectionTranslationService"] = s.SelectionTranslationService,
+            ["selectionTranslationShortcut"] = s.SelectionTranslationShortcut,
+            ["readerToolbar"] = s.ReaderToolbar,
             ["onboardingDone"] = s.OnboardingDone,
             ["openReaderTabs"] = s.OpenReaderTabs,
             ["columnWidths"] = s.ColumnWidths,
@@ -132,6 +142,7 @@ public static partial class Api
         M.RevealRequested += id => App.Main?.Bridge.Emit("reveal", id);
         M.OpenInReaderRequested += (file, page) => App.Main?.Bridge.Emit("reader.open", new { fileId = file.Id, page });
         M.LibraryWillChange += () => App.Main?.Bridge.Emit("library.willChange", null);
+        M.Updater.StateChanged += () => App.Ui.TryEnqueue(() => App.Main?.Bridge.Emit("update", M.Updater.State));
         M.Translations.JobsChanged += () => App.Main?.Bridge.Emit("translation.jobs", JobsState());
         M.Translations.ProgressChanged += _ => App.Main?.Bridge.Emit("translation.jobs", JobsState());
         M.Connector.StateChanged += () => App.Broadcast("connector", ConnectorState());

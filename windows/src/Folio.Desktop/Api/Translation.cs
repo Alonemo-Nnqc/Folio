@@ -11,6 +11,26 @@ public static partial class Api
     static DateTime _agentsCheckedAt;
     static bool _checkingAgents;
 
+    /// <summary>Looks for installed agents again (not more than every few seconds): one installed while Folio runs must not stay
+    /// missing until a restart. Finding agents may ask each for its --help: off the interface thread, then the lists are sorted again.</summary>
+    static void RefreshAgents()
+    {
+        if (!_checkingAgents && (_installedAgents == null || DateTime.UtcNow - _agentsCheckedAt > TimeSpan.FromSeconds(5)))
+        {
+            // Finding agents may ask each for its --help: off the interface thread, then the list is sorted again.
+            _installedAgents ??= [];
+            _checkingAgents = true;
+            Task.Run(() => LocalAgents.Installed().Select(a => a.ServiceId()).ToHashSet()).ContinueWith(t => App.Ui.TryEnqueue(() =>
+            {
+                _checkingAgents = false;
+                _agentsCheckedAt = DateTime.UtcNow;
+                if (!t.IsCompletedSuccessfully || t.Result.SetEquals(_installedAgents)) return;
+                _installedAgents = t.Result;
+                App.Broadcast("translation.servicesChanged", null);
+            })).Fire();
+        }
+    }
+
     static object JobsState() => M.Translations.ActiveItemIds.ToDictionary(id => id, id =>
     {
         var job = M.Translations.JobOf(id)!;
@@ -53,8 +73,8 @@ public static partial class Api
         {
             (Loc.S("我的服务"), all.Where(s => configured.Contains(s.Id)).ToList()),
             (Loc.S("免费"), rest.Where(s => s.Category == ServiceCategory.Free).ToList()),
-            (Loc.S("本机"), rest.Where(s => s.Category == ServiceCategory.Local).ToList()),
-            (Loc.S("本机智能体（这台电脑上未找到）"), rest.Where(s => s.Category == ServiceCategory.Agent).ToList()),
+            // Agents not found on this computer are left out; the one in use stays so the menu can show it.
+            (Loc.S("本机"), rest.Where(s => s.Category == ServiceCategory.Local || (s.Category == ServiceCategory.Agent && s.Id == M.Settings.TranslationService)).ToList()),
             (Loc.S("大模型 API"), rest.Where(s => s.Category == ServiceCategory.Llm).ToList()),
             (Loc.S("机器翻译 API"), rest.Where(s => s.Category == ServiceCategory.Machine).ToList()),
         }.Where(g => g.Services.Count > 0).Select(g => new { title = g.Title, services = g.Services.Select(Entry) });
@@ -110,26 +130,51 @@ public static partial class Api
         }
     }
 
+    /// <summary>Services 划词翻译 can use without further setup: set up, free, or agents found on this computer.</summary>
+    static List<TranslationService> ReadyServices()
+    {
+        var configured = Configured(_installedAgents ?? []);
+        return TranslationServiceCatalog.All.Where(s => s.Category == ServiceCategory.Free || configured.Contains(s.Id)).ToList();
+    }
+
+    static string LanguageName(string code) =>
+        TranslationOptions.CommonLanguages.FirstOrDefault(l => string.Equals(l.Code, code, StringComparison.OrdinalIgnoreCase)).Name ?? code;
+
     static void InstallTranslation()
     {
+        Bridge.On("translation.selectionServices", _ =>
+        {
+            RefreshAgents();
+            var current = M.Settings.SelectionTranslationService is { Length: > 0 } chosen ? TranslationServiceCatalog.Resolve(chosen).Id : M.Settings.TranslationService;
+            // The one in use is listed even while agents are still being looked for.
+            var ready = ReadyServices();
+            if (!ready.Any(s => s.Id == current)) ready.Insert(0, TranslationServiceCatalog.Resolve(current));
+            return new
+            {
+                current, fullText = M.Settings.TranslationService,
+                services = ready.Select(s => new { id = s.Id, name = s.DisplayName }),
+                from = LanguageName(M.Settings.TranslationOptions.LangIn), to = LanguageName(M.Settings.TranslationOptions.LangOut),
+            };
+        });
+        Bridge.OnAsync("translation.selection", async a =>
+        {
+            var chosen = a.OptStr("service") is { Length: > 0 } explicitly ? explicitly
+                : M.Settings.SelectionTranslationService is { Length: > 0 } stored ? stored : M.Settings.TranslationService;
+            var service = TranslationServiceCatalog.Resolve(chosen);
+            var options = M.Settings.TranslationOptions;
+            var outcome = await SelectionTranslator.Translate(a.Str("text"), service.Id, M.Settings.FieldsOf(service.Id), M.Translations.Secrets.Secrets(service),
+                                                              options.LangIn, options.LangOut);
+            return (object?)new { ok = outcome.Succeeded, text = outcome.Text, service = service.Id, serviceName = service.DisplayName };
+        });
+        Bridge.On("translation.setSelectionService", a =>
+        {
+            var id = a.Str("id");
+            M.Settings.SelectionTranslationService = id == M.Settings.TranslationService ? "" : id;
+            return null;
+        });
         Bridge.On("translation.services", _ =>
         {
-            // Looked for again each time the list is shown (not more than every few seconds): one installed while Folio runs
-            // must not stay under "not found on this computer" until a restart.
-            if (!_checkingAgents && (_installedAgents == null || DateTime.UtcNow - _agentsCheckedAt > TimeSpan.FromSeconds(5)))
-            {
-                // Finding agents may ask each for its --help: off the interface thread, then the list is sorted again.
-                _installedAgents ??= [];
-                _checkingAgents = true;
-                Task.Run(() => LocalAgents.Installed().Select(a => a.ServiceId()).ToHashSet()).ContinueWith(t => App.Ui.TryEnqueue(() =>
-                {
-                    _checkingAgents = false;
-                    _agentsCheckedAt = DateTime.UtcNow;
-                    if (!t.IsCompletedSuccessfully || t.Result.SetEquals(_installedAgents)) return;
-                    _installedAgents = t.Result;
-                    App.Broadcast("translation.servicesChanged", null);
-                })).Fire();
-            }
+            RefreshAgents();
             return new { groups = ServiceGroups(), current = M.Settings.TranslationService, options = M.Settings.TranslationOptions, languages = TranslationOptions.CommonLanguages.Select(l => new { code = l.Code, name = l.Name }), detail = ServiceDetail(M.Settings.TranslationService) };
         });
         Bridge.On("translation.setService", a => { M.Settings.TranslationService = a.Str("id"); return ServiceDetail(a.Str("id")); });

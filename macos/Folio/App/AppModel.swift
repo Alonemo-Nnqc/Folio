@@ -57,6 +57,8 @@ final class AppModel {
         }
     }
     var inspectorTab = InspectorTab.metadata
+    /// The inspector's tabs sit in the window's toolbar, level with its button (macOS 15+), instead of above the inspector.
+    var inspectorTabsInToolbar = false
     /// Set by the sidebar to start inline renaming of a newly created group.
     var groupPendingRename: String?
     /// Bumped to ask the toolbar search field to take focus.

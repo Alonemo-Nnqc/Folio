@@ -5,6 +5,7 @@ import { getState, setSetting, setState, useStore } from "./store";
 import { LibraryPage } from "./library/LibraryPage";
 import { ReaderTab, readers } from "./reader/ReaderTab";
 import { useEvent } from "./ui/util";
+import { setCaption } from "./ui/caption";
 
 interface Key { key: string; code: string; ctrl: boolean; alt: boolean; shift: boolean }
 
@@ -97,7 +98,7 @@ export function MainApp() {
     // A panel sliding in fades the colour with it; a change of tab or theme is immediate.
     const animate = captionShown.current.activeTab === activeTab && captionShown.current.dark === dark;
     captionShown.current = { activeTab, dark };
-    call("window.caption", { background: dark ? night : light, foreground: dark ? "#ffffff" : "#000000", animate });
+    setCaption(dark ? night : light, dark ? "#ffffff" : "#000000", animate);
   }, [activeTab, panelUnderButtons, dark]);
 
   useEffect(() => { call("window.title", { title: "Folio" }); emitLocal("focusList", null); }, []);
