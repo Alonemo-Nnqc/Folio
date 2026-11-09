@@ -96,17 +96,22 @@ function PdfPreview({ file, dark }: { file: FileRec; dark: boolean }) {
       const r = await call("reader.openFile", { file: file.id });
       session.current = r.session;
       send({ cmd: "theme", dark });
-      send({ cmd: "insets", top: 0, sidebarTop: 0 });
-      send({ cmd: "sidebar", visible: false });
+      // Thumbnails down the left, as Quick Look shows them; the glass shows through around the pages.
+      send({ cmd: "insets", top: 0, sidebarTop: 0, sidebarWidth: 150 });
+      send({ cmd: "sidebar", visible: true });
+      send({ cmd: "sidebarTab", value: "thumbnails" });
+      send({ cmd: "surface", alpha: 0 });
+      document.documentElement.classList.add("quicklook-open");
       send({ cmd: "tool", tool: "select", color: "yellow" });
       send({ cmd: "open", url: r.url, zoom: "fitWidth", labels, layout: "single", author: "", page: r.state?.page });
     })();
     return () => {
       window.removeEventListener("message", listener);
+      document.documentElement.classList.remove("quicklook-open");
       if (session.current) call("reader.close", { session: session.current });
     };
   }, [file.id]);
-  return <iframe ref={frame} title="preview" src="reader/viewer.html" className="ql-frame" />;
+  return <iframe ref={frame} title="preview" src="reader/viewer.html" className="ql-frame" allowTransparency />;
 }
 
 /** Shows or hides the preview of what is selected. */

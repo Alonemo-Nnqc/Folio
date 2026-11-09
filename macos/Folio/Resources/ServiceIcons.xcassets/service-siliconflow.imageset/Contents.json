@@ -1,15 +1,23 @@
 {
   "images": [
     {
-      "filename": "siliconflow.svg",
-      "idiom": "universal"
+      "filename": "siliconflow@1x.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "siliconflow@2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    },
+    {
+      "filename": "siliconflow@3x.png",
+      "idiom": "universal",
+      "scale": "3x"
     }
   ],
   "info": {
     "author": "xcode",
     "version": 1
-  },
-  "properties": {
-    "preserves-vector-representation": true
   }
 }

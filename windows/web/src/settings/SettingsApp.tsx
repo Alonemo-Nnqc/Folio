@@ -13,8 +13,10 @@ import { setCaption } from "../ui/caption";
 import { ZoteroSheet } from "./ZoteroSheet";
 
 const PANES = [
-  { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen }, { key: "library", title: "文献库", icon: Library }, { key: "retrieval", title: "检索", icon: Search },
-  { key: "translation", title: "翻译", icon: Languages }, { key: "selection", title: "划词翻译", icon: ScanText }, { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
+  { key: "general", title: "通用", icon: Gear, tint: "#8e8e93" }, { key: "reader", title: "阅读", icon: BookOpen, tint: "#ff9500" },
+  { key: "library", title: "文献库", icon: Library, tint: "#0a84ff" }, { key: "retrieval", title: "检索", icon: Search, tint: "#5e5ce6" },
+  { key: "translation", title: "翻译", icon: Languages, tint: "#30b0c7" }, { key: "selection", title: "划词翻译", icon: ScanText, tint: "#34c759" },
+  { key: "browser", title: "浏览器", icon: Compass, tint: "#007aff" }, { key: "ai", title: "AI", icon: Sparkles, tint: "#bf5af2" },
 ];
 
 let launchedLanguage: string | null = null;
@@ -305,19 +307,24 @@ export function SettingsApp() {
   const stored = useStore((s) => s.settings.settingsPane);
   const [pane, setPane] = useState<string>(PANES.some((p) => p.key === stored) ? stored : "general");
   useEffect(() => on("settings.page", (p) => { if (p) setPane(p); }), []);
-  useEffect(() => { setCaption(getState().dark ? "#1d1d1f" : "#fcfcfd", getState().dark ? "#ffffff" : "#000000"); });
+  useEffect(() => { setCaption(getState().dark ? "#1c1c1e" : "#f4f4f6", getState().dark ? "#ffffff" : "#000000"); });
   const title = PANES.find((p) => p.key === pane)?.title ?? "";
   return (
     <div className="settings">
       <div className="settings-nav drag">
         {PANES.map((p) => {
           const Icon = p.icon;
-          return <button key={p.key} className={`no-drag${pane === p.key ? " on" : ""}`} onClick={() => { setPane(p.key); setSetting("settingsPane", p.key); }}><Icon size={17} strokeWidth={1.7} />{p.key === "ai" ? "AI" : t(p.title)}</button>;
+          return (
+            <button key={p.key} className={`no-drag${pane === p.key ? " on" : ""}`} onClick={() => { setPane(p.key); setSetting("settingsPane", p.key); }}>
+              <span className="nav-tile" style={{ ["--tint" as any]: p.tint }}><Icon size={14} strokeWidth={2} /></span>{p.key === "ai" ? "AI" : t(p.title)}
+            </button>
+          );
         })}
       </div>
       <div className="settings-main">
-        <div className="settings-title drag">{title === "AI" ? "AI" : t(title)}</div>
+        <div className="settings-title drag" />
         <div className="settings-page" key={pane}>
+          <h1 className="settings-heading">{title === "AI" ? "AI" : t(title)}</h1>
           {pane === "general" && <General />}
           {pane === "reader" && <Reader />}
           {pane === "library" && <LibraryPane />}

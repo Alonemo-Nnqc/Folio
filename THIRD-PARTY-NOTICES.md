@@ -487,4 +487,5 @@ SOFTWARE.
 
 Translation service logos in `macos/Folio/Resources/ServiceIcons.xcassets` and `windows/web/public/services` come from
 [@lobehub/icons-static-svg](https://github.com/lobehub/lobe-icons) 1.102.0, MIT License, Copyright (c) 2023 LobeHub.
+The pi logo comes from pi.dev and the Hermes Agent icon from github.com/NousResearch/hermes-agent (MIT).
 The logos themselves are trademarks of their respective owners and are used only to identify each service.
