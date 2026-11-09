@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, Languages, NotebookPen, RotateCw, TriangleAlert } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronDown, Copy, Languages, NotebookPen, RotateCw, TriangleAlert } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
 import { openMenuAt, sep, type MenuEntry } from "../ui/menu";
+import { ServiceLogo } from "../ui/serviceLogo";
 
 export interface Anchor { left: number; top: number; right: number; bottom: number }
 
@@ -26,6 +27,7 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
   const [info, setInfo] = useState<{ current: string; fullText: string; services: { id: string; name: string }[]; from: string; to: string } | null>(null);
   const [service, setService] = useState<string | null>(null);
   const [usedName, setUsedName] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: "translating" });
   const [copied, setCopied] = useState(false);
   const [noted, setNoted] = useState(false);
@@ -42,9 +44,11 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
     setPhase({ kind: "translating" });
     setCopied(false); setNoted(false);
     try {
-      const r = await call<{ ok: boolean; text: string; service: string; serviceName: string }>("translation.selection", { text, service: id ?? undefined });
+      setNotice(null);
+      const r = await call<{ ok: boolean; text: string; service: string; serviceName: string; notice?: string }>("translation.selection", { text, service: id ?? undefined });
       if (ticket !== run.current) return;
       setUsedName(r.serviceName);
+      setNotice(r.notice ?? null);
       if (r.ok) { cache.set(`${r.service}|${source}`, r.text); cache.set(key, r.text); setPhase({ kind: "done", text: r.text }); }
       else setPhase({ kind: "failed", message: r.text });
       if (!id) setService(r.service);
@@ -85,8 +89,8 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
 
   const serviceMenu = (el: HTMLElement) => {
     if (!info) return;
-    const entries: MenuEntry[] = info.services.map((s) => ({ label: s.name, checked: s.id === service, action: () => choose(s.id) }));
-    entries.push(sep, { label: t("翻译设置…"), action: () => { close(); call("window.settings", { page: "translation" }); } });
+    const entries: MenuEntry[] = info.services.map((s) => ({ label: s.name, icon: <ServiceLogo id={s.id} />, checked: s.id === service, action: () => choose(s.id) }));
+    entries.push(sep, { label: t("划词翻译设置…"), action: () => { close(); call("window.settings", { page: "selection" }); } });
     openMenuAt(el, entries);
   };
 
@@ -97,10 +101,11 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
     <div ref={ref} className={`translate-pop${place?.above ? " above" : ""}`} style={place ? { left: place.left, top: place.top } : { left: -9999, top: 0 }} role="dialog" aria-label={t("翻译")}>
       <div className="tp-head">
         <span className="tp-langs">{info ? `${info.from} → ${info.to}` : ""}</span>
-        <button className="tp-service" title={t("选择翻译服务")} onClick={(e) => serviceMenu(e.currentTarget)}>{serviceName}<ChevronDown size={11} strokeWidth={2.2} /></button>
+        <button className="tp-service" title={t("选择翻译服务")} onClick={(e) => serviceMenu(e.currentTarget)}>{service && <ServiceLogo id={service} size={13} />}{serviceName}<ChevronDown size={11} strokeWidth={2.2} /></button>
       </div>
       <div className={`tp-source selectable${expanded ? " expanded" : ""}`} onDoubleClick={() => setExpanded((v) => !v)}>{source}</div>
       <div className="tp-divider" />
+      {notice && <div className="tp-notice"><ArrowLeftRight size={12} />{notice}</div>}
       <div className="tp-result">
         {phase.kind === "translating" && <div className="tp-shimmer" aria-label={t("正在翻译")}><i style={{ width: "100%" }} /><i style={{ width: "92%" }} /><i style={{ width: "60%" }} /></div>}
         {phase.kind === "done" && <div className="tp-text selectable">{phase.text}</div>}
@@ -110,7 +115,7 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
         <button className="tp-icon" title={t("拷贝译文")} disabled={!result} onClick={() => { if (result) { call("shell.copy", { text: result }); setCopied(true); } }}>{copied ? <Check size={15} /> : <Copy size={14} />}</button>
         <button className="tp-icon" title={t("添加到笔记")} disabled={!result} onClick={() => { if (result) { addToNote(source, result); setNoted(true); } }}>{noted ? <Check size={15} /> : <NotebookPen size={14} />}</button>
         <span style={{ flex: 1 }} />
-        {phase.kind === "failed" && <button className="btn small" onClick={() => { close(); call("window.settings", { page: "translation" }); }}>{t("设置…")}</button>}
+        {phase.kind === "failed" && <button className="btn small" onClick={() => { close(); call("window.settings", { page: "selection" }); }}>{t("设置…")}</button>}
         <button className="tp-icon" title={t("重新翻译")} disabled={phase.kind === "translating"} onClick={() => translate(service, true)}><RotateCw size={14} /></button>
       </div>
     </div>

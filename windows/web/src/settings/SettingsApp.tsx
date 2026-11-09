@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
+import { AlertTriangle, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, setSetting, useStore } from "../store";
@@ -8,12 +8,13 @@ import { confirm, dialog, openSheet } from "../ui/sheet";
 import { openMenu } from "../ui/menu";
 import { Card, Header, Note, Row } from "./parts";
 import { TranslationPane } from "./TranslationPane";
+import { SelectionTranslationPane } from "./SelectionPane";
 import { setCaption } from "../ui/caption";
 import { ZoteroSheet } from "./ZoteroSheet";
 
 const PANES = [
   { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen }, { key: "library", title: "文献库", icon: Library }, { key: "retrieval", title: "检索", icon: Search },
-  { key: "translation", title: "翻译", icon: Languages }, { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
+  { key: "translation", title: "翻译", icon: Languages }, { key: "selection", title: "划词翻译", icon: ScanText }, { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
 ];
 
 let launchedLanguage: string | null = null;
@@ -304,7 +305,7 @@ export function SettingsApp() {
   const stored = useStore((s) => s.settings.settingsPane);
   const [pane, setPane] = useState<string>(PANES.some((p) => p.key === stored) ? stored : "general");
   useEffect(() => on("settings.page", (p) => { if (p) setPane(p); }), []);
-  useEffect(() => { setCaption(getState().dark ? "#1e1e1f" : "#ffffff", getState().dark ? "#ffffff" : "#000000"); });
+  useEffect(() => { setCaption(getState().dark ? "#1d1d1f" : "#fcfcfd", getState().dark ? "#ffffff" : "#000000"); });
   const title = PANES.find((p) => p.key === pane)?.title ?? "";
   return (
     <div className="settings">
@@ -322,6 +323,7 @@ export function SettingsApp() {
           {pane === "library" && <LibraryPane />}
           {pane === "retrieval" && <Retrieval />}
           {pane === "translation" && <TranslationPane />}
+          {pane === "selection" && <SelectionTranslationPane />}
           {pane === "browser" && <Browser />}
           {pane === "ai" && <Ai />}
         </div>

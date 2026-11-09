@@ -12,8 +12,8 @@ import { ItemList } from "./ItemList";
 import { Inspector } from "./Inspector";
 import { QuickLook } from "./QuickLook";
 
-/** What a toolbar leaves free for the sidebar button when the sidebar is hidden: 10 of margin and the button. */
-const SIDEBAR_BUTTONS = 44;
+/** What a toolbar leaves free for the two buttons at the top left when the sidebar is hidden: 10 of margin, two buttons and the gap between. */
+const SIDEBAR_BUTTONS = 84;
 export const LEAD_ROOM = SIDEBAR_BUTTONS + 6;
 /** What a toolbar leaves free for the panel button beside Windows' buttons, when no panel is open. */
 export const TOGGLE_ROOM = 40;
@@ -49,15 +49,13 @@ export function TabBar() {
 
 function XSmall() { return <svg width="9" height="9" viewBox="0 0 9 9"><path d="M1 1l7 7M8 1L1 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
 
-/** Bottom left of the sidebar: opens Settings. A right click still offers the app's menu (help, about, quit…). */
+/** Top left: opens Settings. A right click still offers the app's menu (help, about, quit…). */
 export function SettingsButton() {
   return (
-    <div className="sidebar-foot">
-      <button className="foot-button" title={t("设置（Ctrl+,）")} onClick={() => call("window.settings")}
-        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openMenu(appMenu(), e.clientX, e.clientY); }}>
-        <Settings size={17} strokeWidth={1.7} />
-      </button>
-    </div>
+    <button className="glass-button" title={t("设置（Ctrl+,）")} onClick={() => call("window.settings")}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openMenu(appMenu(), e.clientX, e.clientY); }}>
+      <Settings size={17} strokeWidth={1.7} />
+    </button>
   );
 }
 
@@ -69,9 +67,17 @@ export function InspectorToggle({ onClick }: { onClick: () => void }) {
   return <button className="glass-button" title={t("显示/隐藏检查器")} onClick={onClick}><PanelRight size={17} strokeWidth={1.7} /></button>;
 }
 
-/** The sidebar button rides along with the sidebar's edge; the sidebar slides under it, a splitter drag moves it directly. */
+/**
+ * The settings button, always in the same place, and the sidebar button, which rides along with the sidebar's edge.
+ * The sidebar slides under them; a splitter drag moves the sidebar button directly.
+ */
 export function SidebarButtons({ visible, width, onToggle }: { visible: boolean; width: number; onToggle: () => void }) {
-  return <div className="sidebar-toggle" style={{ left: visible ? width - 45 : SIDEBAR_BUTTONS - 34 }}><SidebarToggle onClick={onToggle} /></div>;
+  return (
+    <>
+      <div className="sidebar-menu"><SettingsButton /></div>
+      <div className="sidebar-toggle" style={{ left: visible ? width - 45 : SIDEBAR_BUTTONS - 34 }}><SidebarToggle onClick={onToggle} /></div>
+    </>
+  );
 }
 
 /** One button for the right panel, in the same place whether the panel is open or not: the panel slides under it. */
@@ -123,7 +129,6 @@ export function LibraryPage({ visible }: { visible: boolean }) {
         <div className="column column-sidebar" style={{ width: "100%" }}>
           <div className="titlebar-row drag" />
           <Sidebar />
-          <SettingsButton />
           <Splitter side="left" width={sidebarWidth ?? storedSidebar} min={210} max={400} onLive={setSidebarWidth} onDone={(w) => { setSetting("sidebarWidth", w); setSidebarWidth(null); }} />
         </div>
       </SlidePanel>

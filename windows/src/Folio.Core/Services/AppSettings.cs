@@ -127,6 +127,8 @@ public sealed class AppSettings
     public string SelectionTranslationTrigger { get => Get("selectionTranslationTrigger", "button"); set => Set("selectionTranslationTrigger", value); }
     /// <summary>Service id; empty: the full-text translation's service.</summary>
     public string SelectionTranslationService { get => Get("selectionTranslationService", ""); set => Set("selectionTranslationService", value); }
+    /// <summary>划词翻译: a rate-limited free service hands over to another free one.</summary>
+    public bool SelectionTranslationFallback { get => Get("selectionTranslationFallback", true); set => Set("selectionTranslationFallback", value); }
     /// <summary>"Alt+D" style: modifiers then the key's code without its "Key"/"Digit" prefix.</summary>
     public string SelectionTranslationShortcut { get => Get("selectionTranslationShortcut", "Alt+D"); set => Set("selectionTranslationShortcut", value); }
     /// <summary>The reader toolbar's buttons in order (ids from the page); empty: the standard set.</summary>
@@ -158,6 +160,8 @@ public sealed class AppSettings
     }
     public Translate.TranslationOptions TranslationOptions { get => Get("translationOptions", new Translate.TranslationOptions()); set => Set("translationOptions", value); }
     public List<Translate.Services.TranslationProfile> TranslationProfiles { get => Get<List<Translate.Services.TranslationProfile>>("translationProfiles", []); set => Set("translationProfiles", value); }
+    /// <summary>Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.</summary>
+    public int TranslationParallelJobs { get => Get("translationParallelJobs", 2); set => Set("translationParallelJobs", value); }
     /// <summary>The configuration in use per service: service id → profile id.</summary>
     public Dictionary<string, string> SelectedTranslationProfiles { get => Get<Dictionary<string, string>>("selectedTranslationProfiles", []); set => Set("selectedTranslationProfiles", value); }
 }

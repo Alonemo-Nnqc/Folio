@@ -26,7 +26,9 @@ public sealed class TranslationCoordinator(AppModel model)
         public bool Cancelled;
         public void Cancel() { Cancelled = true; Job?.Cancel(); }
     }
-    Running? _running;
+    /// <summary>Translations running now, by item; up to 设置 ▸ 翻译 ▸ 同时翻译 at once.</summary>
+    readonly Dictionary<string, Running> _running = [];
+    int Parallel => Math.Clamp(model.Settings.TranslationParallelJobs, 1, 6);
 
     public SecretStore Secrets => SecretStore.Shared;
 
@@ -58,7 +60,7 @@ public sealed class TranslationCoordinator(AppModel model)
         var remaining = _queue.Where(q => q.ItemId != itemId).ToList();
         _queue.Clear();
         foreach (var q in remaining) _queue.Enqueue(q);
-        if (_running is { } running && running.ItemId == itemId)
+        if (_running.TryGetValue(itemId, out var running))
         {
             running.Cancel();
             if (running.Job == null) Remove(itemId);
@@ -69,7 +71,7 @@ public sealed class TranslationCoordinator(AppModel model)
     public void CancelAll()
     {
         _queue.Clear();
-        _running?.Cancel();
+        foreach (var running in _running.Values) running.Cancel();
     }
 
     /// <summary>What is missing before serviceId can run, in words for the user; null when ready.</summary>
@@ -99,20 +101,26 @@ public sealed class TranslationCoordinator(AppModel model)
     void Enqueue(string itemId, string fileId)
     {
         if (_jobs.ContainsKey(itemId)) return;
-        _jobs[itemId] = new JobState { FileId = fileId, Stage = _running == null ? Loc.S("正在启动翻译") : Loc.S("等待翻译") };
+        _jobs[itemId] = new JobState { FileId = fileId, Stage = _running.Count < Parallel ? Loc.S("正在启动翻译") : Loc.S("等待翻译") };
         JobsChanged?.Invoke();
         _queue.Enqueue((itemId, fileId));
         Pump();
     }
 
+    /// <summary>More papers may run at once now: starts the waiting ones.</summary>
+    public void ParallelChanged() => Pump();
+
     void Pump()
     {
-        if (_running != null || _queue.Count == 0) return;
+        while (_running.Count < Parallel && _queue.Count > 0) StartNext();
+    }
+
+    void StartNext()
+    {
         var (itemId, fileId) = _queue.Dequeue();
         if (!model.Snapshot.Files.TryGetValue(fileId, out var file))
         {
             Remove(itemId);
-            Pump();
             return;
         }
         var settings = model.Settings;
@@ -126,7 +134,7 @@ public sealed class TranslationCoordinator(AppModel model)
         _jobs[itemId] = new JobState { FileId = fileId, Stage = Loc.S("正在启动翻译") };
         ProgressChanged?.Invoke(itemId);
         var current = new Running(itemId);
-        _running = current;
+        _running[itemId] = current;
         var source = model.Library.FilePath(file);
         Task.Run(async () =>
         {
@@ -155,7 +163,7 @@ public sealed class TranslationCoordinator(AppModel model)
             {
                 if (current.Cancelled) Remove(itemId);
                 try { Directory.Delete(output, true); } catch { }
-                _running = null;
+                _running.Remove(itemId);
                 Pump();
             });
         }).Fire();

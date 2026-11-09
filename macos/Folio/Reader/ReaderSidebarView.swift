@@ -156,16 +156,20 @@ struct ReaderNotesPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("笔记")
-                .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
+            // macOS 15+: the title "笔记" is in the toolbar, level with the panel's button.
+            if #unavailable(macOS 15) {
+                Text("笔记")
+                    .font(.headline)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 12)
+            }
             if let title = model.snapshot.items[itemId]?.title {
                 Text(title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .padding(.horizontal, 14)
+                    .padding(.top, 8)
             }
             Divider().padding(.top, 4)
             NoteEditor(model: model, itemId: itemId, focusRequest: focusRequest)

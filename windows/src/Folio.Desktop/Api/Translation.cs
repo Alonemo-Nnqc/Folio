@@ -163,8 +163,13 @@ public static partial class Api
             var service = TranslationServiceCatalog.Resolve(chosen);
             var options = M.Settings.TranslationOptions;
             var outcome = await SelectionTranslator.Translate(a.Str("text"), service.Id, M.Settings.FieldsOf(service.Id), M.Translations.Secrets.Secrets(service),
-                                                              options.LangIn, options.LangOut);
-            return (object?)new { ok = outcome.Succeeded, text = outcome.Text, service = service.Id, serviceName = service.DisplayName };
+                                                              options.LangIn, options.LangOut, M.Settings.SelectionTranslationFallback, id => M.Settings.FieldsOf(id));
+            string Name(string id) => TranslationServiceCatalog.Service(id)?.DisplayName ?? id;
+            return (object?)new
+            {
+                ok = outcome.Succeeded, text = outcome.Text, service = outcome.ServiceId, serviceName = Name(outcome.ServiceId),
+                notice = outcome.FellBackFrom is { } limited ? Loc.S("%@ 暂时限流，已改用 %@", Name(limited), Name(outcome.ServiceId)) : null,
+            };
         });
         Bridge.On("translation.setSelectionService", a =>
         {

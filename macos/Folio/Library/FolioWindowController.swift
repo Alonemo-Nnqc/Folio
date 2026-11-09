@@ -79,12 +79,21 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         case .purge: model.confirmPurge(ids)
         case .setDefaultFile(let fileId): model.setDefaultFile(fileId)
         case .trashFile: model.trashFiles(fileIds)
-        case .translate: if let fileId = sourceFileId(context) { model.translations.requestTranslation(fileId: fileId) }
+        case .translate: model.translations.requestTranslation(fileIds: translatableFileIds(context))
         case .cancelTranslation:
             let itemId = context.fileId.flatMap { model.snapshot.files[$0]?.itemId } ?? ids.first
             if let itemId { model.translations.cancel(itemId: itemId) }
         case .editNote: if let id = ids.first ?? context.fileId.flatMap({ model.snapshot.files[$0]?.itemId }) { editNote(itemId: id) }
         case .exportNote: if let id = ids.first { model.exportNote(itemId: id) }
+        }
+    }
+
+    /// The PDFs 翻译全文 means: the clicked file, else each selected item's default PDF (a batch).
+    private func translatableFileIds(_ context: ItemMenuContext) -> [String] {
+        if let fileId = context.fileId { return [fileId] }
+        return context.itemIds.compactMap { id in
+            model.defaultFile(of: id).flatMap { $0.isPDF && $0.translationOf == nil ? $0.id : nil }
+                ?? model.snapshot.files(of: id).first { $0.isPDF && $0.translationOf == nil }?.id
         }
     }
 
@@ -176,8 +185,9 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         case #selector(manualMatch(_:)):
             return single?.kind == .standalone && !inTrash
         case #selector(translateDocument(_:)):
-            guard let file, file.isPDF, file.translationOf == nil, !inTrash else { return false }
-            return !model.translations.activeItemIds.contains(file.itemId)
+            guard !inTrash else { return false }
+            let ids = translatableFileIds(context)
+            return ids.contains { id in model.snapshot.files[id].map { !model.translations.activeItemIds.contains($0.itemId) } ?? false }
         case #selector(cancelTranslation(_:)):
             return file.map { model.translations.activeItemIds.contains($0.itemId) } ?? false
         case #selector(editNote(_:)):

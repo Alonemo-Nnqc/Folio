@@ -105,7 +105,7 @@ function TranslationPage() {
 
 export function Onboarding() {
   const [step, setStep] = useState(0);
-  useEffect(() => { const d = getState().dark; call("window.caption", { background: d ? "#1e1e1f" : "#ffffff", foreground: d ? "#ffffff" : "#000000" }); });
+  useEffect(() => { const d = getState().dark; call("window.caption", { background: d ? "#1d1d1f" : "#fcfcfd", foreground: d ? "#ffffff" : "#000000" }); });
   const finish = () => call("app.onboardingDone");
   const name = STEPS[step];
   return (

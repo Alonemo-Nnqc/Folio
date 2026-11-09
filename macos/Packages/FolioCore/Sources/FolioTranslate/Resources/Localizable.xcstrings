@@ -1969,6 +1969,16 @@
         }
       }
     },
+    "翻译服务暂时限流，请稍后再试，或在 设置 ▸ 划词翻译 中换用其他服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service is rate-limited for now. Try again shortly, or choose another service in Settings ▸ Selection Translation."
+          }
+        }
+      }
+    },
     "翻译服务的账户余额或额度已用完%@，请充值或换用其他服务" : {
       "localizations" : {
         "en" : {

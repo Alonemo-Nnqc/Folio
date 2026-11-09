@@ -89,6 +89,16 @@
         }
       }
     },
+    "%@ 暂时限流，已改用 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is rate-limited for now; used %2$@ instead"
+          }
+        }
+      }
+    },
     "%@ 的更多操作" : {
       "localizations" : {
         "en" : {
@@ -368,6 +378,26 @@
         }
       }
     },
+    "%lld 篇" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld"
+          }
+        }
+      }
+    },
+    "%lld 篇文献" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld papers"
+          }
+        }
+      }
+    },
     "%lld 项" : {
       "localizations" : {
         "en" : {
@@ -596,6 +626,16 @@
         }
       }
     },
+    "Google、Microsoft%@互为备用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Google and Microsoft%@ stand in for each other"
+          }
+        }
+      }
+    },
     "H汉" : {
       "localizations" : {
         "en" : {
@@ -741,6 +781,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : ", "
+          }
+        }
+      }
+    },
+    "、Apple 离线翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " and Apple's offline translation"
           }
         }
       }
@@ -1815,6 +1865,16 @@
         }
       }
     },
+    "划词翻译设置…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selection Translation Settings…"
+          }
+        }
+      }
+    },
     "列表" : {
       "localizations" : {
         "en" : {
@@ -2327,6 +2387,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Also move items to the Trash"
+          }
+        }
+      }
+    },
+    "同时翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Papers at Once"
           }
         }
       }
@@ -4073,6 +4143,16 @@
         }
       }
     },
+    "所选文献没有可翻译的 PDF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selection has no PDF to translate"
+          }
+        }
+      }
+    },
     "所选模型不是推理模型，不会发送推理强度参数" : {
       "localizations" : {
         "en" : {
@@ -4429,6 +4509,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annotation Color"
+          }
+        }
+      }
+    },
+    "批量翻译时同时进行的论文篇数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How many papers a batch translates at the same time"
           }
         }
       }
@@ -7149,6 +7239,16 @@
         }
       }
     },
+    "笔记标题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes Title"
+          }
+        }
+      }
+    },
     "第 %@ 页" : {
       "localizations" : {
         "en" : {
@@ -8969,6 +9069,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reader Sidebar"
+          }
+        }
+      }
+    },
+    "限流时自动换用其他免费服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch to Another Free Service When Rate-Limited"
           }
         }
       }

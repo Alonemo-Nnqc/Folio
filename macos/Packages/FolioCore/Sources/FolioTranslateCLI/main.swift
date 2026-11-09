@@ -102,7 +102,8 @@ case "selection":
     // selection <service> <text> [--to zh]: 划词翻译 of one passage
     let target = arguments.firstIndex(of: "--to").map { arguments[$0 + 1] } ?? "zh"
     do {
-        print(try await SelectionTranslator.translate(arguments[2], serviceID: arguments[1], fields: [:], secrets: [:], from: "en", to: target))
+        let result = try await SelectionTranslator.translate(arguments[2], serviceID: arguments[1], fields: [:], secrets: [:], from: "en", to: target)
+        print(result.text + (result.fellBackFrom.map { "\n(\(result.serviceID) instead of \($0))" } ?? ""))
     } catch {
         print("error: \(error.localizedDescription)")
     }

@@ -3,7 +3,7 @@ import FolioCore
 import FolioTranslate
 import Observation
 
-/// Queues whole-document translations (one at a time), shows their progress in the list and files
+/// Queues whole-document translations (several at once: 设置 ▸ 翻译 ▸ 同时翻译), shows their progress in the list and files
 /// the results under their items (TRANS-01…06). The engine is built in: nothing to install.
 @Observable
 final class TranslationCoordinator {
@@ -55,7 +55,9 @@ final class TranslationCoordinator {
         }
     }
 
-    @ObservationIgnored private var running: Running?
+    /// Translations running now, by item.
+    @ObservationIgnored private var running: [String: Running] = [:]
+    private var parallel: Int { min(6, max(1, model?.settings.translationParallelJobs ?? 2)) }
 
     init(model: AppModel) {
         self.model = model
@@ -67,15 +69,29 @@ final class TranslationCoordinator {
 
     // MARK: Requests
 
-    /// "翻译全文…": asks for this run's options.
-    func requestTranslation(fileId: String) {
-        guard let model, let file = model.snapshot.files[fileId], file.isPDF else { return }
-        guard jobs[file.itemId] == nil else {
+    /// "翻译全文…": asks for this run's options, for one paper or a batch.
+    func requestTranslation(fileIds: [String]) {
+        guard let model else { return }
+        let files = fileIds.compactMap { model.snapshot.files[$0] }.filter { $0.isPDF && $0.translationOf == nil }
+        guard !files.isEmpty else {
+            model.toasts.show(String(localized: "所选文献没有可翻译的 PDF"), systemImage: "questionmark.circle")
+            return
+        }
+        let waiting = files.filter { jobs[$0.itemId] == nil }
+        guard !waiting.isEmpty else {
             model.toasts.show(String(localized: "这篇论文正在翻译"), systemImage: "character.book.closed")
             return
         }
-        model.activeSheet = .translate(fileId: fileId)
+        model.activeSheet = .translate(fileIds: waiting.map(\.id))
     }
+
+    /// Starts (or queues) translations of several papers with the current settings.
+    func start(fileIds: [String]) {
+        for id in fileIds { start(fileId: id) }
+    }
+
+    /// More papers may run at once now: starts the waiting ones.
+    func parallelChanged() { pump() }
 
     /// Starts (or queues) a translation with the current settings — called by the options sheet.
     func start(fileId: String) {
@@ -104,7 +120,7 @@ final class TranslationCoordinator {
 
     func cancel(itemId: String) {
         queue.removeAll { $0.itemId == itemId }
-        if let running, running.itemId == itemId {
+        if let running = running[itemId] {
             running.cancel()
             if running.job == nil { jobs[itemId] = nil }
         } else {
@@ -115,7 +131,7 @@ final class TranslationCoordinator {
     /// App termination: the engine runs in its own process group and would outlive Folio.
     func cancelAll() {
         queue.removeAll()
-        running?.cancel()
+        running.values.forEach { $0.cancel() }
     }
 
     // MARK: Old engine
@@ -156,17 +172,21 @@ final class TranslationCoordinator {
 
     private func enqueue(itemId: String, fileId: String) {
         guard jobs[itemId] == nil else { return }
-        jobs[itemId] = JobState(fileId: fileId, fraction: nil, stage: running == nil ? String(localized: "正在启动翻译") : String(localized: "等待翻译"))
+        jobs[itemId] = JobState(fileId: fileId, fraction: nil, stage: running.count < parallel ? String(localized: "正在启动翻译") : String(localized: "等待翻译"))
         queue.append((itemId, fileId))
         pump()
     }
 
     private func pump() {
-        guard running == nil, !queue.isEmpty, let model else { return }
+        while running.count < parallel, !queue.isEmpty { startNext() }
+    }
+
+    private func startNext() {
+        guard !queue.isEmpty, let model else { return }
         let next = queue.removeFirst()
         guard let file = model.snapshot.files[next.fileId] else {
             jobs[next.itemId] = nil
-            return pump()
+            return
         }
         let settings = model.settings
         let serviceID = settings.translationService
@@ -179,7 +199,7 @@ final class TranslationCoordinator {
         let output = TranslationJob.supportDirectory.appending(path: "output/\(UUID().uuidString)", directoryHint: .isDirectory)
         jobs[next.itemId] = JobState(fileId: next.fileId, fraction: nil, stage: String(localized: "正在启动翻译"))
         let current = Running(itemId: next.itemId)
-        running = current
+        running[next.itemId] = current
         current.task = Task { [weak self] in
             guard let self else { return }
             do {
@@ -202,7 +222,7 @@ final class TranslationCoordinator {
             }
             if current.cancelled { self.jobs[next.itemId] = nil }
             try? FileManager.default.removeItem(at: output)
-            self.running = nil
+            self.running[next.itemId] = nil
             self.pump()
         }
     }

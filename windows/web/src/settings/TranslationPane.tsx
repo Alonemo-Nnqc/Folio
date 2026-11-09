@@ -5,7 +5,8 @@ import { t } from "../i18n";
 import { getState, setSetting, useStore, type FileRec } from "../store";
 import { Field, Select, Switch } from "../ui/controls";
 import { askText, confirm, Sheet } from "../ui/sheet";
-import { openMenuAt } from "../ui/menu";
+import { openMenuAt, type MenuEntry } from "../ui/menu";
+import { ServiceLogo } from "../ui/serviceLogo";
 import { Card, Header, Note, Row } from "./parts";
 
 interface Detail { id: string; name: string; note?: string; category: string; isAgent: boolean; supportsProfiles: boolean; profiles: { id: string; name: string }[]; selectedProfile?: string; fields: FieldDef[]; advanced: FieldDef[]; reasoning?: any }
@@ -106,9 +107,14 @@ export function ServiceSection({ compact }: { compact: boolean }) {
     <>
       <div className="set-card">
         <Row title={t("翻译服务")}>
-          <select className="select" value={detail.id} onChange={async (e) => { setDetail(await call("translation.setService", { id: e.target.value })); load(); }}>
-            {groups.map((g) => <optgroup key={g.title} label={g.title}>{g.services.map((s: any) => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>)}
-          </select>
+          <button className="btn service-picker" onClick={(e) => openMenuAt(e.currentTarget, groups.flatMap((g: any) => [
+            { kind: "title", label: g.title } as MenuEntry,
+            ...g.services.map((sv: any) => ({ label: sv.label, icon: <ServiceLogo id={sv.id} />, checked: sv.id === detail.id, action: async () => { setDetail(await call("translation.setService", { id: sv.id })); load(); } }) as MenuEntry),
+          ]))}>
+            <ServiceLogo id={detail.id} size={17} />
+            <span className="label">{groups.flatMap((g: any) => g.services).find((sv: any) => sv.id === detail.id)?.label ?? detail.name}</span>
+            <ChevronDown size={13} className="secondary" />
+          </button>
         </Row>
         {detail.supportsProfiles && (
           <Row title={t("配置")}>
@@ -176,6 +182,7 @@ export function OptionsSection({ compact }: { compact: boolean }) {
         </Card>
         <Header>{t("速度")}</Header>
         <Card>
+          <ParallelRow />
           <Row title={t("同时请求数")} detail={t("遇到限流时调小")}><Select value={o.concurrency ?? 0} options={[0, 1, 2, 4, 8, 12, 16].map((n) => ({ value: n, label: n === 0 ? t("自动") : String(n) }))} onChange={(v) => update({ concurrency: v === 0 ? null : v })} /></Row>
           <Row title={t("重新翻译（不使用缓存）")}><Switch on={o.ignoreCache} onChange={(v) => update({ ignoreCache: v })} /></Row>
         </Card>
@@ -201,18 +208,23 @@ export function TranslationPane() {
     <>
       <ServiceSection compact={false} />
       <OptionsSection compact={false} />
-      <SelectionSection />
       <Header>{t("翻译引擎")}</Header>
       <Card><Row title={t("翻译日志")}><button className="btn" onClick={() => call("translation.revealLogs")}>{t("在资源管理器中显示")}</button></Row></Card>
     </>
   );
 }
 
+/** How many papers a batch translates at once. */
+function ParallelRow() {
+  const value = useStore((x) => x.settings.translationParallelJobs ?? 2);
+  return <Row title={t("同时翻译")} detail={t("批量翻译时同时进行的论文篇数")}><Select value={value} options={[1, 2, 3, 4].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelJobs", v)} /></Row>;
+}
+
 /** "Alt+D" for display: "Alt + D". */
 const shortcutLabel = (value: string) => value.split("+").join(" + ");
 
 /** A button that shows a shortcut and records a new one when clicked (Esc cancels, Backspace restores the default). */
-function ShortcutRecorder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function ShortcutRecorder({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [recording, setRecording] = useState(false);
   useEffect(() => {
     if (!recording) return;
@@ -231,35 +243,6 @@ function ShortcutRecorder({ value, onChange }: { value: string; onChange: (v: st
     return () => window.removeEventListener("keydown", key, true);
   }, [recording]);
   return <button className={`btn shortcut${recording ? " recording" : ""}`} title={t("点按后按下新的快捷键；Backspace 恢复默认")} onClick={() => setRecording((v) => !v)}>{recording ? t("请按下快捷键…") : shortcutLabel(value)}</button>;
-}
-
-/** 划词翻译: a selection in the reader translated in a popover, by its own service. */
-function SelectionSection() {
-  const s = useStore((x) => x.settings);
-  const [services, setServices] = useState<{ id: string; name: string }[]>([]);
-  useEffect(() => {
-    const load = () => call("translation.selectionServices").then((i) => setServices(i.services)).catch(() => {});
-    load();
-    return on("translation.servicesChanged", load);
-  }, []);
-  const chosen = s.selectionTranslationService ?? "";
-  const options = [{ value: "", label: t("与全文翻译相同") }, ...services.map((x) => ({ value: x.id, label: x.name }))];
-  if (chosen && !services.some((x) => x.id === chosen)) options.push({ value: chosen, label: chosen });
-  return (
-    <>
-      <Header>{t("划词翻译")}</Header>
-      <Card>
-        <Row title={t("划词翻译")}><Switch on={s.selectionTranslationEnabled !== false} onChange={(v) => setSetting("selectionTranslationEnabled", v)} /></Row>
-        {s.selectionTranslationEnabled !== false && <>
-          <Row title={t("触发方式")}><Select value={s.selectionTranslationTrigger ?? "button"} options={[
-            { value: "button", label: t("选中后显示翻译按钮") }, { value: "automatic", label: t("选中后自动翻译") }, { value: "shortcut", label: t("仅使用快捷键") },
-          ]} onChange={(v) => setSetting("selectionTranslationTrigger", v)} /></Row>
-          <Row title={t("翻译服务")}><Select value={chosen} options={options} onChange={(v) => setSetting("selectionTranslationService", v)} /></Row>
-          <Row title={t("快捷键")}><ShortcutRecorder value={s.selectionTranslationShortcut || "Alt+D"} onChange={(v) => setSetting("selectionTranslationShortcut", v)} /></Row>
-        </>}
-      </Card>
-    </>
-  );
 }
 
 /** "翻译…": confirm service, languages and outputs for this run (they become the new defaults). */

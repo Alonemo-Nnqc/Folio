@@ -482,3 +482,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## LobeHub Icons
+
+Translation service logos in `macos/Folio/Resources/ServiceIcons.xcassets` and `windows/web/public/services` come from
+[@lobehub/icons-static-svg](https://github.com/lobehub/lobe-icons) 1.102.0, MIT License, Copyright (c) 2023 LobeHub.
+The logos themselves are trademarks of their respective owners and are used only to identify each service.

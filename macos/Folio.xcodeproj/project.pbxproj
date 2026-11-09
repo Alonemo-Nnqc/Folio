@@ -46,6 +46,7 @@
 		4EA3FC6DA3A04947D21AFFC5 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = 1C92A17D3FC84C208F701A6A /* popup.html */; };
 		4FF862D239D685675C901BD2 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2CFA125AFED333B13901F8 /* AppSettings.swift */; };
 		5046C263990C9F8BBB7495CB /* SidebarDragRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E077F23D80ED8250C4C5833E /* SidebarDragRulesTests.swift */; };
+		53C726AAB9F8A44E62E7B569 /* ServiceIcons.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C320EB2645874289B2ACA569 /* ServiceIcons.xcassets */; };
 		543B0F4717F63C414B1ECA71 /* icon-48.png in Resources */ = {isa = PBXBuildFile; fileRef = C2933A355CB8906625A592AF /* icon-48.png */; };
 		5477C797109972B7DF15E4C3 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = BA5436DFCCF18BD94C6B09B4 /* Localizable.xcstrings */; };
 		5579159634BED3151391DEB1 /* ReaderMenus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11256ABE6563F8F62C97E2C7 /* ReaderMenus.swift */; };
@@ -298,6 +299,7 @@
 		BC226F0601BD76A1586CDFEE /* ServiceAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceAvailability.swift; sourceTree = "<group>"; };
 		C0DA3665A2CDD0FCAF9785E6 /* connector.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = connector.js; sourceTree = "<group>"; };
 		C2933A355CB8906625A592AF /* icon-48.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "icon-48.png"; sourceTree = "<group>"; };
+		C320EB2645874289B2ACA569 /* ServiceIcons.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ServiceIcons.xcassets; sourceTree = "<group>"; };
 		C4C515588B5798D262DBE05D /* ReaderSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSidebarView.swift; sourceTree = "<group>"; };
 		C4E97D45E0A435766ED8C239 /* TagChipsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagChipsView.swift; sourceTree = "<group>"; };
 		C5A1F0001E4BF60E89623E36 /* ColorSwatchMenuItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorSwatchMenuItem.swift; sourceTree = "<group>"; };
@@ -713,6 +715,7 @@
 				5437B0A45443DA1FFBC67DAB /* Folio.icon */,
 				06B9207BA6881145763FE76E /* InfoPlist.xcstrings */,
 				BA5436DFCCF18BD94C6B09B4 /* Localizable.xcstrings */,
+				C320EB2645874289B2ACA569 /* ServiceIcons.xcassets */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -979,6 +982,7 @@
 				6C810F7B77F471363DF88E0B /* InfoPlist.xcstrings in Resources */,
 				205B2EAF143BCFE42E734EBC /* LICENSE in Resources */,
 				5477C797109972B7DF15E4C3 /* Localizable.xcstrings in Resources */,
+				53C726AAB9F8A44E62E7B569 /* ServiceIcons.xcassets in Resources */,
 				A314213F519A614194F2DABB /* THIRD-PARTY-NOTICES.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

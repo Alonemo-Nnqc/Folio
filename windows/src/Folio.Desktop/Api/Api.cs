@@ -121,7 +121,9 @@ public static partial class Api
             ["selectionTranslationTrigger"] = s.SelectionTranslationTrigger,
             ["selectionTranslationService"] = s.SelectionTranslationService,
             ["selectionTranslationShortcut"] = s.SelectionTranslationShortcut,
+            ["selectionTranslationFallback"] = s.SelectionTranslationFallback,
             ["readerToolbar"] = s.ReaderToolbar,
+            ["translationParallelJobs"] = s.TranslationParallelJobs,
             ["onboardingDone"] = s.OnboardingDone,
             ["openReaderTabs"] = s.OpenReaderTabs,
             ["columnWidths"] = s.ColumnWidths,
@@ -153,6 +155,7 @@ public static partial class Api
                 if (M.Settings.BrowserConnectorEnabled) M.Connector.Start(); else M.Connector.Stop();
             }
             if (key == "includeSubgroupItems") M.Refresh();
+            if (key == "translationParallelJobs") M.Translations.ParallelChanged();
             App.Broadcast("settings", AllSettings());
         });
     }

@@ -113,6 +113,8 @@ final class AppSettings {
         static let selectionTranslationService = "selectionTranslationService"
         static let selectionTranslationShortcut = "selectionTranslationShortcut"
         static let backgroundTranslucency = "backgroundTranslucency"
+        static let translationParallelJobs = "translationParallelJobs"
+        static let selectionTranslationFallback = "selectionTranslationFallback"
     }
 
     private let defaults: UserDefaults
@@ -191,12 +193,16 @@ final class AppSettings {
     /// Service of 划词翻译; empty: the full-text translation's service.
     var selectionTranslationService: String { didSet { save(selectionTranslationService, Key.selectionTranslationService) } }
     var selectionTranslationShortcut: KeyShortcut { didSet { save(selectionTranslationShortcut.storage, Key.selectionTranslationShortcut) } }
+    /// 划词翻译: a rate-limited free service hands over to another free one.
+    var selectionTranslationFallback: Bool { didSet { save(selectionTranslationFallback, Key.selectionTranslationFallback) } }
     /// The service 划词翻译 uses now.
     var effectiveSelectionService: String {
         selectionTranslationService.isEmpty ? translationService : TranslationServiceCatalog.resolve(selectionTranslationService).id
     }
     /// 设置 ▸ 通用 ▸ 背景透明度: 0 opaque (the standard look), 1 the desktop shows through the list, inspector and reader.
     var backgroundTranslucency: Double { didSet { save(backgroundTranslucency, Key.backgroundTranslucency) } }
+    /// Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.
+    var translationParallelJobs: Int { didSet { save(translationParallelJobs, Key.translationParallelJobs) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -220,6 +226,8 @@ final class AppSettings {
             Key.selectionTranslationEnabled: true,
             Key.selectionTranslationTrigger: SelectionTrigger.button.rawValue,
             Key.backgroundTranslucency: 0.0,
+            Key.translationParallelJobs: 2,
+            Key.selectionTranslationFallback: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -251,6 +259,8 @@ final class AppSettings {
         selectionTranslationTrigger = SelectionTrigger(rawValue: defaults.string(forKey: Key.selectionTranslationTrigger) ?? "") ?? .button
         selectionTranslationService = defaults.string(forKey: Key.selectionTranslationService) ?? ""
         selectionTranslationShortcut = KeyShortcut(storage: defaults.dictionary(forKey: Key.selectionTranslationShortcut)) ?? .defaultSelectionTranslation
+        selectionTranslationFallback = defaults.bool(forKey: Key.selectionTranslationFallback)
+        translationParallelJobs = defaults.integer(forKey: Key.translationParallelJobs)
         backgroundTranslucency = min(1, max(0, defaults.double(forKey: Key.backgroundTranslucency)))
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.

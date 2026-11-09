@@ -93,8 +93,8 @@ export function MainApp() {
 
   // What is under Windows' buttons follows what the page shows there.
   useEffect(() => {
-    const light = panelUnderButtons ? "#f1f1f3" : "#ffffff";
-    const night = panelUnderButtons ? "#252527" : "#1e1e1f";
+    const light = panelUnderButtons ? "#f7f7f9" : "#fcfcfd";
+    const night = panelUnderButtons ? "#212123" : "#1d1d1f";
     // A panel sliding in fades the colour with it; a change of tab or theme is immediate.
     const animate = captionShown.current.activeTab === activeTab && captionShown.current.dark === dark;
     captionShown.current = { activeTab, dark };

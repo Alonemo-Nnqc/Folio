@@ -24,6 +24,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private weak var toolGroup: NSToolbarItemGroup?
     private weak var colorItem: NSMenuToolbarItem?
     private weak var searchItem: NSSearchToolbarItem?
+    private weak var notesTitleItem: NSToolbarItem?
+    private var notesCollapse: NSKeyValueObservation?
 
     private var fileURL: URL
     private var saveTask: Task<Void, Never>?
@@ -822,11 +824,35 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         toolbar.allowsUserCustomization = true
         toolbar.autosavesConfiguration = !UserDefaults.standard.bool(forKey: "FolioUITesting")
         window?.toolbar = toolbar
+        addNotesTitleToSavedToolbar(toolbar)
+    }
+
+    /// Toolbars saved before the notes panel's title moved up get it once, at the panel's leading edge.
+    private func addNotesTitleToSavedToolbar(_ toolbar: NSToolbar) {
+        let defaults = UserDefaults.standard
+        let key = "FolioReaderNotesTitleInToolbar"
+        guard !defaults.bool(forKey: key) else { return }
+        if !defaults.bool(forKey: "FolioUITesting") { defaults.set(true, forKey: key) }
+        let ids = toolbar.items.map(\.itemIdentifier)
+        guard !ids.contains(.readerNotesTitle), let separator = ids.firstIndex(of: .inspectorTrackingSeparator) else { return }
+        toolbar.insertItem(withItemIdentifier: .readerNotesTitle, at: separator + 1)
+    }
+
+    func toolbarWillAddItem(_ notification: Notification) {
+        guard let item = notification.userInfo?["item"] as? NSToolbarItem, item.itemIdentifier == .readerNotesTitle else { return }
+        guard #available(macOS 15, *) else { item.view?.isHidden = true; return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let notes = self.notesItem else { return }
+            self.notesCollapse = notes.observe(\.isCollapsed, options: [.initial, .new]) { [weak self] _, change in
+                let collapsed = change.newValue ?? false
+                MainActor.assumeIsolated { self?.notesTitleItem?.isHidden = collapsed }
+            }
+        }
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .readerZoom, .space, .readerTools, .readerColor,
-         .space, .readerTranslate, .readerSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
+         .space, .readerTranslate, .readerSearch, .inspectorTrackingSeparator, .readerNotesTitle, .flexibleSpace, .toggleInspector]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -903,6 +929,27 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             item.searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 200).isActive = true
             searchItem = item
             return item
+        case .readerNotesTitle:
+            // The notes panel's title, level with the panel's button (it used to sit lower, in the panel).
+            let label = NSTextField(labelWithString: String(localized: "笔记"))
+            label.font = .systemFont(ofSize: NSFont.systemFontSize + 2, weight: .bold)
+            label.textColor = .labelColor
+            // Lined up with the panel's text below it.
+            let box = NSView()
+            label.translatesAutoresizingMaskIntoConstraints = false
+            box.addSubview(label)
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 10),
+                label.trailingAnchor.constraint(equalTo: box.trailingAnchor),
+                label.centerYAnchor.constraint(equalTo: box.centerYAnchor),
+                box.heightAnchor.constraint(equalToConstant: 28),
+            ])
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.view = box
+            item.label = String(localized: "笔记")
+            item.paletteLabel = String(localized: "笔记标题")
+            notesTitleItem = item
+            return item
         case .readerPrint:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = String(localized: "打印")
@@ -934,6 +981,7 @@ extension NSToolbarItem.Identifier {
     static let readerTranslate = NSToolbarItem.Identifier("ReaderTranslate")
     static let readerSearch = NSToolbarItem.Identifier("ReaderSearch")
     static let readerPrint = NSToolbarItem.Identifier("ReaderPrint")
+    static let readerNotesTitle = NSToolbarItem.Identifier("ReaderNotesTitle")
 }
 
 /// The PDF, plus the translation beside it while 对照阅读 is on (READER-10).

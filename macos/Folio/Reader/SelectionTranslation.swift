@@ -20,6 +20,8 @@ final class SelectionTranslationState {
     var services: [TranslationService] = []
     var sourceLanguage = "en"
     var targetLanguage = "zh"
+    /// Said under the header when another free service stood in for a rate-limited one.
+    var notice: String?
     var copied = false
     var addedToNote = false
 
@@ -219,6 +221,7 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
         let source = state.source, serviceID = state.serviceID
         let from = state.sourceLanguage, to = state.targetLanguage
         let key = "\(serviceID)|\(from)|\(to)|\(source)"
+        state.notice = nil
         if let cached = cache[key] {
             state.phase = .done(cached)
             return
@@ -227,12 +230,22 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
         let service = TranslationServiceCatalog.resolve(serviceID)
         let fields = settings.translationFields[service.id] ?? [:]
         let secrets = (try? model.translations.secrets.secrets(for: service)) ?? [:]
+        let fallback = settings.selectionTranslationFallback
+        let allFields = settings.translationFields
         task = Task { [weak self] in
             do {
-                let result = try await SelectionTranslator.translate(source, serviceID: service.id, fields: fields, secrets: secrets, from: from, to: to)
+                let result = try await SelectionTranslator.translate(source, serviceID: service.id, fields: fields, secrets: secrets, from: from, to: to,
+                                                                     fallback: fallback, standInFields: { allFields[$0] ?? [:] })
                 guard !Task.isCancelled, let self else { return }
-                self.cache[key] = result
-                withAnimation(.easeOut(duration: 0.2)) { self.state.phase = .done(result) }
+                self.cache[key] = result.text
+                withAnimation(.easeOut(duration: 0.2)) {
+                    if let from = result.fellBackFrom {
+                        let limited = TranslationServiceCatalog.service(id: from)?.displayName ?? from
+                        let used = TranslationServiceCatalog.service(id: result.serviceID)?.displayName ?? result.serviceID
+                        self.state.notice = String(localized: "\(limited) 暂时限流，已改用 \(used)")
+                    }
+                    self.state.phase = .done(result.text)
+                }
             } catch is CancellationError {
             } catch {
                 guard !Task.isCancelled, let self else { return }
@@ -280,7 +293,7 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
             openSettings: { [weak self] in
                 self?.popover?.performClose(nil)
                 AppDelegate.shared.showSettings(nil)
-                AppDelegate.shared.settingsWindow?.select(pane: "translation")
+                AppDelegate.shared.settingsWindow?.select(pane: "selectionTranslation")
             })
         let popover = NSPopover()
         popover.behavior = .transient
@@ -419,6 +432,14 @@ struct SelectionTranslationView: View {
             Divider()
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+            if let notice = state.notice {
+                Label(notice, systemImage: "arrow.triangle.swap")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 6)
+                    .transition(.opacity)
+            }
             result
                 .padding(.horizontal, 14)
             footer
@@ -441,18 +462,20 @@ struct SelectionTranslationView: View {
                     Button {
                         actions.chooseService(service.id)
                     } label: {
-                        if service.id == state.serviceID {
-                            Label(service.displayName, systemImage: "checkmark")
-                        } else {
-                            Text(service.displayName)
+                        Label { Text(service.displayName) } icon: {
+                            Image(nsImage: service.id == state.serviceID
+                                  ? NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)!
+                                  : ServiceLogo.image(for: service.id, size: 16))
                         }
                     }
                 }
                 Divider()
-                Button("翻译设置…", action: actions.openSettings)
+                Button("划词翻译设置…", action: actions.openSettings)
             } label: {
-                Text(serviceName)
-                    .font(.caption.weight(.medium))
+                HStack(spacing: 4) {
+                    if let service = TranslationServiceCatalog.service(id: state.serviceID) { ServiceLogo(service: service, size: 12) }
+                    Text(serviceName).font(.caption.weight(.medium))
+                }
             }
             .menuStyle(.borderlessButton)
             .fixedSize()

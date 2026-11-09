@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "%lld 篇正在翻译" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%lld translating" } } } },
+    "版本 %@" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Version %@" } } } },
+    "Google、Microsoft 互为备用" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Google and Microsoft stand in for each other" } } } },
     "设置（Ctrl+,）" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings (Ctrl+,)" } } } },
     "正在下载…" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Downloading…" } } } },
     "自动下载更新" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Download Updates Automatically" } } } },

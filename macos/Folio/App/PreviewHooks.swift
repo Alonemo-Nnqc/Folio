@@ -91,7 +91,7 @@ enum PreviewHooks {
         case "identifier": model.activeSheet = .identifierAdd
         case "manualMatch": if let id = model.selectedItemIDs.first { model.activeSheet = .manualMatch(itemId: id) }
         case "translate":
-            if let id = model.selectedItemIDs.first, let file = model.defaultFile(of: id) { model.activeSheet = .translate(fileId: file.id) }
+            if let id = model.selectedItemIDs.first, let file = model.defaultFile(of: id) { model.activeSheet = .translate(fileIds: [file.id]) }
         default: break
         }
         let drop = defaults.integer(forKey: "FolioPreviewDrop")

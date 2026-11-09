@@ -291,12 +291,12 @@ public sealed class HostWindow : Form
         if (_themeDark == dark) return;
         _themeDark = dark;
         StopCaptionFade();
-        _captionBack = dark ? ColorTranslator.FromHtml("#1E1E1E") : Color.White;
+        _captionBack = dark ? ColorTranslator.FromHtml("#1D1D1F") : ColorTranslator.FromHtml("#FCFCFD");
         _captionText = dark ? Color.White : Color.Black;
         if (!Translucent)
         {
             BackColor = _captionBack;
-            _web.DefaultBackgroundColor = dark ? ColorTranslator.FromHtml("#1E1E1E") : Color.White;
+            _web.DefaultBackgroundColor = dark ? ColorTranslator.FromHtml("#1D1D1F") : ColorTranslator.FromHtml("#FCFCFD");
         }
         InvalidateCaption();
     }
@@ -327,7 +327,7 @@ public sealed class HostWindow : Form
             else
             {
                 BackColor = _captionBack;
-                _web.DefaultBackgroundColor = _themeDark == true ? ColorTranslator.FromHtml("#1E1E1E") : Color.White;
+                _web.DefaultBackgroundColor = _themeDark == true ? ColorTranslator.FromHtml("#1D1D1F") : ColorTranslator.FromHtml("#FCFCFD");
             }
         }
         Invalidate();
