@@ -645,6 +645,7 @@ struct FontInfo: Sendable, Hashable {
         isItalic = flags & 64 != 0 || ["italic", "ital", "oblique", "-it", "cmti", "cmmi", "slanted", "-sl", "kursiv"].contains { lower.contains($0) }
         let stem = descriptor.flatMap { PDFDictionary.number($0, "StemV") } ?? 0
         isBold = flags & 262144 != 0 || weight >= 600 || (stem >= 130 && !isMonospace)
-            || ["bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi", "medi", "sfbx", "sfsx", "cmssbx", "ptmb", "phvb", "pplb"].contains { lower.contains($0) }
+            || ["bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi", "medi", "sfbx", "sfsx", "cmssbx", "ptmb", "phvb", "pplb", "rtxb", "libertinetb", "biolinumtb", "e-bx"].contains { lower.contains($0) }
+            || lower.hasSuffix("-b")
     }
 }

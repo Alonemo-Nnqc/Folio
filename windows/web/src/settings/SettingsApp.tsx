@@ -1,18 +1,23 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
+import { AlertTriangle, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, setSetting, useStore } from "../store";
-import { Field, Select, Switch } from "../ui/controls";
+import { Field, Select, Slider, Switch } from "../ui/controls";
 import { confirm, dialog, openSheet } from "../ui/sheet";
 import { openMenu } from "../ui/menu";
+import { ServiceLogo } from "../ui/serviceLogo";
 import { Card, Header, Note, Row } from "./parts";
 import { TranslationPane } from "./TranslationPane";
+import { SelectionTranslationPane } from "./SelectionPane";
+import { setCaption } from "../ui/caption";
 import { ZoteroSheet } from "./ZoteroSheet";
 
 const PANES = [
-  { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen }, { key: "library", title: "文献库", icon: Library }, { key: "retrieval", title: "检索", icon: Search },
-  { key: "translation", title: "翻译", icon: Languages }, { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
+  { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen },
+  { key: "library", title: "文献库", icon: Library }, { key: "retrieval", title: "检索", icon: Search },
+  { key: "translation", title: "翻译", icon: Languages }, { key: "selection", title: "划词翻译", icon: ScanText },
+  { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
 ];
 
 let launchedLanguage: string | null = null;
@@ -34,6 +39,26 @@ function Appearance() {
   );
 }
 
+let pendingTranslucency = 0;
+let translucencyFrame = 0;
+function Translucency() {
+  const stored = useStore((x) => x.settings.backgroundTranslucency ?? 0);
+  const supported = useStore((x) => x.statics.translucency);
+  if (!supported) return null;
+  // Every window follows while the slider moves (one change per frame).
+  const change = (v: number) => {
+    pendingTranslucency = v;
+    if (!translucencyFrame) translucencyFrame = requestAnimationFrame(() => { translucencyFrame = 0; setSetting("backgroundTranslucency", pendingTranslucency); });
+  };
+  return (
+    <Row title={t("背景透明度")}>
+      <span className="slider-end opaque" />
+      <Slider label={t("背景透明度")} value={stored} onChange={change} onCommit={change} />
+      <span className="slider-end clear" />
+    </Row>
+  );
+}
+
 function General() {
   const s = useStore((x) => x.settings);
   const statics = useStore((x) => x.statics);
@@ -41,7 +66,7 @@ function General() {
   return (
     <>
       <Header>{t("外观")}</Header>
-      <Card><Appearance /></Card>
+      <Card><Appearance /><Translucency /></Card>
       <Header>{t("打开")}</Header>
       <Card>
         <Row title={t("打开 PDF 时使用")}><Select value={s.openWithMode} options={[{ value: "folio", label: t("Folio 阅读器") }, { value: "system", label: t("系统默认应用") }, { value: "custom", label: t("指定应用…") }]} onChange={(v) => setSetting("openWithMode", v)} /></Row>
@@ -68,9 +93,14 @@ function General() {
       <Card>
         <Row title={t("当前版本")}><span className="secondary">{statics.version} ({statics.channel})</span><button className="btn" onClick={() => call("update.check")}>{t("检查更新…")}</button></Row>
         <Row title={t("自动检查更新")}><Switch on={s.autoCheckUpdates} onChange={(v) => setSetting("autoCheckUpdates", v)} /></Row>
+        <Row title={t("自动下载更新")}><Switch on={s.autoDownloadUpdates} disabled={!s.autoCheckUpdates} onChange={(v) => setSetting("autoDownloadUpdates", v)} /></Row>
         <Row title={t("接收测试版")}><Switch on={s.updatePrereleases} onChange={(v) => setSetting("updatePrereleases", v)} /></Row>
       </Card>
-      <Note>{t("更新从 GitHub Releases 下载，在后台完成，重新启动即完成安装。")}</Note>
+      <Header>{t("帮助")}</Header>
+      <Card>
+        <Row title={t("欢迎使用 Folio…")}><button className="btn" onClick={() => call("window.onboarding")}>{t("打开")}</button></Row>
+        <Row title={t("Folio 主页")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/" })}>{t("打开")}</button><button className="btn" onClick={() => call("shell.open", { target: "https://github.com/Alonemo-Nnqc/Folio/issues" })}>{t("报告问题…")}</button></Row>
+      </Card>
     </>
   );
 }
@@ -124,14 +154,14 @@ function LibraryPane() {
           {error && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 6 }}>{error}</div>}
         </div>
       </Card>
-      <Note>{t("Mac 版 Folio 的文献库文件夹可以直接在这里打开（例如放在同步盘中），两边格式相同。")}</Note>
+      <Note>{t("可直接打开 Mac 版的文献库文件夹，两端格式相同")}</Note>
       <Header>{t("文件")}</Header>
       <Card>
         <Row title={t("检索到元数据后按「作者_年份_标题」重命名文件")}><Switch on={s.autoRenameFiles} onChange={(v) => setSetting("autoRenameFiles", v)} /></Row>
         <Row title={t("自动彻底删除回收站中超过 30 天的内容")}><Switch on={s.autoPurgeTrash} onChange={(v) => setSetting("autoPurgeTrash", v)} /></Row>
       </Card>
       <Header>{t("导入")}</Header>
-      <Card><Row title="Zotero" detail={t("导入条目、PDF、分组和标签，不会修改 Zotero")}><button className="btn" onClick={() => openSheet((close) => <ZoteroSheet close={close} />)}>{t("从 Zotero 导入…")}</button></Row></Card>
+      <Card><Row title="Zotero" detail={t("不会改动 Zotero 数据")}><button className="btn" onClick={() => openSheet((close) => <ZoteroSheet close={close} />)}>{t("从 Zotero 导入…")}</button></Row></Card>
     </>
   );
 }
@@ -142,14 +172,13 @@ function Retrieval() {
     <>
       <Card>
         <Row title={t("添加 PDF 后自动检索元数据")}><Switch on={s.autoRetrieveOnImport} onChange={(v) => setSetting("autoRetrieveOnImport", v)} /></Row>
-        <Row title={t("使用 Zotero 识别服务")} detail={t("会把 PDF 前 5 页的文字发送给 Zotero，无需账号")}><Switch on={s.useZoteroRecognizer} onChange={(v) => setSetting("useZoteroRecognizer", v)} /></Row>
+        <Row title={t("使用 Zotero 识别服务")} detail={t("将发送 PDF 前 5 页文字，无需账号")}><Switch on={s.useZoteroRecognizer} onChange={(v) => setSetting("useZoteroRecognizer", v)} /></Row>
       </Card>
       <div style={{ height: 12 }} />
       <Card>
-        <Row title={t("联系邮箱（选填）")} detail={t("Crossref 会更快地响应带联系邮箱的请求；邮箱只发送给 Crossref 和 OpenAlex")}><Field className="set-field" value={s.crossrefMailto ?? ""} placeholder="name@example.com" onCommit={(v) => setSetting("crossrefMailto", v.trim())} /></Row>
-        <Row title={t("OpenAlex API Key（选填）")} detail={t("可在 openalex.org 免费申请，用于提高 OpenAlex 的访问额度")}><Field className="set-field" secret value={s.openAlexAPIKey ?? ""} onCommit={(v) => setSetting("openAlexAPIKey", v.trim())} /></Row>
+        <Row title={t("联系邮箱（选填）")}><Field className="set-field" value={s.crossrefMailto ?? ""} placeholder="name@example.com" onCommit={(v) => setSetting("crossrefMailto", v.trim())} /></Row>
+        <Row title={t("OpenAlex API Key（选填）")}><Field className="set-field" secret value={s.openAlexAPIKey ?? ""} onCommit={(v) => setSetting("openAlexAPIKey", v.trim())} /></Row>
       </Card>
-      <Note>{t("选填，可让检索更快、更稳定\n不填也能正常检索")}</Note>
     </>
   );
 }
@@ -164,11 +193,34 @@ function Browser() {
       <Card><Row title={t("允许浏览器插件保存到 Folio")}><Switch on={s.browserConnectorEnabled} onChange={(v) => setSetting("browserConnectorEnabled", v)} /></Row></Card>
       {data && <Note>{data.connector.message}</Note>}
       <Header>{t("安装浏览器插件")}</Header>
-      <Note>{t("插件会以“已解压的扩展程序”方式加载：点击“安装”后，Folio 准备好插件文件夹并打开浏览器的扩展页面，打开“开发者模式”，选择“加载已解压的扩展程序”，再选中这个文件夹。")}</Note>
+      <Note>{t("点击“安装”后，在浏览器扩展页面开启“开发者模式”，选择“加载已解压的扩展程序”并选中 Folio 打开的文件夹")}</Note>
       <div style={{ height: 10 }} />
       {data?.browsers.length === 0 && <Note>{t("没有找到支持的浏览器")}</Note>}
       {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}><button className="btn" onClick={() => call("browser.install", { id: b.id })}>{b.installed ? t("更新") : t("安装…")}</button></Row>)}</Card>}
     </>
+  );
+}
+
+/** The agent's official logo on an app-icon-like tile, as in the macOS app. Marks drawn in one colour follow the theme. */
+const LOGOS: Record<string, "fill" | "mark" | "template"> = {
+  codex: "fill", "gemini-cli": "fill", kiro: "fill", "claude-code": "mark", "claude-desktop": "mark", antigravity: "mark", "qwen-code": "mark",
+  cline: "template", "copilot-cli": "template", cursor: "template", opencode: "template",
+};
+/** Agents that are translation services too: the service's logo. */
+const SERVICE_LOGOS: Record<string, string> = {
+  pi: "picli", grok: "grokcli", hermes: "hermesagent", openclaw: "openclawagent", kimi: "kimicli", amp: "ampcli", goose: "gooseagent", deepseek: "deepseekharness",
+};
+function AgentLogo({ id, name }: { id: string; name: string }) {
+  const kind = LOGOS[id];
+  const file = `agents/${id === "claude-desktop" ? "claude-code" : id}.png`;
+  return (
+    <span className={`agent-icon${kind ? ` logo-${kind}` : ""}`} aria-hidden>
+      {kind === "fill" || kind === "mark" ? <img src={file} alt="" draggable={false} />
+        : kind === "template" ? <i style={{ WebkitMaskImage: `url(${file})`, maskImage: `url(${file})` }} />
+        : SERVICE_LOGOS[id] ? <ServiceLogo id={SERVICE_LOGOS[id]} size={18} />
+        : <TerminalSquare size={15} strokeWidth={1.7} />}
+      <span className="sr-only">{name}</span>
+    </span>
   );
 }
 
@@ -186,7 +238,7 @@ function AgentRow({ agent, refresh }: { agent: any; refresh: () => void }) {
       e.preventDefault();
       if (agent.configPath) openMenu([{ label: t("在资源管理器中显示配置文件"), action: () => call("ai.revealConfig", { path: agent.configPath }) }], e.clientX, e.clientY);
     }}>
-      <span className="agent-icon">{agent.name[0]}</span>
+      <AgentLogo id={agent.id} name={agent.name} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div>{agent.name}</div>
         {agent.location && <div className="secondary ellipsis" style={{ fontSize: 11 }}>{agent.version ? `${agent.location} · ${agent.version}` : agent.location}</div>}
@@ -228,7 +280,7 @@ function Ai() {
     <>
       <Header>{t("Folio 的 AI 接口")}</Header>
       <Card>
-        <Row title={t("允许 AI 修改文献库")} detail={t("关闭后只能搜索、阅读和引用\nAI 不能彻底删除任何内容")}><Switch on={s.aiAllowWrites} onChange={(v) => setSetting("aiAllowWrites", v)} /></Row>
+        <Row title={t("允许 AI 修改文献库")} detail={t("关闭后仅可检索、阅读与引用")}><Switch on={s.aiAllowWrites} onChange={(v) => setSetting("aiAllowWrites", v)} /></Row>
         <Row title={t("MCP 服务器")} detail={check && <span className={check.state === "ok" ? "status-ok" : check.state === "warn" ? "status-warn" : check.state === "bad" ? "status-bad" : ""}>{check.message}</span>}>
           <button className="btn" disabled={checking} title={t("像智能体一样启动 folio-cli，完成握手并读取文献库")} onClick={async () => {
             setChecking(true);
@@ -241,18 +293,17 @@ function Ai() {
         <Row title={t("命令行工具")} detail={info && <span className="mono selectable">{info.cliPath}</span>}><button className="btn" onClick={() => info && call("shell.reveal", { path: info.cliPath })}>{t("在资源管理器中显示")}</button></Row>
       </Card>
       {info && !info.cliExists && <Note><AlertTriangle size={11} /> {t("找不到 folio-cli：%@", info.cliPath)}</Note>}
-      <Note>{t("智能体通过 MCP 查找、阅读、引用和整理你的文献\nFolio 技能教它正确地使用")}</Note>
       <Header action={<button className="btn small" disabled={detecting} title={t("重新查找已安装的智能体（安装或卸载后使用）")} onClick={() => detect(true)}><RefreshCw size={12} />{t("重新检测")}</button>}>{t("这台电脑上的智能体")}</Header>
       <Card>
         {agents === null && <div className="set-row"><span className="spinner" /><span className="secondary">{t("正在检测…")}</span></div>}
         {agents?.length === 0 && <div className="set-row"><div><div>{t("没有在这台电脑上找到可用的智能体")}</div><div className="detail">{t("支持 %@\n安装后点\"重新检测\"", info?.catalog ?? "")}</div></div></div>}
         {agents?.map((a) => <AgentRow key={a.id} agent={a} refresh={() => detect(false)} />)}
       </Card>
-      <Note>{t("打开开关即按官方方式写入该智能体的配置，关闭即移除，修改前会备份\n重启智能体或开始新会话后生效")}</Note>
+      <Note>{t("开关会写入或移除该智能体的配置（修改前自动备份），重启智能体后生效")}</Note>
       <Header>{t("手动配置")}</Header>
       <Card>
         <Row title={t("其他支持 MCP 的应用")}><button className="btn" onClick={() => call("ai.copyConfig")}>{t("拷贝 MCP 配置")}</button></Row>
-        <Row title={t("Folio 技能")} detail={t("用于列表之外的应用，如 VS Code、Zed、Windsurf")}><button className="btn" onClick={() => call("ai.exportFolder")}>{t("导出技能文件夹…")}</button><button className="btn" onClick={() => call("ai.exportZip")}>{t("导出技能包（.zip）…")}</button></Row>
+        <Row title={t("Folio 技能")} detail={t("适用于 VS Code、Zed、Windsurf 等")}><button className="btn" onClick={() => call("ai.exportFolder")}>{t("导出技能文件夹…")}</button><button className="btn" onClick={() => call("ai.exportZip")}>{t("导出技能包（.zip）…")}</button></Row>
       </Card>
     </>
   );
@@ -262,24 +313,30 @@ export function SettingsApp() {
   const stored = useStore((s) => s.settings.settingsPane);
   const [pane, setPane] = useState<string>(PANES.some((p) => p.key === stored) ? stored : "general");
   useEffect(() => on("settings.page", (p) => { if (p) setPane(p); }), []);
-  useEffect(() => { call("window.caption", { background: getState().dark ? "#1e1e1f" : "#ffffff", foreground: getState().dark ? "#ffffff" : "#000000" }); });
+  useEffect(() => { setCaption(getState().dark ? "#1c1c1e" : "#f4f4f6", getState().dark ? "#ffffff" : "#000000"); });
   const title = PANES.find((p) => p.key === pane)?.title ?? "";
   return (
     <div className="settings">
       <div className="settings-nav drag">
         {PANES.map((p) => {
           const Icon = p.icon;
-          return <button key={p.key} className={`no-drag${pane === p.key ? " on" : ""}`} onClick={() => { setPane(p.key); setSetting("settingsPane", p.key); }}><Icon size={17} strokeWidth={1.7} />{p.key === "ai" ? "AI" : t(p.title)}</button>;
+          return (
+            <button key={p.key} className={`no-drag${pane === p.key ? " on" : ""}`} onClick={() => { setPane(p.key); setSetting("settingsPane", p.key); }}>
+              <Icon size={17} strokeWidth={1.7} />{p.key === "ai" ? "AI" : t(p.title)}
+            </button>
+          );
         })}
       </div>
       <div className="settings-main">
-        <div className="settings-title drag">{title === "AI" ? "AI" : t(title)}</div>
+        <div className="settings-title drag" />
         <div className="settings-page" key={pane}>
+          <h1 className="settings-heading">{title === "AI" ? "AI" : t(title)}</h1>
           {pane === "general" && <General />}
           {pane === "reader" && <Reader />}
           {pane === "library" && <LibraryPane />}
           {pane === "retrieval" && <Retrieval />}
           {pane === "translation" && <TranslationPane />}
+          {pane === "selection" && <SelectionTranslationPane />}
           {pane === "browser" && <Browser />}
           {pane === "ai" && <Ai />}
         </div>

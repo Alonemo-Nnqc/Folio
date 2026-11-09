@@ -102,8 +102,8 @@ public sealed class AppSettings
     public ReaderZoom ReaderZoom { get => Get("readerZoom", "fitWidth") == "actualSize" ? ReaderZoom.ActualSize : ReaderZoom.FitWidth; set => Set("readerZoom", value == ReaderZoom.ActualSize ? "actualSize" : "fitWidth"); }
     public ReaderLayout ReaderLayout { get => Get("readerLayout", "single") == "twoUp" ? ReaderLayout.TwoUp : ReaderLayout.Single; set => Set("readerLayout", value == ReaderLayout.TwoUp ? "twoUp" : "single"); }
     public bool ReopenReaderTabs { get => Get("reopenReaderTabs", true); set => Set("reopenReaderTabs", value); }
-    /// <summary>How much of the desktop shows through the windows: 0 (opaque) to 1.</summary>
-    public double WindowTransparency { get => Math.Clamp(Get("windowTransparency", 0.2), 0, 1); set => Set("windowTransparency", Math.Clamp(value, 0, 1)); }
+    /// <summary>设置 ▸ 通用 ▸ 背景透明度: how much of the desktop shows through the panels, 0 (opaque) to 1 (as the macOS app).</summary>
+    public double BackgroundTranslucency { get => Math.Clamp(Get("backgroundTranslucency", 0.0), 0, 1); set => Set("backgroundTranslucency", Math.Clamp(value, 0, 1)); }
     public string HighlightColor { get => Get("highlightColor", "yellow"); set => Set("highlightColor", value); }
     public bool UseZoteroRecognizer { get => Get("useZoteroRecognizer", true); set => Set("useZoteroRecognizer", value); }
     public bool MarkReadingOnOpen { get => Get("markReadingOnOpen", true); set => Set("markReadingOnOpen", value); }
@@ -118,6 +118,21 @@ public sealed class AppSettings
     public string CitationStyle { get => Get("citationStyle", "gbt7714"); set => Set("citationStyle", value); }
     public bool AutoCheckUpdates { get => Get("autoCheckUpdates", true); set => Set("autoCheckUpdates", value); }
     public bool UpdatePrereleases { get => Get("updatePrereleases", false); set => Set("updatePrereleases", value); }
+    /// <summary>Updates found by the automatic check are downloaded in the background; Folio then asks to restart.</summary>
+    public bool AutoDownloadUpdates { get => Get("autoDownloadUpdates", false); set => Set("autoDownloadUpdates", value); }
+
+    // 划词翻译 (same keys as the macOS app).
+    public bool SelectionTranslationEnabled { get => Get("selectionTranslationEnabled", true); set => Set("selectionTranslationEnabled", value); }
+    /// <summary>"button" (a button beside the selection), "automatic" or "shortcut".</summary>
+    public string SelectionTranslationTrigger { get => Get("selectionTranslationTrigger", "button"); set => Set("selectionTranslationTrigger", value); }
+    /// <summary>Service id; empty: the full-text translation's service.</summary>
+    public string SelectionTranslationService { get => Get("selectionTranslationService", ""); set => Set("selectionTranslationService", value); }
+    /// <summary>划词翻译: a rate-limited free service hands over to another free one.</summary>
+    public bool SelectionTranslationFallback { get => Get("selectionTranslationFallback", true); set => Set("selectionTranslationFallback", value); }
+    /// <summary>"Alt+D" style: modifiers then the key's code without its "Key"/"Digit" prefix.</summary>
+    public string SelectionTranslationShortcut { get => Get("selectionTranslationShortcut", "Alt+D"); set => Set("selectionTranslationShortcut", value); }
+    /// <summary>The reader toolbar's buttons in order (ids from the page); empty: the standard set.</summary>
+    public List<string> ReaderToolbar { get => Get<List<string>>("readerToolbar", []); set => Set("readerToolbar", value); }
     public int MetadataEngineRevision { get => Get("metadataEngineRevision", 0); set => Set("metadataEngineRevision", value); }
     public bool OnboardingDone { get => Get("onboardingDone", false); set => Set("onboardingDone", value); }
     public List<string> OpenReaderTabs { get => Get<List<string>>("openReaderTabs", []); set => Set("openReaderTabs", value); }
@@ -145,6 +160,8 @@ public sealed class AppSettings
     }
     public Translate.TranslationOptions TranslationOptions { get => Get("translationOptions", new Translate.TranslationOptions()); set => Set("translationOptions", value); }
     public List<Translate.Services.TranslationProfile> TranslationProfiles { get => Get<List<Translate.Services.TranslationProfile>>("translationProfiles", []); set => Set("translationProfiles", value); }
+    /// <summary>Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.</summary>
+    public int TranslationParallelJobs { get => Get("translationParallelJobs", 2); set => Set("translationParallelJobs", value); }
     /// <summary>The configuration in use per service: service id → profile id.</summary>
     public Dictionary<string, string> SelectedTranslationProfiles { get => Get<Dictionary<string, string>>("selectedTranslationProfiles", []); set => Set("selectedTranslationProfiles", value); }
 }

@@ -64,6 +64,24 @@ final class AppSettings {
         }
     }
 
+    /// 划词翻译: when a selection in the reader is translated.
+    enum SelectionTrigger: String, CaseIterable, Identifiable {
+        /// A small button appears beside the selection; a click (or the shortcut) translates.
+        case button
+        /// Translated as soon as the mouse is released.
+        case automatic
+        /// Only with the shortcut or the context menu.
+        case shortcut
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .button: String(localized: "选中后显示翻译按钮")
+            case .automatic: String(localized: "选中后自动翻译")
+            case .shortcut: String(localized: "仅使用快捷键")
+            }
+        }
+    }
+
     private enum Key {
         static let openWith = "openWithMode"
         static let openWithAppPath = "openWithAppPath"
@@ -90,6 +108,13 @@ final class AppSettings {
         static let autoRetrieveOnImport = "autoRetrieveOnImport"
         static let aiAllowWrites = "aiAllowWrites"
         static let browserConnectorEnabled = "browserConnectorEnabled"
+        static let selectionTranslationEnabled = "selectionTranslationEnabled"
+        static let selectionTranslationTrigger = "selectionTranslationTrigger"
+        static let selectionTranslationService = "selectionTranslationService"
+        static let selectionTranslationShortcut = "selectionTranslationShortcut"
+        static let backgroundTranslucency = "backgroundTranslucency"
+        static let translationParallelJobs = "translationParallelJobs"
+        static let selectionTranslationFallback = "selectionTranslationFallback"
     }
 
     private let defaults: UserDefaults
@@ -162,6 +187,23 @@ final class AppSettings {
     /// 设置 ▸ 浏览器: the local service the browser extension saves through (WEB-01).
     var browserConnectorEnabled: Bool { didSet { save(browserConnectorEnabled, Key.browserConnectorEnabled) } }
 
+    /// 划词翻译 in the reader (TRANS-10).
+    var selectionTranslationEnabled: Bool { didSet { save(selectionTranslationEnabled, Key.selectionTranslationEnabled) } }
+    var selectionTranslationTrigger: SelectionTrigger { didSet { save(selectionTranslationTrigger.rawValue, Key.selectionTranslationTrigger) } }
+    /// Service of 划词翻译; empty: the full-text translation's service.
+    var selectionTranslationService: String { didSet { save(selectionTranslationService, Key.selectionTranslationService) } }
+    var selectionTranslationShortcut: KeyShortcut { didSet { save(selectionTranslationShortcut.storage, Key.selectionTranslationShortcut) } }
+    /// 划词翻译: a rate-limited free service hands over to another free one.
+    var selectionTranslationFallback: Bool { didSet { save(selectionTranslationFallback, Key.selectionTranslationFallback) } }
+    /// The service 划词翻译 uses now.
+    var effectiveSelectionService: String {
+        selectionTranslationService.isEmpty ? translationService : TranslationServiceCatalog.resolve(selectionTranslationService).id
+    }
+    /// 设置 ▸ 通用 ▸ 背景透明度: 0 opaque (the standard look), 1 the desktop shows through the list, inspector and reader.
+    var backgroundTranslucency: Double { didSet { save(backgroundTranslucency, Key.backgroundTranslucency) } }
+    /// Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.
+    var translationParallelJobs: Int { didSet { save(translationParallelJobs, Key.translationParallelJobs) } }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         defaults.register(defaults: [
@@ -181,6 +223,11 @@ final class AppSettings {
             Key.autoRetrieveOnImport: true,
             Key.aiAllowWrites: true,
             Key.browserConnectorEnabled: true,
+            Key.selectionTranslationEnabled: true,
+            Key.selectionTranslationTrigger: SelectionTrigger.button.rawValue,
+            Key.backgroundTranslucency: 0.0,
+            Key.translationParallelJobs: 2,
+            Key.selectionTranslationFallback: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -208,6 +255,13 @@ final class AppSettings {
         autoRetrieveOnImport = defaults.bool(forKey: Key.autoRetrieveOnImport)
         aiAllowWrites = defaults.bool(forKey: Key.aiAllowWrites)
         browserConnectorEnabled = defaults.bool(forKey: Key.browserConnectorEnabled)
+        selectionTranslationEnabled = defaults.bool(forKey: Key.selectionTranslationEnabled)
+        selectionTranslationTrigger = SelectionTrigger(rawValue: defaults.string(forKey: Key.selectionTranslationTrigger) ?? "") ?? .button
+        selectionTranslationService = defaults.string(forKey: Key.selectionTranslationService) ?? ""
+        selectionTranslationShortcut = KeyShortcut(storage: defaults.dictionary(forKey: Key.selectionTranslationShortcut)) ?? .defaultSelectionTranslation
+        selectionTranslationFallback = defaults.bool(forKey: Key.selectionTranslationFallback)
+        translationParallelJobs = defaults.integer(forKey: Key.translationParallelJobs)
+        backgroundTranslucency = min(1, max(0, defaults.double(forKey: Key.backgroundTranslucency)))
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.
         libraryPath = defaults.volatileDomain(forName: UserDefaults.argumentDomain)["FolioLibraryPath"] as? String

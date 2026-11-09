@@ -97,7 +97,8 @@ struct Typesetter {
         }
         let indent = givenIndent ?? (block.kind == .paragraph ? block.firstLineIndent : 0)
         let hanging = block.kind == .paragraph || block.kind == .caption ? block.hangingIndent : 0
-        let bold = block.kind == .title || block.kind == .heading || block.font.isBold
+        // As in the original: IEEE's titles and section headings are set in regular type, others in bold.
+        let bold = block.font.isBold
         let top = block.rect.maxY
         let firstBaseline = block.lines[0].baseline
         let lastBaseline = block.lines.last!.baseline

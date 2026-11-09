@@ -155,21 +155,28 @@ struct ReaderNotesPanel: View {
     var focusRequest: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("笔记")
-                .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-            if let title = model.snapshot.items[itemId]?.title {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(.horizontal, 14)
+        GeometryReader { proxy in
+            // The title sits in the toolbar's band, level with the panel's button, as plain text.
+            let band = max(proxy.safeAreaInsets.top, 38)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("笔记")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(height: band)
+                    .padding(.horizontal, 16)
+                    .accessibilityAddTraits(.isHeader)
+                if let title = model.snapshot.items[itemId]?.title {
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.horizontal, 16)
+                }
+                Divider().padding(.top, 4)
+                NoteEditor(model: model, itemId: itemId, focusRequest: focusRequest)
+                    .padding(.horizontal, 6)
             }
-            Divider().padding(.top, 4)
-            NoteEditor(model: model, itemId: itemId, focusRequest: focusRequest)
-                .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .ignoresSafeArea(.container, edges: .top)
         }
     }
 }

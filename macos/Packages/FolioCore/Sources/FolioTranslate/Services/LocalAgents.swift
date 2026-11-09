@@ -127,7 +127,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     private static let genuineLock = NSLock()
 
     /// Whether the program at `path` is this agent and not another one of that name.
-    private func isGenuine(path: String, command: String) -> Bool {
+    public func isGenuine(path: String, command: String) -> Bool {
         guard let signature = signature(of: command) else { return true }
         let key = "\(rawValue)|\(path)"
         if let known = Self.genuineLock.withLock({ Self.genuine[key] }) { return known }

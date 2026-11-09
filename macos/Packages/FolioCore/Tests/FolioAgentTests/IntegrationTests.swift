@@ -102,6 +102,70 @@ private func read(_ path: String, in home: URL) throws -> String {
     }
 }
 
+@Suite struct YAMLServersTests {
+    let fields = ["command: \"/x/folio-cli\"", "args: [\"mcp\"]"]
+
+    @Test func addsToAnEmptyMapAndTakesItAwayAgain() throws {
+        let text = "model: gpt\nmcp_servers: {}\n# keep\nother:\n  a: 1\n"
+        let added = try YAMLServers.edited(text, key: "mcp_servers", name: "folio", fields: fields)
+        #expect(added == "model: gpt\nmcp_servers:\n  folio:\n    command: \"/x/folio-cli\"\n    args: [\"mcp\"]\n# keep\nother:\n  a: 1\n")
+        #expect(YAMLServers.value(of: "command", in: added, key: "mcp_servers", name: "folio") == "/x/folio-cli")
+        #expect(try YAMLServers.edited(added, key: "mcp_servers", name: "folio", fields: nil) == text)
+    }
+
+    @Test func keepsTheOtherServersAndTheirIndentation() throws {
+        let text = "extensions:\n    github:\n        cmd: npx\n    developer:\n        enabled: true\n"
+        let added = try YAMLServers.edited(text, key: "extensions", name: "folio", fields: fields)
+        #expect(added.hasPrefix("extensions:\n    folio:\n      command:"))
+        #expect(added.hasSuffix("    github:\n        cmd: npx\n    developer:\n        enabled: true\n"))
+        let again = try YAMLServers.edited(added, key: "extensions", name: "folio", fields: ["cmd: new"])
+        #expect(again.components(separatedBy: "folio:").count == 2, "replaced, not added twice")
+        #expect(try YAMLServers.edited(added, key: "extensions", name: "folio", fields: nil) == text)
+    }
+
+    @Test func aMissingMapIsAppendedAndAFlowMapRefused() throws {
+        let added = try YAMLServers.edited("a: 1\n", key: "mcp_servers", name: "folio", fields: fields)
+        #expect(YAMLServers.value(of: "command", in: added, key: "mcp_servers", name: "folio") == "/x/folio-cli")
+        #expect(added.hasPrefix("a: 1\n"))
+        #expect(throws: YAMLServers.Unsupported.self) { try YAMLServers.edited("mcp_servers: {a: 1}\n", key: "mcp_servers", name: "folio", fields: fields) }
+    }
+}
+
+@Suite struct OtherAgentsTests {
+    @Test func theAgentsTranslationKnowsAreFoundHereToo() {
+        let ids = Set(AgentIntegrator.catalog.flatMap(\.commands))
+        for command in ["pi", "grok", "hermes", "openclaw", "kimi", "droid", "amp", "goose", "dsh"] { #expect(ids.contains(command), "\(command)") }
+    }
+
+    @Test(arguments: [("pi", ".pi/agent/mcp.json"), ("grok", ".grok/config.toml"), ("hermes", ".hermes/config.yaml"),
+                      ("droid", ".factory/mcp.json"), ("amp", ".config/amp/settings.json"), ("goose", ".config/goose/config.yaml")])
+    func mcpGoesInTheAgentsOwnFile(id: String, file: String) throws {
+        let home = try tempHome()
+        let agent = integrator(home)
+        try agent.setMCP(true, for: descriptor(id))
+        #expect(try read(file, in: home).contains(cli))
+        #expect(agent.installedCommand(descriptor(id)) == cli)
+        try agent.setMCP(false, for: descriptor(id))
+        #expect(agent.installedCommand(descriptor(id)) == nil)
+    }
+
+    @Test func aGrokConfigKeepsItsOtherSettings() throws {
+        let home = try tempHome()
+        try write("[model]\nname = \"grok\"\n", to: ".grok/config.toml", in: home)
+        let agent = integrator(home)
+        try agent.setMCP(true, for: descriptor("grok"))
+        try agent.setMCP(false, for: descriptor("grok"))
+        #expect(try read(".grok/config.toml", in: home).trimmingCharacters(in: .newlines) == "[model]\nname = \"grok\"")
+    }
+
+    @Test func kimiUsesTheFolderOfTheVersionInstalled() throws {
+        let home = try tempHome()
+        try FileManager.default.createDirectory(at: home.appending(path: ".kimi"), withIntermediateDirectories: true)
+        try integrator(home).setMCP(true, for: descriptor("kimi"))
+        #expect(try read(".kimi/mcp.json", in: home).contains(cli))
+    }
+}
+
 @Suite struct AgentCatalogTests {
     @Test func everyAgentFollowsItsOfficialLayout() {
         #expect(descriptor("codex").skillFolders == [".agents/skills"], "Codex reads personal skills from ~/.agents/skills only")

@@ -200,7 +200,10 @@ public sealed class LayoutBlock
         {
             var r = Rect;
             if (!Lines.All(l => Math.Abs((l.MinX + l.MaxX) / 2 - r.MidX) < Math.Max(1.5, Size * 0.2))) return false;
-            return Lines.Count == 1 ? CenteredInColumn : Lines.Any(l => l.MinX - r.MinX > Size * 0.8 && r.MaxX - l.MaxX > Size * 0.8);
+            if (Lines.Count == 1) return CenteredInColumn;
+            if (Lines.Any(l => l.MinX - r.MinX > Size * 0.8 && r.MaxX - l.MaxX > Size * 0.8)) return true;
+            // Lines of nearly one width have none set in from both sides; a title's place on the page still says it is centred.
+            return CenteredInColumn && Kind is BlockKind.Title or BlockKind.Heading;
         }
     }
 }

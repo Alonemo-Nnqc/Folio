@@ -142,97 +142,97 @@ public enum TranslationServiceCatalog {
     public static let all: [TranslationService] = [
         // Free
         .init(id: "google", displayName: String(localized: "Google（免费）", bundle: .module), backend: .googleWeb, category: .free,
-              note: String(localized: "使用 Google 翻译网页接口，无需 Key\n频繁使用可能被暂时限流", bundle: .module)),
+              note: String(localized: "无需 Key，频繁使用可能被限流", bundle: .module)),
         .init(id: "bing", displayName: String(localized: "Microsoft（免费）", bundle: .module), backend: .bingWeb, category: .free,
-              note: String(localized: "使用 Microsoft Edge 浏览器的翻译接口，无需 Key", bundle: .module)),
+              note: String(localized: "无需 Key", bundle: .module)),
         // On this Mac
         .init(id: appleServiceID, displayName: String(localized: "Apple 系统翻译（离线）", bundle: .module), backend: .apple, category: .local,
-              note: String(localized: "使用 macOS 自带的翻译模型，完全离线、免费\n首次使用需要下载对应语言", bundle: .module)),
+              note: String(localized: "完全离线，首次使用需下载语言包", bundle: .module)),
         .init(id: "ollama", displayName: "Ollama", backend: .openAI(defaultBase: "http://localhost:11434/v1"), category: .local, fields: [
             .init(option: "--ollama-host", title: String(localized: "服务地址", bundle: .module), kind: .url,
                   defaultValue: "http://localhost:11434", placeholder: "http://localhost:11434"),
             model("--ollama-model", default: "qwen3:8b", required: true),
-        ], note: String(localized: "需要先在本机运行 Ollama 并下载模型", bundle: .module)),
+        ], note: String(localized: "需在本机运行 Ollama 并下载模型", bundle: .module)),
         .init(id: "lmstudio", displayName: "LM Studio", backend: .openAI(defaultBase: "http://localhost:1234/v1"), category: .local, fields: [
             .init(option: "--lmstudio-host", title: String(localized: "服务地址", bundle: .module), kind: .url,
                   defaultValue: "http://localhost:1234", placeholder: "http://localhost:1234"),
             model("--lmstudio-model", default: nil, required: true),
-        ], note: String(localized: "需要先在 LM Studio 中载入模型并启动本地服务", bundle: .module)),
+        ], note: String(localized: "需在 LM Studio 中载入模型并启动本地服务", bundle: .module)),
         // Agents
         .init(id: "claudecode", displayName: "Claude Code", backend: .agent(.claude), category: .agent, fields: [
             .init(option: "--claude-code-model", title: TranslationServiceCatalog.modelFieldTitle, defaultValue: "haiku", placeholder: "haiku / sonnet / opus"),
             agentPath("--claude-code-path", command: "claude"),
-        ], note: String(localized: "调用本机已登录的 Claude Code，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "codex", displayName: "Codex", backend: .agent(.codex), category: .agent, fields: [
             .init(option: "--codex-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--codex-path", command: "codex"),
-        ], note: String(localized: "调用本机已登录的 Codex CLI，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "geminicli", displayName: "Gemini CLI", backend: .agent(.gemini), category: .agent, fields: [
             .init(option: "--gemini-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--gemini-cli-path", command: "gemini"),
-        ], note: String(localized: "调用本机已登录的 Gemini CLI，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "qwencode", displayName: "Qwen Code", backend: .agent(.qwen), category: .agent, fields: [
             .init(option: "--qwen-code-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--qwen-code-path", command: "qwen"),
-        ], note: String(localized: "调用本机已登录的 Qwen Code，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "opencode", displayName: "opencode", backend: .agent(.opencode), category: .agent, fields: [
             .init(option: "--opencode-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: "provider/model"),
             agentPath("--opencode-path", command: "opencode"),
-        ], note: String(localized: "调用本机已配置的 opencode，无需在 Folio 中配置 Key", bundle: .module)),
+        ]),
         .init(id: "cursoragent", displayName: "Cursor CLI", backend: .agent(.cursor), category: .agent, fields: [
             .init(option: "--cursor-agent-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--cursor-agent-path", command: "cursor-agent"),
-        ], note: String(localized: "调用本机已登录的 Cursor CLI，无需配置 Key\nCursor 应用不带这个命令，需要单独安装 Cursor CLI", bundle: .module)),
+        ], note: String(localized: "需单独安装 Cursor CLI（Cursor 应用不含此命令）", bundle: .module)),
         .init(id: "grokcli", displayName: "Grok CLI", backend: .agent(.grok), category: .agent, fields: [
             .init(option: "--grok-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--grok-cli-path", command: "grok"),
-        ], note: String(localized: "调用本机已登录的 Grok CLI，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "antigravitycli", displayName: "Antigravity CLI", backend: .agent(.antigravity), category: .agent, fields: [
             .init(option: "--antigravity-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--antigravity-cli-path", command: "agy"),
-        ], note: String(localized: "调用本机已登录的 Antigravity 命令行（agy），无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "copilotcli", displayName: "GitHub Copilot CLI", backend: .agent(.copilot), category: .agent, fields: [
             .init(option: "--copilot-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--copilot-cli-path", command: "copilot"),
-        ], note: String(localized: "调用本机已登录的 GitHub Copilot CLI，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "kirocli", displayName: "Kiro CLI", backend: .agent(.kiro), category: .agent, fields: [
             .init(option: "--kiro-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--kiro-cli-path", command: "kiro-cli"),
-        ], note: String(localized: "调用本机已登录的 Kiro CLI，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "clinecli", displayName: "Cline CLI", backend: .agent(.cline), category: .agent, fields: [
             .init(option: "--cline-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--cline-cli-path", command: "cline"),
-        ], note: String(localized: "调用本机已配置的 Cline CLI，无需在 Folio 中配置 Key", bundle: .module)),
+        ]),
         .init(id: "kimicli", displayName: "Kimi CLI", backend: .agent(.kimi), category: .agent, fields: [
             .init(option: "--kimi-cli-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--kimi-cli-path", command: "kimi"),
-        ], note: String(localized: "调用本机已登录的 Kimi CLI，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "droidcli", displayName: "Factory Droid", backend: .agent(.droid), category: .agent, fields: [
             .init(option: "--droid-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--droid-path", command: "droid"),
-        ], note: String(localized: "调用本机已登录的 Factory Droid，无需配置 Key", bundle: .module)),
+        ]),
         .init(id: "ampcli", displayName: "Amp", backend: .agent(.amp), category: .agent, fields: [
             agentPath("--amp-path", command: "amp"),
-        ], note: String(localized: "调用本机已登录的 Amp，模型由 Amp 决定", bundle: .module)),
+        ], note: String(localized: "模型由 Amp 决定", bundle: .module)),
         .init(id: "gooseagent", displayName: "goose", backend: .agent(.goose), category: .agent, fields: [
             .init(option: "--goose-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--goose-path", command: "goose"),
-        ], note: String(localized: "调用本机已配置的 goose，无需在 Folio 中配置 Key", bundle: .module)),
+        ]),
         .init(id: "picli", displayName: "pi", backend: .agent(.pi), category: .agent, fields: [
             .init(option: "--pi-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: "provider/model"),
             agentPath("--pi-path", command: "pi"),
-        ], note: String(localized: "调用本机已配置的 pi，无需在 Folio 中配置 Key", bundle: .module)),
+        ]),
         .init(id: "hermesagent", displayName: "Hermes Agent", backend: .agent(.hermes), category: .agent, fields: [
             .init(option: "--hermes-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--hermes-path", command: "hermes"),
-        ], note: String(localized: "调用本机已配置的 Hermes Agent（需先运行 hermes model 选好模型）", bundle: .module)),
+        ], note: String(localized: "需先运行 hermes model 选择模型", bundle: .module)),
         .init(id: "openclawagent", displayName: "OpenClaw", backend: .agent(.openclaw), category: .agent, fields: [
             .init(option: "--openclaw-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: "provider/model"),
             agentPath("--openclaw-path", command: "openclaw"),
-        ], note: String(localized: "调用本机已配置的 OpenClaw，无需在 Folio 中配置 Key", bundle: .module)),
+        ]),
         .init(id: "deepseekharness", displayName: "DeepSeek Harness", backend: .agent(.deepseek), category: .agent, fields: [
             agentPath("--deepseek-harness-path", command: "dsh"),
-        ], note: String(localized: "调用本机已配置的 DeepSeek Harness（dsh），模型由它的配置决定", bundle: .module)),
+        ], note: String(localized: "模型由 dsh 的配置决定", bundle: .module)),
         // Large language models
         .init(id: "openai", displayName: "OpenAI", backend: .openAI(defaultBase: "https://api.openai.com/v1"), category: .llm, fields: [
             apiKey("--openai-api-key"),
@@ -305,11 +305,11 @@ public enum TranslationServiceCatalog {
             model("--openai-compatible-model", default: nil, required: true),
             .init(option: "--openai-compatible-reasoning-effort", title: String(localized: "推理强度", bundle: .module), isAdvanced: true),
             temperature("--openai-compatible-temperature"),
-        ], note: String(localized: "适用于任何兼容 OpenAI Chat Completions 的服务（如 Moonshot、OpenRouter、vLLM 等）", bundle: .module)),
+        ], note: String(localized: "兼容 OpenAI Chat Completions 的任意服务", bundle: .module)),
         // Machine translation
         .init(id: "deepl", displayName: "DeepL", backend: .deepL, category: .machine, fields: [
             apiKey("--deepl-auth-key", title: "Auth Key"),
-        ], note: String(localized: "免费版 Key（以 :fx 结尾）与专业版 Key 都可以", bundle: .module)),
+        ], note: String(localized: "支持免费版（:fx 结尾）与专业版 Key", bundle: .module)),
         .init(id: "azure", displayName: String(localized: "Azure 翻译", bundle: .module), backend: .azureTranslator, category: .machine, fields: [
             apiKey("--azure-api-key"),
             .init(option: "--azure-region", title: String(localized: "区域", bundle: .module), placeholder: "eastasia"),
@@ -324,6 +324,6 @@ public enum TranslationServiceCatalog {
         .init(id: "clitranslator", displayName: String(localized: "自定义命令行翻译器", bundle: .module), backend: .command, category: .machine, fields: [
             .init(option: "--clitranslator-command", title: String(localized: "命令", bundle: .module), isRequired: true, placeholder: "my-translator --from en --to zh"),
             .init(option: "--clitranslator-timeout", title: String(localized: "超时（秒）", bundle: .module), kind: .number, defaultValue: "60", placeholder: "60"),
-        ], note: String(localized: "每段原文通过标准输入传给命令，命令把译文写到标准输出", bundle: .module)),
+        ], note: String(localized: "原文经标准输入传入，译文由标准输出返回", bundle: .module)),
     ]
 }

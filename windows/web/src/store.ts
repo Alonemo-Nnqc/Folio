@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { call, on } from "./rpc";
+import { call, inHost, on } from "./rpc";
+
+const inHostWindow = inHost;
+/** What the host can do, known after boot. */
+const statics = { translucency: false };
 import { setStrings } from "./i18n";
 
 export interface Author { family: string; given?: string; full: string }
@@ -53,6 +57,8 @@ export interface State {
   tabs: ReaderTabState[];
   activeTab: string; // "library" or a reader tab's key
   inspectorPage: "info" | "annotations" | "notes";
+  /** 快速预览 of the selection is open. */
+  quickLook: boolean;
   captionWidth: number;
   readerNotes: Record<string, boolean>; // reader tabs with their notes panel open
   windowState: string;
@@ -62,7 +68,7 @@ export interface State {
 }
 
 export interface Statics {
-  version: string; channel: string;
+  version: string; channel: string; translucency: boolean;
   annotationColors: { key: string; title: string; hex: string }[];
   tagPresets: { name: string; hex: string }[];
   citationStyles: { raw: string; name: string }[];
@@ -75,9 +81,9 @@ export interface Statics {
 let state: State = {
   items: new Map(), files: new Map(), filesByItem: {}, groups: new Map(), topGroups: [], childGroups: {}, tags: [], itemTags: {}, itemGroups: {}, noted: new Set(), counts: {}, root: "", libraryVersion: 0,
   rows: [], scope: "all", searchText: "", searchWholeLibrary: false, includeFulltext: false, sortAscending: true,
-  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info",
+  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false,
   captionWidth: 138, readerNotes: {}, windowState: "normal", active: true, dark: false,
-  statics: { version: "", channel: "", annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
+  statics: { version: "", channel: "", translucency: false, annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
 };
 
 const subscribers = new Set<() => void>();
@@ -134,16 +140,44 @@ function applyTheme(settings: Record<string, any>) {
   document.documentElement.dataset.theme = dark ? "dark" : "light";
   if (dark !== state.dark) setState({ dark });
   call("window.theme", { dark });
+  applyTranslucency(settings.backgroundTranslucency ?? 0);
 }
+
+/** How much of the panels' colour stays over the desktop at a 背景透明度 of `amount` (1 opaque), as in the macOS app. */
+export function veilFor(amount: number) { return amount > 0.001 ? 0.94 * Math.pow(1 - amount, 1.3) : 1; }
+
+const SURFACES = ["--window", "--sidebar", "--inspector", "--content"];
+let translucentNow = -1;
+/** 背景透明度: the window's panels let the desktop (Acrylic) show through; text and pages stay as they are. */
+export function applyTranslucency(amount: number) {
+  if (!statics.translucency) amount = 0;
+  const root = document.documentElement;
+  for (const name of SURFACES) root.style.removeProperty(name);
+  translucentNow = amount;
+  const veil = veilFor(amount);
+  root.classList.toggle("translucent", veil < 1);
+  root.style.setProperty("--veil", String(veil));
+  if (veil < 1) {
+    const styles = getComputedStyle(root);
+    for (const name of SURFACES) {
+      const base = styles.getPropertyValue(name).trim();
+      const share = name === "--sidebar" ? veil * 0.8 : veil;
+      root.style.setProperty(name, `color-mix(in srgb, ${base} ${(share * 100).toFixed(1)}%, transparent)`);
+    }
+  }
+  if (inHostWindow) call("window.translucency", { value: amount });
+}
+export function currentTranslucency() { return translucentNow; }
 
 /** Loads everything from the app; returns once the first render can happen. */
 export async function boot(route: string) {
   const b = await call("app.boot");
   setStrings(b.strings, b.isEnglish);
+  statics.translucency = !!b.translucency;
   document.documentElement.lang = b.isEnglish ? "en" : "zh-Hans";
   setState({
     settings: b.settings, jobs: b.jobs ?? {}, captionWidth: b.captionWidth, windowState: b.windowState ?? "normal",
-    statics: { version: b.version, channel: b.channel, annotationColors: b.annotationColors, tagPresets: b.tagPresets, citationStyles: b.citationStyles, referenceFormats: b.referenceFormats, itemTypes: b.itemTypes, statuses: b.statuses, homeFolder: b.homeFolder, userName: b.userName },
+    statics: { version: b.version, channel: b.channel, translucency: !!b.translucency, annotationColors: b.annotationColors, tagPresets: b.tagPresets, citationStyles: b.citationStyles, referenceFormats: b.referenceFormats, itemTypes: b.itemTypes, statuses: b.statuses, homeFolder: b.homeFolder, userName: b.userName },
   });
   applyLibrary(b.library);
   applyRows(b.rows);

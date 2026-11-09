@@ -48,6 +48,9 @@ final class ReaderPDFView: PDFView {
         }
     }
     var inkColor = NSColor.systemRed
+    /// The mouse went down on the page / was released over a text selection made with the select tool (划词翻译).
+    var onMouseDown: () -> Void = {}
+    var onSelectionFinished: () -> Void = {}
 
     private(set) var selectedAnnotation: PDFAnnotation?
     private let inkOverlay = InkOverlayView()
@@ -95,6 +98,7 @@ final class ReaderPDFView: PDFView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        onMouseDown()
         let point = convert(event.locationInWindow, from: nil)
         guard let page = page(for: point, nearest: true) else { return super.mouseDown(with: event) }
         let pagePoint = convert(point, to: page)
@@ -165,6 +169,8 @@ final class ReaderPDFView: PDFView {
         if let type = tool.markupType, let selection = currentSelection, !(selection.string ?? "").isEmpty {
             editor?.addMarkup(type, for: selection)
             clearSelection()
+        } else if tool == .select, !(currentSelection?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            onSelectionFinished()
         }
     }
 

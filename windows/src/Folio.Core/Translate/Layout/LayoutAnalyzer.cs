@@ -206,7 +206,8 @@ public sealed partial class LayoutAnalyzer
         }).ToList();
         var boxes = marks.Where(m => m.Kind == GraphicMark.MarkKind.Fill && m.Rect.W * m.Rect.H > 3000).Select(m => m.Rect).ToList();
         Classify(textBlocks, number, crop, boxes);
-        double textLeft = flat.Count > 0 ? flat.Min(l => l.MinX) : crop.MinX, textRight = flat.Count > 0 ? flat.Max(l => l.MaxX) : crop.MaxX;
+        // The running text only: a stamp up the margin (arXiv's) would put the middle of the page somewhere else.
+        double textLeft = flowing.Count > 0 ? flowing.Min(l => l.MinX) : crop.MinX, textRight = flowing.Count > 0 ? flowing.Max(l => l.MaxX) : crop.MaxX;
         foreach (var block in textBlocks)
         {
             var r = block.Rect;
@@ -214,7 +215,9 @@ public sealed partial class LayoutAnalyzer
             var column = edges(r.MidX);
             bool inColumn = Math.Abs(r.MidX - (column.Lo + column.Hi) / 2) < size * 0.8 && r.MinX - column.Lo > size * 1.5;
             bool onPage = Math.Abs(r.MidX - (textLeft + textRight) / 2) < size * 0.8 && r.MinX - textLeft > size * 1.5;
-            block.CenteredInColumn = inColumn || onPage;
+            // A title about as wide as the text leaves no room to show it, but its translation will be shorter.
+            bool fillsPage = block.Kind == BlockKind.Title && Math.Min(Math.Abs(r.MidX - (textLeft + textRight) / 2), Math.Abs(r.MidX - crop.MidX)) < size * 0.8;
+            block.CenteredInColumn = inColumn || onPage || fillsPage;
         }
         blocks.AddRange(textBlocks);
         MergeInterleaved(blocks);

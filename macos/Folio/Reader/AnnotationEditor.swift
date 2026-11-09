@@ -13,6 +13,7 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
     /// "添加到笔记" / "拷贝为引用" for a text selection (READER-08).
     var onAddToNote: (String, Int) -> Void = { _, _ in }
     var onCopyAsCitation: (String, Int) -> Void = { _, _ in }
+    var onTranslateSelection: () -> Void = {}
     private var editing: (annotation: PDFAnnotation, textView: NSTextView, isNew: Bool, original: String?)?
 
     init(state: ReaderState) {
@@ -256,6 +257,10 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         let menu = NSMenu()
         let text = Self.clean(selection.string ?? "")
         let index = selection.pages.first.flatMap { $0.document?.index(for: $0) } ?? 0
+        let translate = NSMenuItem.closure(String(localized: "翻译")) { [weak self] in self?.onTranslateSelection() }
+        translate.image = NSImage(systemSymbolName: "translate", accessibilityDescription: nil)
+        menu.addItem(translate)
+        menu.addItem(.separator())
         menu.addItem(.closure(String(localized: "拷贝")) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)

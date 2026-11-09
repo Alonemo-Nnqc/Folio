@@ -22,7 +22,19 @@ public sealed class Updater
     readonly AppModel _model;
     string? _installer;
     string? _pendingVersion;
+    Release? _available;
+    bool _downloading;
     System.Windows.Forms.Timer? _timer;
+
+    /// <summary>The 更新 button follows this: an update found, downloading, or downloaded and waiting for a restart.</summary>
+    public event Action? StateChanged;
+
+    public object State => new
+    {
+        available = _pendingVersion ?? _available?.Version,
+        downloaded = _installer != null,
+        downloading = _downloading,
+    };
 
     public Updater(AppModel model) { _model = model; }
 
@@ -55,7 +67,7 @@ public sealed class Updater
         if (!_model.Settings.AutoCheckUpdates || !IsInstalled) return;
         Check(userInitiated: false).Fire();
         _timer = new System.Windows.Forms.Timer { Interval = 24 * 60 * 60 * 1000 };
-        _timer.Tick += (_, _) => { if (_model.Settings.AutoCheckUpdates && _installer == null) Check(userInitiated: false).Fire(); };
+        _timer.Tick += (_, _) => { if (_model.Settings.AutoCheckUpdates && _installer == null && !_downloading) Check(userInitiated: false).Fire(); };
         _timer.Start();
     }
 
@@ -94,7 +106,7 @@ public sealed class Updater
         }
         if (_installer != null)
         {
-            await OfferRestart();
+            if (userInitiated) await OfferRestart();
             return;
         }
         try
@@ -105,14 +117,50 @@ public sealed class Updater
                 if (userInitiated) await Dialogs.Message(Loc.S("已是最新版本"), Loc.S("Folio %@ 是目前最新的 Windows 版本。", CurrentVersion));
                 return;
             }
-            if (userInitiated) _model.Toasts.Show(Loc.S("正在下载 Folio %@…", latest.Version), "download");
-            _installer = await Download(latest);
-            _pendingVersion = latest.Version;
-            await OfferRestart();
+            _available = latest;
+            StateChanged?.Invoke();
+            // A check of its own only shows the 更新 button (downloading first when the user chose so); asked, it goes on.
+            if (userInitiated) await Install();
+            else if (_model.Settings.AutoDownloadUpdates) await DownloadAvailable(userInitiated: false);
         }
         catch (Exception e)
         {
             if (userInitiated) await Dialogs.Message(Loc.S("检查更新"), Loc.S("无法检查更新：%@", e.Message));
+        }
+    }
+
+    /// <summary>The 更新 button: downloads the update if needed, then offers to restart into it.</summary>
+    public async Task Install()
+    {
+        if (_installer == null)
+        {
+            if (_available == null || _downloading) return;
+            if (!await DownloadAvailable(userInitiated: true)) return;
+        }
+        await OfferRestart();
+    }
+
+    async Task<bool> DownloadAvailable(bool userInitiated)
+    {
+        if (_available is not { } release || _downloading) return false;
+        _downloading = true;
+        StateChanged?.Invoke();
+        try
+        {
+            if (userInitiated) _model.Toasts.Show(Loc.S("正在下载 Folio %@…", release.Version), "download");
+            _installer = await Download(release);
+            _pendingVersion = release.Version;
+            return true;
+        }
+        catch (Exception e)
+        {
+            if (userInitiated) await Dialogs.Message(Loc.S("检查更新"), Loc.S("无法检查更新：%@", e.Message));
+            return false;
+        }
+        finally
+        {
+            _downloading = false;
+            StateChanged?.Invoke();
         }
     }
 

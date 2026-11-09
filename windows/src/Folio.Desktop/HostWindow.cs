@@ -38,6 +38,9 @@ public sealed class HostWindow : Form
     FormWindowState _beforeFullScreen;
     Rectangle _normalBounds;
     Color _captionBack = Color.White, _captionText = Color.Black;
+    /// <summary>背景透明度: 0 opaque; otherwise the share of the panels' colour left over the Acrylic backdrop.</summary>
+    double _veil = 1;
+    bool Translucent => _veil < 1;
     bool? _themeDark;
     System.Windows.Forms.Timer? _captionFade;
     int _hover = HTNOWHERE, _pressed = HTNOWHERE;
@@ -251,7 +254,7 @@ public sealed class HostWindow : Form
         if (!animate || !Visible || to == _captionBack)
         {
             _captionBack = to;
-            BackColor = to;
+            if (!Translucent) BackColor = to;
             InvalidateCaption();
             return;
         }
@@ -269,7 +272,7 @@ public sealed class HostWindow : Form
             if (t < 1) return;
             StopCaptionFade();
             _captionBack = to;
-            BackColor = to;
+            if (!Translucent) BackColor = to;
         };
         _captionFade.Start();
     }
@@ -288,11 +291,46 @@ public sealed class HostWindow : Form
         if (_themeDark == dark) return;
         _themeDark = dark;
         StopCaptionFade();
-        _captionBack = dark ? ColorTranslator.FromHtml("#1E1E1E") : Color.White;
+        _captionBack = dark ? ColorTranslator.FromHtml("#1D1D1F") : ColorTranslator.FromHtml("#FCFCFD");
         _captionText = dark ? Color.White : Color.Black;
-        BackColor = _captionBack;
-        _web.DefaultBackgroundColor = dark ? ColorTranslator.FromHtml("#1E1E1E") : Color.White;
+        if (!Translucent)
+        {
+            BackColor = _captionBack;
+            _web.DefaultBackgroundColor = dark ? ColorTranslator.FromHtml("#1D1D1F") : ColorTranslator.FromHtml("#FCFCFD");
+        }
         InvalidateCaption();
+    }
+
+    /// <summary>Acrylic behind the window (Windows 11): what the page leaves transparent shows the desktop, blurred.</summary>
+    public static bool SupportsTranslucency => System.Environment.OSVersion.Version.Build >= 22000;
+
+    /// <summary>Applies 背景透明度 (0 … 1). The page makes its panels translucent to the same degree.</summary>
+    public void SetTranslucency(double amount)
+    {
+        double veil = SupportsTranslucency && amount > 0.001 ? 0.94 * Math.Pow(1 - Math.Clamp(amount, 0, 1), 1.3) : 1;
+        bool was = Translucent;
+        _veil = veil;
+        if (!IsHandleCreated) return;
+        if (Translucent != was || Translucent)
+        {
+            // Extended from the bottom edge over the whole window: extended from the top, DWM would draw its own caption
+            // buttons over ours.
+            var margins = Translucent ? new MARGINS { bottom = 32767 } : new MARGINS();
+            DwmExtendFrameIntoClientArea(Handle, ref margins);
+            int backdrop = Translucent ? DWMSBT_TRANSIENTWINDOW : DWMSBT_AUTO;
+            DwmSetWindowAttribute(Handle, DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
+            if (Translucent)
+            {
+                BackColor = Color.Black;   // black is what DWM fills with the backdrop
+                _web.DefaultBackgroundColor = Color.Transparent;
+            }
+            else
+            {
+                BackColor = _captionBack;
+                _web.DefaultBackgroundColor = _themeDark == true ? ColorTranslator.FromHtml("#1D1D1F") : ColorTranslator.FromHtml("#FCFCFD");
+            }
+        }
+        Invalidate();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -302,6 +340,7 @@ public sealed class HostWindow : Form
         // Rounded corners and the shadow, on Windows 11.
         int round = DWMWCP_ROUND;
         DwmSetWindowAttribute(Handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
+        SetTranslucency(App.Model.Settings.BackgroundTranslucency);
     }
 
     public void ToggleFullScreen()
@@ -421,7 +460,21 @@ public sealed class HostWindow : Form
         base.OnPaint(e);
         if (_fullScreen) return;
         var rect = CaptionRect;
-        using (var back = new SolidBrush(_captionBack)) e.Graphics.FillRectangle(back, rect);
+        if (Translucent)
+        {
+            // Written with its alpha (GDI would leave the glass fully clear), the same veil as the page beside it.
+            e.Graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+            // The page lays two translucent layers there (the window's background and the column's): the same cover.
+            double cover = 1 - (1 - _veil) * (1 - _veil);
+            using (var veil = new SolidBrush(Color.FromArgb((int)Math.Round(255 * cover), _captionBack))) e.Graphics.FillRectangle(veil, rect);
+            e.Graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
+            e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        }
+        else
+        {
+            using var back = new SolidBrush(_captionBack);
+            e.Graphics.FillRectangle(back, rect);
+        }
         bool active = ContainsFocus || Form.ActiveForm == this;
         var glyphs = new List<(int Hit, string Glyph)>();
         if (_options.Minimizable) glyphs.Add((HTMINBUTTON, ""));
@@ -444,7 +497,13 @@ public sealed class HostWindow : Form
                 e.Graphics.FillRectangle(brush, cell);
                 if (hit == HTCLOSE) text = Color.White;
             }
-            TextRenderer.DrawText(e.Graphics, glyph, font, cell, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            if (Translucent)
+            {
+                using var brush = new SolidBrush(text);
+                using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                e.Graphics.DrawString(glyph, font, brush, cell, format);
+            }
+            else TextRenderer.DrawText(e.Graphics, glyph, font, cell, text, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }
 
@@ -536,6 +595,9 @@ public sealed class HostWindow : Form
     const int SM_CYSIZEFRAME = 33, SM_CXPADDEDBORDER = 92;
     const uint TME_LEAVE = 2, TME_NONCLIENT = 0x10;
     const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20, DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2;
+    const int DWMWA_SYSTEMBACKDROP_TYPE = 38, DWMSBT_AUTO = 0, DWMSBT_TRANSIENTWINDOW = 3;
+    [StructLayout(LayoutKind.Sequential)] struct MARGINS { public int left, right, top, bottom; }
+    [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref MARGINS margins);
 
     [StructLayout(LayoutKind.Sequential)] struct RECT { public int left, top, right, bottom; }
     [StructLayout(LayoutKind.Sequential)] struct NCCALCSIZE_PARAMS { public RECT rgrc0, rgrc1, rgrc2; public nint lppos; }

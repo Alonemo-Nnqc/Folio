@@ -801,6 +801,16 @@
         }
       }
     },
+    "兼容 OpenAI Chat Completions 的任意服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Any service compatible with OpenAI Chat Completions"
+          }
+        }
+      }
+    },
     "内存不足，翻译被中止，请只翻译部分页码" : {
       "localizations" : {
         "en" : {
@@ -857,6 +867,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The archive doesn't contain uv"
+          }
+        }
+      }
+    },
+    "原文经标准输入传入，译文由标准输出返回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text goes in on standard input; the translation comes back on standard output"
           }
         }
       }
@@ -1075,6 +1095,16 @@
         }
       }
     },
+    "完全离线，首次使用需下载语言包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fully offline. Languages are downloaded on first use."
+          }
+        }
+      }
+    },
     "嵌入字体" : {
       "localizations" : {
         "en" : {
@@ -1257,6 +1287,16 @@
         }
       }
     },
+    "支持免费版（:fx 结尾）与专业版 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free keys (ending in :fx) and Pro keys both work"
+          }
+        }
+      }
+    },
     "文件不存在或不可执行" : {
       "localizations" : {
         "en" : {
@@ -1359,6 +1399,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couldn't connect to the translation service%@. Please check your network"
+          }
+        }
+      }
+    },
+    "无需 Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No key needed"
+          }
+        }
+      }
+    },
+    "无需 Key，频繁使用可能被限流" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No key needed. Heavy use may be rate-limited."
           }
         }
       }
@@ -1591,6 +1651,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Model not found"
+          }
+        }
+      }
+    },
+    "模型由 Amp 决定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amp chooses the model"
+          }
+        }
+      }
+    },
+    "模型由 dsh 的配置决定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model comes from dsh's configuration"
           }
         }
       }
@@ -1885,6 +1965,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The translation service denied access%@: this API key isn't allowed to use the service or model"
+          }
+        }
+      }
+    },
+    "翻译服务暂时限流，请稍后再试，或在 设置 ▸ 划词翻译 中换用其他服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation service is rate-limited for now. Try again shortly, or choose another service in Settings ▸ Selection Translation."
           }
         }
       }
@@ -2611,6 +2701,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Alibaba Cloud Model Studio (Qwen)"
+          }
+        }
+      }
+    },
+    "需先运行 hermes model 选择模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run hermes model first to choose a model"
+          }
+        }
+      }
+    },
+    "需单独安装 Cursor CLI（Cursor 应用不含此命令）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requires the Cursor CLI (not included in the Cursor app)"
+          }
+        }
+      }
+    },
+    "需在 LM Studio 中载入模型并启动本地服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load a model in LM Studio and start its local server"
+          }
+        }
+      }
+    },
+    "需在本机运行 Ollama 并下载模型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Requires Ollama running on this computer with a model downloaded"
           }
         }
       }

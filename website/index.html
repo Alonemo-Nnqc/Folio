@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Folio — 轻量、原生的 macOS 文献管理软件</title>
-  <meta name="description" content="Folio 是轻量、原生的 macOS 文献管理软件：拖入 PDF 自动识别元数据，内置阅读与批注，保留排版的整篇翻译，AI 智能体接入。免费开源。">
+  <title>Folio — 开源文献管理软件，支持 Mac 与 Windows</title>
+  <meta name="description" content="Folio 是开源的文献管理软件，Mac 与 Windows 共用一个文献库：拖入 PDF 自动建好条目，批注写回文件，整篇翻译保留排版，AI 智能体可以直接查文献、写引用。">
   <meta name="theme-color" content="#fbfaf7">
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
   <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Folio — 轻量、原生的 macOS 文献管理软件">
-  <meta property="og:description" content="拖入 PDF 自动识别元数据 · 内置阅读与批注 · 保留排版的整篇翻译 · AI 智能体接入">
+  <meta property="og:title" content="Folio — 开源文献管理软件，支持 Mac 与 Windows">
+  <meta property="og:description" content="拖入 PDF 自动建好条目 · 批注写回文件 · 整篇翻译保留排版 · AI 智能体接入 · Mac 与 Windows 通用">
   <meta property="og:image" content="https://alonemo-nnqc.github.io/Folio/assets/img/og.jpg">
   <meta property="og:url" content="https://alonemo-nnqc.github.io/Folio/">
   <meta name="twitter:card" content="summary_large_image">
@@ -66,10 +66,10 @@
         <img src="assets/img/icon.webp" alt="Folio 图标" width="512" height="512">
         <span class="hero-icon-shine" aria-hidden="true"></span>
       </div>
-      <p class="hero-eyebrow intro" style="--i:1" data-i18n="hero.eyebrow">适用于 macOS</p>
+      <p class="hero-eyebrow intro" style="--i:1" data-i18n="hero.eyebrow">适用于 Mac 与 Windows</p>
       <h1 class="hero-title intro" style="--i:2">Folio</h1>
       <p class="hero-headline intro" style="--i:3" data-i18n="hero.headline">文献，各归其位。</p>
-      <p class="hero-sub intro" style="--i:4" data-i18n="hero.sub">轻量、原生的 macOS 文献管理软件。拖入 PDF 自动识别元数据，内置阅读与批注，保留排版的整篇翻译，还能让 AI 智能体帮你查文献、写引用。</p>
+      <p class="hero-sub intro" style="--i:4" data-i18n="hero.sub">写给读论文的人的开源文献管理软件。拖入 PDF 自动建好条目，批注直接写进文件，整篇翻译不动排版，还能让 AI 智能体查文献、写引用。Mac 和 Windows 用同一个文献库。</p>
       <div class="hero-cta intro" style="--i:5" id="heroCta">
         <a class="btn btn-primary js-download" href="https://github.com/Alonemo-Nnqc/Folio/releases/latest">
           <svg class="btn-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -80,7 +80,7 @@
           <svg class="chev" viewBox="0 0 8 14" aria-hidden="true"><path d="M1.5 1.5L6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
       </div>
-      <p class="hero-meta intro" style="--i:6"><span class="js-version" data-i18n="hero.meta">macOS 14 及以上 · Apple 芯片与 Intel · 免费开源</span></p>
+      <p class="hero-meta intro" style="--i:6"><span data-i18n="hero.meta">macOS 14 及以上 · Windows 10 / 11 · 免费开源</span></p>
     </div>
     <div class="hero-stage intro" style="--i:6">
       <div class="hero-window" id="heroWindow">
@@ -110,17 +110,36 @@
     </div>
   </section>
 
+  <!-- One library, two systems -->
+  <section class="organize platforms" id="platforms">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="plat.eyebrow">Mac 与 Windows</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="plat.title">一个文献库，<br>两个系统都能打开。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="plat.lede">两个版本功能一一对应，文献库格式完全相同。把文献库文件夹放进同步盘，实验室的 Windows 和家里的 Mac 打开的就是同一份论文、批注和笔记。不用注册账号，也没有服务器。</p>
+    </div>
+    <div class="duo">
+      <figure class="duo-item reveal" style="--d:1">
+        <div class="win"><img src="assets/img/library_light.webp" alt="macOS 版 Folio" width="2200" height="1323" loading="lazy"></div>
+        <figcaption><b>macOS</b><span data-i18n="plat.c1d">macOS 14 及以上，Apple 芯片与 Intel。</span></figcaption>
+      </figure>
+      <figure class="duo-item reveal" style="--d:3">
+        <div class="win"><img src="assets/img/library_windows.webp" alt="Windows 版 Folio" width="2200" height="1323" loading="lazy"></div>
+        <figcaption><b>Windows</b><span data-i18n="plat.c2d">Windows 10 / 11，x64 与 ARM64，安装无需管理员权限。</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
   <!-- Import: pinned, scroll-driven walkthrough -->
   <section class="import" id="features">
     <div class="section-head">
       <p class="eyebrow reveal" data-i18n="import.eyebrow">自动识别</p>
       <h2 class="headline reveal" style="--d:1" data-i18n="import.title">拖进来，就整理好了。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="import.lede">把 PDF 拖进窗口，Folio 会在几秒内查到标题、作者、期刊、DOI 等信息并建好条目。依次查询 Zotero 识别服务、Crossref、arXiv、OpenAlex、DBLP 与 CVF，找不到时也能手动匹配。</p>
+      <p class="lede reveal" style="--d:2" data-i18n="import.lede">把 PDF 拖进窗口，几秒内就有了标题、作者、期刊和 DOI。Folio 依次查询 Zotero 识别服务、Crossref、arXiv、OpenAlex、DBLP 与 CVF，都找不到时也能手动匹配。</p>
     </div>
     <div class="import-track" id="importTrack">
       <div class="import-stage">
         <ol class="import-steps" id="importSteps">
-          <li class="is-active"><b data-i18n="import.s1t">拖入 PDF</b><span data-i18n="import.s1d">从 Finder、下载文件夹，或任何地方。</span></li>
+          <li class="is-active"><b data-i18n="import.s1t">拖入 PDF</b><span data-i18n="import.s1d">从文件夹、下载目录，或任何地方。</span></li>
           <li><b data-i18n="import.s2t">松手</b><span data-i18n="import.s2d">剩下的交给 Folio。</span></li>
           <li><b data-i18n="import.s3t">正在检索元数据</b><span data-i18n="import.s3d">新条目立刻出现在列表中，识别在后台进行。</span></li>
           <li><b data-i18n="import.s4t">识别完成</b><span data-i18n="import.s4d">从拖入到识别完成，不到 4 秒。</span></li>
@@ -176,8 +195,8 @@
   <section class="reader">
     <div class="section-head">
       <p class="eyebrow reveal" data-i18n="reader.eyebrow">阅读与批注</p>
-      <h2 class="headline reveal" style="--d:1" data-i18n="reader.title">与「预览」同一引擎。<br>批注写回 PDF。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="reader.lede">论文以原生标签页打开。高亮、下划线、删除线、便签、文本框、手绘，批注直接写回 PDF 文件，在「预览」中同样可见。Folio 会记住每篇论文读到哪里，旁边还有一篇 Markdown 笔记。</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="reader.title">批注写进 PDF，<br>换个阅读器也还在。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="reader.lede">论文在标签页中打开。高亮、下划线、删除线、便签、文本框、手绘都写进 PDF 文件本身，不会锁在某个软件的数据库里。Folio 会记住每篇论文读到哪里，旁边还有一篇 Markdown 笔记。</p>
     </div>
     <div class="reader-stage reveal-scale" id="readerStage">
       <div class="win"><img src="assets/img/reader.webp" alt="Folio 阅读器" width="2200" height="1323" loading="lazy"></div>
@@ -193,7 +212,7 @@
     <div class="section-head">
       <p class="eyebrow reveal" data-i18n="tr.eyebrow">整篇翻译</p>
       <h2 class="headline reveal" style="--d:1" data-i18n="tr.title">整篇翻译，<br>排版原封不动。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="tr.lede">内置原生引擎，无需下载：公式、图表与版式原样保留，翻译时就能对照阅读。支持免费服务、离线的 Apple 系统翻译、20 多种大模型与机器翻译服务，也能直接调用本机的 Claude Code、Codex 等智能体。</p>
+      <p class="lede reveal" style="--d:2" data-i18n="tr.lede">引擎内置，无需下载。公式逐字形保留，表格逐格翻译，译文里的引用依然能点，翻译途中就能对照阅读，多篇论文可以一次译完。服务任你选：免费接口、本地模型、17 种大模型与机器翻译 API，或直接用电脑上已登录的 Claude Code、Codex 等 19 种智能体，不用另配 Key。</p>
     </div>
     <div class="translate-stage">
       <div class="win win-parallel reveal-scale"><img src="assets/img/parallel.webp" alt="原文与译文对照阅读" width="1264" height="760" loading="lazy"></div>
@@ -223,7 +242,7 @@
       <div class="theme-copy">
         <p class="eyebrow" data-i18n="theme.eyebrow">深色模式</p>
         <h2 class="headline" data-i18n="theme.title">白天黑夜，一样好看。</h2>
-        <p class="lede" data-i18n="theme.lede">完整支持深色模式。在 macOS 26 上，Folio 使用全新的 Liquid Glass 外观。</p>
+        <p class="lede" data-i18n="theme.lede">完整支持深色模式，也贴合各自系统的质感：macOS 26 上是 Liquid Glass，Windows 11 上是亚克力。</p>
       </div>
       <div class="theme-window">
         <div class="win win-stack">
@@ -240,7 +259,7 @@
     <div class="section-head">
       <p class="eyebrow eyebrow-ai reveal" data-i18n="ai.eyebrow">AI 接入</p>
       <h2 class="headline reveal" style="--d:1" data-i18n="ai.title">让智能体，<br>读懂你的文献库。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="ai.lede">内置 MCP 服务器与命令行工具 folio-cli。在 设置 ▸ AI 中，一键为 Claude Code、Codex、Gemini CLI、Copilot CLI、Cursor CLI 等 11 种智能体添加。也可以关闭「允许 AI 修改文献库」，只让 AI 读取。</p>
+      <p class="lede reveal" style="--d:2" data-i18n="ai.lede">内置 MCP 服务器与命令行工具 folio-cli。Folio 会自动找到电脑上的 Claude Code、Codex、Gemini CLI、Pi、Hermes 等智能体，每个只需打开一个开关。不放心的话，关闭「允许 AI 修改文献库」，AI 就只能读取。</p>
     </div>
     <div class="ai-stage">
       <div class="win win-settings reveal" style="--d:1"><img src="assets/img/settings_ai.webp" alt="设置 ▸ AI" width="1300" height="1000" loading="lazy"></div>
@@ -251,7 +270,7 @@
     </div>
     <div class="ai-facts">
       <div class="reveal" style="--d:1"><b>26</b><span data-i18n="ai.f1">个 MCP 工具</span></div>
-      <div class="reveal" style="--d:2"><b>11</b><span data-i18n="ai.f2">种智能体一键接入</span></div>
+      <div class="reveal" style="--d:2"><b>19</b><span data-i18n="ai.f2">种智能体一键接入</span></div>
       <div class="reveal" style="--d:3"><b>0</b><span data-i18n="ai.f3">AI 能彻底删除的内容</span></div>
     </div>
   </section>
@@ -259,14 +278,14 @@
   <!-- Stats -->
   <section class="stats">
     <div class="section-head">
-      <p class="eyebrow reveal" data-i18n="stats.eyebrow">轻快</p>
-      <h2 class="headline reveal" style="--d:1" data-i18n="stats.title">轻，本身就是一种性能。</h2>
+      <p class="eyebrow reveal" data-i18n="stats.eyebrow">一览</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="stats.title">体量不大，该有的都有。</h2>
     </div>
     <div class="stats-grid">
-      <div class="stat reveal" style="--d:1"><b><span class="count" data-to="0.35" data-dec="2">0.35</span><small data-i18n="unit.s">秒</small></b><span data-i18n="stats.s1">冷启动（1,000 个条目）</span></div>
-      <div class="stat reveal" style="--d:2"><b><span class="count" data-to="110" data-dec="0">110</span>–<span class="count" data-to="130" data-dec="0">130</span><small>MB</small></b><span data-i18n="stats.s2">内存占用</span></div>
-      <div class="stat reveal" style="--d:3"><b><span class="count" data-to="20" data-dec="0">20</span>+</b><span data-i18n="stats.s3">种翻译服务</span></div>
-      <div class="stat reveal" style="--d:4"><b><span class="count" data-to="9" data-dec="0">9</span></b><span data-i18n="stats.s4">种引用格式</span></div>
+      <div class="stat reveal" style="--d:1"><b><span class="count" data-to="6" data-dec="0">6</span></b><span data-i18n="stats.s1">个元数据来源</span></div>
+      <div class="stat reveal" style="--d:2"><b><span class="count" data-to="40" data-dec="0">40</span></b><span data-i18n="stats.s2">种翻译服务</span></div>
+      <div class="stat reveal" style="--d:3"><b><span class="count" data-to="9" data-dec="0">9</span></b><span data-i18n="stats.s3">种引用格式</span></div>
+      <div class="stat reveal" style="--d:4"><b><span class="count" data-to="0" data-dec="0">0</span></b><span data-i18n="stats.s4">账号、订阅与使用数据收集</span></div>
     </div>
   </section>
 
@@ -277,34 +296,49 @@
     </div>
     <div class="bento">
       <article class="card reveal" style="--d:0">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c3.5 3.4 5 7.4 5 12s-1.5 8.6-5 12M16 4c-3.5 3.4-5 7.4-5 12s1.5 8.6 5 12"/></svg>
-        <h3 data-i18n="more.c1t">浏览器插件</h3>
-        <p data-i18n="more.c1d">Safari、Chrome、Edge、Brave、Arc、Firefox。在论文页面一键保存（可同时保存 PDF），搜索结果页可批量保存。</p>
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 7h22M5 14h13M5 21h9"/><path d="M19 27l4-10 4 10M20.5 24h5"/></svg>
+        <h3 data-i18n="more.c7t">划词翻译</h3>
+        <p data-i18n="more.c7d">读到一半卡住了？选中文字，按快捷键或点按钮，译文就在旁边，可以直接加入笔记。</p>
       </article>
       <article class="card reveal" style="--d:1">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c3.5 3.4 5 7.4 5 12s-1.5 8.6-5 12M16 4c-3.5 3.4-5 7.4-5 12s1.5 8.6 5 12"/></svg>
+        <h3 data-i18n="more.c1t">浏览器插件</h3>
+        <p data-i18n="more.c1d">Chrome、Edge、Brave、Arc、Firefox，Mac 上还有 Safari。在论文页面一键保存（可同时保存 PDF），搜索结果页可批量保存。</p>
+      </article>
+      <article class="card reveal" style="--d:2">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 9h14M6 9l4-4M6 9l4 4M26 23H12m14 0l-4-4m4 4l-4 4"/></svg>
         <h3 data-i18n="more.c2t">从 Zotero 迁移</h3>
         <p data-i18n="more.c2d">一键导入条目、PDF、分组和标签。只读取数据库副本，不会修改 Zotero。</p>
       </article>
-      <article class="card reveal" style="--d:2">
+      <article class="card reveal" style="--d:0">
         <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="4" width="22" height="24" rx="4"/><path d="M10 11h12M10 16h12M10 21h7"/></svg>
         <h3 data-i18n="more.c3t">Markdown 笔记</h3>
         <p data-i18n="more.c3d">每个条目一篇笔记。阅读时选中文字，一键加入笔记。</p>
       </article>
-      <article class="card reveal" style="--d:0">
+      <article class="card reveal" style="--d:1">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9S3 16 3 16z"/><circle cx="16" cy="16" r="4"/></svg>
+        <h3 data-i18n="more.c8t">快速预览</h3>
+        <p data-i18n="more.c8d">在列表中按空格就能看一眼论文，方向键切换，不用打开阅读器。</p>
+      </article>
+      <article class="card reveal" style="--d:2">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8h12M10 5v3M7 8c0 5 3 9 7 11M14 8c-1 5-4 9-9 12"/><path d="M17 27l5-13 5 13M19 23h6"/></svg>
         <h3 data-i18n="more.c4t">中英双语</h3>
         <p data-i18n="more.c4d">界面支持简体中文和英文，默认跟随系统语言，也可以在设置中切换。</p>
       </article>
-      <article class="card reveal" style="--d:1">
+      <article class="card reveal" style="--d:0">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M26 16a10 10 0 11-3-7.1M26 5v6h-6"/></svg>
         <h3 data-i18n="more.c5t">自动更新</h3>
-        <p data-i18n="more.c5d">后台下载，重新启动即完成安装。安装前校验 EdDSA 签名。</p>
+        <p data-i18n="more.c5d">后台下载，重新启动即完成安装，安装前会先校验更新包。</p>
       </article>
-      <article class="card reveal" style="--d:2">
+      <article class="card reveal" style="--d:1">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3l10 4v8c0 7-4.5 11.5-10 14-5.5-2.5-10-7-10-14V7z"/><path d="M11.5 16l3 3 6-6"/></svg>
         <h3 data-i18n="more.c6t">隐私优先</h3>
-        <p data-i18n="more.c6d">不收集任何使用数据，文献库完全保存在你的 Mac 上。API 密钥存放在系统钥匙串中。</p>
+        <p data-i18n="more.c6d">不收集任何使用数据，文献库完全保存在你自己的电脑上，API 密钥由系统加密保存。</p>
+      </article>
+      <article class="card reveal" style="--d:2">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M11 8l-7 8 7 8M21 8l7 8-7 8M18 6l-4 20"/></svg>
+        <h3 data-i18n="more.c9t">免费开源</h3>
+        <p data-i18n="more.c9d">MIT 许可证，代码全部公开。没有订阅，也不会把你的论文绑在某一家的云上。</p>
       </article>
     </div>
   </section>
@@ -314,7 +348,7 @@
     <div class="download-inner">
       <img class="download-icon reveal-scale" src="assets/img/icon.webp" alt="Folio" width="512" height="512" loading="lazy">
       <h2 class="headline reveal" style="--d:1" data-i18n="dl.title">现在就试试 Folio。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="dl.lede">免费、开源，适用于 macOS 14 Sonoma 及以上，支持 Apple 芯片与 Intel。</p>
+      <p class="lede reveal" style="--d:2" data-i18n="dl.lede">免费、开源，提供 macOS 与 Windows 两个版本，文献库互通。</p>
       <div class="download-cta reveal" style="--d:3">
         <a class="btn btn-primary btn-large js-download" href="https://github.com/Alonemo-Nnqc/Folio/releases/latest">
           <svg class="btn-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0l-4-4m4 4l4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -326,6 +360,7 @@
         </a>
       </div>
       <p class="download-meta reveal" style="--d:4" id="dlMeta">&nbsp;</p>
+      <p class="download-meta reveal" style="--d:4" data-i18n="dl.req">macOS 14 及以上 · Apple 芯片与 Intel<br>Windows 10 / 11 · x64 与 ARM64</p>
 
       <div class="first-run reveal js-platform-windows" style="--d:5" hidden>
         <h3 data-i18n="dl.winFirstTitle">首次安装</h3>
@@ -346,7 +381,6 @@
       <ul class="download-links reveal" style="--d:6">
         <li id="altPlatform" hidden><a href="https://github.com/Alonemo-Nnqc/Folio/releases">其他平台</a></li>
         <li><a href="https://github.com/Alonemo-Nnqc/Folio/releases" data-i18n="dl.l1">所有版本与更新日志</a></li>
-        <li><a href="https://github.com/Alonemo-Nnqc/Folio/releases/latest" data-i18n="dl.l2">浏览器扩展安装包</a></li>
         <li><a href="https://github.com/Alonemo-Nnqc/Folio#从源码构建" data-href-en="https://github.com/Alonemo-Nnqc/Folio/blob/main/README.en.md#building-from-source" data-i18n="dl.l3">从源码构建</a></li>
         <li><a href="https://github.com/Alonemo-Nnqc/Folio/issues" data-i18n="dl.l4">反馈问题</a></li>
       </ul>
@@ -357,7 +391,7 @@
 <footer class="footer">
   <div class="footer-inner">
     <div class="footer-brand"><img src="assets/img/icon.webp" alt="" width="20" height="20" loading="lazy"> Folio</div>
-    <p data-i18n="footer.text">Folio 以 MIT 许可证开源。Mac 与 macOS 是 Apple Inc. 的商标，Folio 是独立项目，与 Apple 无关。</p>
+    <p data-i18n="footer.text">Folio 以 MIT 许可证开源。Mac 与 macOS 是 Apple Inc. 的商标，Windows 是 Microsoft Corporation 的商标，Folio 是独立项目，与上述公司无关。</p>
     <p class="footer-links">
       <a href="https://github.com/Alonemo-Nnqc/Folio">GitHub</a>
       <a href="https://github.com/Alonemo-Nnqc/Folio/blob/main/LICENSE" data-i18n="footer.license">许可证</a>

@@ -576,6 +576,7 @@ extension EngineDiagnostics {
         for (i, block) in layout.blocks.enumerated() where needle.isEmpty || block.text.contains(needle) {
             let r = block.rect
             out += String(format: "%3d %@%@%@ (%.0f,%.0f %.0fx%.0f) ", i, block.kind.rawValue, block.translate ? "*" : "", stretch[i].map { " s\($0)" } ?? "", r.minX, r.minY, r.width, r.height)
+                + (block.isCentered ? "centered " : "") + (block.font.isBold ? "bold " : "")
                 + String(block.text.prefix(90)) + "\n"
         }
         return out

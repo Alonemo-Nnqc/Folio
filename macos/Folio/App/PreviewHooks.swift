@@ -35,6 +35,10 @@ import Foundation
 ///   -FolioPreviewAppearance light               light or dark, whatever the system's is
 ///   -FolioPreviewNoGlass YES                    plain prominent buttons: a window with a glass one draws blank in Snapshot
 ///   -FolioPreviewProfileDetail YES              …and the first configuration's details sheet
+///   -FolioPreviewSelectionTranslate <text>      with OpenReader: selects that text and translates it (Snapshot also draws
+///                                               the popover into <png>.popover.png)
+///   -FolioPreviewSelectionBadge YES             …shows the translate button beside the selection instead
+///   -FolioPreviewToggleNotes YES                with OpenReader: opens the notes panel
 enum PreviewHooks {
     private static var defaults: UserDefaults { .standard }
 
@@ -87,7 +91,7 @@ enum PreviewHooks {
         case "identifier": model.activeSheet = .identifierAdd
         case "manualMatch": if let id = model.selectedItemIDs.first { model.activeSheet = .manualMatch(itemId: id) }
         case "translate":
-            if let id = model.selectedItemIDs.first, let file = model.defaultFile(of: id) { model.activeSheet = .translate(fileId: file.id) }
+            if let id = model.selectedItemIDs.first, let file = model.defaultFile(of: id) { model.activeSheet = .translate(fileIds: [file.id]) }
         default: break
         }
         let drop = defaults.integer(forKey: "FolioPreviewDrop")
@@ -117,6 +121,16 @@ enum PreviewHooks {
                 if let log = defaults.string(forKey: "FolioReaderSelfTest") {
                     ReaderSelfTest.run(model: model, fileId: file.id, log: log)
                 }
+                if let text = defaults.string(forKey: "FolioPreviewSelectionTranslate") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        model.readers.reader(for: file.id)?.previewSelectionTranslation(text, badgeOnly: defaults.bool(forKey: "FolioPreviewSelectionBadge"))
+                    }
+                }
+                if defaults.bool(forKey: "FolioPreviewToggleNotes") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        model.readers.reader(for: file.id)?.editNote(itemId: item.id)
+                    }
+                }
             }
         }
         if let appearance = defaults.string(forKey: "FolioPreviewAppearance") {
@@ -140,6 +154,12 @@ enum PreviewHooks {
                 while let sheet = shown?.attachedSheet { shown = sheet }
                 if defaults.bool(forKey: "FolioPreviewModelPicker"),
                    let popover = NSApp.windows.first(where: { String(describing: type(of: $0)).contains("Popover") }) { shown = popover }
+                if defaults.string(forKey: "FolioPreviewSelectionTranslate") != nil,
+                   let popover = NSApp.windows.first(where: { String(describing: type(of: $0)).contains("Popover") && $0.isVisible }),
+                   let view = popover.contentView?.superview, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                    view.cacheDisplay(in: view.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(filePath: path + ".popover.png"))
+                }
                 guard let view = shown?.contentView?.superview,
                       let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
                 view.cacheDisplay(in: view.bounds, to: rep)

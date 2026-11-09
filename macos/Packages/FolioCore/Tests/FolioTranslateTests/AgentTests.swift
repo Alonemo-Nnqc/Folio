@@ -253,6 +253,19 @@ private struct FakeAgent {
         let block = LayoutBlock(kind: .caption, lines: [line(100, 300, baseline: 600), line(150, 250, baseline: 588)], translate: true)
         #expect(block.isCentered)
     }
+
+    @Test func aTitleOfTwoLinesOfOneWidthIsCentredByItsPlace() {
+        var title = LayoutBlock(kind: .title, lines: [line(165, 450, baseline: 660), line(170, 445, baseline: 640)], translate: true)
+        #expect(!title.isCentered, "nothing says so yet")
+        title.centeredInColumn = true
+        #expect(title.isCentered)
+    }
+
+    @Test func aParagraphOfFullLinesStaysFlush() {
+        var paragraph = LayoutBlock(kind: .paragraph, lines: [line(165, 450, baseline: 660), line(165, 450, baseline: 648)], translate: true)
+        paragraph.centeredInColumn = true
+        #expect(!paragraph.isCentered)
+    }
 }
 
 @Suite struct ProgressEstimateTests {

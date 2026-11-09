@@ -103,10 +103,11 @@ function Panel({ items, x, y, parentWidth, close, depth }: { items: MenuEntry[];
                 item.action?.();
               }}>
               {hasIcons && <span className="mi-icon" style={item.indent ? { marginLeft: item.indent * 12 } : undefined}>
-                {item.checked ? <Check size={14} /> : item.dot ? <span className="mi-dot" style={{ background: item.dot }} /> : item.icon}
+                {item.checked && !item.icon ? <Check size={14} /> : item.dot ? <span className="mi-dot" style={{ background: item.dot }} /> : item.icon}
               </span>}
               <span className="mi-label" style={!hasIcons && item.indent ? { paddingLeft: item.indent * 12 } : undefined}>{item.label}</span>
-              {item.checked && item.dot && <span className="mi-dot" style={{ background: item.dot }} />}
+              {item.checked && item.dot && !item.icon && <span className="mi-dot" style={{ background: item.dot }} />}
+              {item.checked && item.icon && <Check size={13} className="mi-trail" />}
               {item.key && <span className="mi-key">{item.key}</span>}
               {hasSub && <ChevronRight size={13} className="secondary" style={{ marginLeft: 12 }} />}
             </div>

@@ -27,14 +27,18 @@ struct TranslationSettingsPane: View {
 /// "翻译全文…": confirm service, languages and outputs for this run (they become the new defaults).
 struct TranslateSheet: View {
     let model: AppModel
-    let fileId: String
+    let fileIds: [String]
     @Environment(\.sheetDismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("翻译全文").font(.headline)
-                if let file = model.snapshot.files[fileId] {
+                if fileIds.count > 1 {
+                    Text("\(fileIds.count) 篇文献")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else if let file = fileIds.first.flatMap({ model.snapshot.files[$0] }) {
                     Text(model.snapshot.items[file.itemId]?.title ?? file.fileName)
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -49,7 +53,7 @@ struct TranslateSheet: View {
             .formStyle(.grouped)
             .frame(minHeight: 360)
             HStack {
-                Text("保留原文排版、公式和图表，翻译时就可以对照阅读\n译文会作为新文件加入该条目")
+                Text("保留版面、公式与图表，译文将作为附件加入该条目")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -57,7 +61,7 @@ struct TranslateSheet: View {
                     .keyboardShortcut(.cancelAction)
                 Button("开始翻译") {
                     dismiss()
-                    model.translations.start(fileId: fileId)
+                    model.translations.start(fileIds: fileIds)
                 }
                 .keyboardShortcut(.defaultAction)
                 .glassProminentButtonStyle()
@@ -92,8 +96,6 @@ private struct EngineSection: View {
             }
         } header: {
             Text("翻译引擎")
-        } footer: {
-            Text("Folio 内置的翻译引擎直接解析 PDF 版面并按原样排入译文，图表内文字和公式保持原样，无需下载任何组件")
         }
         .task(id: coordinator.legacyRevision) {
             legacySize = LegacyTranslator.exists ? await Task.detached { LegacyTranslator.size() }.value : nil
@@ -129,20 +131,8 @@ struct ServiceSection: View {
 
     /// Services with something entered (fields, keys, saved configurations), and agents found on this Mac.
     private func findConfigured() async -> Set<String> {
-        let settings = model.settings
-        let store = model.translations.secrets
-        var result: Set<String> = []
-        for service in TranslationServiceCatalog.all {
-            if case .agent = service.backend { continue }
-            let fields = settings.translationFields[service.id] ?? [:]
-            let hasFields = service.fields.contains { !$0.isSecret && !(fields[$0.option] ?? "").isEmpty && $0.kind != .toggle }
-            let hasKey = service.secretFields.contains { ((try? store.get(serviceID: service.id, option: $0.option)) ?? nil)?.isEmpty == false }
-            let hasProfiles = settings.translationProfiles.contains { $0.serviceID == service.id }
-            if hasKey || hasProfiles || (hasFields && service.category != .free) { result.insert(service.id) }
-        }
-        let agents = await Task.detached { LocalAgent.installed() }.value
-        for agent in agents { result.insert(agent.serviceID) }
-        return result
+        let result = ServiceAvailability.configured(settings: model.settings, secrets: model.translations.secrets)
+        return result.union(await ServiceAvailability.agents())
     }
 
     var body: some View {
@@ -152,7 +142,9 @@ struct ServiceSection: View {
             Picker(selection: $settings.translationService) {
                 ForEach(groups, id: \.title) { group in
                     Section(group.title) {
-                        ForEach(group.services) { Text(label(for: $0)).tag($0.id) }
+                        ForEach(group.services) { service in
+                            Label { Text(label(for: service)) } icon: { ServiceLogo(service: service) }.tag(service.id)
+                        }
                     }
                 }
             } label: {
@@ -160,7 +152,7 @@ struct ServiceSection: View {
                     Text("翻译服务")
                     if let note = service?.note { Text(note) }
                 } icon: {
-                    if let service { ServiceIcon(service: service) }
+                    if let service { ServiceLogo(service: service, size: 18) }
                 }
             }
             .task(id: "\(settings.translationProfiles.count)-\(settings.translationFields.count)-\(settings.translationService)") {
@@ -227,36 +219,39 @@ struct ServiceSection: View {
             $0.id != TranslationServiceCatalog.appleServiceID || AppleSystemTranslator.isSupportedOnThisSystem
         }
         // Services set up before (a key, an address, saved configurations) and agents on this Mac come first.
+        // Agents not found here are left out (the one in use stays, so the picker can show it).
         let mine = available.filter { configured.contains($0.id) }
         let all = available.filter { !configured.contains($0.id) }
+        let current = model.settings.translationService
         return [(String(localized: "我的服务"), mine),
                 (String(localized: "免费"), all.filter { $0.category == .free }),
-                (String(localized: "本机"), all.filter { $0.category == .local }),
-                (String(localized: "本机智能体（这台 Mac 上未找到）"), all.filter { $0.category == .agent }),
+                (String(localized: "本机"), all.filter { $0.category == .local || ($0.category == .agent && $0.id == current) }),
                 (String(localized: "大模型 API"), all.filter { $0.category == .llm }),
                 (String(localized: "机器翻译 API"), all.filter { $0.category == .machine })].filter { !$0.services.isEmpty }
     }
 }
 
-/// What kind of service this is, as a plain system symbol in the label's colour.
-private struct ServiceIcon: View {
+/// The service's official logo (single-colour ones follow the text colour); the AI sparkles when it has none.
+struct ServiceLogo: View {
     let service: TranslationService
-
-    private var symbol: String {
-        if service.id == TranslationServiceCatalog.appleServiceID { return "apple.logo" }
-        switch service.category {
-        case .free: return "globe"
-        case .local: return "desktopcomputer"
-        case .agent: return "terminal"
-        case .llm: return "sparkles"
-        case .machine: return "character.book.closed"
-        }
-    }
+    var size: CGFloat = 16
 
     var body: some View {
-        Image(systemName: symbol)
-            .foregroundStyle(.secondary)
+        Image(nsImage: Self.image(for: service.id, size: size))
+            .foregroundStyle(.primary)
             .accessibilityHidden(true)
+    }
+
+    /// The logo at `size` points (menus show images at their own size, so it is made that size here).
+    static func image(for serviceID: String, size: CGFloat) -> NSImage {
+        let base = NSImage(named: "service-\(serviceID)")
+            ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)!
+                .withSymbolConfiguration(.init(pointSize: size * 0.8, weight: .medium))!
+        let image = base.copy() as! NSImage
+        let aspect = image.size.height > 0 ? image.size.width / image.size.height : 1
+        image.size = aspect >= 1 ? NSSize(width: size, height: size / aspect) : NSSize(width: size * aspect, height: size)
+        image.isTemplate = base.isTemplate
+        return image
     }
 }
 
@@ -330,7 +325,7 @@ private struct ServiceStatusRow: View {
                 ProgressView().controlSize(.small)
             }
         } else {
-            Text("翻译一句话，确认这个服务能用").foregroundStyle(.secondary)
+            Text("测试服务是否可用").foregroundStyle(.secondary)
         }
     }
 
@@ -444,7 +439,6 @@ private struct OptionsSection: View {
                 tablesToggle
                 Toggle(isOn: $settings.translationOptions.translateReferences) {
                     Text("翻译参考文献")
-                    Text("默认保留参考文献列表的原文")
                 }
                 LabeledContent {
                     HStack {
@@ -457,7 +451,7 @@ private struct OptionsSection: View {
                     }
                 } label: {
                     Text("术语表（选填）")
-                    Text("CSV 文件，两列：原文, 译文")
+                    Text("CSV：原文, 译文")
                 }
             }
             Section("速度") {
@@ -467,11 +461,17 @@ private struct OptionsSection: View {
                     ForEach([1, 2, 4, 8, 12, 16], id: \.self) { Text("\($0)").tag($0) }
                 } label: {
                     Text("同时请求数")
-                    Text("付费接口额度较高时调大可以更快；遇到限流时调小")
+                    Text("遇到限流时调小")
                 }
+                Picker(selection: $settings.translationParallelJobs) {
+                    ForEach(1...4, id: \.self) { Text("\($0) 篇").tag($0) }
+                } label: {
+                    Text("同时翻译")
+                    Text("批量翻译时同时进行的论文篇数")
+                }
+                .onChange(of: settings.translationParallelJobs) { AppDelegate.shared.model.translations.parallelChanged() }
                 Toggle(isOn: $settings.translationOptions.ignoreCache) {
                     Text("重新翻译（不使用缓存）")
-                    Text("默认会复用同一篇论文用同一服务翻译过的段落，重试时更快、更省")
                 }
             }
         }
@@ -506,7 +506,7 @@ private struct OptionsSection: View {
                 Text("替换旧的译文").tag(TranslationOptions.Duplicates.replace)
             } label: {
                 Text("再次翻译")
-                Text("同一服务和模型再翻译一次时；保留两者时按翻译时间区分，替换的旧译文会移到废纸篓")
+                Text("同一服务与模型重复翻译时")
             }
         }
         TextField("页码范围（选填）", text: Binding(get: { settings.translationOptions.pages ?? "" },
@@ -517,7 +517,6 @@ private struct OptionsSection: View {
     private var tablesToggle: some View {
         Toggle(isOn: $settings.translationOptions.translateTables) {
             Text("翻译表格")
-            Text("逐格翻译表格中的文字；数字和符号保持原样")
         }
     }
 
@@ -799,7 +798,7 @@ struct ReasoningPicker: View {
                 Text(level).foregroundStyle(.secondary)
             } label: {
                 Text("思考程度")
-                Text("由所选模型决定，想换程度请换一个模型")
+                Text("由所选模型决定")
             }
         case let .choices(choices, _):
             if choices.count > 5 {
@@ -807,7 +806,6 @@ struct ReasoningPicker: View {
                     ForEach(choices) { Text($0.title).tag($0.value) }
                 } label: {
                     Text("思考程度")
-                    Text("越高译文可能越好，也越慢；翻译通常用低就够了")
                 }
             } else {
                 Picker(selection: selection) {
@@ -844,5 +842,62 @@ private struct AppleLanguageDownloader: View {
                 requested = false
                 await finished()
             }
+    }
+}
+
+/// 设置 ▸ 划词翻译 (TRANS-10): a selection in the reader translated in a popover, by its own service.
+struct SelectionTranslationSettingsPane: View {
+    let model: AppModel
+    @State private var services: [TranslationService] = []
+
+    var body: some View {
+        @Bindable var settings = model.settings
+        Form {
+            Section {
+                Toggle("划词翻译", isOn: $settings.selectionTranslationEnabled)
+            }
+            Section("使用") {
+                Picker("触发方式", selection: $settings.selectionTranslationTrigger) {
+                    ForEach(AppSettings.SelectionTrigger.allCases) { Text($0.title).tag($0) }
+                }
+                LabeledContent("快捷键") {
+                    ShortcutRecorder(shortcut: $settings.selectionTranslationShortcut, defaultShortcut: .defaultSelectionTranslation)
+                }
+            }
+            .disabled(!settings.selectionTranslationEnabled)
+            Section {
+                Picker(selection: $settings.selectionTranslationService) {
+                    Text("与全文翻译相同").tag("")
+                    Divider()
+                    ForEach(choices) { service in
+                        Label { Text(service.displayName) } icon: { ServiceLogo(service: service, size: 16) }.tag(service.id)
+                    }
+                } label: {
+                    Label { Text("翻译服务") } icon: {
+                        ServiceLogo(service: TranslationServiceCatalog.resolve(settings.effectiveSelectionService), size: 18)
+                    }
+                }
+                Toggle(isOn: $settings.selectionTranslationFallback) {
+                    Text("限流时自动换用其他免费服务")
+                    Text("Google、Microsoft\(AppleSystemTranslator.isSupportedOnThisSystem ? String(localized: "、Apple 离线翻译") : "")互为备用")
+                }
+            } header: {
+                Text("服务")
+            }
+            .disabled(!settings.selectionTranslationEnabled)
+        }
+        .formStyle(.grouped)
+        .task(id: "\(settings.translationProfiles.count)-\(settings.translationFields.count)") {
+            services = ServiceAvailability.ready(settings: settings, secrets: model.translations.secrets, agents: ServiceAvailability.knownAgents)
+            let agents = await ServiceAvailability.agents()
+            services = ServiceAvailability.ready(settings: settings, secrets: model.translations.secrets, agents: agents)
+        }
+    }
+
+    /// Ready services, plus the one chosen before even if it is not ready now (so the picker can show it).
+    private var choices: [TranslationService] {
+        let chosen = model.settings.selectionTranslationService
+        guard !chosen.isEmpty, !services.contains(where: { $0.id == chosen }), let service = TranslationServiceCatalog.service(id: chosen) else { return services }
+        return services + [service]
     }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { emitLocal, handleRequest, on } from "../rpc";
 import { t } from "../i18n";
+import { setScrims } from "./caption";
 
 /** Opens a sheet; its component gets `close(result)`. */
 export function openSheet<T = void>(render: (close: (result?: T) => void) => ReactNode): Promise<T | undefined> {
@@ -11,6 +12,7 @@ export function SheetHost() {
   const [stack, setStack] = useState<{ id: number; render: (close: (r?: any) => void) => ReactNode; resolve: (r: any) => void }[]>([]);
   const counter = useRef(0);
   useEffect(() => on("sheet.open", (s) => setStack((v) => [...v, { ...s, id: ++counter.current }])), []);
+  useEffect(() => setScrims(stack.length), [stack.length]);
   return (
     <>
       {stack.map((s) => (

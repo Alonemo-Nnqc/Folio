@@ -154,7 +154,13 @@ public static partial class Api
 
         // Opening.
         Bridge.On("item.open", a => { M.OpenItem(a.Str("id"), a.OptInt("page")); return null; });
-        Bridge.On("file.open", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) M.OpenFile(f, a.OptInt("page")); return null; });
+        Bridge.On("file.open", a =>
+        {
+            if (!M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) return null;
+            // 快速预览's button: the file in Windows' default app, whatever 设置 says Folio opens PDFs with.
+            if (a.Bool("system")) Shell.OpenPath(M.Library.FilePath(f)); else M.OpenFile(f, a.OptInt("page"));
+            return null;
+        });
         Bridge.On("file.reveal", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.Reveal(M.Library.FilePath(f)); return null; });
         Bridge.On("file.openSystem", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.OpenPath(M.Library.FilePath(f)); return null; });
         Bridge.On("file.openWithDialog", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.OpenWithDialog(M.Library.FilePath(f)); return null; });

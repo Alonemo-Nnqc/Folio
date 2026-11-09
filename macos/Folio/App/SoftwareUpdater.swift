@@ -8,14 +8,26 @@ import Sparkle
 ///
 ///   -FolioUpdateFeedURL <url>   reads the feed from another address (testing a release locally)
 @Observable
-final class SoftwareUpdater: NSObject, SPUUpdaterDelegate {
+final class SoftwareUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDelegate {
     @ObservationIgnored private var controller: SPUStandardUpdaterController!
     @ObservationIgnored private var observation: NSKeyValueObservation?
     private(set) var canCheckForUpdates = false
 
+    /// An update found by a scheduled check, waiting for the user: the 更新 button in the library's toolbar shows it
+    /// (Sparkle's gentle reminders) instead of an alert popping up while they read.
+    struct PendingUpdate: Equatable {
+        var version: String
+        /// Downloaded in the background: one click restarts Folio into it.
+        var isDownloaded: Bool
+    }
+    private(set) var pendingUpdate: PendingUpdate?
+
     override init() {
         super.init()
-        controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil)
+        controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: self)
+        if let version = UserDefaults.standard.string(forKey: "FolioPreviewPendingUpdate") {
+            pendingUpdate = PendingUpdate(version: version, isDownloaded: UserDefaults.standard.bool(forKey: "FolioPreviewPendingUpdateDownloaded"))
+        }
         // UI tests and screenshot runs never talk to the update server, unless they test an update feed.
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: "FolioUITesting") || defaults.string(forKey: "FolioUpdateFeedURL") != nil else { return }
@@ -51,6 +63,28 @@ final class SoftwareUpdater: NSObject, SPUUpdaterDelegate {
 
     @objc func checkForUpdates(_ sender: Any?) {
         controller.checkForUpdates(sender)
+    }
+
+    // MARK: SPUStandardUserDriverDelegate (gentle reminders)
+
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool {
+        // Folio shows it: the 更新 button waits in the toolbar until the user clicks it.
+        false
+    }
+
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        guard !state.userInitiated else { return }
+        pendingUpdate = PendingUpdate(version: update.displayVersionString, isDownloaded: state.stage != .notDownloaded)
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        pendingUpdate = nil
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        pendingUpdate = nil
     }
 
     // MARK: SPUUpdaterDelegate

@@ -57,7 +57,7 @@ struct BrowserSettingsPane: View {
                     }
                 }
             } footer: {
-                Text("扩展暂未上架应用商店，点按钮按引导完成安装")
+                Text("扩展未上架商店，请按引导安装")
             }
         }
         .formStyle(.grouped)

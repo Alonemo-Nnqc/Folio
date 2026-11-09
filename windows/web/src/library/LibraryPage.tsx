@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { Menu, PanelLeft, PanelRight, Plus } from "lucide-react";
+import { PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
 import { call, droppedPaths } from "../rpc";
 import { t } from "../i18n";
 import { closeTab, appMenu } from "../commands";
 import { getState, setSetting, setState, useStore } from "../store";
-import { openMenu, openMenuAt } from "../ui/menu";
+import { openMenu } from "../ui/menu";
 import { dragPointer } from "../ui/util";
 import { SlidePanel, useMoving } from "../ui/slide";
 import { Sidebar } from "./Sidebar";
 import { ItemList } from "./ItemList";
 import { Inspector } from "./Inspector";
+import { QuickLook } from "./QuickLook";
 
-/** What a toolbar leaves free for the two sidebar buttons when the sidebar is hidden: 10 of margin, two buttons and the gap between. */
+/** What a toolbar leaves free for the two buttons at the top left when the sidebar is hidden: 10 of margin, two buttons and the gap between. */
 const SIDEBAR_BUTTONS = 84;
 export const LEAD_ROOM = SIDEBAR_BUTTONS + 6;
 /** What a toolbar leaves free for the panel button beside Windows' buttons, when no panel is open. */
@@ -48,8 +49,14 @@ export function TabBar() {
 
 function XSmall() { return <svg width="9" height="9" viewBox="0 0 9 9"><path d="M1 1l7 7M8 1L1 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }
 
-export function MenuButton() {
-  return <button className="glass-button" title={t("菜单")} onClick={(e) => openMenuAt(e.currentTarget, appMenu())}><Menu size={17} strokeWidth={1.8} /></button>;
+/** Top left: opens Settings. A right click still offers the app's menu (help, about, quit…). */
+export function SettingsButton() {
+  return (
+    <button className="glass-button" title={t("设置（Ctrl+,）")} onClick={() => call("window.settings")}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openMenu(appMenu(), e.clientX, e.clientY); }}>
+      <Settings size={17} strokeWidth={1.7} />
+    </button>
+  );
 }
 
 export function SidebarToggle({ onClick }: { onClick: () => void }) {
@@ -61,13 +68,13 @@ export function InspectorToggle({ onClick }: { onClick: () => void }) {
 }
 
 /**
- * One menu button, always in the same place, and one sidebar button, which rides along with the sidebar's edge.
+ * The settings button, always in the same place, and the sidebar button, which rides along with the sidebar's edge.
  * The sidebar slides under them; a splitter drag moves the sidebar button directly.
  */
 export function SidebarButtons({ visible, width, onToggle }: { visible: boolean; width: number; onToggle: () => void }) {
   return (
     <>
-      <div className="sidebar-menu"><MenuButton /></div>
+      <div className="sidebar-menu"><SettingsButton /></div>
       <div className="sidebar-toggle" style={{ left: visible ? width - 45 : SIDEBAR_BUTTONS - 34 }}><SidebarToggle onClick={onToggle} /></div>
     </>
   );
@@ -137,6 +144,7 @@ export function LibraryPage({ visible }: { visible: boolean }) {
       </SlidePanel>
       <SidebarButtons visible={sidebarVisible} width={sidebarWidth ?? storedSidebar} onToggle={toggleSidebar} />
       <PanelToggle onClick={toggleInspector} />
+      <QuickLook />
       {dropping && (
         <div className="drop-overlay">
           <div className="drop-card">
