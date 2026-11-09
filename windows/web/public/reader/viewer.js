@@ -1111,7 +1111,9 @@ async function buildThumbnails() {
   const first = await doc.getPage(1);
   if (doc !== pdf) return;
   const firstViewport = first.getViewport({ scale: 1 });
-  const width = 150, placeholderHeight = Math.round(width * firstViewport.height / firstViewport.width);
+  // As wide as the sidebar allows: 150 in the reader's usual 220, more in a wider one (快速预览).
+  const sidebarWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sidebar-width")) || 220;
+  const width = Math.round(Math.max(120, Math.min(200, sidebarWidth - 70))), placeholderHeight = Math.round(width * firstViewport.height / firstViewport.width);
   const observer = new IntersectionObserver(async (entries) => {
     for (const entry of entries) {
       if (!entry.isIntersecting || entry.target.dataset.done) continue;

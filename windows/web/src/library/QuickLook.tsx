@@ -97,9 +97,10 @@ function PdfPreview({ file, dark }: { file: FileRec; dark: boolean }) {
       session.current = r.session;
       send({ cmd: "theme", dark });
       // Thumbnails down the left, as Quick Look shows them; the glass shows through around the pages.
-      send({ cmd: "insets", top: 0, sidebarTop: 0, sidebarWidth: 150 });
+      send({ cmd: "insets", top: 0, sidebarTop: 0, sidebarWidth: 240 });
       send({ cmd: "sidebar", visible: true });
       send({ cmd: "sidebarTab", value: "thumbnails" });
+      // Always the clearest glass, whatever 背景透明度 is.
       send({ cmd: "surface", alpha: 0 });
       document.documentElement.classList.add("quicklook-open");
       send({ cmd: "tool", tool: "select", color: "yellow" });

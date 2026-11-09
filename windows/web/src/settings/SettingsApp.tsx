@@ -13,10 +13,10 @@ import { setCaption } from "../ui/caption";
 import { ZoteroSheet } from "./ZoteroSheet";
 
 const PANES = [
-  { key: "general", title: "通用", icon: Gear, tint: "#8e8e93" }, { key: "reader", title: "阅读", icon: BookOpen, tint: "#ff9500" },
-  { key: "library", title: "文献库", icon: Library, tint: "#0a84ff" }, { key: "retrieval", title: "检索", icon: Search, tint: "#5e5ce6" },
-  { key: "translation", title: "翻译", icon: Languages, tint: "#30b0c7" }, { key: "selection", title: "划词翻译", icon: ScanText, tint: "#34c759" },
-  { key: "browser", title: "浏览器", icon: Compass, tint: "#007aff" }, { key: "ai", title: "AI", icon: Sparkles, tint: "#bf5af2" },
+  { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen },
+  { key: "library", title: "文献库", icon: Library }, { key: "retrieval", title: "检索", icon: Search },
+  { key: "translation", title: "翻译", icon: Languages }, { key: "selection", title: "划词翻译", icon: ScanText },
+  { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
 ];
 
 let launchedLanguage: string | null = null;
@@ -316,7 +316,7 @@ export function SettingsApp() {
           const Icon = p.icon;
           return (
             <button key={p.key} className={`no-drag${pane === p.key ? " on" : ""}`} onClick={() => { setPane(p.key); setSetting("settingsPane", p.key); }}>
-              <span className="nav-tile" style={{ ["--tint" as any]: p.tint }}><Icon size={14} strokeWidth={2} /></span>{p.key === "ai" ? "AI" : t(p.title)}
+              <Icon size={17} strokeWidth={1.7} />{p.key === "ai" ? "AI" : t(p.title)}
             </button>
           );
         })}
