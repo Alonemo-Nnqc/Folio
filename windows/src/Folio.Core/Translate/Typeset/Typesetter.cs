@@ -95,7 +95,8 @@ public sealed partial class Typesetter(string language)
         };
         double indent = givenIndent ?? (block.Kind == BlockKind.Paragraph ? block.FirstLineIndent : 0);
         double hanging = block.Kind is BlockKind.Paragraph or BlockKind.Caption ? block.HangingIndent : 0;
-        bool bold = block.Kind is BlockKind.Title or BlockKind.Heading || block.Font.IsBold;
+        // As in the original: IEEE's titles and section headings are set in regular type, others in bold.
+        bool bold = block.Font.IsBold;
         double top = block.Rect.MaxY;
         double firstBaseline = block.Lines[0].Baseline, lastBaseline = block.Lines[^1].Baseline;
 

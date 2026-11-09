@@ -618,6 +618,7 @@ public sealed record FontInfo(string Name, bool IsBold, bool IsItalic, bool IsMo
         IsItalic = (flags & 64) != 0 || new[] { "italic", "ital", "oblique", "-it", "cmti", "cmmi", "slanted", "-sl", "kursiv" }.Any(lower.Contains);
         double stem = descriptor?.Number("StemV") ?? 0;
         IsBold = (flags & 262144) != 0 || weight >= 600 || (stem >= 130 && !IsMonospace)
-                 || new[] { "bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi", "medi", "sfbx", "sfsx", "cmssbx", "ptmb", "phvb", "pplb" }.Any(lower.Contains);
+                 || new[] { "bold", "black", "heavy", "semibold", "cmbx", "-bd", "demi", "medi", "sfbx", "sfsx", "cmssbx", "ptmb", "phvb", "pplb", "rtxb", "libertinetb", "biolinumtb", "e-bx" }.Any(lower.Contains)
+                 || lower.EndsWith("-b");
     }
 }

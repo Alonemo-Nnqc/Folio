@@ -99,7 +99,10 @@ struct LayoutBlock: Sendable {
     var isCentered: Bool {
         let r = rect
         guard lines.allSatisfy({ abs(($0.minX + $0.maxX) / 2 - r.midX) < max(1.5, size * 0.2) }) else { return false }
-        return lines.count == 1 ? centeredInColumn : lines.contains { $0.minX - r.minX > size * 0.8 && r.maxX - $0.maxX > size * 0.8 }
+        if lines.count == 1 { return centeredInColumn }
+        if lines.contains(where: { $0.minX - r.minX > size * 0.8 && r.maxX - $0.maxX > size * 0.8 }) { return true }
+        // Lines of nearly one width have none set in from both sides; a title's place on the page still says it is centred.
+        return centeredInColumn && (kind == .title || kind == .heading)
     }
 }
 

@@ -204,13 +204,16 @@ struct LayoutAnalyzer {
         // Shaded boxes (a journal's banner) do not hold the paper's title.
         let boxes = marks.filter { $0.kind == .fill && $0.rect.width * $0.rect.height > 3000 }.map(\.rect)
         classify(&textBlocks, page: number, crop: crop, boxes: boxes)
-        let textLeft = flat.map(\.minX).min() ?? crop.minX, textRight = flat.map(\.maxX).max() ?? crop.maxX
+        // The running text only: a stamp up the margin (arXiv's) would put the middle of the page somewhere else.
+        let textLeft = flowing.map(\.minX).min() ?? crop.minX, textRight = flowing.map(\.maxX).max() ?? crop.maxX
         for k in textBlocks.indices {
             let r = textBlocks[k].rect, size = textBlocks[k].size
             let column = edges(r.midX)
             let inColumn = abs(r.midX - (column.lo + column.hi) / 2) < size * 0.8 && r.minX - column.lo > size * 1.5
             let onPage = abs(r.midX - (textLeft + textRight) / 2) < size * 0.8 && r.minX - textLeft > size * 1.5
-            textBlocks[k].centeredInColumn = inColumn || onPage
+            // A title about as wide as the text leaves no room to show it, but its translation will be shorter.
+            let fillsPage = textBlocks[k].kind == .title && min(abs(r.midX - (textLeft + textRight) / 2), abs(r.midX - crop.midX)) < size * 0.8
+            textBlocks[k].centeredInColumn = inColumn || onPage || fillsPage
         }
         blocks.append(contentsOf: textBlocks)
 
