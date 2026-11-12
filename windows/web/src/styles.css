@@ -390,9 +390,14 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .slider-end.clear { border: 1.5px dotted var(--secondary); }
 
 /* 划词翻译 */
-.translate-badge { position: fixed; z-index: 700; width: 28px; height: 28px; border-radius: 14px; border: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); background: var(--popup); backdrop-filter: blur(20px) saturate(1.6); box-shadow: 0 2px 8px rgba(0,0,0,.18), 0 0 0 .5px var(--separator-strong); animation: badge-in .22s cubic-bezier(.2,1.4,.4,1); transition: transform .1s; app-region: no-drag; }
-.translate-badge:hover { transform: scale(1.08); }
-.translate-badge:active { transform: scale(.94); }
+.translate-badge { position: fixed; z-index: 700; width: 30px; height: 30px; border-radius: 15px; border: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--accent); --glyph-knockout: var(--popup-solid, #fff); background: var(--popup); backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 3px 10px rgba(0,0,0,.16), 0 1px 2px rgba(0,0,0,.1), 0 0 0 .5px var(--separator-strong), inset 0 .5px 0 rgba(255,255,255,.5);
+  animation: badge-in .22s cubic-bezier(.2,1.4,.4,1); transition: transform .14s cubic-bezier(.2,.9,.3,1.3), box-shadow .14s; cursor: pointer; app-region: no-drag; }
+.translate-badge:hover { transform: translateY(-1px) scale(1.06); box-shadow: 0 6px 16px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1), 0 0 0 .5px var(--separator-strong), inset 0 .5px 0 rgba(255,255,255,.5); }
+.translate-badge:active { transform: scale(.94); transition-duration: .06s; }
+.translate-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:root[data-theme="dark"] .translate-badge { --glyph-knockout: #1f1f22; box-shadow: 0 3px 12px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.14), inset 0 .5px 0 rgba(255,255,255,.08); }
 @keyframes badge-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 .translate-pop { position: fixed; z-index: 720; width: 380px; border-radius: 12px; background: var(--popup); backdrop-filter: blur(28px) saturate(1.6); box-shadow: var(--popup-shadow); padding: 12px 0 6px; animation: pop-in .16s cubic-bezier(.2,.9,.3,1); transform-origin: top center; app-region: no-drag; }
 .translate-pop.above { transform-origin: bottom center; }

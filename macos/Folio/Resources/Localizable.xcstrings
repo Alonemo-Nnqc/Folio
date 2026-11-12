@@ -10372,6 +10372,16 @@
           }
         }
       }
+    },
+    "按 [ 或 ] 调整大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press [ or ] to change the size"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

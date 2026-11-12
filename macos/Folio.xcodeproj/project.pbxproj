@@ -145,6 +145,7 @@
 		E1031996659690F569078E1D /* JournalMetricsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92124EB820FC89B674506084 /* JournalMetricsRow.swift */; };
 		E2F1036387C0A44B9DE8F546 /* BrowserExtension in Resources */ = {isa = PBXBuildFile; fileRef = 560F83D0E557831E820C3598 /* BrowserExtension */; };
 		EA507E20AE5FB65994BC2193 /* SimulatedDrop.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B51AD2DA729F49CD7F9721 /* SimulatedDrop.swift */; };
+		EAA6A679DF81F297C13FE465 /* EraserSizeMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56BEE71697C24068E717A3FD /* EraserSizeMenuView.swift */; };
 		ED13C18575D1036D08524BEA /* ReaderCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0BD0343C1727C1E7A7F3450 /* ReaderCoordinator.swift */; };
 		EDF3F8A2FB9F7FAAD1566577 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4262FBCFBF74F063C7B2307A /* AppDelegate.swift */; };
 		EF869D23839BCDFEC0DFFDBA /* ReaderWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 268B655678B1E6C751B8F393 /* ReaderWindowController.swift */; };
@@ -251,6 +252,7 @@
 		5437B0A45443DA1FFBC67DAB /* Folio.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = Folio.icon; sourceTree = "<group>"; };
 		556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSheet.swift; sourceTree = "<group>"; };
 		560F83D0E557831E820C3598 /* BrowserExtension */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BrowserExtension; path = ../BrowserExtension; sourceTree = SOURCE_ROOT; };
+		56BEE71697C24068E717A3FD /* EraserSizeMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EraserSizeMenuView.swift; sourceTree = "<group>"; };
 		5961A891C3C0BF88F2C695C9 /* SidebarDragRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarDragRules.swift; sourceTree = "<group>"; };
 		5B8BAAD0990BFEBF5AC22207 /* Folio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Folio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitExtensions.swift; sourceTree = "<group>"; };
@@ -442,6 +444,7 @@
 			children = (
 				FEC74199B40FD11246FCDF50 /* AnnotationColor.swift */,
 				E1158F075747D921B91789BA /* AnnotationEditor.swift */,
+				56BEE71697C24068E717A3FD /* EraserSizeMenuView.swift */,
 				EE5AFF73BCA3D46047138DC8 /* FeatureSelfTest.swift */,
 				326DA9C6B611FD7EDDE31BDF /* InkEraseSession.swift */,
 				87D946683773DED18BC14DB1 /* PDFTextEditMode.swift */,
@@ -1067,6 +1070,7 @@
 				DA63CCE46D6E7991CBF8C00F /* DropOverlay.swift in Sources */,
 				D4A75FA44F5BC38F74641415 /* DuplicatePrompter.swift in Sources */,
 				2B78D1B5F6C9DF8583821175 /* EngineResolver.swift in Sources */,
+				EAA6A679DF81F297C13FE465 /* EraserSizeMenuView.swift in Sources */,
 				942953D1AEA80DC87F9E98BE /* FeatureSelfTest.swift in Sources */,
 				D103FB83EAD3F3C9CC03C5EE /* FileOpener.swift in Sources */,
 				B276990702FE10835E8F1F4F /* FolioWindowController.swift in Sources */,

@@ -112,6 +112,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     // MARK: Editing the PDF's text (EDIT-01)
 
     var isEditingPDFText: Bool { textEditMode != nil }
+    var textEditState: String { textEditMode?.stateDescription ?? "off" }
 
     @objc func toggleTextEditing(_ sender: Any?) {
         if let mode = textEditMode {
@@ -885,7 +886,11 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         menu.removeAllItems()
         if state.tool == .eraser {
             menu.addItem(.sectionHeader(title: String(localized: "橡皮擦大小")))
-            eraserSizeItems().forEach(menu.addItem)
+            menu.addItem(.eraserSizes(selected: state.eraserSize) { [weak self] size in self?.choose(size) })
+            menu.addItem(.separator())
+            let hint = NSMenuItem(title: String(localized: "按 [ 或 ] 调整大小"), action: nil, keyEquivalent: "")
+            hint.isEnabled = false
+            menu.addItem(hint)
             return
         }
         let colors = AnnotationColor.allCases
@@ -914,23 +919,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         choose(sizes[min(max(index + step, 0), sizes.count - 1)])
     }
 
-    /// The eraser's sizes, the current one checked: the toolbar button's menu while erasing, and right-click on the page.
-    private func eraserSizeItems() -> [NSMenuItem] {
-        InkEraser.Size.allCases.enumerated().map { index, size in
-            let item = NSMenuItem(title: size.title, action: #selector(selectEraserSize(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = index
-            item.image = size.image
-            item.state = size == state.eraserSize ? .on : .off
-            return item
-        }
-    }
-
     private func eraserSizeMenu() -> NSMenu {
         let menu = NSMenu()
-        let header = NSMenuItem.sectionHeader(title: String(localized: "橡皮擦大小"))
-        menu.addItem(header)
-        eraserSizeItems().forEach(menu.addItem)
+        menu.addItem(.sectionHeader(title: String(localized: "橡皮擦大小")))
+        menu.addItem(.eraserSizes(selected: state.eraserSize) { [weak self] size in self?.choose(size) })
         return menu
     }
 

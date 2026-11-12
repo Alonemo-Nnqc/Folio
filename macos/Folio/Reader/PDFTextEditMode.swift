@@ -29,6 +29,8 @@ final class PDFTextEditMode: NSView, NSTextViewDelegate {
         autoresizingMask = [.width, .height]
         NotificationCenter.default.addObserver(self, selector: #selector(viewMoved), name: .PDFViewScaleChanged, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(viewMoved), name: .PDFViewPageChanged, object: pdfView)
+        NotificationCenter.default.addObserver(self, selector: #selector(viewMoved), name: .PDFViewVisiblePagesChanged, object: pdfView)
+        NotificationCenter.default.addObserver(self, selector: #selector(documentChanged), name: .PDFViewDocumentChanged, object: pdfView)
         if let clip = pdfView.documentView?.enclosingScrollView?.contentView {
             clip.postsBoundsChangedNotifications = true
             NotificationCenter.default.addObserver(self, selector: #selector(viewMoved), name: NSView.boundsDidChangeNotification, object: clip)
@@ -51,6 +53,11 @@ final class PDFTextEditMode: NSView, NSTextViewDelegate {
         loadVisiblePages()
     }
 
+    /// For the self-test: what the layer knows.
+    var stateDescription: String {
+        "pages visible \(visiblePages), blocks \(blocks.mapValues(\.count)), loading \(loading), editor \(editor != nil), editing \(editing != nil), busy \(busy), frame \(frame), superview \(superview.map { String(describing: type(of: $0)) } ?? "nil")"
+    }
+
     func finish() {
         if editing != nil { endEditing(save: true) }
     }
@@ -59,7 +66,10 @@ final class PDFTextEditMode: NSView, NSTextViewDelegate {
 
     private var visiblePages: [Int] {
         guard let pdfView, let document = pdfView.document else { return [] }
-        return pdfView.visiblePages.compactMap { document.index(for: $0) }
+        let visible = pdfView.visiblePages.compactMap { document.index(for: $0) }
+        // Right after the document is set PDFView may not know yet what it shows: the current page stands in.
+        if visible.isEmpty, let page = pdfView.currentPage ?? document.page(at: 0) { return [document.index(for: page)] }
+        return visible
     }
 
     private func loadVisiblePages() {
@@ -82,6 +92,8 @@ final class PDFTextEditMode: NSView, NSTextViewDelegate {
             }
         }
     }
+
+    @objc private func documentChanged() { reload() }
 
     @objc private func viewMoved() {
         loadVisiblePages()
@@ -166,6 +178,11 @@ final class PDFTextEditMode: NSView, NSTextViewDelegate {
         beginEditing(hit)
     }
 
+    // The rest of a click stays here: passed on, PDFView would take the focus back from the editor as the mouse comes up.
+    override func mouseUp(with event: NSEvent) {}
+    override func mouseDragged(with event: NSEvent) {}
+    override func rightMouseDown(with event: NSEvent) {}
+
     override func scrollWheel(with event: NSEvent) { pdfView?.scrollWheel(with: event) }
     override func magnify(with event: NSEvent) { pdfView?.magnify(with: event) }
 
@@ -229,6 +246,11 @@ final class PDFTextEditMode: NSView, NSTextViewDelegate {
         NSAnimationContext.runAnimationGroup { $0.duration = 0.15; frame.animator().alphaValue = 1 }
         window?.makeFirstResponder(text)
         text.selectAll(nil)
+        // Once more after the click has ended, in case something took the focus on the way.
+        DispatchQueue.main.async { [weak self, weak text] in
+            guard let self, let text, self.editing?.view === text, self.window?.firstResponder !== text else { return }
+            self.window?.makeFirstResponder(text)
+        }
         hovered = nil
         needsDisplay = true
     }

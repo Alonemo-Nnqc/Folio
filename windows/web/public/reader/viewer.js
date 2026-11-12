@@ -1644,7 +1644,9 @@ function drawEditLayer(page) {
   const layer = document.createElement("div");
   layer.className = "folio-edit-layer";
   for (const block of textBlocks.get(page) ?? []) {
-    const [x1, y1, x2, y2] = view.viewport.convertToViewportRectangle(block.rect);
+    // (pdf.js 6 has no convertToViewportRectangle: two corners instead.)
+    const [x1, y1] = view.viewport.convertToViewportPoint(block.rect[0], block.rect[1]);
+    const [x2, y2] = view.viewport.convertToViewportPoint(block.rect[2], block.rect[3]);
     const box = document.createElement("div");
     box.className = `edit-block${block.editable ? "" : " locked"}`;
     box.style.cssText = `left:${Math.min(x1, x2) - 3}px;top:${Math.min(y1, y2) - 2}px;width:${Math.abs(x2 - x1) + 6}px;height:${Math.abs(y2 - y1) + 4}px`;
@@ -1672,9 +1674,12 @@ function beginEditing(page, block, box, view) {
     + `text-align:${block.alignment === "center" ? "center" : block.alignment === "justified" ? "justify" : "left"};`
     + `font-weight:${block.bold ? 600 : 400};font-style:${block.italic ? "italic" : "normal"};`
     + `font-family:${block.serif ? '"Times New Roman", "SimSun", serif' : '"Segoe UI", "Microsoft YaHei", sans-serif'};`;
+  // At least as tall as the block it covers (none of the old text shows under it), taller as the text needs.
+  const blockHeight = box.offsetHeight;
+  box.style.minHeight = `${blockHeight}px`;
   box.classList.add("open");
   box.appendChild(area);
-  const grow = () => { area.style.height = "auto"; area.style.height = `${Math.max(box.clientHeight, area.scrollHeight)}px`; };
+  const grow = () => { area.style.height = "auto"; area.style.height = `${Math.max(blockHeight, area.scrollHeight)}px`; };
   area.addEventListener("input", grow);
   area.addEventListener("pointerdown", (e) => e.stopPropagation());
   area.addEventListener("keydown", (e) => {
@@ -1693,6 +1698,7 @@ function finishEditing(save) {
   const text = area.value;
   area.remove();
   box.classList.remove("open");
+  box.style.minHeight = "";
   if (save && text !== block.text) {
     box.classList.add("busy");
     post({ type: "editText", page, block: block.index, expected: block.text, text });

@@ -24,6 +24,8 @@ const COLUMNS: { key: string; title: string; sort: string; width: number }[] = [
 ];
 
 const TITLE_MIN = 160;
+/** How narrow the other columns get when the space is short (they give way before the table scrolls). */
+const COLUMN_MIN = 48;
 
 const dash = (v?: string | number | null) => (v === undefined || v === null || v === "" ? "—" : String(v));
 
@@ -102,14 +104,31 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   useEffect(() => { if (!typing.current) setSearching(searchText); }, [searchText]);
 
   const columns = useMemo(() => visible.map((k) => COLUMNS.find((c) => c.key === k)).filter(Boolean) as typeof COLUMNS, [visible]);
-  const widthOf = (key: string) => liveWidths[key] ?? widths[key] ?? COLUMNS.find((c) => c.key === key)!.width;
+  const storedWidth = (key: string) => liveWidths[key] ?? widths[key] ?? COLUMNS.find((c) => c.key === key)!.width;
   // As on macOS: the title takes what the window has left (and follows the window's width); dragging a divider moves that
   // divider with the pointer and the columns after it along, so the table may grow wider than the window. What the user's
   // drags added to the title's share is kept as titleExtra.
   const [viewWidth, setViewWidth] = useState(0);
   const [liveExtra, setLiveExtra] = useState<number | null>(null);
-  const othersWidth = columns.reduce((sum, c) => sum + (c.key === "title" ? 0 : widthOf(c.key)), 0);
   const extra = liveExtra ?? widths.titleExtra ?? 0;
+  // When the window (or the space the inspector leaves) is too narrow for every column at its width, the other columns
+  // give way in proportion, down to COLUMN_MIN each, so they all stay in view; only widths the user dragged wider than the
+  // window make the table scroll sideways.
+  const storedOthers = columns.reduce((sum, c) => sum + (c.key === "title" ? 0 : storedWidth(c.key)), 0);
+  const squeeze = useMemo(() => {
+    if (viewWidth <= 0 || (widths.titleExtra ?? 0) > 0) return 1;
+    const room = viewWidth - 12 - TITLE_MIN;
+    if (storedOthers <= room || storedOthers <= 0) return 1;
+    // The column being dragged follows the pointer: only the others give way.
+    const shrinkable = columns.reduce((sum, c) => sum + (c.key === "title" || c.key in liveWidths ? 0 : Math.max(0, storedWidth(c.key) - COLUMN_MIN)), 0);
+    if (shrinkable <= 0) return 1;
+    return Math.max(0, 1 - (storedOthers - room) / shrinkable);
+  }, [viewWidth, extra, liveExtra, storedOthers, columns, widths, liveWidths]);
+  const widthOf = (key: string) => {
+    const w = storedWidth(key);
+    return squeeze >= 1 || key === "title" || key in liveWidths ? w : Math.round(COLUMN_MIN + Math.max(0, w - COLUMN_MIN) * squeeze);
+  };
+  const othersWidth = columns.reduce((sum, c) => sum + (c.key === "title" ? 0 : widthOf(c.key)), 0);
   const titleWidth = viewWidth > 0 ? Math.max(TITLE_MIN, Math.round(viewWidth - 12 - othersWidth + extra)) : undefined;
   const titleStyle = titleWidth ? { width: titleWidth, flex: "none" } : { minWidth: TITLE_MIN };
   const minWidth = 12 + othersWidth + (titleWidth ?? TITLE_MIN);
@@ -118,6 +137,9 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
     const title = titleWidth ?? TITLE_MIN;
     const extraStart = title - (viewWidth - 12 - othersWidth);
     const start = key === "title" ? title : widthOf(key);
+    // A squeezed column is dragged from where it is shown: that width becomes its own.
+    const squeezing = squeeze < 1;
+    const shown = Object.fromEntries(columns.map((c) => [c.key, widthOf(c.key)]));
     const min = key === "title" ? TITLE_MIN : 40;
     let latest = start, latestExtra = extraStart;
     dragPointer(e, (dx) => {
@@ -127,6 +149,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       setLiveExtra(latestExtra);
     }, () => {
       const stored = { ...getState().settings.columnWidths, titleExtra: latestExtra };
+      // Squeezed columns keep the width they are shown at: nothing jumps when the drag ends.
+      if (squeezing) for (const c of columns) if (c.key !== "title" && c.key !== key) stored[c.key] = shown[c.key];
       if (key !== "title") stored[key] = latest;
       setSetting("columnWidths", stored);
       setLiveWidths({});
@@ -335,12 +359,13 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
         }}>
         <div className="table-inner" style={{ height: 28 + flat.length * ROW + 8, minWidth }}>
           <div className="table-head" onContextMenu={columnsMenu}>
-            {columns.map((c) => (
-              <div key={c.key} className={`th${c.key === "title" ? " title" : ""}`} style={c.key === "title" ? titleStyle : { width: widthOf(c.key) }}
+            {columns.map((c, index) => (
+              <div key={c.key} className={`th${c.key === "title" ? " title" : ""}${index === columns.length - 1 ? " last" : ""}`} style={c.key === "title" ? titleStyle : { width: widthOf(c.key) }}
                 onClick={() => call("library.sort", { column: c.sort, ascending: sortColumn === c.sort ? !sortAscending : true })}>
                 <span className="ellipsis">{c.title === "DOI" ? "DOI" : t(c.title)}</span>
                 {sortColumn === c.sort && (sortAscending ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
-                <span className="grip" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => resizeColumn(e, c.key)} />
+                {/* The last column ends at the list's edge: no divider there to drag. */}
+                {index < columns.length - 1 && <span className="grip" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => resizeColumn(e, c.key)} />}
               </div>
             ))}
           </div>

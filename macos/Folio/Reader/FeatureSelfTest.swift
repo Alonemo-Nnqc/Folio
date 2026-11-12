@@ -19,6 +19,22 @@ enum FeatureSelfTest {
                 while !until(), Date() < end { try? await Task.sleep(for: .milliseconds(200)) }
             }
 
+            // The eraser's size tiles, drawn into PNGs beside the log (light and dark).
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                let view = EraserSizeMenuView(selected: .medium) { _ in }
+                view.appearance = NSAppearance(named: appearance)
+                let holder = NSView(frame: view.bounds.insetBy(dx: -8, dy: -8).offsetBy(dx: 8, dy: 8))
+                holder.wantsLayer = true
+                holder.layer?.backgroundColor = (appearance == .aqua ? NSColor(white: 0.96, alpha: 1) : NSColor(white: 0.18, alpha: 1)).cgColor
+                holder.appearance = view.appearance
+                view.frame.origin = NSPoint(x: 8, y: 8)
+                holder.addSubview(view)
+                if let rep = holder.bitmapImageRepForCachingDisplay(in: holder.bounds) {
+                    holder.cacheDisplay(in: holder.bounds, to: rep)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: log + ".eraser-\(name).png"))
+                }
+            }
+
             // A scanned copy of page 1: the page as a 200 dpi picture, nothing else.
             let scan = FileManager.default.temporaryDirectory.appending(path: "Folio 扫描件自测.pdf")
             check(makeScan(of: sample, to: scan), "scanned sample written")
@@ -102,6 +118,39 @@ enum FeatureSelfTest {
             }
             reader.toggleTextEditing(nil)
             check(!reader.isEditingPDFText, "edit mode off")
+
+            // The same through the mouse: a click on a block opens it, typing and ⌘↩ write it.
+            reader.toggleTextEditing(nil)
+            try? await Task.sleep(for: .seconds(3))
+            if let window = reader.window, let page0 = reader.pdfView.document?.page(at: 0),
+               let blocks = (try? PDFTextEditor(data: Data(contentsOf: model.fileURL(textFile))))?.blocks(onPage: 0),
+               let target = blocks.first(where: { $0.isEditable && $0.text.count > 8 && reader.pdfView.convert($0.rect, from: page0).intersects(reader.pdfView.bounds) }) {
+                let inView = reader.pdfView.convert(NSPoint(x: target.rect.midX, y: target.rect.midY), from: page0)
+                let inWindow = reader.pdfView.convert(inView, to: nil)
+                let hit = window.contentView?.superview?.hitTest(inWindow) ?? window.contentView?.hitTest(inWindow)
+                lines.append("INFO edit layer: \(reader.textEditState)")
+                lines.append("INFO hit view at block: \(hit.map { String(describing: type(of: $0)) } ?? "nil")")
+                check(hit is PDFTextEditMode, "the edit layer takes the click")
+                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                    if let event = NSEvent.mouseEvent(with: type, location: inWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                      windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
+                        window.sendEvent(event)
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(400))
+                let editorView = window.firstResponder as? NSTextView
+                check(editorView != nil, "a click opens the block for editing (first responder: \(String(describing: window.firstResponder.map { type(of: $0) })))")
+                if let editorView {
+                    editorView.selectAll(nil)
+                    editorView.insertText("Folio 鼠标编辑自测", replacementRange: editorView.selectedRange())
+                    window.makeFirstResponder(reader.pdfView)
+                    // A click elsewhere finishes it: here the mode is ended, which saves the open edit.
+                    reader.toggleTextEditing(nil)
+                    try? await Task.sleep(for: .seconds(3))
+                    check((reader.pdfView.document?.page(at: 0)?.string ?? "").contains("Folio 鼠标编辑自测"), "the typed text is in the file")
+                }
+            } else { check(false, "a visible editable block") }
+            if reader.isEditingPDFText { reader.toggleTextEditing(nil) }
             flush()
 
             // SEL-20: the second request for a passage comes from the shared cache.

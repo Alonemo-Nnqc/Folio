@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookText, ChevronDown, ChevronUp, Columns2, Eraser, ScanText, TextCursorInput, Highlighter, Languages, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
+import { BookText, ChevronDown, ChevronUp, Columns2, Eraser, ScanText, TextCursorInput, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
 import { CustomizeToolbarSheet, TOOLBAR_ITEMS, toolbarIds } from "./toolbar";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
+import { TranslateIcon } from "../ui/icons";
 import { filesOf, getState, setSetting, setState, useStore, veilFor, type FileRec, type Item } from "../store";
 import { translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
@@ -471,7 +472,12 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         break;
       case "markup": call("reader.markup", { session: pane.session, subtype: m.subtype, color: m.color ?? colorRef.current, pages: m.pages }).then((r) => applyResult(pane, r)); break;
       case "needBlocks":
-        call("reader.textBlocks", { session: pane.session, page: m.page }).then((blocks) => pane.send({ cmd: "textBlocks", page: m.page, blocks })).catch(() => {});
+        call("reader.textBlocks", { session: pane.session, page: m.page })
+          .then((blocks) => pane.send({ cmd: "textBlocks", page: m.page, blocks }))
+          .catch((e) => {
+            pane.send({ cmd: "textBlocks", page: m.page, blocks: [] });
+            call("toast.show", { message: t("无法读取第 %lld 页的文字：%@", m.page, e?.message ?? String(e)), icon: "warning" });
+          });
         break;
       case "editText":
         call("reader.editText", { session: pane.session, page: m.page, block: m.block, expected: m.expected, text: m.text })
@@ -649,7 +655,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       })))}><span className="color-dot" style={{ background: colorHex }} /></button>;
       case "editText": return plain(t("编辑 PDF 中的文字"), TextCursorInput, () => setEditing(!editingRef.current), editing ? " on" : "");
       case "translate": return <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><BookText size={17} strokeWidth={1.7} /></button>;
-      case "selectionTranslate": return plain(t("翻译所选文字"), Languages, () => main.send({ cmd: "translateSelection" }));
+      case "selectionTranslate": return plain(t("翻译所选文字"), TranslateIcon, () => main.send({ cmd: "translateSelection" }));
       case "search": return searchOpen || query ? (
         <label className="search-field" style={{ flex: "0 1 200px", minWidth: 130 }}>
           <Search size={14} />

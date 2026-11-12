@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
-import { BookText, ChevronDown, Eraser, TextCursorInput, Columns2, GripVertical, Highlighter, Languages, MousePointer2, NotebookPen, PanelRight, PenLine, Printer, Search, StickyNote, Strikethrough, Type, Underline, ZoomIn, ZoomOut, MoveHorizontal, ChevronUp } from "lucide-react";
+import { BookText, ChevronDown, Eraser, TextCursorInput, Columns2, GripVertical, Highlighter, MousePointer2, NotebookPen, PanelRight, PenLine, Printer, Search, StickyNote, Strikethrough, Type, Underline, ZoomIn, ZoomOut, MoveHorizontal, ChevronUp } from "lucide-react";
 import { t } from "../i18n";
+import { TranslateIcon } from "../ui/icons";
 import { setSetting } from "../store";
 import { Sheet } from "../ui/sheet";
 
@@ -18,7 +19,7 @@ export const TOOLBAR_ITEMS: { id: string; title: string; icon: any; tool?: boole
   { id: "color", title: "批注颜色", icon: null },
   { id: "translate", title: "翻译", icon: BookText },
   { id: "editText", title: "编辑 PDF", icon: TextCursorInput },
-  { id: "selectionTranslate", title: "划词翻译", icon: Languages },
+  { id: "selectionTranslate", title: "划词翻译", icon: TranslateIcon },
   { id: "search", title: "查找", icon: Search },
   { id: "zoomOut", title: "缩小", icon: ZoomOut },
   { id: "zoomIn", title: "放大", icon: ZoomIn },

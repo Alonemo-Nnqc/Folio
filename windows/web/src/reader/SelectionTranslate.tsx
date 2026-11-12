@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeftRight, Check, ChevronDown, Copy, Languages, NotebookPen, RotateCw, TriangleAlert, X } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronDown, Copy, NotebookPen, RotateCw, TriangleAlert, X } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
 import { openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { ServiceLogo } from "../ui/serviceLogo";
 import { useLayer, within } from "../ui/dismiss";
+import { TranslateGlyph } from "../ui/icons";
 
 export interface Anchor { left: number; top: number; right: number; bottom: number }
 
@@ -14,7 +15,7 @@ export function TranslateBadge({ x, y, onClick }: { x: number; y: number; onClic
   return (
     <button className="translate-badge" style={{ left, top }} title={t("翻译所选文字")} aria-label={t("翻译所选文字")}
       onMouseDown={(e) => e.preventDefault()} onClick={onClick}>
-      <Languages size={14} strokeWidth={2.1} />
+      <TranslateGlyph size={18} />
     </button>
   );
 }

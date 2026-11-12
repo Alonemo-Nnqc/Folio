@@ -121,7 +121,9 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             tableColumn.title = column.header
             tableColumn.width = column.defaultWidth
             tableColumn.minWidth = column.minimumWidth
-            tableColumn.resizingMask = column == .title ? [.autoresizingMask, .userResizingMask] : .userResizingMask
+            // Every column gives way when the list narrows (the inspector opens, the window shrinks), down to its minimum,
+            // so none is pushed out of view; the title takes most of it.
+            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
             tableColumn.isHidden = !column.visibleByDefault
             tableColumn.sortDescriptorPrototype = NSSortDescriptor(key: column.rawValue, ascending: true)
             outline.addTableColumn(tableColumn)
@@ -201,7 +203,14 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
     /// On first layout, make every visible column fit: the title column keeps at least 260 pt and
     /// the other columns shrink proportionally.
     private func fitColumnsOnce() {
-        guard !didInitialFit, let clip = outline.enclosingScrollView?.contentView, clip.bounds.width > 100 else { return }
+        guard !didInitialFit else { return }
+        fitColumns()
+    }
+
+    /// Makes every visible column fit the list's width: the title keeps at least 260 pt (less when there is no room),
+    /// the others shrink in proportion, never below their minimum.
+    private func fitColumns() {
+        guard let clip = outline.enclosingScrollView?.contentView, clip.bounds.width > 100 else { return }
         didInitialFit = true
         let visible = outline.tableColumns.filter { !$0.isHidden }
         let spacing = outline.intercellSpacing.width * CGFloat(visible.count) + 24
@@ -210,7 +219,7 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
               let title = visible.first(where: { $0.identifier == ItemColumn.title.identifier }) else { return }
         let others = visible.filter { $0 !== title }
         let othersWidth = others.reduce(0) { $0 + $1.width }
-        let titleWidth = max(260, available - othersWidth)
+        let titleWidth = max(min(260, available * 0.4), available - othersWidth)
         let scale = min(1, (available - titleWidth) / max(othersWidth, 1))
         for column in others { column.width = max(column.minWidth, floor(column.width * scale)) }
         title.width = max(title.minWidth, available - others.reduce(0) { $0 + $1.width })
@@ -471,8 +480,10 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
     private func buildHeaderMenu(_ menu: NSMenu) {
         for column in ItemColumn.allCases where column != .title {
             guard let tableColumn = outline.tableColumn(withIdentifier: column.identifier) else { continue }
-            let item = NSMenuItem.closure(column.header) { [weak tableColumn] in
+            let item = NSMenuItem.closure(column.header) { [weak self, weak tableColumn] in
                 tableColumn?.isHidden.toggle()
+                // A column shown makes room for itself from the others instead of running past the edge.
+                self?.fitColumns()
             }
             item.state = tableColumn.isHidden ? .off : .on
             menu.addItem(item)
