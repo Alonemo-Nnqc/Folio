@@ -372,6 +372,9 @@ public static class TranslationErrorClassifier
                         return Loc.S("codex 连不上它的服务商 %@：回复还没完成连接就断了。这个地址打开的是网站而不是接口，中转服务的地址通常要以 /v1 结尾（例如 %@/v1）。请在 CC Switch 或 codex 的配置里改正后再试", url, url);
                     return Loc.S("codex 连不上它的服务商：回复还没完成连接就断了。请检查 codex 配置里的服务商地址和网络后再试");
                 }
+                // CodeBuddy: signed in in WorkBuddy is not signed in here.
+                if (name == "codebuddy" && System.Text.RegularExpressions.Regex.IsMatch(original, @"(?i)authenticat|log ?in|401"))
+                    return Loc.S("CodeBuddy 命令行还没登录：请在 设置 ▸ 翻译 ▸ CodeBuddy 点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次后再试");
                 if (name == "dsh" && Matches(haystack, ["missing_credential", "account_sign_in_required"]))
                     return Loc.S("DeepSeek Harness 的命令行不能使用桌面版的账号登录。请在 DeepSeek Harness 的模型设置中填写 DeepSeek API Key（或设置环境变量 DEEPSEEK_API_KEY）后再试");
                 var why = TrimmedSentence(FirstMatch(@"agent-setup [\w-]+:\s*([^\n]+)", original) ?? raw);

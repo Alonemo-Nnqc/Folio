@@ -130,9 +130,9 @@ public enum TranslationErrorClassifier {
         case .agentSetup:
             let agent = firstMatch(#"agent-setup ([\w-]+):"#, in: original) ?? ""
             let reason = trimmedSentence(firstMatch(#"agent-setup [\w-]+:\s*([^\n]+)"#, in: original) ?? raw)
-            // WorkBuddy's command line: its account is a key, not a login in the app.
-            if agent == "codebuddy", original.range(of: #"(?i)authenticat|log ?in|api.?key|401"#, options: .regularExpression) != nil {
-                return String(localized: "WorkBuddy 需要 CodeBuddy API Key：请在 copilot.tencent.com/profile 生成，然后填入 设置 ▸ 翻译 ▸ WorkBuddy", bundle: .module)
+            // CodeBuddy: signed in in WorkBuddy is not signed in here.
+            if agent == "codebuddy", original.range(of: #"(?i)authenticat|log ?in|401"#, options: .regularExpression) != nil {
+                return String(localized: "CodeBuddy 命令行还没登录：请在 设置 ▸ 翻译 ▸ CodeBuddy 点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次后再试", bundle: .module)
             }
             return String(localized: "\(agent) 还不能使用：\(reason)。请先在终端运行一次 \(agent)，完成登录或设置后再试", bundle: .module)
         case .serverError:

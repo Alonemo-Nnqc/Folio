@@ -3,7 +3,7 @@ import Foundation
 /// Coding agents that can translate from the command line with the user's own login, no key needed in Folio.
 /// Each has a documented way to answer one prompt and exit; the arguments follow its own `--help` and documentation.
 public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
-    case claude, codex, gemini, grok, antigravity, copilot, cursor, qwen, opencode, kiro, cline, kimi, droid, amp, goose, pi, hermes, openclaw, deepseek, workbuddy
+    case claude, codex, gemini, grok, antigravity, copilot, cursor, qwen, opencode, kiro, cline, kimi, droid, amp, goose, pi, hermes, openclaw, deepseek, codebuddy
 
     /// The command, under its usual name.
     public var command: String { commands[0] }
@@ -30,8 +30,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .hermes: ["hermes"]
         case .openclaw: ["openclaw"]
         case .deepseek: ["dsh"]
-        // WorkBuddy's own copy of the CodeBuddy command line (in the app), else CodeBuddy Code installed apart.
-        case .workbuddy: ["codebuddy"]
+        // CodeBuddy Code, the command line of WorkBuddy's account (WorkBuddy's own copy cannot use the app's login).
+        case .codebuddy: ["codebuddy", "cbc"]
         }
     }
 
@@ -57,7 +57,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .hermes: "hermesagent"
         case .openclaw: "openclawagent"
         case .deepseek: "deepseekharness"
-        case .workbuddy: "workbuddy"
+        case .codebuddy: "codebuddy"
         }
     }
 
@@ -69,7 +69,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .grok: ["low", "medium", "high"]
         case .pi: ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         case .hermes: ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
-        case .workbuddy: ["minimal", "low", "medium", "high", "xhigh", "max"]
+        case .codebuddy: ["minimal", "low", "medium", "high", "xhigh", "max"]
         default: []
         }
     }
@@ -78,7 +78,9 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     /// agent takes (agy, 4000 characters: 20 s at low, 65 s at high).
     public var defaultEffort: String? {
         switch self {
-        case .claude, .antigravity, .codex, .grok, .hermes, .workbuddy: "low"
+        case .claude, .antigravity, .codex, .grok, .hermes: "low"
+        // CodeBuddy's free model thinks at length even at "low" (4000 characters: over four minutes).
+        case .codebuddy: "minimal"
         case .pi: "off"
         default: nil
         }
@@ -102,7 +104,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         guard Self.effort(inModelName: model) == nil, !(modelDecidesEffort && named),
               let level = effort ?? defaultEffort, !level.isEmpty else { return [] }
         switch self {
-        case .claude, .antigravity, .workbuddy: return ["--effort", level]
+        case .claude, .antigravity, .codebuddy: return ["--effort", level]
         case .codex: return ["-c", "model_reasoning_effort=\"\(level)\""]
         case .grok: return ["--reasoning-effort", level]
         case .pi: return ["--thinking", level]
@@ -123,7 +125,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case (.hermes, _): (#"(?i)hermes agent"#, 8000)
         case (.kimi, _): (#"(?i)kimi"#, 2000)
         case (.deepseek, _): (#"(?i)deepseek"#, 2000)
-        case (.workbuddy, _): (#"(?i)codebuddy"#, 2000)
+        case (.codebuddy, _): (#"(?i)codebuddy"#, 2000)
         default: nil
         }
     }
@@ -146,8 +148,6 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     /// the usual install folders.
     public func locate(customPath: String? = nil) -> URL? {
         let fileManager = FileManager.default
-        // WorkBuddy: its command line runs on the app's own runtime (Electron run as Node, as WorkBuddy runs it).
-        if self == .workbuddy, customPath?.isEmpty != false, let app = Self.workBuddyApp() { return app }
         if let customPath, !customPath.isEmpty {
             let expanded = (customPath as NSString).expandingTildeInPath
             return fileManager.isExecutableFile(atPath: expanded) ? URL(filePath: expanded) : nil
@@ -182,47 +182,41 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         return allCases.indices.filter { found.flags[$0] }.map { allCases[$0] }
     }
 
-    /// WorkBuddy's runtime, when the app (and the command line in it) is installed.
-    static func workBuddyApp() -> URL? {
+    /// WorkBuddy's desktop app, when it is installed: its account works with CodeBuddy Code once that is installed and
+    /// signed in (the app's own login is not shared with other programs).
+    public static func workBuddyApp() -> URL? {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        for app in [URL(filePath: "/Applications/WorkBuddy.app"), home.appending(path: "Applications/WorkBuddy.app")] {
-            let runtime = app.appending(path: "Contents/MacOS/Electron")
-            if FileManager.default.isExecutableFile(atPath: runtime.path), FileManager.default.fileExists(atPath: workBuddyScript(runtime).path) { return runtime }
-        }
-        return nil
+        return [URL(filePath: "/Applications/WorkBuddy.app"), home.appending(path: "Applications/WorkBuddy.app")]
+            .first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
-    /// The command line inside WorkBuddy, beside the runtime `executable`.
-    static func workBuddyScript(_ executable: URL) -> URL {
-        executable.deletingLastPathComponent().deletingLastPathComponent().appending(path: "Resources/app.asar.unpacked/cli/bin/codebuddy")
+    /// What the command needs in its environment: CodeBuddy without its long-term memory and session summaries (a
+    /// translation needs neither, and they cost time).
+    var environment: [String: String] {
+        guard self == .codebuddy else { return [:] }
+        return ["CODEBUDDY_DISABLE_AUTO_MEMORY": "1", "CODEBUDDY_CODE_DISABLE_SESSION_SUMMARY": "1", "CODEBUDDY_PROMPT_SUGGESTION_DISABLED": "1"]
     }
 
-    /// Whether `executable` is WorkBuddy's runtime (the command line then comes first among the arguments).
-    static func isWorkBuddyRuntime(_ executable: URL) -> Bool { executable.path.hasSuffix(".app/Contents/MacOS/Electron") }
-
-    /// What the command needs in its environment: WorkBuddy's runtime runs as Node with its lean bundle; the key and
-    /// site of the user's CodeBuddy account.
-    func environment(executable: URL, apiKey: String?, site: String?) -> [String: String] {
-        guard self == .workbuddy else { return [:] }
-        var env: [String: String] = [:]
-        if Self.isWorkBuddyRuntime(executable) {
-            env["ELECTRON_RUN_AS_NODE"] = "1"
-            env["CODEBUDDY_FORCE_LITE_WB_BUNDLE"] = "1"
+    /// Installs CodeBuddy Code with npm (the shell's, else the one WorkBuddy brings). The output of npm.
+    public static func installCodeBuddy() async throws -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        var npm = ShellEnvironment.loginPATH().map { ($0 as NSString).appendingPathComponent("npm") }.first { FileManager.default.isExecutableFile(atPath: $0) }
+        var extra: [String: String] = [:]
+        if npm == nil {
+            let versions = home.appending(path: ".workbuddy/binaries/node/versions")
+            let found = ((try? FileManager.default.contentsOfDirectory(atPath: versions.path)) ?? []).sorted().reversed()
+                .map { versions.appending(path: "\($0)/bin") }.first { FileManager.default.isExecutableFile(atPath: $0.appending(path: "npm").path) }
+            if let found {
+                npm = found.appending(path: "npm").path
+                extra["PATH"] = found.path + ":" + (LocalProcess.environment()["PATH"] ?? "/usr/bin:/bin")
+            }
         }
-        if let apiKey, !apiKey.isEmpty { env["CODEBUDDY_API_KEY"] = apiKey }
-        // WorkBuddy is the China edition: its keys come from copilot.tencent.com; "international" for codebuddy.ai.
-        let site = site?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
-        if site.isEmpty || site == "internal" || site.contains("国内") || site.contains("china") { env["CODEBUDDY_INTERNET_ENVIRONMENT"] = "internal" }
-        else if !site.hasPrefix("int") { env["CODEBUDDY_INTERNET_ENVIRONMENT"] = site }
-        return env
+        guard let npm else { throw ProviderError(kind: .agentSetup, detail: "agent-setup codebuddy: npm not found") }
+        return try await LocalProcess.run([npm, "install", "-g", "@tencent-ai/codebuddy-code"], input: "", timeout: 600, environment: extra)
     }
 
     /// The version the command reports, if it answers.
     public func version(at url: URL) -> String? {
-        if self == .workbuddy, Self.isWorkBuddyRuntime(url) {
-            let info = url.deletingLastPathComponent().deletingLastPathComponent().appending(path: "Info.plist")
-            return (NSDictionary(contentsOf: info)?["CFBundleShortVersionString"] as? String).map { "WorkBuddy \($0)" }
-        }
         // Some check for updates first (Hermes): a slow network must not make them look broken.
         guard let result = CommandProbe.run(url.path, ["--version"], environment: LocalProcess.environment(), timeout: 25), result.status == 0 else { return nil }
         return CommandProbe.version(in: result.output)
@@ -316,8 +310,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
             return (args + ["--prompt"], true, true)
         case .deepseek:
             return (["--profile", "headless"], true, true)
-        case .workbuddy:
-            // As Claude Code: one answer, no tools, nothing saved; the command line first when it runs in WorkBuddy's runtime.
+        case .codebuddy:
+            // As Claude Code: one answer, no tools, nothing saved.
             var args = ["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
                         "--max-turns", "1", "--system-prompt", system] + thinking
             if let model { args += ["--model", model] }
@@ -328,7 +322,15 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     /// The model's answer in what the command printed.
     func answer(stdout: String, outputFile: URL) throws -> String {
         switch self {
-        case .claude, .workbuddy:
+        case .codebuddy:
+            // A JSON array of the run's messages; the last, of type "result", holds the answer.
+            if let list = try? JSONSerialization.jsonObject(with: Data(stdout.trimmingCharacters(in: .whitespacesAndNewlines).utf8)) as? [[String: Any]],
+               let result = list.last(where: { $0["type"] as? String == "result" }) {
+                if result["is_error"] as? Bool == true { throw ProviderError(kind: .process, detail: (result["result"] as? String) ?? stdout) }
+                return result["result"] as? String ?? stdout
+            }
+            return stdout
+        case .claude:
             // The whole output is one JSON object; its `result` may itself contain code fences.
             let trimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let object = ((try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) as? [String: Any]) ?? LLMBatch.jsonObject(in: stdout) else { return stdout }
@@ -434,8 +436,6 @@ struct AgentProvider: ChatModel {
     var agent: LocalAgent
     var executable: URL
     var model: String?
-    /// Set for the command's environment (WorkBuddy's runtime, an account's key).
-    var environment: [String: String] = [:]
     /// The thinking level chosen; nil: the usual one, "": the agent's own.
     var effort: String?
     /// Set once a model has refused the usual level, so later batches do not ask again.
@@ -460,9 +460,8 @@ struct AgentProvider: ChatModel {
         let (arguments, promptArgument, combine) = agent.arguments(model: model, effort: effort, system: system, outputFile: outputFile)
         let prompt = combine ? system + "\n\n---\n\nTranslate this JSON object:\n" + user : user
         do {
-            let lead = agent == .workbuddy && LocalAgent.isWorkBuddyRuntime(executable) ? [LocalAgent.workBuddyScript(executable).path] : []
-            let stdout = try await LocalProcess.run([executable.path] + lead + arguments + (promptArgument ? [prompt] : []),
-                                                    input: promptArgument ? "" : prompt, timeout: 600, environment: environment)
+            let stdout = try await LocalProcess.run([executable.path] + arguments + (promptArgument ? [prompt] : []),
+                                                    input: promptArgument ? "" : prompt, timeout: 600, environment: agent.environment)
             let reply = AgentFailure.stripANSI(try agent.answer(stdout: stdout, outputFile: outputFile))
             if let failure = AgentFailure.inReply(reply, agent: agent) { throw failure }
             return reply

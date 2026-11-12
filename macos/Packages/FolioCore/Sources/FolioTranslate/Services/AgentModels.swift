@@ -6,8 +6,8 @@ public enum AgentModels {
         let home = FileManager.default.homeDirectoryForCurrentUser
         var models: [String] = []
         switch agent {
-        case .workbuddy:
-            // What WorkBuddy's command line lists in its help.
+        case .codebuddy:
+            // What CodeBuddy's command line lists in its help.
             models = ["auto", "glm-5.1", "glm-5.0", "glm-5.0-turbo", "glm-4.7", "kimi-k2.5", "minimax-m2.7", "deepseek-v3-2-volc"]
         case .claude:
             models = ["haiku", "sonnet", "opus"]

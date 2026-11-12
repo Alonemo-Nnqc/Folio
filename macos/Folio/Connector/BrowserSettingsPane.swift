@@ -149,6 +149,39 @@ struct BrowserSettingsPane: View {
     }
 }
 
+/// The extension folder as something to drag: dropped on a Chromium browser's extensions page (developer mode on), it
+/// is loaded, with no file dialog to find it in.
+private struct ExtensionFolderTile: View {
+    let folder: URL
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: folder.path))
+                .resizable()
+                .frame(width: 36, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(folder.lastPathComponent).font(.callout.weight(.medium))
+                Text(TranslationSettingsPane.abbreviatedPath(folder.path))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            Label("拖到扩展页面", systemImage: "hand.draw")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.6)))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 3])).foregroundStyle(.tertiary))
+        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .onDrag { NSItemProvider(object: folder as NSURL) }
+        .help(String(localized: "把这个文件夹拖到浏览器的扩展页面（需先打开开发者模式）"))
+    }
+}
+
 /// Step-by-step installation for one browser; watches until the extension shows up.
 struct ExtensionInstallGuide: View {
     let browser: BrowserInfo
@@ -220,18 +253,14 @@ struct ExtensionInstallGuide: View {
             Button("拷贝地址") { copy(page, label: String(localized: "地址")) }
         }
         step(2, browser.id == "edge" ? String(localized: "打开左侧的\"开发人员模式\"") : String(localized: "打开右上角的\"开发者模式\"开关"), detail: nil) { EmptyView() }
-        step(3, browser.id == "edge" ? String(localized: "点\"加载解压缩的扩展\"") : String(localized: "点\"加载已解压的扩展程序\""), detail: nil) { EmptyView() }
-        step(4, String(localized: "选择 Folio 扩展文件夹"), detail: String(localized: "在弹出的窗口中按 ⌘⇧G，再按 ⌘V 粘贴下面的路径（已拷贝），回车后点\"选择\"\n也可以把 Finder 中的文件夹拖进窗口")) {
+        step(3, String(localized: "把下面的 Folio 扩展文件夹拖到扩展页面"),
+             detail: browser.id == "edge"
+                ? String(localized: "松开即载入。也可以点\"加载解压缩的扩展\"，按 ⌘⇧G 粘贴路径（已拷贝）后点\"选择\"")
+                : String(localized: "松开即载入。也可以点\"加载已解压的扩展程序\"，按 ⌘⇧G 粘贴路径（已拷贝）后点\"选择\"")) {
             Button("拷贝路径") { if let folder { copy(folder.path, label: String(localized: "路径")) } }
             Button("在 Finder 中显示") { if let folder { NSWorkspace.shared.activateFileViewerSelecting([folder]) } }
         }
-        if let folder {
-            Text(folder.path)
-                .font(.callout.monospaced())
-                .textSelection(.enabled)
-                .foregroundStyle(.secondary)
-                .padding(.leading, 30)
-        }
+        if let folder { ExtensionFolderTile(folder: folder).padding(.leading, 30) }
     }
 
     @ViewBuilder

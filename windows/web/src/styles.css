@@ -508,6 +508,10 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .settings .appearance button.on .preview { box-shadow: 0 0 0 2.5px var(--accent), 0 1px 3px rgba(0, 0, 0, .1); }
 .settings .service-picker { height: 30px; }
 .settings ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, .3); }
+/* A sheet that holds settings (翻译全文) wears the settings page: its calm surface and raised panels. */
+.sheet.settings, .translucent .sheet.settings { background: var(--settings-bg); display: flex; flex-direction: column; height: auto; }
+.sheet.settings .set-header:first-child { margin-top: 4px; }
+.sheet.settings .set-note { margin-top: 10px; }
 
 /* 期刊指标 (META-30): rank capsules under 来源 in the inspector. Tints as on the Mac: 中科院 1 区 red … 4 区 grey-green,
    JCR quartiles blue, IF violet, CCF teal; the text is the tint darkened (light) or lightened (dark). */

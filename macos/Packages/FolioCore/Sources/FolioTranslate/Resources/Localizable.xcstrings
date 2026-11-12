@@ -3856,6 +3856,26 @@
           }
         }
       }
+    },
+    "使用 CodeBuddy 命令行，与 WorkBuddy 同一个腾讯账号。WorkBuddy 桌面版的登录只能在应用内使用，需另装命令行并登录一次。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the CodeBuddy command line with the same Tencent account as WorkBuddy. WorkBuddy's desktop sign-in works only inside the app: install the command line and sign in once."
+          }
+        }
+      }
+    },
+    "CodeBuddy 命令行还没登录：请在 设置 ▸ 翻译 ▸ CodeBuddy 点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The CodeBuddy command line isn't signed in: in Settings ▸ Translation ▸ CodeBuddy, click “Sign In in Terminal”, sign in once with your WorkBuddy (Tencent) account, then try again"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

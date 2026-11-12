@@ -11,7 +11,7 @@ namespace Folio.Core.Translate.Services;
 // On Windows the agents are npm shims (claude.cmd …), native installers' .exe files or scripts on PATH.
 
 /// <summary>Coding agents that can translate from the command line with the user's own login, no key needed in Folio.</summary>
-public enum LocalAgent { Claude, Codex, Gemini, Grok, Antigravity, Copilot, Cursor, Qwen, Opencode, Kiro, Cline, Kimi, Droid, Amp, Goose, Pi, Hermes, Openclaw, Deepseek }
+public enum LocalAgent { Claude, Codex, Gemini, Grok, Antigravity, Copilot, Cursor, Qwen, Opencode, Kiro, Cline, Kimi, Droid, Amp, Goose, Pi, Hermes, Openclaw, Deepseek, Codebuddy }
 
 public static partial class LocalAgents
 {
@@ -40,6 +40,8 @@ public static partial class LocalAgents
         LocalAgent.Pi => ["pi"],
         LocalAgent.Hermes => ["hermes"],
         LocalAgent.Openclaw => ["openclaw"],
+        // CodeBuddy Code, the command line of WorkBuddy's account (WorkBuddy's own copy cannot use the app's login).
+        LocalAgent.Codebuddy => ["codebuddy", "cbc"],
         _ => ["dsh"],
     };
 
@@ -63,6 +65,7 @@ public static partial class LocalAgents
         LocalAgent.Pi => "picli",
         LocalAgent.Hermes => "hermesagent",
         LocalAgent.Openclaw => "openclawagent",
+        LocalAgent.Codebuddy => "codebuddy",
         _ => "deepseekharness",
     };
 
@@ -74,6 +77,7 @@ public static partial class LocalAgents
         LocalAgent.Grok => ["low", "medium", "high"],
         LocalAgent.Pi => ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
         LocalAgent.Hermes => ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+        LocalAgent.Codebuddy => ["minimal", "low", "medium", "high", "xhigh", "max"],
         _ => [],
     };
 
@@ -82,6 +86,8 @@ public static partial class LocalAgents
     {
         LocalAgent.Claude or LocalAgent.Antigravity or LocalAgent.Codex or LocalAgent.Grok or LocalAgent.Hermes => "low",
         LocalAgent.Pi => "off",
+        // CodeBuddy's free model thinks at length even at "low" (4000 characters: over four minutes).
+        LocalAgent.Codebuddy => "minimal",
         _ => null,
     };
 
@@ -108,7 +114,7 @@ public static partial class LocalAgents
         if (string.IsNullOrEmpty(level)) return [];
         return agent switch
         {
-            LocalAgent.Claude or LocalAgent.Antigravity => ["--effort", level],
+            LocalAgent.Claude or LocalAgent.Antigravity or LocalAgent.Codebuddy => ["--effort", level],
             LocalAgent.Codex => ["-c", $"model_reasoning_effort=\"{level}\""],
             LocalAgent.Grok => ["--reasoning-effort", level],
             LocalAgent.Pi => ["--thinking", level],
@@ -128,6 +134,7 @@ public static partial class LocalAgents
         (LocalAgent.Hermes, _) => ("(?i)hermes agent", 8000),
         (LocalAgent.Kimi, _) => ("(?i)kimi", 2000),
         (LocalAgent.Deepseek, _) => ("(?i)deepseek", 2000),
+        (LocalAgent.Codebuddy, _) => ("(?i)codebuddy", 2000),
         _ => null,
     };
 
@@ -170,6 +177,53 @@ public static partial class LocalAgents
         var found = new bool[All.Length];
         Parallel.For(0, All.Length, k => found[k] = All[k].Locate() != null);
         return All.Where((_, k) => found[k]).ToList();
+    }
+
+    /// <summary>What the command needs in its environment: CodeBuddy without its long-term memory and session summaries
+    /// (a translation needs neither, and they cost time).</summary>
+    public static Dictionary<string, string>? ExtraEnvironment(this LocalAgent agent) => agent switch
+    {
+        LocalAgent.Deepseek => DeepseekHarness.Environment(),
+        LocalAgent.Codebuddy => new() { ["CODEBUDDY_DISABLE_AUTO_MEMORY"] = "1", ["CODEBUDDY_CODE_DISABLE_SESSION_SUMMARY"] = "1", ["CODEBUDDY_PROMPT_SUGGESTION_DISABLED"] = "1" },
+        _ => null,
+    };
+
+    static string Home => System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+
+    /// <summary>WorkBuddy's desktop app, when it is installed: its account works with CodeBuddy Code once that is installed and
+    /// signed in (the app's own login is not shared with other programs).</summary>
+    public static string? WorkBuddyApp()
+    {
+        var local = System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData);
+        string[] candidates = [
+            Path.Combine(local, "Programs", "WorkBuddy", "WorkBuddy.exe"),
+            Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles), "WorkBuddy", "WorkBuddy.exe"),
+            Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86), "WorkBuddy", "WorkBuddy.exe"),
+            Path.Combine(local, "WorkBuddy", "WorkBuddy.exe"),
+        ];
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>The Node versions WorkBuddy brings (newest first): CodeBuddy installed with their npm lands beside them.</summary>
+    public static IEnumerable<string> WorkBuddyNodeFolders() =>
+        ShellEnvironment.VersionFolders(Path.Combine(Home, ".workbuddy", "binaries", "node", "versions"));
+
+    /// <summary>Installs CodeBuddy Code with npm (the user's, else the one WorkBuddy brings). The output of npm.</summary>
+    public static async Task<string> InstallCodeBuddy(CancellationToken cancel = default)
+    {
+        string? npm = null;
+        Dictionary<string, string>? extra = null;
+        foreach (var folder in ShellEnvironment.SearchFolders().Where(f => !f.Contains(".workbuddy", StringComparison.OrdinalIgnoreCase)))
+            if (File.Exists(Path.Combine(folder, "npm.cmd"))) { npm = Path.Combine(folder, "npm.cmd"); break; }
+        if (npm == null && WorkBuddyNodeFolders().FirstOrDefault(f => File.Exists(Path.Combine(f, "npm.cmd"))) is { } node)
+        {
+            npm = Path.Combine(node, "npm.cmd");
+            extra = new() { ["PATH"] = node + Path.PathSeparator + (System.Environment.GetEnvironmentVariable("PATH") ?? "") };
+        }
+        if (npm == null) throw new ProviderError(ProviderError.Kinds.AgentSetup, "agent-setup codebuddy: npm not found");
+        var output = await LocalProcess.Run([npm, "install", "-g", "@tencent-ai/codebuddy-code"], "", 600, cancel, extra);
+        Genuine.Clear();
+        return output;
     }
 
     public static string? Version(this LocalAgent agent, string path)
@@ -227,6 +281,10 @@ public static partial class LocalAgents
                 return ([.. WithModel(["--ignore-rules", .. thinking], "-m"), "-z"], true, true);
             case LocalAgent.Openclaw:
                 return ([.. WithModel(["infer", "model", "run", "--local", "--json"], "--model"), "--prompt"], true, true);
+            case LocalAgent.Codebuddy:
+                // As Claude Code: one answer, no tools, nothing saved.
+                return (WithModel(["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
+                                   "--max-turns", "1", "--system-prompt", system, .. thinking], "--model"), false, false);
             default:
                 // "-": the task from stdin, so a long prompt never meets a command line's limit.
                 return (["--profile", "headless", "-"], false, true);
@@ -245,6 +303,16 @@ public static partial class LocalAgents
                 if (obj["is_error"] is JsonValue e && e.TryGetValue<bool>(out var isError) && isError)
                     throw new ProviderError(ProviderError.Kinds.Process, Str(obj["result"]) ?? stdout);
                 return Str(obj["result"]) ?? stdout;
+            }
+            case LocalAgent.Codebuddy:
+            {
+                // A JSON array of the run's messages; the last, of type "result", holds the answer.
+                JsonArray? list = null;
+                try { list = JsonNode.Parse(stdout.Trim()) as JsonArray; } catch { }
+                if (list?.OfType<JsonObject>().LastOrDefault(m => Str(m["type"]) == "result") is not { } result) return stdout;
+                if (result["is_error"] is JsonValue e && e.TryGetValue<bool>(out var isError) && isError)
+                    throw new ProviderError(ProviderError.Kinds.Process, Str(result["result"]) ?? stdout);
+                return Str(result["result"]) ?? stdout;
             }
             case LocalAgent.Codex:
                 try { return File.ReadAllText(outputFile, Encoding.UTF8); } catch { return stdout; }
@@ -370,7 +438,7 @@ public sealed class AgentProvider(LocalAgent agent, string executable, string? m
             {
                 var stdout = await LocalProcess.Run([executable, .. arguments, .. promptArgument ? [prompt] : Array.Empty<string>()],
                                                     promptArgument ? "" : prompt, 600, cancel,
-                                                    agent == LocalAgent.Deepseek ? DeepseekHarness.Environment() : null);
+                                                    agent.ExtraEnvironment());
                 var reply = AgentFailure.StripAnsi(agent.Answer(stdout, outputFile));
                 if (AgentFailure.InReply(reply, agent) is { } failure) throw failure;
                 return reply;
@@ -459,7 +527,7 @@ public static class ShellEnvironment
     }
 
     /// <summary>Folders named after each installed version, newest first: where version managers keep Node and global npm commands.</summary>
-    static IEnumerable<string> VersionFolders(string parent, string suffix = "")
+    internal static IEnumerable<string> VersionFolders(string parent, string suffix = "")
     {
         try
         {
@@ -504,6 +572,8 @@ public static class ShellEnvironment
             paths.AddRange(VersionFolders(Path.Combine(appData, "fnm", "node-versions"), "installation"));
             paths.AddRange(VersionFolders(Path.Combine(appData, "Python"), "Scripts"));
             paths.AddRange(VersionFolders(Path.Combine(local, "Programs", "Python"), "Scripts"));
+            // WorkBuddy's own Node: CodeBuddy installed with it (no other npm here) lands there.
+            paths.AddRange(VersionFolders(Path.Combine(home, ".workbuddy", "binaries", "node", "versions")));
         }
         else
         {
@@ -878,6 +948,10 @@ public static class AgentModels
         {
             case LocalAgent.Claude:
                 models = ["haiku", "sonnet", "opus"];
+                break;
+            case LocalAgent.Codebuddy:
+                // What CodeBuddy's command line lists in its help.
+                models = ["deepseek-v3-2-volc", "auto", "glm-5.1", "glm-5.0", "glm-5.0-turbo", "glm-4.7", "kimi-k2.5", "minimax-m2.7"];
                 break;
             case LocalAgent.Codex:
             {

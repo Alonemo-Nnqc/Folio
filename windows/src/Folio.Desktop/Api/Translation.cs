@@ -74,7 +74,8 @@ public static partial class Api
             (Loc.S("我的服务"), all.Where(s => configured.Contains(s.Id)).ToList()),
             (Loc.S("免费"), rest.Where(s => s.Category == ServiceCategory.Free).ToList()),
             // Agents not found on this computer are left out; the one in use stays so the menu can show it.
-            (Loc.S("本机"), rest.Where(s => s.Category == ServiceCategory.Local || (s.Category == ServiceCategory.Agent && s.Id == M.Settings.TranslationService)).ToList()),
+            (Loc.S("本机"), rest.Where(s => s.Category == ServiceCategory.Local || (s.Category == ServiceCategory.Agent && s.Id == M.Settings.TranslationService)
+                || (s.Id == LocalAgent.Codebuddy.ServiceId() && LocalAgents.WorkBuddyApp() != null)).ToList()),
             (Loc.S("大模型 API"), rest.Where(s => s.Category == ServiceCategory.Llm).ToList()),
             (Loc.S("机器翻译 API"), rest.Where(s => s.Category == ServiceCategory.Machine).ToList()),
         }.Where(g => g.Services.Count > 0).Select(g => new { title = g.Title, services = g.Services.Select(Entry) });
@@ -230,11 +231,34 @@ public static partial class Api
             {
                 var found = which.Locate(path);
                 var version = found != null ? which.Version(found) : null;
+                // CodeBuddy: WorkBuddy is here, its command line is not (offered to be installed), or it is (one sign-in in a terminal).
+                bool codeBuddy = which == LocalAgent.Codebuddy;
+                if (found == null && codeBuddy && LocalAgents.WorkBuddyApp() != null)
+                    return new { ok = false, info = true, action = "installCodeBuddy",
+                                 message = Loc.S("检测到 WorkBuddy 桌面版，但它的登录只能在应用内使用。安装 CodeBuddy 命令行后，用同一个腾讯账号登录一次即可用于翻译。") };
                 return found == null
-                    ? new { ok = false, message = Loc.S("没有在这台电脑上找到 %@，请先安装并登录", which.Command()) }
-                    : new { ok = true, message = version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found) };
+                    ? new { ok = false, info = false, action = (string?)null, message = Loc.S("没有在这台电脑上找到 %@，请先安装并登录", which.Command()) }
+                    : new { ok = true, info = false, action = codeBuddy ? "loginCodeBuddy" : null,
+                            message = version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found) };
             });
         });
+        Bridge.OnAsync("translation.installCodeBuddy", async _ =>
+        {
+            try
+            {
+                await LocalAgents.InstallCodeBuddy();
+                OpenAgentLogin(LocalAgent.Codebuddy);
+                _agentsCheckedAt = default;
+                RefreshAgents();
+                return (object?)new { ok = true };
+            }
+            catch (Exception e)
+            {
+                var detail = e is ProviderError p ? p.Detail : e.Message;
+                return new { ok = false, message = Loc.S("安装没有完成：%@。也可以在终端运行 npm install -g @tencent-ai/codebuddy-code", detail.Length > 300 ? detail[..300] : detail) };
+            }
+        });
+        Bridge.On("translation.loginCodeBuddy", _ => { OpenAgentLogin(LocalAgent.Codebuddy); return null; });
         Bridge.OnAsync("translation.test", async a =>
         {
             var service = TranslationServiceCatalog.Resolve(a.Str("service"));
@@ -313,5 +337,21 @@ public static partial class Api
             foreach (var id in a.Strs("files")) await M.Translations.Start(id);
         });
         Bridge.On("translation.cancel", a => { M.Translations.Cancel(a.Str("item")); return null; });
+    }
+
+    /// <summary>A console window running the agent, to sign in (CodeBuddy: the China site, WorkBuddy's Tencent account).</summary>
+    static void OpenAgentLogin(LocalAgent agent)
+    {
+        var path = agent.Locate() ?? agent.Command();
+        var info = new System.Diagnostics.ProcessStartInfo(LocalProcess.CommandShell)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = false,
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        };
+        // Raw, not ArgumentList: cmd reads the rest of its command line as it is, quotes and all (no \" escapes).
+        info.Arguments = $"/k chcp 65001 >nul & title Folio & echo {Loc.S("Folio：在下面选择中国站，用 WorkBuddy 的腾讯账号登录；登录完成后可关闭这个窗口。")} & echo. & \"{path}\"";
+        foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
+        try { System.Diagnostics.Process.Start(info)?.Dispose(); } catch { }
     }
 }

@@ -28,8 +28,7 @@ import Testing
     }
 
     @Test func freeAndAgentServicesNeedNoSecrets() {
-        // WorkBuddy's command line takes the account's key (the app's login is not shared).
-        for service in TranslationServiceCatalog.all where service.isFree && service.id != "workbuddy" {
+        for service in TranslationServiceCatalog.all where service.isFree {
             #expect(service.secretFields.isEmpty, "\(service.id)")
         }
         for agent in LocalAgent.allCases {

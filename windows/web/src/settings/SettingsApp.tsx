@@ -239,10 +239,13 @@ function Browser() {
       <Card><Row title={t("允许浏览器插件保存到 Folio")}><Switch on={s.browserConnectorEnabled} onChange={(v) => setSetting("browserConnectorEnabled", v)} /></Row></Card>
       {data && <Note>{data.connector.message}</Note>}
       <Header>{t("安装浏览器插件")}</Header>
-      <Note>{t("点击“安装”后，在浏览器扩展页面开启“开发者模式”，选择“加载已解压的扩展程序”并选中 Folio 打开的文件夹")}</Note>
+      <Note>{t("点击“安装”会打开浏览器的扩展页面，并在资源管理器中选中 Folio 插件文件夹。在扩展页面打开“开发者模式”，把这个文件夹直接拖进扩展页面即可；也可以点“加载已解压的扩展程序”选择它。")}</Note>
       <div style={{ height: 10 }} />
       {data?.browsers.length === 0 && <Note>{t("没有找到支持的浏览器")}</Note>}
-      {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}><button className="btn" onClick={() => call("browser.install", { id: b.id })}>{b.installed ? t("更新") : t("安装…")}</button></Row>)}</Card>}
+      {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}>
+        <button className="btn" title={t("在资源管理器中选中插件文件夹，可直接拖到浏览器的扩展页面")} onClick={() => call("browser.revealExtension", { id: b.id })}>{t("显示插件文件夹")}</button>
+        <button className="btn" onClick={() => call("browser.install", { id: b.id })}>{b.installed ? t("更新") : t("安装…")}</button>
+      </Row>)}</Card>}
     </>
   );
 }

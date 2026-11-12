@@ -112,7 +112,6 @@ enum ProviderFactory {
                 throw TranslationConfigurationError.agentNotFound(agent.command)
             }
             provider = AgentProvider(agent: agent, executable: executable, model: modelOption.flatMap(value),
-                                     environment: agent.environment(executable: executable, apiKey: value("--workbuddy-api-key"), site: value("--workbuddy-site")),
                                      effort: ReasoningEffort.agentEffort(serviceID: serviceID, fields: fields))
         case .command:
             provider = CommandProvider(command: try required("--clitranslator-command"),

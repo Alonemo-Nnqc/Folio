@@ -10462,6 +10462,116 @@
           }
         }
       }
+    },
+    "在终端登录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign In in Terminal"
+          }
+        }
+      }
+    },
+    "在终端打开 codebuddy，选择中国站并用 WorkBuddy 的腾讯账号登录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens codebuddy in Terminal: choose the China site and sign in with your WorkBuddy (Tencent) account"
+          }
+        }
+      }
+    },
+    "检测到 WorkBuddy 桌面版，但它的登录只能在应用内使用。安装 CodeBuddy 命令行后，用同一个腾讯账号登录一次即可用于翻译。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WorkBuddy is installed, but its sign-in works only inside the app. Install the CodeBuddy command line and sign in once with the same Tencent account to translate with it."
+          }
+        }
+      }
+    },
+    "正在安装…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installing…"
+          }
+        }
+      }
+    },
+    "安装 CodeBuddy 命令行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install CodeBuddy Command Line"
+          }
+        }
+      }
+    },
+    "安装没有完成：%@。也可以在终端运行 npm install -g @tencent-ai/codebuddy-code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The installation didn't finish: %@. You can also run npm install -g @tencent-ai/codebuddy-code in Terminal."
+          }
+        }
+      }
+    },
+    "把下面的 Folio 扩展文件夹拖到扩展页面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag the Folio extension folder below onto the extensions page"
+          }
+        }
+      }
+    },
+    "松开即载入。也可以点\"加载解压缩的扩展\"，按 ⌘⇧G 粘贴路径（已拷贝）后点\"选择\"" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It loads when you drop it. Or click \"Load unpacked\", press ⌘⇧G, paste the path (already copied) and click \"Select\""
+          }
+        }
+      }
+    },
+    "松开即载入。也可以点\"加载已解压的扩展程序\"，按 ⌘⇧G 粘贴路径（已拷贝）后点\"选择\"" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It loads when you drop it. Or click \"Load unpacked\", press ⌘⇧G, paste the path (already copied) and click \"Select\""
+          }
+        }
+      }
+    },
+    "拖到扩展页面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to Extensions Page"
+          }
+        }
+      }
+    },
+    "把这个文件夹拖到浏览器的扩展页面（需先打开开发者模式）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag this folder onto the browser's extensions page (turn on developer mode first)"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
