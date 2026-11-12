@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
-import { getState, setSetting, useStore } from "../store";
+import { getState, setSetting, setState, useStore } from "../store";
 import { Field, Select, Slider, Switch } from "../ui/controls";
 import { confirm, dialog, openSheet } from "../ui/sheet";
 import { openMenu } from "../ui/menu";
@@ -179,6 +179,52 @@ function Retrieval() {
         <Row title={t("联系邮箱（选填）")}><Field className="set-field" value={s.crossrefMailto ?? ""} placeholder="name@example.com" onCommit={(v) => setSetting("crossrefMailto", v.trim())} /></Row>
         <Row title={t("OpenAlex API Key（选填）")}><Field className="set-field" secret value={s.openAlexAPIKey ?? ""} onCommit={(v) => setSetting("openAlexAPIKey", v.trim())} /></Row>
       </Card>
+      <JournalMetricsSection />
+    </>
+  );
+}
+
+/** 期刊指标 (META-30): the easyScholar key, a test, and whether ranks are fetched by themselves. */
+function JournalMetricsSection() {
+  const state = useStore((x) => x.journalMetrics);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [test, setTest] = useState<{ busy: boolean; ok?: boolean; text?: string }>({ busy: false });
+  useEffect(() => { call("journalMetrics.state").then((journalMetrics) => setState({ journalMetrics })); }, []);
+  if (!state) return null;
+  const key = draft ?? state.key;
+  const save = (value: string) => { setDraft(null); setTest({ busy: false }); call("journalMetrics.setKey", { key: value }).then((journalMetrics) => setState({ journalMetrics })); };
+  const run = async () => {
+    setTest({ busy: true });
+    const r = await call<{ ok: boolean; text: string }>("journalMetrics.test", { key }).catch((e) => ({ ok: false, text: String(e.message ?? e) }));
+    setTest({ busy: false, ...r });
+    if (r.ok && key.trim() !== state.key) save(key);
+  };
+  const line = test.text ? { ok: !!test.ok, text: test.text } : state.hasKey && state.status ? { ok: !state.attention, text: state.status, progress: !state.attention } : null;
+  return (
+    <>
+      <Header>{t("期刊指标")}</Header>
+      <Card>
+        <Row title={t("自动获取期刊分区与影响因子")} detail={t("为有期刊名的条目获取中科院分区、JCR 分区和影响因子，同一期刊只查询一次并缓存 30 天")}>
+          <Switch on={state.autoFetch} onChange={(on) => call("journalMetrics.setAutoFetch", { on }).then((journalMetrics) => setState({ journalMetrics }))} />
+        </Row>
+        <Row title={t("easyScholar 密钥")} detail={<button className="link-button" onClick={() => call("shell.open", { target: state.keyPage })}>{t("如何获取密钥…")}</button>}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="field set-field" type="password" value={key} placeholder="SecretKey" spellCheck={false} autoComplete="off"
+              onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== null) save(draft); }}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+            <button className="btn" style={{ minWidth: 56 }} disabled={test.busy || !key.trim()} title={t("用该密钥查询一次 Nature 的指标")} onClick={run}>
+              {test.busy ? <span className="spinner" /> : t("测试")}
+            </button>
+          </div>
+        </Row>
+        {line && (
+          <div className="jm-status">
+            {"progress" in line && line.progress ? <span className="spinner" /> : line.ok ? <CheckCircle2 size={14} color="var(--green)" /> : <AlertTriangle size={14} color="var(--orange)" />}
+            <span className="selectable">{line.text}</span>
+          </div>
+        )}
+      </Card>
+      <Note>{t("数据由 easyScholar 开放接口免费提供：登录 easyScholar 后，在“开放接口”页面复制 SecretKey。密钥加密保存在本机。")}</Note>
     </>
   );
 }

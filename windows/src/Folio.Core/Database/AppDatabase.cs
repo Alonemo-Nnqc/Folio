@@ -282,6 +282,8 @@ static class Migrations
             """),
         ("v3", "ALTER TABLE libraryGroup ADD COLUMN colorHex TEXT"),
         ("v4", "ALTER TABLE file ADD COLUMN translatedBy TEXT"),
+        // v1.3 (META-30): easyScholar journal ranks per normalised journal name; "{}" caches "not listed".
+        ("v1.3-journalMetrics", "CREATE TABLE IF NOT EXISTS journalMetrics (name TEXT PRIMARY KEY, json TEXT NOT NULL, fetchedAt DATETIME NOT NULL)"),
     ];
 
     public static void Migrate(SqliteConnection c)

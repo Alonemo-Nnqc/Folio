@@ -107,6 +107,59 @@ case "selection":
     } catch {
         print("error: \(error.localizedDescription)")
     }
+case "selection-bench":
+    // selection-bench <service> [--prewarm] [--delay seconds]: how long 划词翻译 takes, from a cold process.
+    // With --prewarm the service is got ready first (as the reader does on mouse-down), and the first passage is sent
+    // after --delay seconds (the time a selection takes; 0 = at once), or once the warm-up has finished when no delay is given.
+    let service = arguments[1]
+    let passages = [
+        "Transformers have become the dominant architecture for natural language processing.",
+        "We evaluate our method on three benchmarks and report the mean over five runs.",
+        "The results suggest that pretraining on larger corpora improves robustness to distribution shift.",
+    ]
+    func timed(_ label: String, _ text: String) async {
+        let start = Date()
+        do {
+            let result = try await SelectionTranslator.translate(text, serviceID: service, fields: [:], secrets: [:], from: "en", to: "zh", fallback: false)
+            print(String(format: "%@: %.0f ms  %@", label, Date().timeIntervalSince(start) * 1000, String(result.text.prefix(24))))
+        } catch {
+            print(String(format: "%@: %.0f ms  error: %@", label, Date().timeIntervalSince(start) * 1000, error.localizedDescription))
+        }
+    }
+    if arguments.contains("--prewarm") {
+        let start = Date()
+        if let index = arguments.firstIndex(of: "--delay"), let delay = Double(arguments[index + 1]) {
+            SelectionTranslator.prewarm(serviceID: service)
+            try await Task.sleep(for: .seconds(delay))
+            print(String(format: "selection made after %.0f ms", delay * 1000))
+        } else {
+            await SelectionTranslator.prewarmed(serviceID: service)
+            print(String(format: "prewarm: %.0f ms", Date().timeIntervalSince(start) * 1000))
+        }
+    }
+    await timed("first passage", passages[0])
+    await timed("second passage", passages[1])
+    try await Task.sleep(for: .seconds(5))
+    await timed("third passage, 5 s later", passages[2])
+    await timed("first passage again (cache)", passages[0])
+case "edit":
+    // edit <pdf> <page>: the text blocks of a page (1-based) as the PDF editor sees them.
+    // edit <pdf> <page> <block> <text> <out.pdf>: replaces a block's text (`{v1}` … put its formulas back).
+    let editor = try PDFTextEditor(data: Data(contentsOf: url(arguments[1])))
+    let page = (Int(arguments[2]) ?? 1) - 1
+    let blocks = editor.blocks(onPage: page)
+    if arguments.count >= 6, let index = Int(arguments[3]), let block = blocks.first(where: { $0.index == index }) {
+        let start = Date()
+        let data = try editor.replace(block, with: arguments[4])
+        try data.write(to: url(arguments[5]))
+        print(String(format: "written %d bytes in %.2f s", data.count, Date().timeIntervalSince(start)))
+    } else {
+        for block in blocks {
+            let r = block.rect
+            print(String(format: "%3d %@ [%.0f,%.0f %.0f×%.0f] %.1fpt/%.1f %@ %@", block.index, block.isEditable ? "✎" : "·", r.minX, r.minY, r.width, r.height,
+                         block.fontSize, block.lineHeight, block.alignment.rawValue, String(block.text.prefix(70))) + (block.reason.map { "  (\($0))" } ?? ""))
+        }
+    }
 default:
     print("usage: folio-translate roundtrip|compare …")
 }

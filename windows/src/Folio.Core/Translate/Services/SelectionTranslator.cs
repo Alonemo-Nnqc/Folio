@@ -53,13 +53,59 @@ public static class SelectionTranslator
 
     public sealed record Result(bool Succeeded, string Text, string ServiceId, string? FellBackFrom);
 
+    // MARK: Getting ready (SEL-20)
+
+    static readonly Dictionary<string, DateTime> PreparedAt = [];
+
+    /// <summary>Gets serviceId ready for a translation without sending any text: its connection opened (DNS, TCP, TLS) and
+    /// any token fetched, so the request made when the mouse comes up starts on a warm connection. With fallback, the first
+    /// free service standing in for it too. Returns at once; cheap enough for every mouse-down.</summary>
+    public static void Prewarm(string serviceId, IReadOnlyDictionary<string, string> fields, IReadOnlyDictionary<string, string> secrets, bool fallback)
+    {
+        var ids = new List<string> { TranslationServiceCatalog.Resolve(serviceId).Id };
+        if (fallback && StandIns.FirstOrDefault(s => s != ids[0]) is { } standIn) ids.Add(standIn);
+        foreach (var id in ids)
+        {
+            lock (Gate)
+            {
+                if ((DateTime.UtcNow - PreparedAt.GetValueOrDefault(id, DateTime.MinValue)).TotalSeconds <= 5) continue;
+                PreparedAt[id] = DateTime.UtcNow;
+            }
+            ITranslationProvider provider;
+            try { provider = ProviderFactory.Make(id, id == ids[0] ? fields : new Dictionary<string, string>(), id == ids[0] ? secrets : new Dictionary<string, string>(), null); }
+            catch { continue; }
+            _ = Task.Run(async () => { try { await provider.Prewarm(); } catch { } });
+        }
+    }
+
+    // MARK: Translations made lately
+
+    /// <summary>Every passage translated lately, shared by every reader: the same passage again comes back at once.</summary>
+    static readonly LruCache<string, Result> Cache = new(500);
+
+    static string CacheKey(string passage, string serviceId, IReadOnlyDictionary<string, string> fields, string from, string to) =>
+        string.Join('\u0002', serviceId, from.ToLowerInvariant(), to.ToLowerInvariant(),
+                    string.Join('\u0001', fields.OrderBy(f => f.Key, StringComparer.Ordinal).Select(f => $"{f.Key}={f.Value}")), passage);
+
     /// <summary>The translation of text. A rate-limited request is tried again shortly; still refused, and with fallback, another
     /// free service translates it (and the limited one rests for a minute). Errors come back in plain words.</summary>
     public static async Task<Result> Translate(string text, string serviceId, IReadOnlyDictionary<string, string> fields, IReadOnlyDictionary<string, string> secrets,
-                                               string from, string to, bool fallback, Func<string, IReadOnlyDictionary<string, string>> standInFields, CancellationToken cancel = default)
+                                               string from, string to, bool fallback, Func<string, IReadOnlyDictionary<string, string>> standInFields,
+                                               CancellationToken cancel = default, bool useCache = true)
     {
         var passage = Normalized(text);
         if (passage.Length == 0) return new Result(false, Loc.S("服务没有返回译文"), serviceId, null);
+        if (useCache && Cache.Get(CacheKey(passage, serviceId, fields, from, to)) is { } hit) return hit;
+        var result = await TranslateNow(passage, serviceId, fields, secrets, from, to, fallback, standInFields, cancel);
+        // Under the service that made it: a stand-in's translation does not stand for the service asked first.
+        if (result.Succeeded)
+            Cache.Set(CacheKey(passage, result.ServiceId, result.ServiceId == serviceId ? fields : standInFields(result.ServiceId), from, to), result with { FellBackFrom = null });
+        return result;
+    }
+
+    static async Task<Result> TranslateNow(string passage, string serviceId, IReadOnlyDictionary<string, string> fields, IReadOnlyDictionary<string, string> secrets,
+                                           string from, string to, bool fallback, Func<string, IReadOnlyDictionary<string, string>> standInFields, CancellationToken cancel)
+    {
         var order = new List<string> { serviceId };
         if (fallback) order.AddRange(StandIns.Where(s => s != serviceId));
         if (fallback && IsCooling(serviceId) && order.Count > 1) { order.RemoveAt(0); order.Add(serviceId); }
@@ -124,4 +170,38 @@ public static class SelectionTranslator
         ProviderError p => TranslationErrorClassifier.Classify(p.Detail + (p.Host != null ? $" https://{p.Host}/" : "")).Message,
         _ => TranslationErrorClassifier.Classify(e.Message).Message,
     };
+}
+
+/// <summary>A small least-recently-used cache, safe to share between threads.</summary>
+public sealed class LruCache<TKey, TValue>(int capacity) where TKey : notnull where TValue : class
+{
+    readonly LinkedList<(TKey Key, TValue Value)> _order = new();
+    readonly Dictionary<TKey, LinkedListNode<(TKey Key, TValue Value)>> _nodes = [];
+
+    public TValue? Get(TKey key)
+    {
+        lock (_nodes)
+        {
+            if (!_nodes.TryGetValue(key, out var node)) return null;
+            _order.Remove(node);
+            _order.AddFirst(node);
+            return node.Value.Value;
+        }
+    }
+
+    public void Set(TKey key, TValue value)
+    {
+        lock (_nodes)
+        {
+            if (_nodes.TryGetValue(key, out var old)) _order.Remove(old);
+            _nodes[key] = _order.AddFirst((key, value));
+            while (_nodes.Count > capacity && _order.Last is { } last)
+            {
+                _order.RemoveLast();
+                _nodes.Remove(last.Value.Key);
+            }
+        }
+    }
+
+    public int Count { get { lock (_nodes) return _nodes.Count; } }
 }

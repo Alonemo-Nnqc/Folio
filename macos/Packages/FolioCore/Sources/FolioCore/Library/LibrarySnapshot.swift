@@ -28,6 +28,8 @@ public struct LibrarySnapshot: Sendable, Equatable {
     public var notedItems: Set<String> = []
     /// Lowercased text each item is searched against.
     public var searchText: [String: String] = [:]
+    /// easyScholar ranks per journal (`JournalMetrics.key(for:)`), including journals it does not list (META-30).
+    public var journalMetrics: [String: JournalMetrics] = [:]
 
     public init() {}
 
@@ -45,9 +47,91 @@ public struct LibrarySnapshot: Sendable, Equatable {
         (itemTags[itemId] ?? []).compactMap { tagsById[$0] }
     }
 
-    /// Descendant ids including the group itself.
-    public func groupAndChildren(_ groupId: String) -> [String] {
-        [groupId] + (childGroups[groupId] ?? [])
+    // MARK: Group hierarchy (SIDE-17)
+
+    /// The group followed by all its descendants, depth first in display order.
+    public func groupAndDescendants(_ groupId: String) -> [String] {
+        [groupId] + groupDescendants(groupId)
+    }
+
+    /// All descendants of a group (not the group itself), depth first in display order.
+    public func groupDescendants(_ groupId: String) -> [String] {
+        var result: [String] = []
+        var seen: Set<String> = [groupId]
+        func visit(_ id: String) {
+            for child in childGroups[id] ?? [] where seen.insert(child).inserted {
+                result.append(child)
+                visit(child)
+            }
+        }
+        visit(groupId)
+        return result
+    }
+
+    /// Ancestor ids from the top level down, not including the group itself.
+    public func groupAncestors(_ groupId: String) -> [String] {
+        var chain: [String] = []
+        var seen: Set<String> = [groupId]
+        var current = groupsById[groupId]?.parentId
+        while let id = current, seen.insert(id).inserted, let group = groupsById[id] {
+            chain.insert(id, at: 0)
+            current = group.parentId
+        }
+        return chain
+    }
+
+    /// The group's level: 1 for a top-level group.
+    public func groupDepth(_ groupId: String) -> Int {
+        groupAncestors(groupId).count + 1
+    }
+
+    /// How many levels the group and its subtree span: 1 for a group without subgroups.
+    public func groupSubtreeHeight(_ groupId: String) -> Int {
+        var seen: Set<String> = [groupId]
+        func height(_ id: String) -> Int {
+            1 + (childGroups[id] ?? []).filter { seen.insert($0).inserted }.map(height).reduce(0, max)
+        }
+        return height(groupId)
+    }
+
+    /// Names from the top-level ancestor down to the group, e.g. ["课题", "文献", "综述"].
+    public func groupPath(_ groupId: String) -> [String] {
+        (groupAncestors(groupId) + [groupId]).compactMap { groupsById[$0]?.name }
+    }
+
+    /// Whether a new subgroup may be created inside the group.
+    public func canAddSubgroup(to groupId: String) -> Bool {
+        groupsById[groupId] != nil && groupDepth(groupId) < LibraryGroup.maximumDepth
+    }
+
+    /// Whether `groupId` (with its subtree) may move under `parentId` (nil = top level): not into itself or
+    /// one of its descendants, and no deeper than `LibraryGroup.maximumDepth` levels.
+    public func canMoveGroup(_ groupId: String, toParent parentId: String?) -> Bool {
+        guard groupsById[groupId] != nil else { return false }
+        guard let parentId else { return true }
+        guard parentId != groupId, groupsById[parentId] != nil, !groupAncestors(parentId).contains(groupId) else { return false }
+        return groupDepth(parentId) + groupSubtreeHeight(groupId) <= LibraryGroup.maximumDepth
+    }
+
+    /// Every group in sidebar order, each followed by its subgroups; `depth` is 0 for top-level groups.
+    public var groupsInOrder: [(group: LibraryGroup, depth: Int)] {
+        var result: [(group: LibraryGroup, depth: Int)] = []
+        var seen: Set<String> = []
+        func visit(_ ids: [String], depth: Int) {
+            for id in ids where seen.insert(id).inserted {
+                guard let group = groupsById[id] else { continue }
+                result.append((group, depth))
+                visit(childGroups[id] ?? [], depth: depth + 1)
+            }
+        }
+        visit(topLevelGroups, depth: 0)
+        return result
+    }
+
+    /// The cached ranks of an item's journal, if it has a journal and they were fetched.
+    public func journalMetrics(for item: Item) -> JournalMetrics? {
+        guard let name = JournalMetrics.journalName(of: item) else { return nil }
+        return journalMetrics[JournalMetrics.key(for: name)]
     }
 
     static func fetch(_ db: Database) throws -> LibrarySnapshot {
@@ -88,6 +172,9 @@ public struct LibrarySnapshot: Sendable, Equatable {
         }
         for sort in try ViewSortRecord.fetchAll(db) {
             s.sorts[sort.scope] = SortState(column: sort.sortColumn, ascending: sort.ascending)
+        }
+        for record in try JournalMetricsRecord.fetchAll(db) {
+            s.journalMetrics[record.name] = record.metrics
         }
         var notes: [String: String] = [:]
         for note in try Note.fetchAll(db) {

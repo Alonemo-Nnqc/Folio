@@ -20,6 +20,7 @@ const COLUMNS: { key: string; title: string; sort: string; width: number }[] = [
   { key: "volume", title: "卷", sort: "volume", width: 56 }, { key: "issue", title: "期", sort: "issue", width: 56 }, { key: "pages", title: "页码", sort: "pages", width: 80 },
   { key: "readStatus", title: "阅读状态", sort: "readStatus", width: 64 }, { key: "rating", title: "评分", sort: "rating", width: 78 }, { key: "fileCount", title: "文件数", sort: "fileCount", width: 56 },
   { key: "citationKey", title: "引用键", sort: "citationKey", width: 140 },
+  { key: "journalRank", title: "分区", sort: "journalRank", width: 72 }, { key: "impactFactor", title: "影响因子", sort: "impactFactor", width: 68 },
 ];
 
 const TITLE_MIN = 160;
@@ -42,6 +43,8 @@ function cellText(key: string, item: Item, s: State): string {
     case "readStatus": return item.kind === "standalone" ? "—" : item.readStatusName;
     case "fileCount": return String(s.filesByItem[item.id]?.length ?? 0);
     case "citationKey": return dash(item.citationKey);
+    case "journalRank": return dash(item.journalMetrics?.rank);
+    case "impactFactor": return dash(item.journalMetrics?.impactFactor);
     default: return "";
   }
 }

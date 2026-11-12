@@ -47,7 +47,7 @@ extension AppModel {
         guard let group = snapshot.groupsById[id] else { return }
         let alert = NSAlert()
         alert.messageText = String(localized: "删除分组「\(group.name)」？")
-        let hasChildren = !(snapshot.childGroups[id] ?? []).isEmpty
+        let hasChildren = !snapshot.groupDescendants(id).isEmpty
         alert.informativeText = (hasChildren ? String(localized: "其中的子分组也会一并删除。") : "")
             + String(localized: "分组中的条目会保留在文库中；如需同时删除条目，请选择「同时将条目移到回收站」。")
         alert.addButton(withTitle: String(localized: "删除分组"))

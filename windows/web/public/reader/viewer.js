@@ -3,7 +3,7 @@
 //
 // Commands from the app: open, reload, tool, zoom, layout, find, findStep, goto, step, history, theme, shadows, sidebar,
 // sidebarTab, scrollTo, selectAnnotation, print, clearSelection.
-// Messages to the app: ready, error, loaded, page, position, scale, scroll, selection, markup, note, textbox, ink, link,
+// Messages to the app: ready, error, loaded, page, position, scale, scroll, selection, markup, note, textbox, ink, erase, eraserStep, link,
 // contextMenu, annotationEdit, annotationDelete, annotationMoved, key, findCount, toolReset.
 
 // The page runs in an iframe of the interface (reader/ReaderTab.tsx), which holds the app's end of the conversation.
@@ -119,6 +119,7 @@ async function open({ url, page, scale, top, left, layout, zoom, keepPanes, auth
     viewer.scrollPageIntoView({ pageNumber: Math.min(page, pdf.numPages), destArray: top != null ? [null, { name: "XYZ" }, left ?? 0, top, null] : undefined });
   }
   post({ type: "loaded", pages: pdf.numPages });
+  if (editMode) { textBlocks.clear(); asked.clear(); editing = null; setTimeout(askForVisibleBlocks, 300); }
   post({ type: "page", page: viewer.currentPageNumber, pages: pdf.numPages });
   // The first page matters most: thumbnails, outline and the annotation scan wait until it is on screen.
   const panes = keepPanes ? scrollTops() : null;
@@ -481,6 +482,12 @@ function selectionGeometry() {
   return { rect: union, end: { x: last.right, y: last.top, bottom: last.bottom } };
 }
 document.addEventListener("pointerdown", (e) => { if (e.button === 0) post({ type: "pointerDown" }); }, true);
+// The app's floating layers (menus, popovers, 划词翻译) close on a press here as on one in the app's window, which never sees
+// presses inside this page (WIN-30, ui/dismiss.ts): every button, before any tool acts on it.
+document.addEventListener("pointerdown", (e) => post({ type: "press", button: e.button }), true);
+window.addEventListener("blur", () => post({ type: "blur" }));
+// While a layer of the app is open, Esc is the app's: it closes the layer instead of leaving a tool or a selection.
+let overlayOpen = false;
 container.addEventListener("scroll", () => post({ type: "viewMoved" }), { passive: true });
 
 // MARK: Annotations added or changed since the file was loaded
@@ -748,6 +755,77 @@ function drawSelection(pageNumber, source) {
 let drag = null;
 let stroke = null;
 
+// MARK: Eraser (READER-30)
+//
+// Dragging erases what the ring passes over from ink annotations (pdf.js's and Folio's), drawn as it goes; on release the
+// app cuts the same tracks out of the file (Folio.Core InkEraser), one undo step for the whole drag. Ink still being
+// written (a moment after it was drawn) is left alone.
+
+const { eraseStrokes } = await import("./eraser.js");
+const ERASER_DIAMETERS = { small: 8, medium: 16, large: 32 };
+let eraserSize = "medium";
+let erasing = null;
+
+const eraserRadius = () => (ERASER_DIAMETERS[eraserSize] ?? 16) / 2;
+
+/** The ring under the pointer, as large on screen as the eraser at this zoom. */
+function updateEraserCursor() {
+  const scale = viewer.getPageView(Math.max(0, viewer.currentPageNumber - 1))?.viewport?.scale ?? viewer.currentScale * 4 / 3;
+  const size = Math.round(Math.max(6, Math.min(120, (ERASER_DIAMETERS[eraserSize] ?? 16) * scale)));
+  const half = size / 2, r = Math.max(1.5, half - 1.5);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${r}" fill="rgba(255,255,255,.28)" stroke="rgba(0,0,0,.7)" stroke-width="1.2"/><circle cx="${half}" cy="${half}" r="${Math.max(0.5, r - 1.2)}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1"/></svg>`;
+  document.body.style.setProperty("--eraser-cursor", `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${Math.floor(half)} ${Math.floor(half)}, crosshair`);
+}
+eventBus.on("scalechanging", () => { if (tool === "eraser") requestAnimationFrame(updateEraserCursor); });
+
+function startErasing(hit) {
+  erasing = { page: hit.number, view: hit.view, div: hit.div, path: [], before: new Map(), current: new Map(), frame: 0 };
+  continueErasing(hit.x, hit.y);
+}
+
+/** One more point of the track: the ink under the newest stretch is cut, and the page redrawn on the next frame. */
+function continueErasing(x, y) {
+  const e = erasing;
+  const last = e.path.length ? e.path.slice(-2) : null;
+  e.path.push(x, y);
+  const segment = last ? [...last, x, y] : [x, y];
+  let changed = false;
+  for (const entry of pageAnnotations.get(e.page) ?? []) {
+    if (entry.subtype !== "Ink" || isPending(entry.id) || !entry.strokes?.length) continue;
+    const left = eraseStrokes(entry.strokes, segment, eraserRadius() + (entry.width ?? 1) / 2);
+    if (!left) continue;
+    if (!e.before.has(entry.id)) e.before.set(entry.id, entry);
+    e.current.set(entry.id, left.length ? changedCopy(entry, { strokes: left, rect: boundsOf(left.flat()) }) : null);
+    changed = true;
+  }
+  if (changed && !e.frame) e.frame = requestAnimationFrame(() => { e.frame = 0; showErasing(e); });
+}
+
+/** What the drag has erased so far, on screen (not in the undo history yet). */
+function showErasing(e) {
+  const list = (pageAnnotations.get(e.page) ?? []).filter((a) => !e.current.has(a.id) || e.current.get(a.id));
+  const ids = new Map(list.map((a, i) => [a.id, i]));
+  for (const [id, entry] of e.current) if (entry && ids.has(id)) list[ids.get(id)] = entry;
+  pageAnnotations.set(e.page, list);
+  syncCanvas(e.page);
+  drawMarks(e.page);
+}
+
+function finishErasing() {
+  const e = erasing;
+  erasing = null;
+  cancelAnimationFrame(e.frame);
+  if (!e.before.size) return;
+  // Back to how it was, then the whole drag as one change: one undo step, and the thumbnails and list follow.
+  const list = pageAnnotations.get(e.page) ?? [];
+  for (const [id, original] of e.before) {
+    const index = list.findIndex((a) => a.id === id);
+    if (index >= 0) list[index] = original; else list.push(original);
+  }
+  commit([...e.before].map(([id, before]) => ({ page: e.page, before, after: e.current.get(id) ?? null })));
+  post({ type: "erase", page: e.page, ids: [...e.before.keys()], paths: [e.path], radius: eraserRadius() });
+}
+
 // MARK: Moving the page with the mouse
 //
 // Dragging from an empty part of the page moves it, as with a hand tool, while dragging from text still selects it. The
@@ -867,6 +945,13 @@ container.addEventListener("pointerdown", (e) => {
     post({ type: tool, page: hit.number, x: hit.x, y: hit.y, clientX: e.clientX, clientY: e.clientY, color });
     return;
   }
+  if (tool === "eraser") {
+    e.preventDefault();
+    clearSelection();
+    container.setPointerCapture(e.pointerId);
+    startErasing(hit);
+    return;
+  }
   if (tool === "ink") {
     e.preventDefault();
     container.setPointerCapture(e.pointerId);
@@ -899,6 +984,16 @@ container.addEventListener("pointerdown", (e) => {
 }, true);
 
 container.addEventListener("pointermove", (e) => {
+  if (erasing) {
+    // Over the page it started on, even past its edge (the track just goes on outside).
+    const origin = erasing.div.getBoundingClientRect();
+    const events = e.getCoalescedEvents?.() ?? [];
+    for (const event of events.length ? events : [e]) {
+      const [x, y] = erasing.view.viewport.convertToPdfPoint(event.clientX - origin.left, event.clientY - origin.top);
+      continueErasing(x, y);
+    }
+    return;
+  }
   if (stroke) {
     const origin = stroke.hit.div.getBoundingClientRect();
     const p = [e.clientX - origin.left, e.clientY - origin.top];
@@ -937,6 +1032,7 @@ container.addEventListener("pointerleave", () => { clearTimeout(tipTimer); tip.h
 
 function finishPointer(e) {
   if (endPan()) return;
+  if (erasing) { finishErasing(); return; }
   if (stroke) {
     const { canvas, hit, points } = stroke;
     stroke = null;
@@ -976,6 +1072,8 @@ document.addEventListener("contextmenu", (e) => {
   if (e.target.closest?.("input, textarea")) return;
   const hit = e.target.closest?.("#viewerContainer") ? pageAt(e) : null;
   const message = { type: "contextMenu", clientX: e.clientX, clientY: e.clientY, kind: "none" };
+  // While erasing, the menu picks the eraser's size.
+  if (hit && tool === "eraser") { post({ ...message, kind: "eraser" }); return; }
   if (hit) {
     const annotation = annotationAt(hit);
     const info = selectionInfo();
@@ -1052,10 +1150,21 @@ container.addEventListener("touchend", (e) => { if (e.touches.length < 2) touchG
 
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest?.("input, textarea");
+  if (e.key === "Escape" && overlayOpen && !e.isComposing) {
+    e.preventDefault();
+    post({ type: "escape" });
+    return;
+  }
   if (e.key === "Escape") {
     if (selected) select(null);
     else if (tool !== "select") post({ type: "toolReset" });
     else if (lastQuery && !typing) { /* the search stays until it is cleared in its box */ }
+    e.preventDefault();
+    return;
+  }
+  // [ and ] make the eraser smaller and larger, as in drawing apps.
+  if (!typing && tool === "eraser" && (e.key === "[" || e.key === "]") && !e.ctrlKey && !e.altKey) {
+    post({ type: "eraserStep", step: e.key === "[" ? -1 : 1 });
     e.preventDefault();
     return;
   }
@@ -1262,7 +1371,7 @@ async function refreshAnnotations() {
     const list = annotations.map((a) => {
       const entry = {
         id: a.id, page: i, subtype: a.subtype, rect: Array.from(a.rect), quads: a.quadPoints ? Array.from(a.quadPoints) : null,
-        strokes: a.inkLists ? a.inkLists.map((l) => Array.from(l)) : null,
+        strokes: a.inkLists ? a.inkLists.map((l) => Array.from(l)) : null, width: a.borderStyle?.width || 1,
         colorRgb: a.color ? Array.from(a.color) : rgbOfKey("yellow"), colorKey: nearestColorKey(a.color),
         contents: a.contentsObj?.str ?? a.contents ?? "", quoted: quotedText(content, a), author: a.titleObj?.str ?? "", live: false,
       };
@@ -1497,6 +1606,105 @@ async function print() {
   }
 }
 
+// MARK: 编辑 PDF 文字 (EDIT-01)
+//
+// While on, the text blocks of the pages light up under the pointer (their geometry comes from the app: Folio.Core's
+// PdfTextEditor); a click opens the block's text in place, set like the page; finishing (Ctrl+Enter or a click elsewhere)
+// sends it to the app, which writes the file and has the page reload where it was. Esc gives up the edit.
+
+let editMode = false;
+const textBlocks = new Map(); // page → blocks
+const asked = new Set();
+let editing = null;
+
+function setEditMode(on) {
+  editMode = on;
+  document.body.classList.toggle("edit-mode", on);
+  if (!on) { finishEditing(false); document.querySelectorAll(".folio-edit-layer").forEach((l) => l.remove()); return; }
+  select(null);
+  clearSelection();
+  textBlocks.clear(); asked.clear();
+  askForVisibleBlocks();
+}
+
+function askForVisibleBlocks() {
+  if (!editMode || !pdf) return;
+  const first = Math.max(1, viewer.currentPageNumber - 1), last = Math.min(pdf.numPages, viewer.currentPageNumber + 2);
+  for (let page = first; page <= last; page++) {
+    if (textBlocks.has(page)) drawEditLayer(page);
+    else if (!asked.has(page)) { asked.add(page); post({ type: "needBlocks", page }); }
+  }
+}
+
+function drawEditLayer(page) {
+  const view = viewer.getPageView(page - 1);
+  if (!view?.div || !view.viewport) return;
+  view.div.querySelector(".folio-edit-layer")?.remove();
+  if (!editMode) return;
+  const layer = document.createElement("div");
+  layer.className = "folio-edit-layer";
+  for (const block of textBlocks.get(page) ?? []) {
+    const [x1, y1, x2, y2] = view.viewport.convertToViewportRectangle(block.rect);
+    const box = document.createElement("div");
+    box.className = `edit-block${block.editable ? "" : " locked"}`;
+    box.style.cssText = `left:${Math.min(x1, x2) - 3}px;top:${Math.min(y1, y2) - 2}px;width:${Math.abs(x2 - x1) + 6}px;height:${Math.abs(y2 - y1) + 4}px`;
+    box.title = block.editable ? "" : block.reason ?? "";
+    box.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      if (editing) { finishEditing(true); return; }
+      if (block.editable) beginEditing(page, block, box, view);
+      else post({ type: "editRefused", reason: block.reason ?? "" });
+    });
+    layer.appendChild(box);
+  }
+  view.div.appendChild(layer);
+}
+
+function beginEditing(page, block, box, view) {
+  const scale = view.viewport.scale;
+  const area = document.createElement("textarea");
+  area.className = "edit-text";
+  area.spellcheck = false;
+  area.value = block.text;
+  const size = block.fontSize * scale;
+  area.style.cssText = `font-size:${size}px;line-height:${Math.max(block.lineHeight, block.fontSize) * scale}px;color:${block.color};`
+    + `text-align:${block.alignment === "center" ? "center" : block.alignment === "justified" ? "justify" : "left"};`
+    + `font-weight:${block.bold ? 600 : 400};font-style:${block.italic ? "italic" : "normal"};`
+    + `font-family:${block.serif ? '"Times New Roman", "SimSun", serif' : '"Segoe UI", "Microsoft YaHei", sans-serif'};`;
+  box.classList.add("open");
+  box.appendChild(area);
+  const grow = () => { area.style.height = "auto"; area.style.height = `${Math.max(box.clientHeight, area.scrollHeight)}px`; };
+  area.addEventListener("input", grow);
+  area.addEventListener("pointerdown", (e) => e.stopPropagation());
+  area.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") { e.preventDefault(); finishEditing(false); }
+    else if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); finishEditing(true); }
+  });
+  editing = { page, block, box, area };
+  requestAnimationFrame(() => { grow(); area.focus(); area.select(); });
+}
+
+function finishEditing(save) {
+  if (!editing) return;
+  const { page, block, box, area } = editing;
+  editing = null;
+  const text = area.value;
+  area.remove();
+  box.classList.remove("open");
+  if (save && text !== block.text) {
+    box.classList.add("busy");
+    post({ type: "editText", page, block: block.index, expected: block.text, text });
+  }
+}
+
+// A press on the page outside the block being edited finishes it.
+container.addEventListener("pointerdown", (e) => { if (editing && !editing.box.contains(e.target)) finishEditing(true); }, true);
+eventBus.on("pagerendered", ({ pageNumber }) => { if (editMode && textBlocks.has(pageNumber) && !(editing && editing.page === pageNumber)) drawEditLayer(pageNumber); });
+eventBus.on("pagechanging", () => askForVisibleBlocks());
+container.addEventListener("scroll", () => { if (editMode) askForVisibleBlocks(); }, { passive: true });
+
 // MARK: Commands from the app
 
 host.addEventListener("message", async (e) => {
@@ -1577,6 +1785,8 @@ host.addEventListener("message", async (e) => {
     case "tool": {
       const changed = m.tool !== tool;
       tool = m.tool; color = m.color ?? color;
+      if (m.eraserSize) eraserSize = m.eraserSize;
+      if (tool === "eraser") updateEraserCursor();
       document.body.className = document.body.className.replace(/\btool-\S+/g, "").trim() + ` tool-${tool}`;
       if (tool !== "select") select(null);
       // Choosing a markup tool with text already selected marks that text right away, as in the macOS reader.
@@ -1634,6 +1844,9 @@ host.addEventListener("message", async (e) => {
     case "selectAnnotation": select(null); break;
     case "flushPosition": if (pdf) post({ type: "position", ...currentPosition() }); break;
     case "clearSelection": clearSelection(); break;
+    case "overlay": overlayOpen = !!m.open; break;
+    case "editMode": setEditMode(!!m.on); break;
+    case "textBlocks": textBlocks.set(m.page, m.blocks ?? []); drawEditLayer(m.page); break;
     case "print": await print(); break;
   }
 });

@@ -19,9 +19,13 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private let colorPanel = ColorPanelBridge()
     private static let expandedKey = "sidebarExpandedGroups"
     private static let collapsedSectionsKey = "sidebarCollapsedSections"
+    /// Expanded groups at every level (SIDE-05/17). Kept here rather than read back from the outline: the subgroups of
+    /// a collapsed group are not loaded, so the outline cannot tell whether they are expanded.
+    private var expandedGroupIds: Set<String>
 
     init(model: AppModel) {
         self.model = model
+        expandedGroupIds = Set(UserDefaults.standard.stringArray(forKey: Self.expandedKey) ?? [])
         super.init()
         configureOutline()
     }
@@ -119,8 +123,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case .builtin: chain = [.libraryHeader]
         case .tag: chain = [.tagsHeader]
         case .group(let id):
-            chain = [.groupsHeader]
-            if let parent = model?.snapshot.groupsById[id]?.parentId { chain.append(.group(parent)) }
+            chain = [.groupsHeader] + (model?.snapshot.groupAncestors(id) ?? []).map { .group($0) }
         default: break
         }
         let wasSyncing = isSyncingSelection
@@ -135,23 +138,38 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         isRestoringExpansion = true
         defer { isRestoringExpansion = false }
         let collapsedSections = Set(UserDefaults.standard.stringArray(forKey: Self.collapsedSectionsKey) ?? [])
-        let expandedGroups = Set(UserDefaults.standard.stringArray(forKey: Self.expandedKey) ?? [])
         for section in tree.roots where !collapsedSections.contains(Self.key(section.kind)) {
             outline.expandItem(section)
         }
-        if let groups = tree.node(for: .groupsHeader) {
-            for group in groups.children where expandedGroups.contains(group.groupId ?? "") && !group.children.isEmpty {
-                outline.expandItem(group)
-            }
+        if let groups = tree.node(for: .groupsHeader) { restoreExpansion(of: groups.children) }
+    }
+
+    /// Expands the saved groups among `nodes`, then their saved subgroups, level by level.
+    private func restoreExpansion(of nodes: [SidebarNode]) {
+        let wasRestoring = isRestoringExpansion
+        isRestoringExpansion = true
+        defer { isRestoringExpansion = wasRestoring }
+        for node in nodes where !node.children.isEmpty && expandedGroupIds.contains(node.groupId ?? "") {
+            if !outline.isItemExpanded(node) { outline.expandItem(node) }
+            restoreExpansion(of: node.children)
         }
+    }
+
+    /// Records an expanded or collapsed row; collapsing a group keeps its subgroups' state for when it opens again.
+    private func noteExpansion(_ notification: Notification, expanded: Bool) {
+        guard !isRestoringExpansion, let node = notification.userInfo?["NSObject"] as? SidebarNode else { return }
+        if let id = node.groupId {
+            if expanded { expandedGroupIds.insert(id) } else { expandedGroupIds.remove(id) }
+        }
+        persistExpansion()
     }
 
     private func persistExpansion() {
         guard !isRestoringExpansion, !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
         let collapsed = tree.roots.filter { !outline.isItemExpanded($0) }.map { Self.key($0.kind) }
         UserDefaults.standard.set(collapsed, forKey: Self.collapsedSectionsKey)
-        let expanded = (tree.node(for: .groupsHeader)?.children ?? []).filter { outline.isItemExpanded($0) }.compactMap(\.groupId)
-        UserDefaults.standard.set(expanded, forKey: Self.expandedKey)
+        if let groups = model?.snapshot.groupsById { expandedGroupIds.formIntersection(groups.keys) }
+        UserDefaults.standard.set(expandedGroupIds.sorted(), forKey: Self.expandedKey)
     }
 
     private static func key(_ kind: SidebarNode.Kind) -> String {
@@ -256,12 +274,16 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
 
     func outlineViewItemDidCollapse(_ notification: Notification) {
         isSyncingSelection = false
-        persistExpansion()
+        noteExpansion(notification, expanded: false)
         syncSelection()
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) {
-        persistExpansion()
+        noteExpansion(notification, expanded: true)
+        // Opening a section or group brings back the subgroups that were open inside it.
+        if let node = notification.userInfo?["NSObject"] as? SidebarNode, !isRestoringExpansion {
+            restoreExpansion(of: node.children)
+        }
         if !isRestoringExpansion, !isSyncingSelection { syncSelection() }
     }
 
@@ -323,7 +345,8 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             break
         case .group(let id):
             let row = outline.clickedRow
-            if model.snapshot.groupsById[id]?.parentId == nil {
+            // Groups nest four levels deep: the last level has no 新建子分组 (SIDE-06/17).
+            if model.snapshot.canAddSubgroup(to: id) {
                 menu.addItem(item(String(localized: "新建子分组"), "folder.badge.plus") { model.createGroup(parentId: id) })
             }
             menu.addItem(item(String(localized: "重命名"), "pencil") { [weak self] in self?.beginRenaming(row: row) })
@@ -442,7 +465,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private func dragSource(_ info: any NSDraggingInfo) -> SidebarDragSource? {
         let pasteboard = info.draggingPasteboard
         if let id = pasteboard.pasteboardItems?.first?.string(forType: .folioGroup) {
-            return .group(id: id, hasChildren: !(model?.snapshot.childGroups[id] ?? []).isEmpty)
+            return .group(id: id, height: model?.snapshot.groupSubtreeHeight(id) ?? 1)
         }
         let dragged = ItemPasteboard.draggedItems(pasteboard)
         if let first = dragged.first {
@@ -453,7 +476,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     }
 
     /// Maps the outline's proposal onto the sidebar's drop vocabulary. Top-level groups are the
-    /// children of the 分组 section, so their gaps are child indexes of that header.
+    /// children of the 分组 section, so their gaps are child indexes of that header; the gaps between
+    /// subgroups at any level are child indexes of their parent group, and the outline draws the
+    /// insertion line at that level's indentation.
     private func dropTarget(item: SidebarNode?, childIndex index: Int) -> SidebarDropTarget {
         guard let item else { return .elsewhere }
         let onItem = index == NSOutlineViewDropOnItemIndex
@@ -463,9 +488,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case .builtin(let scope):
             return onItem ? .builtin(scope) : .elsewhere
         case .group(let id):
-            let isTopLevel = model?.snapshot.groupsById[id]?.parentId == nil
-            if onItem { return .group(id: id, isTopLevel: isTopLevel) }
-            return isTopLevel ? .childGap(parentId: id, index: index) : .elsewhere
+            let ancestors = model?.snapshot.groupAncestors(id) ?? []
+            if onItem { return .group(id: id, ancestors: ancestors) }
+            return .childGap(parentId: id, ancestors: ancestors, index: index)
         case .tag(let id):
             return onItem ? .tag(id) : .elsewhere
         case .libraryHeader, .tagsHeader:

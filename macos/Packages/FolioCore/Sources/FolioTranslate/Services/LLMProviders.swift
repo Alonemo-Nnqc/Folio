@@ -34,6 +34,8 @@ struct OpenAIChatProvider: ChatModel {
     var extraHeaders: [String: String] = [:]
     var limits: ProviderLimits
 
+    func prewarm() async { await HTTP.warm(endpoint) }
+
     func complete(system: String, user: String) async throws -> String {
         var body: [String: Any] = [
             "model": model,
@@ -72,6 +74,8 @@ struct AnthropicProvider: ChatModel {
     var model: String
     var limits: ProviderLimits
 
+    func prewarm() async { await HTTP.warm(base) }
+
     func complete(system: String, user: String) async throws -> String {
         let body: [String: Any] = [
             "model": model, "max_tokens": 8192, "system": system,
@@ -91,6 +95,8 @@ struct GeminiProvider: ChatModel {
     var apiKey: String
     var model: String
     var limits: ProviderLimits
+
+    func prewarm() async { await HTTP.warm(URL(string: "https://generativelanguage.googleapis.com/")!) }
 
     func complete(system: String, user: String) async throws -> String {
         let name = model.hasPrefix("models/") ? String(model.dropFirst(7)) : model
@@ -118,6 +124,8 @@ struct AzureOpenAIProvider: ChatModel {
     var deployment: String
     var apiVersion: String
     var limits: ProviderLimits
+
+    func prewarm() async { if let url = URL(string: resource) { await HTTP.warm(url) } }
 
     func complete(system: String, user: String) async throws -> String {
         let base = resource.hasSuffix("/") ? String(resource.dropLast()) : resource

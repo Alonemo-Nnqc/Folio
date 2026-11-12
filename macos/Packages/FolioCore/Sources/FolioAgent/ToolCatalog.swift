@@ -145,12 +145,12 @@ public enum ToolCatalog {
             writes: false, destructive: false),
         ToolDefinition(
             name: "list_collections", title: "List groups and tags",
-            description: "Return the user's groups (two levels, with item counts and colours) and tags, plus the counts of all items, unfiled items and the trash.",
+            description: "Return the user's groups (nested up to four levels, with item counts and colours) and tags, plus the counts of all items, unfiled items and the trash.",
             inputSchema: schema([:]),
             writes: false, destructive: false),
         ToolDefinition(
             name: "get_item", title: "Get one item",
-            description: "Full record of one item: bibliographic fields, abstract, tags, groups, files (with absolute paths), reading status, rating, when it was last read, the user's note and a folio:// link.",
+            description: "Full record of one item: bibliographic fields, abstract, tags, groups, files (with absolute paths), reading status, rating, when it was last read, the user's note, the journal's ranks when known (CAS zone, JCR quartile, impact factor) and a folio:// link.",
             inputSchema: schema(["item": string(itemRef)], required: ["item"]),
             writes: false, destructive: false),
         ToolDefinition(
@@ -293,10 +293,10 @@ public enum ToolCatalog {
             writes: true, destructive: false),
         ToolDefinition(
             name: "create_group", title: "Create a group",
-            description: "Create a group, optionally inside a top-level parent group (groups are at most two levels deep).",
+            description: "Create a group, optionally inside a parent group (groups nest at most four levels deep).",
             inputSchema: schema([
                 "name": string("Group name."),
-                "parent": string("Optional parent group (name or id)."),
+                "parent": string("Optional parent group (name, \"Parent/Child\" path or id)."),
             ], required: ["name"]),
             writes: true, destructive: false),
         ToolDefinition(
@@ -323,7 +323,7 @@ public enum ToolCatalog {
             writes: true, destructive: true),
         ToolDefinition(
             name: "update_group", title: "Rename, recolour or move a group",
-            description: "Rename a group, change its folder colour, or move it under another top-level group (\"parent\": \"\" makes it top-level). Groups are at most two levels deep.",
+            description: "Rename a group, change its folder colour, or move it with its subgroups under another group (\"parent\": \"\" makes it top-level). Groups nest at most four levels deep, subgroups included.",
             inputSchema: schema([
                 "group": string("The group (name, \"Parent/Child\" or id)."),
                 "name": string("New name."),
@@ -333,7 +333,7 @@ public enum ToolCatalog {
             writes: true, destructive: false),
         ToolDefinition(
             name: "delete_group", title: "Delete a group",
-            description: "Delete a group and its subgroups. Its items stay in the library unless trash_items is true (then they go to the trash). Confirm with the user first.",
+            description: "Delete a group and all its subgroups. Its items stay in the library unless trash_items is true (then they go to the trash). Confirm with the user first.",
             inputSchema: schema([
                 "group": string("The group (name, \"Parent/Child\" or id)."),
                 "trash_items": boolean("Also move the group's items to the trash (default false)."),

@@ -203,6 +203,15 @@ final class TranslationCoordinator {
         current.task = Task { [weak self] in
             guard let self else { return }
             do {
+                // A scan has no text to translate: its text is recognised first (OCR-01).
+                if await model.ocr.isScanned(fileId: next.fileId), !current.cancelled {
+                    self.jobs[next.itemId]?.stage = String(localized: "正在识别扫描件文字")
+                    try await model.ocr.recognizeAndWait(fileId: next.fileId) { [weak self] progress in
+                        self?.jobs[next.itemId]?.fraction = progress.fraction
+                    }
+                    self.jobs[next.itemId]?.fraction = nil
+                    self.jobs[next.itemId]?.stage = String(localized: "正在启动翻译")
+                }
                 try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
                 let service = TranslationServiceCatalog.service(id: serviceID)
                 let request = TranslationRequest(

@@ -265,6 +265,75 @@ final class TextCell: NSTableCellView {
     }
 }
 
+/// 分区 column: the 中科院 zone (or JCR quartile) as a tinted capsule, Top in bold (META-30).
+final class JournalRankCell: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("JournalRankCell")
+    private let capsule = RankCapsuleView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        identifier = Self.identifier
+        capsule.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(capsule)
+        NSLayoutConstraint.activate([
+            capsule.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            capsule.trailingAnchor.constraint(equalTo: trailingAnchor),
+            capsule.topAnchor.constraint(equalTo: topAnchor),
+            capsule.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
+
+    func configure(_ metrics: JournalMetrics?) {
+        let text = metrics?.rankText
+        let tint: NSColor = if let zone = metrics?.casZone ?? metrics?.casBaseZone {
+            JournalBadgeTint.cas(zone)
+        } else {
+            JournalBadgeTint.quartile(metrics?.jcrQuartile ?? 4)
+        }
+        capsule.configure(text, tint: tint, bold: metrics?.casZone != nil && metrics?.casTop == true)
+        toolTip = metrics.flatMap { $0.isIndexed ? $0.badges.map(\.detail).joined(separator: "\n") : nil }
+        setAccessibilityLabel(text ?? "—")
+    }
+}
+
+private final class RankCapsuleView: NSView {
+    private var text: String?
+    private var tint: NSColor = .systemGray
+    private var bold = false
+
+    override var isFlipped: Bool { true }
+
+    func configure(_ text: String?, tint: NSColor, bold: Bool) {
+        guard text != self.text || tint != self.tint || bold != self.bold else { return }
+        self.text = text
+        self.tint = tint
+        self.bold = bold
+        needsDisplay = true
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let scale = window?.backingScaleFactor ?? 2
+        guard let text else {
+            CapsuleLabel.drawText("—", in: NSRect(x: 0, y: 0, width: CapsuleLabel.textWidth("—", font: ItemListMetrics.bodyFont), height: bounds.height),
+                                  color: .secondaryLabelColor, font: ItemListMetrics.bodyFont, flipped: true, scale: scale)
+            return
+        }
+        let font = bold ? JournalBadgeTint.emphasizedFont : JournalBadgeTint.font
+        let height = CapsuleLabel.tagHeight
+        let width = min(CapsuleLabel.textWidth(text, font: font) + CapsuleLabel.tagPadding * 2, bounds.width - 2)
+        let y = ((bounds.height - height) / 2 * scale).rounded() / scale
+        CapsuleLabel.draw(text, in: NSRect(x: 0, y: y, width: width, height: height), tint: tint, font: font,
+                          padding: CapsuleLabel.tagPadding, appearance: effectiveAppearance, flipped: true, scale: scale)
+    }
+}
+
 /// Tag chips column cell.
 final class TagsCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("TagsCell")
@@ -296,6 +365,19 @@ enum CellText {
         case .read: ("", .clear)
         }
         return NSAttributedString(string: symbol, attributes: [.foregroundColor: color, .font: NSFont.systemFont(ofSize: 10)])
+    }
+
+    /// Right-aligned, tabular digits so a column of impact factors lines up; "—" when unknown.
+    static func impactFactor(_ value: Double?) -> NSAttributedString {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .right
+        guard let value else {
+            return NSAttributedString(string: "—", attributes: [.foregroundColor: NSColor.secondaryLabelColor, .font: ItemListMetrics.bodyFont,
+                                                                 .paragraphStyle: paragraph])
+        }
+        return NSAttributedString(string: JournalMetrics.format(value), attributes: [
+            .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph,
+            .font: NSFont.monospacedDigitSystemFont(ofSize: ItemListMetrics.bodyFont.pointSize, weight: .regular)])
     }
 
     static func rating(_ value: Int) -> NSAttributedString {

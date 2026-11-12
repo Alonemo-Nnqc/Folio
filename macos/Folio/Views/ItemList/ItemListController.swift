@@ -318,6 +318,14 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             let cell = make(TextCell.self, TextCell.identifier)
             cell.configure(CellText.rating(entry.rating))
             return cell
+        case .journalRank:
+            let cell = make(JournalRankCell.self, JournalRankCell.identifier)
+            cell.configure(snapshot.journalMetrics(for: entry))
+            return cell
+        case .impactFactor:
+            let cell = make(TextCell.self, TextCell.identifier)
+            cell.configure(CellText.impactFactor(snapshot.journalMetrics(for: entry)?.impactFactor))
+            return cell
         default:
             let cell = make(TextCell.self, TextCell.identifier)
             cell.configure(column.text(for: entry, snapshot: snapshot),

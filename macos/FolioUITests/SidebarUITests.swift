@@ -42,7 +42,7 @@ final class SidebarUITests: FolioUITestCase {
 
         sidebarRow("2026美赛").rightClick()
         waitFor(menuItem("重命名"))
-        XCTAssertFalse(menuItem("新建子分组").exists, "two levels at most")
+        XCTAssertTrue(menuItem("新建子分组").exists, "four levels: a second-level group can have subgroups")
         app.typeKey(.escape, modifierFlags: [])
 
         let snapshot = try library.snapshot()

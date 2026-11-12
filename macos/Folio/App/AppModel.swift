@@ -82,6 +82,10 @@ final class AppModel {
     @ObservationIgnored lazy var readers = ReaderCoordinator(model: self)
     @ObservationIgnored lazy var translations = TranslationCoordinator(model: self)
     @ObservationIgnored lazy var connector = ConnectorServer(model: self)
+    /// 期刊分区与影响因子 (META-30). Observable itself: the inspector and 设置 read its state.
+    @ObservationIgnored lazy var journalMetrics = JournalMetricsCoordinator(model: self)
+    /// 扫描件识别 (OCR-01). Observable itself: readers and the list show its progress.
+    @ObservationIgnored lazy var ocr = OCRCoordinator(model: self)
     /// The live list controller, for the simulated-drop check (see SimulatedDrop).
     @ObservationIgnored weak var itemListController: ItemListController?
     @ObservationIgnored weak var sidebarController: SidebarController?
@@ -202,6 +206,12 @@ final class AppModel {
         if case .tag(let id) = sidebarSelection, snapshot.tagsById[id] == nil { sidebarSelection = .all }
         recompute()
         if firstLoad {
+            // Filling in journal ranks waits until the window is up and settled.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.journalMetrics.snapshotDidChange() }
+        } else {
+            journalMetrics.snapshotDidChange()
+        }
+        if firstLoad {
             importer.libraryDidLoad()
             readers.restoreTabs()
             PreviewHooks.apply(to: self)
@@ -291,11 +301,8 @@ final class AppModel {
         return snapshot.files(of: itemId).first
     }
 
-    /// Groups ordered for menus: each top-level group followed by its children.
+    /// Groups ordered for menus: each group followed by its subgroups, `depth` 0 at the top level.
     var groupsForMenus: [(group: LibraryGroup, depth: Int)] {
-        snapshot.topLevelGroups.flatMap { id -> [(LibraryGroup, Int)] in
-            guard let group = snapshot.groupsById[id] else { return [] }
-            return [(group, 0)] + (snapshot.childGroups[id] ?? []).compactMap { snapshot.groupsById[$0].map { ($0, 1) } }
-        }
+        snapshot.groupsInOrder
     }
 }

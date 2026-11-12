@@ -405,8 +405,9 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     @objc func addByIdentifier(_ sender: Any?) { model.activeSheet = .identifierAdd }
     @objc func newGroup(_ sender: Any?) { model.createGroup() }
     @objc func newSubgroup(_ sender: Any?) {
+        // Inside the selected group; from a group on the last level, next to it.
         if case .group(let id) = model.sidebarSelection {
-            model.createGroup(parentId: model.snapshot.groupsById[id]?.parentId ?? id)
+            model.createGroup(parentId: model.snapshot.canAddSubgroup(to: id) ? id : model.snapshot.groupsById[id]?.parentId)
         }
     }
     @objc func newTag(_ sender: Any?) { model.activeSheet = .tagEditor(tagId: nil, applyTo: targetItemIds) }

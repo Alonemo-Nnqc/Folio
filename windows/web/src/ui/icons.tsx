@@ -1,4 +1,4 @@
-import { AlertTriangle, BookOpen, Check, CheckCircle2, Copy, Download, FileText, Folder, HelpCircle, Info, Languages, RefreshCw, Search, Share, StickyNote, Trash2, Upload, X, Quote } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, CheckCircle2, Copy, Download, FileText, Folder, HelpCircle, Info, Languages, RefreshCw, Search, Share, StickyNote, Trash2, Upload, X, Quote, KeyRound } from "lucide-react";
 import type { ReactElement } from "react";
 
 /** The icons the app names in its toasts. */
@@ -22,6 +22,7 @@ export function namedIcon(name: string, size = 15): ReactElement {
     case "cite": return <Quote {...p} />;
     case "reader": return <BookOpen {...p} />;
     case "refresh": return <RefreshCw {...p} />;
+    case "key": return <KeyRound {...p} />;
     case "document": return <FileText {...p} />;
     default: return <Info {...p} />;
   }

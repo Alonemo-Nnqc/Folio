@@ -6,18 +6,20 @@ import FolioCore
 /// End-to-end tests driving `ZoteroReader` against a minimal, SQL-built Zotero database —
 /// covering every scenario called out in the Task 2C spec.
 @Suite struct ZoteroReaderTests {
-    @Test func flattensThreeLevelCollectionAndSkipsNonRegularAndTrashedItems() throws {
+    @Test func flattensFiveLevelCollectionAndSkipsNonRegularAndTrashedItems() throws {
         let fixture = try ZoteroFixtureDB()
 
-        // Collections: 论文辅导 (top) > 2025年 (mid) > B (deep, not exported).
+        // Collections: 论文辅导 > 2025年 > B > 数据 (four exported levels) > 原始 (fifth level, not exported).
         try fixture.addCollection(id: 1, key: "TOP1", name: "论文辅导")
         try fixture.addCollection(id: 2, key: "MID1", name: "2025年", parent: 1)
-        try fixture.addCollection(id: 3, key: "DEEP1", name: "B", parent: 2)
+        try fixture.addCollection(id: 3, key: "L3", name: "B", parent: 2)
+        try fixture.addCollection(id: 4, key: "L4", name: "数据", parent: 3)
+        try fixture.addCollection(id: 5, key: "DEEP1", name: "原始", parent: 4)
 
-        // A kept regular item, filed directly in the deep (level-3) collection.
+        // A kept regular item, filed directly in the deep (level-5) collection.
         try fixture.addItem(id: 10, type: ZoteroFixtureDB.journalArticleType)
         try fixture.addField(item: 10, name: "title", value: "Kept Paper")
-        try fixture.addToCollection(item: 10, collection: 3)
+        try fixture.addToCollection(item: 10, collection: 5)
 
         // A trashed regular item — must not appear, and must count as trashed (not "kept").
         try fixture.addItem(id: 11, type: ZoteroFixtureDB.journalArticleType)
@@ -36,17 +38,19 @@ import FolioCore
         #expect(report.skippedNotes == 1)
         #expect(report.skippedAnnotations == 1)
 
-        // Only the two exportable levels become groups; "B" is merged into its level-2 ancestor.
-        #expect(library.groups.count == 2)
-        #expect(report.collections == 2)
+        // The four exportable levels become groups; "原始" is merged into its level-4 ancestor.
+        #expect(library.groups.count == 4)
+        #expect(report.collections == 4)
         let top = library.groups.first { $0.key == "TOP1" }
         let mid = library.groups.first { $0.key == "MID1" }
         #expect(top?.parentKey == nil)
         #expect(mid?.parentKey == "TOP1")
+        #expect(library.groups.first { $0.key == "L3" }?.parentKey == "MID1")
+        #expect(library.groups.first { $0.key == "L4" }?.parentKey == "L3")
         #expect(!library.groups.contains { $0.key == "DEEP1" })
 
         let kept = library.entries.first { if case .regular(let m) = $0.kind { return m.title == "Kept Paper" } else { return false } }
-        #expect(kept?.groupKeys == ["MID1"])
+        #expect(kept?.groupKeys == ["L4"])
     }
 
     @Test func linkedFileAndConnectorDownloadedAttachmentsAreKeptOnlyHTMLSnapshotIsSkipped() throws {

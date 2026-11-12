@@ -145,8 +145,9 @@ final class PDFWriter {
         return number
     }
 
-    /// The complete file. Unset objects are written as `null`.
-    func finish(root: Int, info: Int?) -> Data {
+    /// The complete file. Unset objects are written as `null`. `id` is the file identifier to keep (the two strings of
+    /// the trailer's `ID`), when the file is a new version of another.
+    func finish(root: Int, info: Int?, id: [Data]? = nil) -> Data {
         var out = Data()
         out.append(contentsOf: Array("%PDF-1.7\n%".utf8))
         out.append(contentsOf: [0xE2, 0xE3, 0xCF, 0xD3, 0x0A])
@@ -164,6 +165,7 @@ final class PDFWriter {
         out.append(contentsOf: Array(table.utf8))
         var trailer: [String: PDFValue] = ["Size": .int(bodies.count + 1), "Root": .ref(root)]
         if let info { trailer["Info"] = .ref(info) }
+        if let id, id.count == 2 { trailer["ID"] = .array(id.map { .string($0) }) }
         out.append(contentsOf: Array("trailer\n".utf8))
         PDFValue.dict(trailer).serialize(into: &out)
         out.append(contentsOf: Array("\nstartxref\n\(xref)\n%%EOF\n".utf8))

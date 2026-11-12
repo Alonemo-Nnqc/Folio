@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { BookText, ChevronDown, Columns2, GripVertical, Highlighter, Languages, MousePointer2, NotebookPen, PanelRight, PenLine, Printer, Search, StickyNote, Strikethrough, Type, Underline, ZoomIn, ZoomOut, MoveHorizontal, ChevronUp } from "lucide-react";
+import { BookText, ChevronDown, Eraser, TextCursorInput, Columns2, GripVertical, Highlighter, Languages, MousePointer2, NotebookPen, PanelRight, PenLine, Printer, Search, StickyNote, Strikethrough, Type, Underline, ZoomIn, ZoomOut, MoveHorizontal, ChevronUp } from "lucide-react";
 import { t } from "../i18n";
 import { setSetting } from "../store";
 import { Sheet } from "../ui/sheet";
@@ -14,8 +14,10 @@ export const TOOLBAR_ITEMS: { id: string; title: string; icon: any; tool?: boole
   { id: "note", title: "便签", icon: StickyNote, tool: true },
   { id: "textbox", title: "文本框", icon: Type, tool: true },
   { id: "ink", title: "手绘", icon: PenLine, tool: true },
+  { id: "eraser", title: "橡皮擦", icon: Eraser, tool: true },
   { id: "color", title: "批注颜色", icon: null },
   { id: "translate", title: "翻译", icon: BookText },
+  { id: "editText", title: "编辑 PDF", icon: TextCursorInput },
   { id: "selectionTranslate", title: "划词翻译", icon: Languages },
   { id: "search", title: "查找", icon: Search },
   { id: "zoomOut", title: "缩小", icon: ZoomOut },
@@ -29,7 +31,7 @@ export const TOOLBAR_ITEMS: { id: string; title: string; icon: any; tool?: boole
   { id: "print", title: "打印", icon: Printer },
 ];
 
-export const DEFAULT_TOOLBAR = ["view", "select", "highlight", "underline", "strike", "note", "textbox", "ink", "color", "translate", "search"];
+export const DEFAULT_TOOLBAR = ["view", "select", "highlight", "underline", "strike", "note", "textbox", "ink", "eraser", "color", "translate", "editText", "search"];
 
 export function toolbarIds(stored: unknown): string[] {
   const known = new Set(TOOLBAR_ITEMS.map((i) => i.id));

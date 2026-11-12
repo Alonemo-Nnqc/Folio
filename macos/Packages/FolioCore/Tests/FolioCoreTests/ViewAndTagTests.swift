@@ -54,6 +54,24 @@ import Testing
         #expect(counts[.all] == 2)
     }
 
+    @Test func parentGroupIncludesItemsFromEveryLevelOnce() throws {
+        let lib = try Library.temporary()
+        let l1 = try lib.createGroup(name: "L1")
+        let l2 = try lib.createGroup(name: "L2", parentId: l1.id)
+        let l3 = try lib.createGroup(name: "L3", parentId: l2.id)
+        let l4 = try lib.createGroup(name: "L4", parentId: l3.id)
+        let deep = try lib.importItem("Deep", toGroup: l4.id)
+        let mid = try lib.importItem("Mid", toGroup: l3.id)
+        _ = try lib.addItems([deep], toGroup: l2.id, includeSubgroups: false)
+        #expect(Set(try lib.rows(.group(l1.id))) == [deep, mid])
+        #expect(try lib.rows(.group(l1.id)).count == 2, "no duplicates")
+        #expect(try lib.rows(.group(l2.id), includeSubgroups: false) == [deep])
+        let counts = SidebarCounts.compute(try lib.snapshot(), includeSubgroupItems: true)
+        #expect(counts[.group(l1.id)] == 2)
+        #expect(counts[.group(l3.id)] == 2)
+        #expect(counts[.group(l4.id)] == 1)
+    }
+
     @Test func searchRequiresAllTokensAndMatchesTagsAndFiles() throws {
         let lib = try Library.temporary()
         let unet = try lib.importItem("UNet++ nested architecture")
@@ -227,6 +245,23 @@ import Testing
         #expect(again.itemsImported == 0)
         #expect(again.groupsCreated == 0)
         #expect(again.tagsCreated == 0)
+    }
+
+    @Test func importsNestedGroupsParentsFirstUpToFourLevels() throws {
+        let lib = try Library.temporary()
+        // Children listed before their parents, with positions that would put them first.
+        let groups = [
+            PreparedGroup(key: "5", name: "Five", parentKey: "4", position: 0),
+            PreparedGroup(key: "4", name: "Four", parentKey: "3", position: 0),
+            PreparedGroup(key: "3", name: "Three", parentKey: "2", position: 0),
+            PreparedGroup(key: "2", name: "Two", parentKey: "1", position: 0),
+            PreparedGroup(key: "1", name: "One", position: 9),
+        ]
+        let summary = try lib.importPrepared(PreparedLibrary(groups: groups))
+        #expect(summary.groupsCreated == 4, "the fifth level is skipped")
+        let s = try lib.snapshot()
+        let four = try #require(s.groupsById.values.first { $0.name == "Four" })
+        #expect(s.groupPath(four.id) == ["One", "Two", "Three", "Four"])
     }
 
     @Test func namesImportedTranslationsByWhoMadeThemNotByNumber() throws {

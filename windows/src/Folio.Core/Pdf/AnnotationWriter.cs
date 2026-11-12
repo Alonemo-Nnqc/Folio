@@ -44,12 +44,16 @@ public sealed record NewAnnotation(
     string? Contents = null,
     string? Author = null);
 
+/// <summary>What the eraser did to one ink annotation: its tracks over the page (x y x y …, page coordinates) and the
+/// eraser's radius in page points.</summary>
+public sealed record InkErasure(int Page, long ObjectNumber, IReadOnlyList<double[]> Paths, double Radius);
+
 /// <summary>
 /// Writes annotations into a PDF by incremental update: the original bytes stay untouched and new objects, a new
 /// version of the page dictionary and a cross-reference section are appended — what Preview and Acrobat do, so other
 /// readers (and the macOS app) see the annotations. Appearance streams are included for markup and ink.
 /// </summary>
-public static class AnnotationWriter
+public static partial class AnnotationWriter
 {
     sealed record PageInfo(long Number, int Generation, DictionaryToken Dictionary, List<IToken> Annots);
 
@@ -161,6 +165,95 @@ public static class AnnotationWriter
             return [];
         });
         return modified;
+    }
+
+    /// <summary>The eraser (READER-30): cuts what the eraser's tracks (x y x y …, page coordinates) passed over out of ink
+    /// annotations, all in one update (one undo step). An annotation with nothing left goes from its page; the others keep
+    /// their colour, line width and opacity and get a new picture. Returns the object numbers changed and removed.</summary>
+    public static (List<long> Changed, List<long> Removed) EraseInk(string path, IReadOnlyList<InkErasure> erasures)
+    {
+        var changed = new List<long>();
+        var removed = new List<long>();
+        if (erasures.Count == 0) return (changed, removed);
+        Update(path, (document, pages, next, write) =>
+        {
+            IToken Resolve(IToken t) => t is IndirectReferenceToken r ? document.Structure.GetObject(r.Data).Data : t;
+            var kept = new Dictionary<int, List<IToken>>();
+            foreach (var erasure in erasures)
+            {
+                var info = pages(erasure.Page);
+                var reference = info.Annots.OfType<IndirectReferenceToken>().FirstOrDefault(r => r.Data.ObjectNumber == erasure.ObjectNumber);
+                if (reference == null || document.Structure.GetObject(reference.Data).Data is not DictionaryToken dict) continue;
+                var entries = dict.Data.ToDictionary(kv => kv.Key, kv => kv.Value);
+                double[] Numbers(IToken? token) => token != null && Resolve(token) is ArrayToken a ? a.Data.Select(Resolve).OfType<NumericToken>().Select(n => n.Double).ToArray() : [];
+                if (!entries.TryGetValue("Subtype", out var st) || Resolve(st) is not NameToken { Data: "Ink" }) continue;
+                if (!entries.TryGetValue("InkList", out var inkRaw) || Resolve(inkRaw) is not ArrayToken inkList) continue;
+                var strokes = inkList.Data.Select(Resolve).OfType<ArrayToken>().Select(s => Numbers(s)).ToList();
+                double width = InkWidth(entries, Resolve);
+                var left = InkEraser.Erase(strokes, erasure.Paths, erasure.Radius + width / 2);
+                if (left == null) continue;
+                if (left.Count == 0)
+                {
+                    // Nothing left: off the page, with its popup.
+                    var list = kept.TryGetValue(erasure.Page, out var current) ? current : [.. info.Annots];
+                    list.RemoveAll(token => token is IndirectReferenceToken r && (r.Data.ObjectNumber == erasure.ObjectNumber
+                        || document.Structure.GetObject(r.Data).Data is DictionaryToken d && d.TryGet(NameToken.Create("Parent"), out IndirectReferenceToken? parent)
+                            && parent.Data.ObjectNumber == erasure.ObjectNumber));
+                    kept[erasure.Page] = list;
+                    removed.Add(erasure.ObjectNumber);
+                    continue;
+                }
+                double pad = width / 2 + 1;
+                var rect = Bounds(left.SelectMany(s => Pairs(s)), pad);
+                double opacity = entries.TryGetValue("CA", out var ca) && Resolve(ca) is NumericToken n ? Math.Clamp(n.Double, 0, 1) : 1;
+                var stream = InkStream(left, Numbers(entries.GetValueOrDefault("C")), width, opacity);
+                long ap = next();
+                var gs = opacity < 1 ? $"/Resources << /ExtGState << /GS0 << /CA {N(opacity)} /ca {N(opacity)} >> >> >> " : "";
+                write(ap, $"<< /Type /XObject /Subtype /Form /BBox [{string.Join(' ', rect.Select(N))}] {gs}/Length {Encoding.ASCII.GetByteCount(stream)} >>\nstream\n{stream}\nendstream");
+                entries["InkList"] = new ArrayToken(left.Select(s => (IToken)Array(s.Select(v => Math.Round(v, 3)).ToArray())).ToList());
+                entries["Rect"] = Array(rect);
+                entries["AP"] = new DictionaryToken(new Dictionary<NameToken, IToken> { [NameToken.Create("N")] = new IndirectReferenceToken(new IndirectReference(ap, 0)) });
+                entries["M"] = new StringToken(PdfDate(DateTime.Now));
+                var body = new StringBuilder("<<");
+                foreach (var (key, value) in entries) body.Append('/').Append(EscapeName(key)).Append(' ').Append(Serialize(value)).Append(' ');
+                body.Append(">>");
+                write(erasure.ObjectNumber, body.ToString());
+                changed.Add(erasure.ObjectNumber);
+            }
+            return kept;
+        });
+        return (changed, removed);
+    }
+
+    /// <summary>An ink annotation's line width: /BS /W, else the third number of /Border, else 1 (the PDF default).</summary>
+    static double InkWidth(Dictionary<string, IToken> entries, Func<IToken, IToken> resolve)
+    {
+        if (entries.TryGetValue("BS", out var bs) && resolve(bs) is DictionaryToken style && style.TryGet(NameToken.Create("W"), out var w) && resolve(w) is NumericToken width)
+            return Math.Max(0, width.Double);
+        if (entries.TryGetValue("Border", out var border) && resolve(border) is ArrayToken array && array.Data.Count >= 3 && resolve(array.Data[2]) is NumericToken bw)
+            return Math.Max(0, bw.Double);
+        return 1;
+    }
+
+    /// <summary>The picture of erased ink: its strokes in its own colour (gray, RGB or CMYK), width and opacity.</summary>
+    static string InkStream(IReadOnlyList<double[]> strokes, double[] color, double width, double opacity)
+    {
+        var sb = new StringBuilder();
+        if (opacity < 1) sb.Append("/GS0 gs ");
+        sb.Append(color.Length switch
+        {
+            1 => $"{N(color[0])} G ",
+            3 => $"{N(color[0])} {N(color[1])} {N(color[2])} RG ",
+            4 => $"{N(color[0])} {N(color[1])} {N(color[2])} {N(color[3])} K ",
+            _ => "0 G ",
+        });
+        sb.Append(CultureInfo.InvariantCulture, $"{N(width)} w 1 J 1 j ");
+        foreach (var s in strokes)
+        {
+            for (int i = 0; i + 1 < s.Length; i += 2) sb.Append(CultureInfo.InvariantCulture, $"{N(s[i])} {N(s[i + 1])} {(i == 0 ? "m" : "l")} ");
+            sb.Append("S ");
+        }
+        return sb.ToString();
     }
 
     static ArrayToken Array(params double[] values) => new(values.Select(v => (IToken)new NumericToken(v)).ToList());

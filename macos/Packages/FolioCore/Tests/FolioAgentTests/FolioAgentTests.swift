@@ -66,6 +66,33 @@ private func seed(_ library: Library) throws -> [String] {
         #expect(try library.item(ids[2])?.isTrashed == false)
     }
 
+    @Test func groupPathsReachFourLevels() async throws {
+        let (toolbox, library) = try makeToolbox()
+        let ids = try seed(library)
+        _ = try await toolbox.call("set_groups", arguments: ["items": [.string(ids[0])], "add": ["课题/文献/综述/医学"]])
+        var s = try library.snapshot()
+        let leaf = try #require(s.groupsById.values.first { $0.name == "医学" })
+        #expect(s.groupPath(leaf.id) == ["课题", "文献", "综述", "医学"])
+        #expect(s.groupItems[leaf.id] == [ids[0]])
+        // The same path (or its tail) finds the existing groups instead of creating new ones.
+        _ = try await toolbox.call("set_groups", arguments: ["items": [.string(ids[1])], "add": ["综述/医学"]])
+        s = try library.snapshot()
+        #expect(s.groupsById.count == 4)
+        #expect(s.groupItems[leaf.id] == [ids[0], ids[1]])
+        let item = try await toolbox.call("get_item", arguments: ["item": .string(ids[0])])
+        #expect(item["groups"]?.arrayValue?.compactMap(\.stringValue) == ["课题/文献/综述/医学"])
+        // A fifth level is refused, both through a path and through create_group.
+        await #expect(throws: ToolError.self) {
+            try await toolbox.call("set_groups", arguments: ["items": [.string(ids[0])], "add": ["课题/文献/综述/医学/太深"]])
+        }
+        await #expect(throws: ToolError.self) {
+            try await toolbox.call("create_group", arguments: ["name": "太深", "parent": "课题/文献/综述/医学"])
+        }
+        _ = try await toolbox.call("create_group", arguments: ["name": "新", "parent": "课题/文献/综述"])
+        let deleted = try await toolbox.call("delete_group", arguments: ["group": "课题"])
+        #expect(deleted["subgroups_deleted"]?.intValue == 4)
+    }
+
     @Test func importAndNotes() async throws {
         let (toolbox, library) = try makeToolbox()
         let result = try await toolbox.call("import_references", arguments: [

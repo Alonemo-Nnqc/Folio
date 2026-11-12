@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, ExternalLink, FileText, Paperclip, Plus, Search, Star } from "lucide-react";
+import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FileText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
 import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item } from "../store";
-import { fileMenu, manualMatch, newTag, openReader } from "../commands";
+import { fileMenu, manualMatch, newTag, openReader, refreshJournalMetrics } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, PlainEdit, Segmented } from "../ui/controls";
 import { formatDateTime } from "../ui/util";
@@ -22,6 +22,41 @@ function FieldRow({ label, value, onCommit, link }: { label: string; value?: str
       {link && <button className="link" title={t("在浏览器中打开")} onClick={() => call("shell.open", { target: link })}><ExternalLink size={12} /></button>}
     </div>
   );
+}
+
+/** The line of rank capsules under 来源 (META-30), or a quiet hint when there is nothing to show yet. */
+function JournalMetricsRow({ item }: { item: Item }) {
+  const state = useStore((x) => x.journalMetrics);
+  const metrics = item.journalMetrics;
+  const refresh = () => refreshJournalMetrics([item.id]);
+  const settings = () => call("window.settings", { page: "retrieval" });
+  const menu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openMenu([
+      { label: t("刷新期刊指标"), action: refresh },
+      ...(metrics?.badges.length ? [{ label: t("拷贝期刊指标"), action: () => call("shell.copy", { text: metrics.summary }) }] : []),
+    ], e.clientX, e.clientY);
+  };
+  let body: React.ReactNode;
+  if (metrics && metrics.badges.length) {
+    body = (
+      <div className="jm-badges" onContextMenu={menu} aria-label={t("期刊指标：%@", metrics.summary)}>
+        {metrics.badges.map((b) => <span key={b.text} className={`jm-badge jm-${b.kind}${b.emphasized ? " strong" : ""}`} title={b.detail}>{b.text}</span>)}
+        <button className="jm-refresh" title={t("刷新期刊指标")} onClick={refresh}><RefreshCw size={11} strokeWidth={2.2} /></button>
+      </div>
+    );
+  } else if (metrics) {
+    body = <span className="jm-hint" onContextMenu={menu} title={t("按期刊名「%@」没有查到分区信息，可核对期刊全称后刷新", item.source ?? "")}>{t("easyScholar 未收录该期刊")}</span>;
+  } else if (!state?.hasKey) {
+    body = <button className="jm-hint link" onClick={settings} title={t("填写 easyScholar 密钥后，这里会显示中科院分区、JCR 分区与影响因子")}><BarChart3 size={12} />{t("设置期刊指标…")}</button>;
+  } else if (state.attention && state.status && /密钥|key/i.test(state.status)) {
+    body = <button className="jm-hint link" onClick={settings}><AlertTriangle size={12} />{t("easyScholar 密钥无效")}</button>;
+  } else if (state.pending > 0 && state.autoFetch) {
+    body = <span className="jm-hint"><span className="spinner" />{t("正在获取期刊指标…")}</span>;
+  } else {
+    body = <button className="jm-hint link" onClick={refresh}><RefreshCw size={12} />{t("获取期刊指标")}</button>;
+  }
+  return <div className="jm-row">{body}</div>;
 }
 
 function LibrarySection({ item }: { item: Item }) {
@@ -119,6 +154,7 @@ function InfoPage({ item }: { item: Item }) {
       <div className="ins-section">{t("引用")}</div>
       <FieldRow label={t("年份")} value={item.year} onCommit={(v) => update(item.id, { year: v })} />
       <FieldRow label={t("来源")} value={item.source} onCommit={(v) => update(item.id, { source: v })} />
+      {item.hasJournal && <JournalMetricsRow item={item} />}
       <FieldRow label={t("卷")} value={item.volume} onCommit={(v) => update(item.id, { volume: v })} />
       <FieldRow label={t("期")} value={item.issue} onCommit={(v) => update(item.id, { issue: v })} />
       <FieldRow label={t("页码")} value={item.pages} onCommit={(v) => update(item.id, { pages: v })} />

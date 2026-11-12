@@ -21,6 +21,7 @@ public static partial class Api
         @abstract = i.Abstract, citationKey = i.CitationKey, rating = i.Rating, readStatus = (int)i.ReadStatus, readStatusName = i.ReadStatus.DisplayName(),
         defaultFileId = i.DefaultFileId, metadataState = i.MetadataState.ToString(), dateAdded = Ms(i.DateAdded), dateModified = Ms(i.DateModified), trashed = i.IsTrashed,
         retrieving = M.Importer.IsRetrieving(i.Id),
+        hasJournal = JournalMetrics.JournalName(i) != null, journalMetrics = JournalMetricsDto(i, s),
     };
 
     static object FileDto(FileRecord f, Item? item, IReadOnlyList<FileRecord> siblings) => new

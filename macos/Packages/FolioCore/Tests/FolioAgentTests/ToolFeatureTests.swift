@@ -158,4 +158,20 @@ private func ids(_ result: JSONValue, _ key: String = "results") -> [String] {
         #expect(ids(recent, "items") == [b, a])
         #expect(try await toolbox.call("get_item", arguments: ["item": .string(b)])["last_read"] != nil)
     }
+
+    /// META-30: get_item carries the journal's cached ranks.
+    @Test func itemDetailsIncludeJournalMetrics() async throws {
+        let (toolbox, library) = try toolbox()
+        let id = try create(library, "Ranked Paper", family: "Zhang", year: 2024)
+        var plain = try await toolbox.call("get_item", arguments: ["item": .string(id)])
+        #expect(plain["journal_metrics"] == nil)
+        try library.saveJournalMetrics([("Journal of Tests", JournalMetrics(ranks: ["sciUp": "医学2区", "sciUpTop": "医学TOP", "sci": "Q1", "sciif": "7.25"]))])
+        plain = try await toolbox.call("get_item", arguments: ["item": .string(id)])
+        let metrics = try #require(plain["journal_metrics"])
+        #expect(metrics["cas_zone"] == .number(2))
+        #expect(metrics["cas_top"] == .bool(true))
+        #expect(metrics["jcr_quartile"]?.stringValue == "Q1")
+        #expect(metrics["impact_factor"] == .number(7.25))
+        #expect(["中科院 2 区 Top · JCR Q1 · IF 7.25", "CAS Zone 2 Top · JCR Q1 · IF 7.25"].contains(metrics["summary"]?.stringValue ?? ""))
+    }
 }

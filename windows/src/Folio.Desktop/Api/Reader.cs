@@ -8,8 +8,10 @@ sealed class PdfSession(string path)
 {
     public string Path_ => path;
     Task _writes = Task.CompletedTask;
-    readonly Stack<(long Before, long After)> _undo = new();
-    readonly Stack<(long Before, byte[] Tail)> _redo = new();
+    /// <summary>Annotation changes append (undone by cutting the end off: Before/After); a text edit rewrites the file
+    /// (undone by writing the whole file back: Whole holds the other version).</summary>
+    readonly Stack<(long Before, long After, byte[]? Whole)> _undo = new();
+    readonly Stack<(long Before, byte[] Tail, byte[]? Whole)> _redo = new();
     DateTime _loadedStamp;
     long _loadedLength;
 
@@ -40,18 +42,43 @@ sealed class PdfSession(string path)
         long before = new FileInfo(path).Length;
         var message = change(path);
         long after = new FileInfo(path).Length;
-        if (after != before) lock (_undo) { _undo.Push((before, after)); _redo.Clear(); }
+        if (after != before) lock (_undo) { _undo.Push((before, after, null)); _redo.Clear(); }
         return message;
     });
+
+    /// <summary>Replaces the whole file with what make returns (编辑 PDF 文字, EDIT-01): one undo step that puts the
+    /// earlier version back. The page reloads.</summary>
+    public Task<object?> Rewrite(Func<string, byte[]> make) => Enqueue(() =>
+    {
+        var old = File.ReadAllBytes(path);
+        var data = make(path);
+        WriteWhole(data);
+        lock (_undo) { _undo.Push((0, data.Length, old)); _redo.Clear(); }
+        return new { cmd = "reloadCurrent" };
+    });
+
+    void WriteWhole(byte[] data)
+    {
+        var temp = path + ".folio-editing";
+        File.WriteAllBytes(temp, data);
+        File.Move(temp, path, true);
+    }
 
     public Task<object?> Undo() => Enqueue(() =>
     {
         lock (_undo)
         {
             if (_undo.Count == 0) return null;
-            var (before, after) = _undo.Pop();
+            var (before, after, whole) = _undo.Pop();
             if (new FileInfo(path).Length != after) { _undo.Clear(); _redo.Clear(); throw new IOException(Loc.S("文件已被其他程序修改")); }
-            _redo.Push((before, AnnotationWriter.TruncateTo(path, before)));
+            if (whole != null)
+            {
+                var current = File.ReadAllBytes(path);
+                WriteWhole(whole);
+                _redo.Push((whole.Length, [], current));
+                return new { cmd = "reloadCurrent" };
+            }
+            _redo.Push((before, AnnotationWriter.TruncateTo(path, before), null));
             return new { cmd = "undone" };
         }
     });
@@ -61,10 +88,17 @@ sealed class PdfSession(string path)
         lock (_undo)
         {
             if (_redo.Count == 0) return null;
-            var (before, tail) = _redo.Pop();
+            var (before, tail, whole) = _redo.Pop();
             if (new FileInfo(path).Length != before) { _undo.Clear(); _redo.Clear(); throw new IOException(Loc.S("文件已被其他程序修改")); }
+            if (whole != null)
+            {
+                var current = File.ReadAllBytes(path);
+                WriteWhole(whole);
+                _undo.Push((0, whole.Length, current));
+                return new { cmd = "reloadCurrent" };
+            }
             AnnotationWriter.Append(path, tail);
-            _undo.Push((before, before + tail.Length));
+            _undo.Push((before, before + tail.Length, null));
             return new { cmd = "redone" };
         }
     });
@@ -187,6 +221,32 @@ public static partial class Api
             var temp = a.Str("temp");
             var color = a.Str("color");
             return Session(a).Change(path => Resolved([temp], AnnotationWriter.Add(path, [new NewAnnotation(page, "Ink", color, Strokes: strokes, Author: Author)])));
+        });
+        // The eraser (READER-30): the page already shows the result; the same tracks are cut out of the file, one undo step.
+        Bridge.OnAsync("reader.erase", a =>
+        {
+            int page = a.Int("page");
+            var numbers = a.Strs("ids").Select(ObjectNumber).Distinct().ToList();
+            var paths = a.Raw("paths").EnumerateArray().Select(p => p.EnumerateArray().Select(v => v.GetDouble()).ToArray()).ToList();
+            double radius = a.Num("radius");
+            return Session(a).Change(path => { AnnotationWriter.EraseInk(path, numbers.Select(n => new InkErasure(page, n, paths, radius)).ToList()); return null; });
+        });
+        // 编辑 PDF 文字 (EDIT-01): the blocks of a page, and one replaced.
+        Bridge.OnAsync("reader.textBlocks", async a =>
+        {
+            var session = Session(a);
+            int page = a.Int("page");
+            return (object?)await Task.Run(() => Folio.Core.Translate.Edit.PdfTextEditor.Blocks(session.Path_, page).Select(b => new
+            {
+                index = b.Index, rect = new[] { b.Left, b.Bottom, b.Right, b.Top }, text = b.Text, fontSize = b.FontSize, lineHeight = b.LineHeight,
+                color = b.Color, bold = b.IsBold, italic = b.IsItalic, serif = b.IsSerif, alignment = b.Alignment, editable = b.IsEditable, reason = b.Reason,
+            }).ToList());
+        });
+        Bridge.OnAsync("reader.editText", a =>
+        {
+            int page = a.Int("page"), index = a.Int("block");
+            string expected = a.Str("expected"), text = a.Str("text");
+            return Session(a).Rewrite(path => Folio.Core.Translate.Edit.PdfTextEditor.Replace(path, page, index, expected, text));
         });
         Bridge.OnAsync("reader.addText", a =>
         {

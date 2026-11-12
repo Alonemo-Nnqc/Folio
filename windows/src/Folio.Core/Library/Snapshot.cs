@@ -43,6 +43,12 @@ public sealed class LibrarySnapshot
     public HashSet<string> NotedItems { get; } = [];
     /// <summary>Lowercased text each item is searched against.</summary>
     public Dictionary<string, string> SearchText { get; } = [];
+    /// <summary>easyScholar ranks per journal (JournalMetrics.Key), including journals it does not list (META-30).</summary>
+    public Dictionary<string, JournalMetrics> JournalMetrics { get; } = [];
+
+    /// <summary>The cached ranks of an item's journal, if it has a journal and they were fetched.</summary>
+    public JournalMetrics? JournalMetricsOf(Item item) =>
+        Folio.Core.JournalMetrics.JournalName(item) is { } name ? JournalMetrics.GetValueOrDefault(Folio.Core.JournalMetrics.Key(name)) : null;
 
     public static readonly LibrarySnapshot Empty = new();
 
@@ -54,17 +60,83 @@ public sealed class LibrarySnapshot
     public List<Tag> TagsOf(string itemId) =>
         ItemTags.TryGetValue(itemId, out var ids) ? ids.Where(TagsById.ContainsKey).Select(id => TagsById[id]).ToList() : [];
 
-    /// <summary>The group and its children.</summary>
-    public List<string> GroupAndChildren(string groupId) => [groupId, .. ChildGroups.GetValueOrDefault(groupId) ?? []];
+    // MARK: Group hierarchy (SIDE-17)
 
-    /// <summary>Groups in sidebar order with their depth (for menus).</summary>
+    /// <summary>The group followed by all its descendants, depth first in display order.</summary>
+    public List<string> GroupAndDescendants(string groupId) => [groupId, .. GroupDescendants(groupId)];
+
+    /// <summary>All descendants of a group (not the group itself), depth first in display order.</summary>
+    public List<string> GroupDescendants(string groupId)
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string> { groupId };
+        void Visit(string id)
+        {
+            foreach (var child in ChildGroups.GetValueOrDefault(id) ?? [])
+                if (seen.Add(child)) { result.Add(child); Visit(child); }
+        }
+        Visit(groupId);
+        return result;
+    }
+
+    /// <summary>Ancestor ids from the top level down, not including the group itself.</summary>
+    public List<string> GroupAncestors(string groupId)
+    {
+        var chain = new List<string>();
+        var seen = new HashSet<string> { groupId };
+        var current = GroupsById.GetValueOrDefault(groupId)?.ParentId;
+        while (current != null && seen.Add(current) && GroupsById.TryGetValue(current, out var group))
+        {
+            chain.Insert(0, current);
+            current = group.ParentId;
+        }
+        return chain;
+    }
+
+    /// <summary>The group's level: 1 for a top-level group.</summary>
+    public int GroupDepth(string groupId) => GroupAncestors(groupId).Count + 1;
+
+    /// <summary>How many levels the group and its subtree span: 1 for a group without subgroups.</summary>
+    public int GroupSubtreeHeight(string groupId)
+    {
+        var seen = new HashSet<string> { groupId };
+        int Height(string id) => 1 + (ChildGroups.GetValueOrDefault(id) ?? []).Where(seen.Add).ToList().Select(Height).DefaultIfEmpty(0).Max();
+        return Height(groupId);
+    }
+
+    /// <summary>Names from the top-level ancestor down to the group.</summary>
+    public List<string> GroupPath(string groupId) =>
+        [.. GroupAncestors(groupId).Append(groupId).Where(GroupsById.ContainsKey).Select(id => GroupsById[id].Name)];
+
+    /// <summary>Whether a new subgroup may be created inside the group.</summary>
+    public bool CanAddSubgroup(string groupId) => GroupsById.ContainsKey(groupId) && GroupDepth(groupId) < LibraryGroup.MaximumDepth;
+
+    /// <summary>Whether the group (with its subtree) may move under parentId (null = top level): not into itself or a
+    /// descendant, and no deeper than <see cref="LibraryGroup.MaximumDepth"/> levels.</summary>
+    public bool CanMoveGroup(string groupId, string? parentId)
+    {
+        if (!GroupsById.ContainsKey(groupId)) return false;
+        if (parentId == null) return true;
+        if (parentId == groupId || !GroupsById.ContainsKey(parentId) || GroupAncestors(parentId).Contains(groupId)) return false;
+        return GroupDepth(parentId) + GroupSubtreeHeight(groupId) <= LibraryGroup.MaximumDepth;
+    }
+
+    /// <summary>Groups in sidebar order, each followed by its subgroups, with their depth (0 = top level; for menus).</summary>
     public IEnumerable<(LibraryGroup Group, int Depth)> GroupsForMenus()
     {
-        foreach (var id in TopLevelGroups)
+        var result = new List<(LibraryGroup, int)>();
+        var seen = new HashSet<string>();
+        void Visit(IEnumerable<string> ids, int depth)
         {
-            yield return (GroupsById[id], 0);
-            foreach (var child in ChildGroups.GetValueOrDefault(id) ?? []) yield return (GroupsById[child], 1);
+            foreach (var id in ids)
+            {
+                if (!seen.Add(id) || !GroupsById.TryGetValue(id, out var group)) continue;
+                result.Add((group, depth));
+                Visit(ChildGroups.GetValueOrDefault(id) ?? [], depth + 1);
+            }
         }
+        Visit(TopLevelGroups, 0);
+        return result;
     }
 
     internal static LibrarySnapshot Fetch(SqliteConnection c)
@@ -106,6 +178,8 @@ public sealed class LibrarySnapshot
             notes[itemId] = content;
             s.NotedItems.Add(itemId);
         }
+        foreach (var (name, json, fetched) in Query(c, null, "SELECT name, json, fetchedAt FROM journalMetrics", r => (r.GetString(0), r.GetString(1), r.GetValue(2))))
+            s.JournalMetrics[name] = Folio.Core.JournalMetrics.FromJson(json, fetched is DateTime d ? d : ParseDate(Convert.ToString(fetched, System.Globalization.CultureInfo.InvariantCulture)!));
         foreach (var item in s.Items.Values)
             s.SearchText[item.Id] = SearchMatcher.Haystack(item, s.TagsOf(item.Id), s.FilesOf(item.Id), notes.GetValueOrDefault(item.Id));
         return s;
@@ -126,7 +200,7 @@ public static class ViewResolver
         ViewScope.AllScope => s.Items.Values.Where(i => !i.IsTrashed).Select(i => i.Id).ToList(),
         ViewScope.UnfiledScope => s.Items.Values.Where(i => !i.IsTrashed && (!s.ItemGroups.TryGetValue(i.Id, out var g) || g.Count == 0)).Select(i => i.Id).ToList(),
         ViewScope.TrashScope => s.Items.Values.Where(i => i.IsTrashed).Select(i => i.Id).ToList(),
-        ViewScope.GroupScope g => (includeSubgroupItems ? s.GroupAndChildren(g.Id) : [g.Id])
+        ViewScope.GroupScope g => (includeSubgroupItems ? s.GroupAndDescendants(g.Id) : [g.Id])
             .SelectMany(id => s.GroupItems.GetValueOrDefault(id) ?? []).Distinct()
             .Where(id => s.Items.TryGetValue(id, out var i) && !i.IsTrashed).ToList(),
         ViewScope.TagScope t => (s.TagItems.GetValueOrDefault(t.Id) ?? []).Where(id => s.Items.TryGetValue(id, out var i) && !i.IsTrashed).ToList(),
@@ -190,6 +264,8 @@ public static class SortComparators
         SortColumn.FileCount => (double)(s.FilesByItem.GetValueOrDefault(item.Id)?.Count ?? 0),
         SortColumn.CitationKey => item.CitationKey,
         SortColumn.Tags => s.TagsOf(item.Id).FirstOrDefault()?.Name,
+        SortColumn.JournalRank => s.JournalMetricsOf(item)?.RankSortKey,
+        SortColumn.ImpactFactor => s.JournalMetricsOf(item)?.ImpactFactor,
         _ => null,
     };
 

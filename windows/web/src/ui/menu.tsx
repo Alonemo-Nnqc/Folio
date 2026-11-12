@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronRight } from "lucide-react";
 import { emitLocal, on } from "../rpc";
+import { useLayer } from "./dismiss";
 
 export type MenuEntry =
   | { kind?: "item"; label: string; icon?: ReactNode; action?: () => void; disabled?: boolean; checked?: boolean; submenu?: MenuEntry[]; key?: string; dot?: string; indent?: number }
@@ -125,27 +126,19 @@ export function MenuHost() {
   useEffect(() => on("menu.open", (m) => setMenu({ ...m, n: ++counter.current })), []);
   useEffect(() => on("menu.close", () => setMenu(null)), []);
   useEffect(() => { if (!menu) anchor = null; }, [menu]);
+  // Closes on a press anywhere else (the reader's pages included), Esc, and when the window goes to the background or resizes.
+  useLayer(!!menu, {
+    // Its button closes it on the click that follows, in openMenuAt; closing here too would open it again.
+    contains: (target) => target instanceof Node && (!!(target instanceof Element && target.closest(".menu")) || !!anchor?.contains(target)),
+    onPress: () => setMenu(null),
+    onEscape: () => setMenu(null),
+    onDeactivate: () => setMenu(null),
+  });
   useEffect(() => {
     if (!menu) return;
-    const close = (e: Event) => {
-      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
-      if (e.target instanceof Element && e.target.closest(".menu")) return;
-      // Its button closes it on the click that follows, in openMenuAt; closing here too would open it again.
-      if (e.target instanceof Node && anchor?.contains(e.target)) return;
-      if (e instanceof KeyboardEvent) { e.preventDefault(); e.stopPropagation(); }
-      setMenu(null);
-    };
-    const blur = () => setMenu(null);
-    window.addEventListener("mousedown", close, true);
-    window.addEventListener("keydown", close, true);
-    window.addEventListener("blur", blur);
-    window.addEventListener("resize", blur);
-    return () => {
-      window.removeEventListener("mousedown", close, true);
-      window.removeEventListener("keydown", close, true);
-      window.removeEventListener("blur", blur);
-      window.removeEventListener("resize", blur);
-    };
+    const close = () => setMenu(null);
+    window.addEventListener("resize", close);
+    return () => window.removeEventListener("resize", close);
   }, [menu]);
   if (!menu) return null;
   return <Panel key={menu.n} items={menu.items} x={menu.x} y={menu.y} close={() => setMenu(null)} depth={0} />;

@@ -17,6 +17,8 @@ public static partial class Api
         InstallReader();
         InstallTranslation();
         InstallIntegrations();
+        InstallJournalMetrics();
+        InstallOcr();
         WireEvents();
     }
 
@@ -126,6 +128,9 @@ public static partial class Api
             ["translationParallelJobs"] = s.TranslationParallelJobs,
             ["onboardingDone"] = s.OnboardingDone,
             ["openReaderTabs"] = s.OpenReaderTabs,
+            ["sidebarCollapsedGroups"] = s.SidebarCollapsedGroups,
+            ["readerEraserSize"] = s.ReaderEraserSize,
+            ["journalMetricsAutoFetch"] = s.JournalMetricsAutoFetch,
             ["columnWidths"] = s.ColumnWidths,
             ["visibleColumns"] = s.VisibleColumns,
             ["sidebarWidth"] = s.Raw("sidebarWidth")?.GetValue<double>() ?? 210.0, // the macOS window's

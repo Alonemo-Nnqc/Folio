@@ -51,7 +51,7 @@ struct ZoteroImportSheet: View {
             if let report {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("将导入 \(report.regularItems) 个条目、\(report.standaloneFiles) 个独立文件、\(report.collections) 个分组、\(report.tags) 个标签。")
-                    Text("跳过：\(report.skippedNotes) 条笔记、\(report.skippedAnnotations) 条 Zotero 批注、\(report.skippedSnapshots) 个网页快照、\(report.skippedTrashed) 个回收站条目。超过两级的分组会并入第二级。")
+                    Text("跳过：\(report.skippedNotes) 条笔记、\(report.skippedAnnotations) 条 Zotero 批注、\(report.skippedSnapshots) 个网页快照、\(report.skippedTrashed) 个回收站条目。超过四级的分组会并入第四级。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

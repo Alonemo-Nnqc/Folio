@@ -7,7 +7,7 @@ public struct PreparedGroup: Sendable, Hashable {
     /// Unique key on the source side (e.g. a Zotero collection key).
     public var key: String
     public var name: String
-    /// Must already be flattened to two levels: the parent itself has no parent.
+    /// Must already be flattened to `LibraryGroup.maximumDepth` levels; deeper groups are skipped.
     public var parentKey: String?
     public var position: Double
 

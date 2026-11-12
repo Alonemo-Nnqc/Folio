@@ -216,9 +216,12 @@ public sealed class FileRecord
     public FileRecord Clone() => (FileRecord)MemberwiseClone();
 }
 
-/// <summary>A user-created group. Groups nest at most two levels deep.</summary>
+/// <summary>A user-created group. Groups nest at most <see cref="MaximumDepth"/> (four) levels deep (SIDE-17).</summary>
 public sealed class LibraryGroup
 {
+    /// <summary>How many levels user groups may nest: a top-level group is level 1.</summary>
+    public const int MaximumDepth = 4;
+
     public LibraryGroup(string name, double position, string? parentId = null, DateTime? dateCreated = null, string? id = null)
     {
         Id = id ?? Guid.NewGuid().ToString().ToUpperInvariant();
@@ -292,6 +295,8 @@ public enum SortColumn
 {
     Title, Authors, Year, Source, Type, DateAdded, DateModified, Doi, Publisher,
     Volume, Issue, Pages, ReadStatus, Rating, FileCount, CitationKey, Tags,
+    /// <summary>期刊分区 and 影响因子 (META-30).</summary>
+    JournalRank, ImpactFactor,
 }
 
 public static class SortColumns

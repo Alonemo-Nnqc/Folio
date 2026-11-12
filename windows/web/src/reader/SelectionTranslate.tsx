@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeftRight, Check, ChevronDown, Copy, Languages, NotebookPen, RotateCw, TriangleAlert } from "lucide-react";
+import { ArrowLeftRight, Check, ChevronDown, Copy, Languages, NotebookPen, RotateCw, TriangleAlert, X } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
 import { openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { ServiceLogo } from "../ui/serviceLogo";
+import { useLayer, within } from "../ui/dismiss";
 
 export interface Anchor { left: number; top: number; right: number; bottom: number }
 
@@ -18,12 +19,17 @@ export function TranslateBadge({ x, y, onClick }: { x: number; y: number; onClic
   );
 }
 
-const cache = new Map<string, string>();
+export interface Pinned { left: number; top: number }
 
 type Phase = { kind: "translating" } | { kind: "done"; text: string } | { kind: "failed"; message: string };
 
-/** The popover: the passage, its translation, and what to do with it. */
-export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: Anchor; text: string; close: () => void; addToNote: (source: string, translation: string) => void }) {
+/** The popover: the passage, its translation, and what to do with it. Dragged by its top, it leaves the selection and
+ * stays where it is put (`pinned`, SEL-21): later selections are translated in it until it is closed. Translations are
+ * cached by the app (SelectionTranslator), shared by every reader. */
+export function TranslatePopover({ anchor, text, close, addToNote, pinned, onPin }: {
+  anchor: Anchor; text: string; close: () => void; addToNote: (source: string, translation: string) => void;
+  pinned: Pinned | null; onPin: (place: Pinned) => void;
+}) {
   const [info, setInfo] = useState<{ current: string; fullText: string; services: { id: string; name: string }[]; from: string; to: string } | null>(null);
   const [service, setService] = useState<string | null>(null);
   const [usedName, setUsedName] = useState("");
@@ -39,17 +45,15 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
 
   const translate = async (id: string | null, fresh = false) => {
     const ticket = ++run.current;
-    const key = `${id ?? ""}|${source}`;
-    if (!fresh && cache.has(key)) { setPhase({ kind: "done", text: cache.get(key)! }); return; }
     setPhase({ kind: "translating" });
     setCopied(false); setNoted(false);
     try {
       setNotice(null);
-      const r = await call<{ ok: boolean; text: string; service: string; serviceName: string; notice?: string }>("translation.selection", { text, service: id ?? undefined });
+      const r = await call<{ ok: boolean; text: string; service: string; serviceName: string; notice?: string }>("translation.selection", { text, service: id ?? undefined, fresh });
       if (ticket !== run.current) return;
       setUsedName(r.serviceName);
       setNotice(r.notice ?? null);
-      if (r.ok) { cache.set(`${r.service}|${source}`, r.text); cache.set(key, r.text); setPhase({ kind: "done", text: r.text }); }
+      if (r.ok) setPhase({ kind: "done", text: r.text });
       else setPhase({ kind: "failed", message: r.text });
       if (!id) setService(r.service);
     } catch (e: any) {
@@ -62,24 +66,54 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
     translate(null);
   }, [text]);
 
-  useEffect(() => {
-    const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node) && !(e.target as Element).closest?.(".menu")) close(); };
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); } };
-    window.addEventListener("mousedown", away, true);
-    window.addEventListener("keydown", key, true);
-    return () => { window.removeEventListener("mousedown", away, true); window.removeEventListener("keydown", key, true); };
-  }, []);
+  // A press elsewhere (the reader's pages included) closes it, unless it was dragged off; Esc always does.
+  useLayer(true, {
+    contains: (target) => within(ref.current, target),
+    onPress: pinned ? undefined : () => close(),
+    onEscape: close,
+  });
 
-  // Below the selection when there is room, else above it; always inside the window.
+  // Below the selection when there is room, else above it; always inside the window. Once dragged, where it was put.
   useLayoutEffect(() => {
     const box = ref.current?.getBoundingClientRect();
     if (!box) return;
     const width = box.width, height = box.height;
+    if (pinned) {
+      setPlace({ left: clamp(pinned.left, 8, innerWidth - width - 8), top: clamp(pinned.top, 8, innerHeight - height - 8), above: false });
+      return;
+    }
     const below = anchor.bottom + 10, aboveTop = anchor.top - 10 - height;
     const above = below + height > innerHeight - 8 && aboveTop > 8;
     const center = (anchor.left + anchor.right) / 2;
     setPlace({ left: Math.min(Math.max(8, center - width / 2), innerWidth - width - 8), top: above ? aboveTop : Math.min(below, innerHeight - height - 8), above });
-  }, [anchor.left, anchor.top, anchor.bottom, phase.kind, expanded, info !== null]);
+  }, [anchor.left, anchor.top, anchor.bottom, phase.kind, expanded, info !== null, pinned?.left, pinned?.top]);
+
+  // Dragging by the top: pointer capture, a few pixels before it counts, kept inside the window.
+  const [dragging, setDragging] = useState(false);
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as Element).closest("button") || !place) return;
+    const head = e.currentTarget, box = ref.current!.getBoundingClientRect();
+    const dx = e.clientX - box.left, dy = e.clientY - box.top, x0 = e.clientX, y0 = e.clientY;
+    let moved = false;
+    head.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 3) return;
+      if (!moved) { moved = true; setDragging(true); }
+      const left = clamp(ev.clientX - dx, 8, innerWidth - box.width - 8), top = clamp(ev.clientY - dy, 8, innerHeight - box.height - 8);
+      setPlace({ left, top, above: false });
+    };
+    const up = (ev: PointerEvent) => {
+      head.removeEventListener("pointermove", move);
+      head.removeEventListener("pointerup", up);
+      head.removeEventListener("pointercancel", up);
+      setDragging(false);
+      if (moved) onPin({ left: clamp(ev.clientX - dx, 8, innerWidth - box.width - 8), top: clamp(ev.clientY - dy, 8, innerHeight - box.height - 8) });
+    };
+    head.addEventListener("pointermove", move);
+    head.addEventListener("pointerup", up);
+    head.addEventListener("pointercancel", up);
+    e.preventDefault();
+  };
 
   const choose = (id: string) => {
     setService(id);
@@ -98,10 +132,12 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
   const serviceName = info?.services.find((s) => s.id === service)?.name ?? usedName;
 
   return (
-    <div ref={ref} className={`translate-pop${place?.above ? " above" : ""}`} style={place ? { left: place.left, top: place.top } : { left: -9999, top: 0 }} role="dialog" aria-label={t("翻译")}>
-      <div className="tp-head">
+    <div ref={ref} className={`translate-pop${place?.above ? " above" : ""}${pinned ? " pinned" : ""}${dragging ? " dragging" : ""}`}
+      style={place ? { left: place.left, top: place.top } : { left: -9999, top: 0 }} role="dialog" aria-label={t("翻译")}>
+      <div className="tp-head" onPointerDown={startDrag} title={pinned ? undefined : t("拖动可移开小窗")}>
         <span className="tp-langs">{info ? `${info.from} → ${info.to}` : ""}</span>
         <button className="tp-service" title={t("选择翻译服务")} onClick={(e) => serviceMenu(e.currentTarget)}>{service && <ServiceLogo id={service} size={13} />}{serviceName}<ChevronDown size={11} strokeWidth={2.2} /></button>
+        {pinned && <button className="tp-icon tp-close" title={t("关闭")} aria-label={t("关闭")} onClick={close}><X size={13} strokeWidth={2.2} /></button>}
       </div>
       <div className={`tp-source selectable${expanded ? " expanded" : ""}`} onDoubleClick={() => setExpanded((v) => !v)}>{source}</div>
       <div className="tp-divider" />
@@ -121,3 +157,5 @@ export function TranslatePopover({ anchor, text, close, addToNote }: { anchor: A
     </div>
   );
 }
+
+const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(value, Math.max(low, high)));

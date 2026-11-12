@@ -15,8 +15,8 @@ extension Library {
         guard !clean.isEmpty else { throw LibraryError.emptyName }
         return try writer.write { db in
             if let parentId {
-                guard let parent = try LibraryGroup.fetchOne(db, key: parentId) else { throw LibraryError.notFound }
-                guard parent.parentId == nil else { throw LibraryError.groupDepthExceeded }
+                guard try LibraryGroup.exists(db, key: parentId) else { throw LibraryError.notFound }
+                guard try Self.depth(of: parentId, db) < LibraryGroup.maximumDepth else { throw LibraryError.groupDepthExceeded }
             }
             let siblings = try Self.siblings(of: parentId, db)
             try Self.ensureUniqueName(clean, among: siblings, excluding: nil)
@@ -47,10 +47,10 @@ extension Library {
         }
     }
 
-    /// Deletes the group and its subgroups. Items stay in the library unless `trashItems` is true.
+    /// Deletes the group and all its descendants. Items stay in the library unless `trashItems` is true.
     public func deleteGroup(_ id: String, trashItems: Bool) throws {
         try writer.write { db in
-            let ids = [id] + (try String.fetchAll(db, sql: "SELECT id FROM libraryGroup WHERE parentId = ?", arguments: [id]))
+            let ids = [id] + (try Self.descendantIds(of: id, db))
             if trashItems {
                 try db.execute(sql: """
                     UPDATE item SET trashedAt = ? WHERE trashedAt IS NULL AND id IN
@@ -59,11 +59,13 @@ extension Library {
             }
             try db.execute(sql: "DELETE FROM itemOrder WHERE scope IN (\(ids.map { _ in "?" }.joined(separator: ",")))",
                            arguments: StatementArguments(ids.map { ViewScope.group($0).key }))
-            _ = try LibraryGroup.deleteOne(db, key: id)
+            // Subgroups go with it (ON DELETE CASCADE); deleting them explicitly keeps this independent of that.
+            _ = try LibraryGroup.deleteAll(db, keys: ids)
         }
     }
 
-    /// Whether `id` may become a child of `parentId` (nil = top level) without exceeding two levels.
+    /// Whether `id` may become a child of `parentId` (nil = top level): not inside itself or one of its descendants,
+    /// and with its subtree no deeper than `LibraryGroup.maximumDepth` levels.
     public func canMoveGroup(_ id: String, toParent parentId: String?) throws -> Bool {
         try writer.read { try Self.canMove(id, toParent: parentId, $0) }
     }
@@ -112,7 +114,7 @@ extension Library {
         try writer.write { db in
             var groups = [groupId]
             if includeSubgroups {
-                groups += try String.fetchAll(db, sql: "SELECT id FROM libraryGroup WHERE parentId = ?", arguments: [groupId])
+                groups += try Self.descendantIds(of: groupId, db)
             }
             try ItemGroup
                 .filter(itemIds.contains(Column("itemId")) && groups.contains(Column("groupId")))
@@ -134,19 +136,49 @@ extension Library {
     static func canMove(_ id: String, toParent parentId: String?, _ db: Database) throws -> Bool {
         guard try LibraryGroup.exists(db, key: id) else { return false }
         guard let parentId else { return true }
-        guard parentId != id, let parent = try LibraryGroup.fetchOne(db, key: parentId), parent.parentId == nil else {
-            return false
+        guard parentId != id, try LibraryGroup.exists(db, key: parentId),
+              !(try descendantIds(of: id, db).contains(parentId)) else { return false }
+        return try depth(of: parentId, db) + subtreeHeight(of: id, db) <= LibraryGroup.maximumDepth
+    }
+
+    /// Ids of every group below `id` (not `id` itself). `UNION` stops on a (corrupt) cycle.
+    static func descendantIds(of id: String, _ db: Database) throws -> [String] {
+        try String.fetchAll(db, sql: """
+            WITH RECURSIVE sub(id) AS (
+              SELECT id FROM libraryGroup WHERE parentId = ?
+              UNION SELECT g.id FROM libraryGroup g JOIN sub ON g.parentId = sub.id)
+            SELECT id FROM sub WHERE id <> ?
+            """, arguments: [id, id])
+    }
+
+    /// The group's level: 1 for a top-level group.
+    static func depth(of id: String, _ db: Database) throws -> Int {
+        var depth = 1
+        var seen: Set<String> = [id]
+        var current = try String.fetchOne(db, sql: "SELECT parentId FROM libraryGroup WHERE id = ?", arguments: [id])
+        while let parent = current, seen.insert(parent).inserted {
+            depth += 1
+            current = try String.fetchOne(db, sql: "SELECT parentId FROM libraryGroup WHERE id = ?", arguments: [parent])
         }
-        let hasChildren = try LibraryGroup.filter(Column("parentId") == id).fetchCount(db) > 0
-        return !hasChildren
+        return depth
+    }
+
+    /// Levels spanned by the group and its subtree: 1 without subgroups.
+    static func subtreeHeight(of id: String, _ db: Database) throws -> Int {
+        try Int.fetchOne(db, sql: """
+            WITH RECURSIVE sub(id, level) AS (
+              SELECT ?, 1
+              UNION SELECT g.id, sub.level + 1 FROM libraryGroup g JOIN sub ON g.parentId = sub.id WHERE sub.level < 64)
+            SELECT MAX(level) FROM sub
+            """, arguments: [id]) ?? 1
     }
 
     static func memberIds(ofGroup groupId: String, includeSubgroups: Bool, _ db: Database) throws -> [String] {
         if includeSubgroups {
+            let groups = [groupId] + (try descendantIds(of: groupId, db))
             return try String.fetchAll(db, sql: """
-                SELECT itemId FROM itemGroup
-                WHERE groupId = ? OR groupId IN (SELECT id FROM libraryGroup WHERE parentId = ?)
-                """, arguments: [groupId, groupId])
+                SELECT DISTINCT itemId FROM itemGroup WHERE groupId IN (\(groups.map { _ in "?" }.joined(separator: ",")))
+                """, arguments: StatementArguments(groups))
         }
         return try String.fetchAll(db, sql: "SELECT itemId FROM itemGroup WHERE groupId = ?", arguments: [groupId])
     }

@@ -25,6 +25,8 @@ public sealed partial class AppModel : IImportUi
     public Updater Updater { get; }
     public ConnectorServer Connector { get; }
     public TranslationCoordinator Translations { get; }
+    public JournalMetricsCoordinator JournalMetrics { get; }
+    public OcrCoordinator Ocr { get; }
     readonly Lazy<CslRenderer> _csl = new(() => new CslRenderer());
     readonly object _cslLock = new();
 
@@ -56,6 +58,8 @@ public sealed partial class AppModel : IImportUi
         Updater = new Updater(this);
         Connector = new ConnectorServer(this);
         Translations = new TranslationCoordinator(this);
+        JournalMetrics = new JournalMetricsCoordinator(this);
+        Ocr = new OcrCoordinator(this);
         _externalChanges = new System.Windows.Forms.Timer { Interval = 1500 };
         _externalChanges.Tick += (_, _) => CheckExternalChanges();
     }
@@ -389,6 +393,8 @@ public sealed partial class AppModel : IImportUi
     // MARK: IImportUi
 
     void IImportUi.Toast(string message, string icon, string? actionTitle, Action? action) => Toasts.Show(message, icon, actionTitle, action);
+
+    void IImportUi.PdfImported(string itemId) => _ui.TryEnqueue(() => Ocr.RecognizeIfScanned(itemId));
 
     Task<bool> IImportUi.AskRestore(string title) =>
         AskOnUi(() => Dialogs.Confirm(Loc.S("「%@」在回收站中", title), Loc.S("要将它恢复到文献库吗？"), Loc.S("恢复"), Loc.S("取消")));

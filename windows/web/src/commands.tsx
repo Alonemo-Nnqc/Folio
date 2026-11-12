@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Copy, Download, Edit3, ExternalLink, FileText, Folder, FolderOpen, Languages, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, Folder, FolderOpen, Languages, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
 import { call } from "./rpc";
 import { t } from "./i18n";
 import { defaultFile, filesOf, getState, groupsForMenus, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
@@ -295,11 +295,15 @@ export function itemMenu(ids: string[]): MenuEntry[] {
   if (single) {
     entries.push({ label: t("编辑笔记"), icon: icon(StickyNote), key: "Ctrl+Alt+N", action: showNotes });
     if (s.noted.has(single.id)) entries.push({ label: t("导出笔记…"), icon: icon(Share), action: () => call("note.export", { item: single.id }) });
-    if (singleFile?.isPdf) entries.push(translateEntry(single.id, () => translate([single.id])));
+    if (singleFile?.isPdf) {
+      entries.push(translateEntry(single.id, () => translate([single.id])));
+      entries.push({ label: t("识别文字（OCR）"), icon: icon(ScanText), disabled: !!s.ocr[singleFile.id], action: () => call("ocr.recognize", { files: [singleFile.id] }) });
+    }
     entries.push(sep);
     if (single.kind === "regular") {
       entries.push({ label: t("添加文件…"), icon: icon(Paperclip), action: () => call("files.attachPick", { item: single.id }) });
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), key: "Ctrl+Alt+R", action: () => call("items.retrieve", { ids }) });
+      if (single.hasJournal) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
     } else {
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: single.metadataState === "Pending" || !filesOf(s, single.id)[0]?.isPdf, action: () => call("items.retrieve", { ids }) });
       entries.push({ label: t("手动匹配…"), icon: icon(Search), action: () => manualMatch(single) });
@@ -307,6 +311,7 @@ export function itemMenu(ids: string[]): MenuEntry[] {
   } else if (selected.some((i) => defaultFile(s, i)?.isPdf)) {
     entries.push({ label: t("翻译全文…"), icon: icon(Languages), action: () => translate(ids) });
   }
+  if (!single && selected.some((i) => i.hasJournal)) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
   if (selected.some((i) => defaultFile(s, i))) entries.push({ label: t("在资源管理器中显示"), icon: icon(Folder), key: "Ctrl+Shift+R", action: () => revealFirstFile(ids) });
   entries.push(sep);
   const group = scopeGroupId(s.scope);
@@ -369,4 +374,13 @@ export function appMenu(): MenuEntry[] {
     sep,
     { label: t("退出 Folio"), action: () => call("window.quit") },
   ];
+}
+
+/** 刷新期刊指标 (META-30): the selected items' journals are asked again, first in the queue. */
+export async function refreshJournalMetrics(ids: string[]) {
+  const r = await call<{ needsKey: boolean }>("journalMetrics.refresh", { items: ids });
+  if (r.needsKey) {
+    call("toast.show", { message: t("请先在设置中填写 easyScholar 密钥"), icon: "key" });
+    call("window.settings", { page: "retrieval" });
+  } else call("toast.show", { message: t("正在刷新期刊指标…"), icon: "refresh" });
 }

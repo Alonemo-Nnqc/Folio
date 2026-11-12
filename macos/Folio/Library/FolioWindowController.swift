@@ -73,6 +73,16 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         case .addFiles: if let id = ids.first { model.chooseFilesToAttach(to: id) }
         case .retrieve: ids.forEach(model.importer.retrieve(itemId:))
         case .manualMatch: if let id = ids.first { model.activeSheet = .manualMatch(itemId: id) }
+        case .refreshJournalMetrics: model.journalMetrics.refresh(itemIds: ids)
+        case .recognizeText:
+            if let fileId = context.fileId { model.ocr.recognize(fileId: fileId) }
+            else {
+                for id in ids {
+                    let files = model.snapshot.files(of: id).filter(\.isPDF)
+                    let item = model.snapshot.items[id]
+                    if let file = files.first(where: { $0.id == item?.defaultFileId }) ?? files.first { model.ocr.recognize(fileId: file.id) }
+                }
+            }
         case .removeFromGroup: model.removeFromCurrentGroup(ids)
         case .trash: model.trashItems(ids)
         case .restore: model.restoreItems(ids)

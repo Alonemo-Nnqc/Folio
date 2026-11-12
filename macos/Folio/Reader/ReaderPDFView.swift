@@ -1,4 +1,5 @@
 import AppKit
+import FolioCore
 import PDFKit
 
 /// Pages that outline the selected annotation. PDFKit creates them through
@@ -48,6 +49,13 @@ final class ReaderPDFView: PDFView {
         }
     }
     var inkColor = NSColor.systemRed
+    /// The eraser's size (READER-30); the pointer is a ring this large at the current zoom.
+    var eraserSize = InkEraser.Size.medium {
+        didSet { window?.invalidateCursorRects(for: self) }
+    }
+    /// The eraser's size menu (right-click while erasing) and stepping through the sizes with [ and ].
+    var eraserSizeMenu: () -> NSMenu? = { nil }
+    var onEraserSizeStep: (Int) -> Void = { _ in }
     /// The mouse went down on the page / was released over a text selection made with the select tool (划词翻译).
     var onMouseDown: () -> Void = {}
     var onSelectionFinished: () -> Void = {}
@@ -57,6 +65,7 @@ final class ReaderPDFView: PDFView {
     private var inkPoints: [NSPoint] = []
     private var inkPage: PDFPage?
     private var drag: (annotation: PDFAnnotation, page: PDFPage, start: NSPoint, original: NSRect, moved: Bool)?
+    private var erasing: InkEraseSession?
 
     /// Annotation kinds the reader edits; links, widgets and popups are left to PDFKit.
     static let editableTypes: Set<String> = ["Highlight", "Underline", "StrikeOut", "Squiggly", "Text", "FreeText",
@@ -69,6 +78,13 @@ final class ReaderPDFView: PDFView {
         inkOverlay.frame = bounds
         inkOverlay.autoresizingMask = [.width, .height]
         addSubview(inkOverlay)
+        // The eraser's ring follows the zoom.
+        NotificationCenter.default.addObserver(forName: .PDFViewScaleChanged, object: self, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.tool == .eraser else { return }
+                self.window?.invalidateCursorRects(for: self)
+            }
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
@@ -110,6 +126,8 @@ final class ReaderPDFView: PDFView {
             inkPoints = [pagePoint]
             inkOverlay.color = inkColor
             inkOverlay.path = nil
+        case .eraser:
+            beginErasing(at: pagePoint, on: page)
         case .select:
             if let hit = editableAnnotation(at: pagePoint, on: page) {
                 selectAnnotation(hit)
@@ -130,6 +148,11 @@ final class ReaderPDFView: PDFView {
 
     override func mouseDragged(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if erasing != nil {
+            eraserCursor.set()
+            if let page = page(for: point, nearest: true) { continueErasing(to: convert(point, to: page), on: page) }
+            return
+        }
         if tool == .ink, let page = inkPage {
             inkPoints.append(convert(point, to: page))
             let path = NSBezierPath()
@@ -153,6 +176,10 @@ final class ReaderPDFView: PDFView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if erasing != nil {
+            endErasing()
+            return
+        }
         if tool == .ink, let page = inkPage {
             inkOverlay.path = nil
             if inkPoints.count > 1 { editor?.addInk(points: inkPoints, on: page) }
@@ -177,17 +204,47 @@ final class ReaderPDFView: PDFView {
     override func resetCursorRects() {
         super.resetCursorRects()
         if [.note, .text, .ink].contains(tool) { addCursorRect(visibleRect, cursor: .crosshair) }
+        if tool == .eraser { addCursorRect(visibleRect, cursor: eraserCursor) }
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         // PDFView resets the cursor while tracking; keep the tool cursor.
         if [.note, .text, .ink].contains(tool) { NSCursor.crosshair.set() }
+        if tool == .eraser { eraserCursor.set() }
+    }
+
+    // MARK: Eraser (READER-30)
+
+    private var eraserCursor: NSCursor { EraserCursor.cursor(diameter: eraserSize.diameter * scaleFactor) }
+
+    /// The eraser went down: what it covers is erased at once. (Also driven by the reader's self-test.)
+    func beginErasing(at point: NSPoint, on page: PDFPage) {
+        erasing = InkEraseSession(diameter: eraserSize.diameter)
+        continueErasing(to: point, on: page)
+    }
+
+    func continueErasing(to point: NSPoint, on page: PDFPage) {
+        guard let erasing, erasing.move(to: point, on: page) else { return }
+        annotationsChanged(on: page)
+    }
+
+    /// Released: everything the drag erased becomes one undo step and is saved.
+    func endErasing() {
+        guard let session = erasing else { return }
+        erasing = nil
+        editor?.didErase(session.changes)
     }
 
     // MARK: Keyboard
 
     override func keyDown(with event: NSEvent) {
+        // [ and ] make the eraser smaller and larger, as in drawing apps.
+        if tool == .eraser, event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.shift, .capsLock]).isEmpty,
+           let key = event.charactersIgnoringModifiers, key == "[" || key == "]" {
+            onEraserSizeStep(key == "[" ? -1 : 1)
+            return
+        }
         if [51, 117].contains(event.keyCode), let annotation = selectedAnnotation {   // ⌫ / ⌦
             selectAnnotation(nil)
             editor?.remove(annotation)
@@ -210,6 +267,7 @@ final class ReaderPDFView: PDFView {
     // MARK: Context menu (READER-04/08)
 
     override func menu(for event: NSEvent) -> NSMenu? {
+        if tool == .eraser, let menu = eraserSizeMenu() { return menu }
         let base = super.menu(for: event) ?? NSMenu()
         let point = convert(event.locationInWindow, from: nil)
         if let page = page(for: point, nearest: false), let hit = editableAnnotation(at: convert(point, to: page), on: page) {

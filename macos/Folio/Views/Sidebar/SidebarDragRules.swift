@@ -3,7 +3,8 @@ import Foundation
 
 /// What is being dragged over the sidebar.
 enum SidebarDragSource: Equatable {
-    case group(id: String, hasChildren: Bool)
+    /// `height`: the levels the group and its subgroups span (1 = no subgroups).
+    case group(id: String, height: Int)
     case items(ids: [String], from: ViewScope)
     case files([URL])
 }
@@ -11,12 +12,13 @@ enum SidebarDragSource: Equatable {
 /// Where the pointer is, in sidebar terms.
 enum SidebarDropTarget: Equatable {
     case builtin(ViewScope)
-    case group(id: String, isTopLevel: Bool)
+    /// On a user group; `ancestors` run from the top level down to its parent (empty at the top level).
+    case group(id: String, ancestors: [String])
     case tag(String)
     /// Between top-level user groups; `index` counts user groups only.
     case topLevelGap(index: Int)
-    /// Between the children of a top-level group.
-    case childGap(parentId: String, index: Int)
+    /// Between the subgroups of `parentId`, whose own ancestors are `ancestors`.
+    case childGap(parentId: String, ancestors: [String], index: Int)
     case elsewhere
 }
 
@@ -30,18 +32,24 @@ enum SidebarDropDecision: Equatable {
     case importFiles([URL], groupId: String?)
 }
 
-/// Pure drop rules for the sidebar (SIDE-12, DND-02/03).
+/// Pure drop rules for the sidebar (SIDE-12, SIDE-17, DND-02/03).
 enum SidebarDragRules {
+    /// Whether a group spanning `height` levels fits under `parentId` (whose ancestors are `ancestors`): never inside
+    /// itself or its own subgroups, and no deeper than `LibraryGroup.maximumDepth` levels with its subgroups.
+    static func fits(_ id: String, height: Int, under parentId: String, ancestors: [String]) -> Bool {
+        parentId != id && !ancestors.contains(id) && ancestors.count + 1 + height <= LibraryGroup.maximumDepth
+    }
+
     static func decide(_ source: SidebarDragSource, _ target: SidebarDropTarget) -> SidebarDropDecision {
         switch (source, target) {
-        // Groups: nest onto a top-level group, reorder among siblings, promote into the top level.
-        case let (.group(id, hasChildren), .group(targetId, isTopLevel)):
-            guard targetId != id, isTopLevel, !hasChildren else { return .reject }
+        // Groups: nest onto a group, reorder among siblings, move to another level (four levels at most).
+        case let (.group(id, height), .group(targetId, ancestors)):
+            guard fits(id, height: height, under: targetId, ancestors: ancestors) else { return .reject }
             return .nestGroup(id: id, parentId: targetId)
         case let (.group(id, _), .topLevelGap(index)):
             return .moveGroup(id: id, parentId: nil, index: index)
-        case let (.group(id, hasChildren), .childGap(parentId, index)):
-            guard !hasChildren, parentId != id else { return .reject }
+        case let (.group(id, height), .childGap(parentId, ancestors, index)):
+            guard fits(id, height: height, under: parentId, ancestors: ancestors) else { return .reject }
             return .moveGroup(id: id, parentId: parentId, index: index)
         case (.group, _):
             return .reject

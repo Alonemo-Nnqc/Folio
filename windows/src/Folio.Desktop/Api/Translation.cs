@@ -163,13 +163,23 @@ public static partial class Api
             var service = TranslationServiceCatalog.Resolve(chosen);
             var options = M.Settings.TranslationOptions;
             var outcome = await SelectionTranslator.Translate(a.Str("text"), service.Id, M.Settings.FieldsOf(service.Id), M.Translations.Secrets.Secrets(service),
-                                                              options.LangIn, options.LangOut, M.Settings.SelectionTranslationFallback, id => M.Settings.FieldsOf(id));
+                                                              options.LangIn, options.LangOut, M.Settings.SelectionTranslationFallback, id => M.Settings.FieldsOf(id),
+                                                              useCache: !a.Bool("fresh"));
             string Name(string id) => TranslationServiceCatalog.Service(id)?.DisplayName ?? id;
             return (object?)new
             {
                 ok = outcome.Succeeded, text = outcome.Text, service = outcome.ServiceId, serviceName = Name(outcome.ServiceId),
                 notice = outcome.FellBackFrom is { } limited ? Loc.S("%@ 暂时限流，已改用 %@", Name(limited), Name(outcome.ServiceId)) : null,
             };
+        });
+        // The reader's mouse went down (or it opened): the 划词 service's connection is opened and its token fetched (SEL-20).
+        Bridge.On("translation.prewarm", _ =>
+        {
+            if (!M.Settings.SelectionTranslationEnabled) return null;
+            var service = TranslationServiceCatalog.Resolve(M.Settings.SelectionTranslationService is { Length: > 0 } stored ? stored : M.Settings.TranslationService);
+            try { SelectionTranslator.Prewarm(service.Id, M.Settings.FieldsOf(service.Id), M.Translations.Secrets.Secrets(service), M.Settings.SelectionTranslationFallback); }
+            catch { }
+            return null;
         });
         Bridge.On("translation.setSelectionService", a =>
         {

@@ -24,6 +24,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private weak var toolGroup: NSToolbarItemGroup?
     private weak var colorItem: NSMenuToolbarItem?
     private weak var searchItem: NSSearchToolbarItem?
+    private weak var textEditItem: NSToolbarItem?
+    /// 编辑 PDF 文字 (EDIT-01), while it is on.
+    private var textEditMode: PDFTextEditMode?
 
     private var fileURL: URL
     private var saveTask: Task<Void, Never>?
@@ -41,7 +44,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         self.fileId = fileId
         itemId = file.itemId
         fileURL = model.fileURL(file)
-        state = ReaderState(color: AnnotationColor(rawValue: model.settings.highlightColor) ?? .yellow)
+        state = ReaderState(color: AnnotationColor(rawValue: model.settings.highlightColor) ?? .yellow,
+                            eraserSize: InkEraser.Size(rawValue: model.settings.readerEraserSize) ?? .medium)
         editor = AnnotationEditor(state: state)
         content = ReaderContentViewController(pdfView: pdfView)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 860),
@@ -61,6 +65,119 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         window.representedURL = fileURL
         updateTitle()
         startObserving()
+        configureScanBanner()
+    }
+
+    // MARK: Scans (OCR-01)
+
+    /// A scan without text gets a banner offering to recognise it; the file is reloaded once that is done.
+    private func configureScanBanner() {
+        let banner = content.scanBanner
+        banner.recognize = { [weak self] in
+            guard let self else { return }
+            self.model.ocr.recognize(fileId: self.fileId)
+        }
+        banner.cancel = { [weak self] in
+            guard let self else { return }
+            self.model.ocr.cancel(fileId: self.fileId)
+        }
+        banner.dismiss = { banner.dismissed = true }
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let progress = self.model.ocr.jobs[self.fileId]
+            if banner.progress != progress { banner.progress = progress }
+        })
+        NotificationCenter.default.addObserver(self, selector: #selector(fileRecognized(_:)), name: .folioFileRecognized, object: nil)
+        checkIfScanned()
+    }
+
+    @objc private func fileRecognized(_ notification: Notification) {
+        guard notification.userInfo?["fileId"] as? String == fileId else { return }
+        reloadIfChangedOnDisk()
+        content.scanBanner.isScan = false
+    }
+
+    private func checkIfScanned() {
+        Task { [weak self] in
+            guard let self else { return }
+            let scan = await self.model.ocr.isScanned(fileId: self.fileId)
+            self.content.scanBanner.isScan = scan
+        }
+    }
+
+    @objc func recognizeText(_ sender: Any?) {
+        model.ocr.recognize(fileId: fileId)
+    }
+
+    // MARK: Editing the PDF's text (EDIT-01)
+
+    var isEditingPDFText: Bool { textEditMode != nil }
+
+    @objc func toggleTextEditing(_ sender: Any?) {
+        if let mode = textEditMode {
+            mode.finish()
+            NSAnimationContext.runAnimationGroup({ $0.duration = 0.15; mode.animator().alphaValue = 0 }, completionHandler: { mode.removeFromSuperview() })
+            textEditMode = nil
+            content.scanBanner.editing = false
+            updateEditItem()
+            return
+        }
+        // Annotations waiting to be saved go into the file first: the editor reads the file.
+        guard save() else { return }
+        state.tool = .select
+        pdfView.selectAnnotation(nil)
+        pdfView.clearSelection()
+        let mode = PDFTextEditMode(pdfView: pdfView)
+        mode.data = { [weak self] in self.flatMap { try? Data(contentsOf: $0.fileURL, options: .alwaysMapped) } }
+        mode.commit = { [weak self] data, name in self?.applyEdit(data, actionName: name) ?? false }
+        mode.showMessage = { [weak self] text in self?.model.toasts.show(text, systemImage: "character.cursor.ibeam") }
+        mode.alphaValue = 0
+        pdfView.addSubview(mode)
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.15; mode.animator().alphaValue = 1 }
+        textEditMode = mode
+        content.scanBanner.editing = true
+        content.scanBanner.finishEditing = { [weak self] in self?.toggleTextEditing(nil) }
+        mode.reload()
+        updateEditItem()
+    }
+
+    /// The self-test's way in: an edit made by the editor, written as a click would.
+    func selfTestCommit(_ data: Data) -> Bool { applyEdit(data, actionName: String(localized: "编辑文字")) }
+
+    private func updateEditItem() {
+        textEditItem?.image = NSImage(systemSymbolName: isEditingPDFText ? "character.cursor.ibeam" : "character.cursor.ibeam",
+                                      accessibilityDescription: textEditItem?.label)
+        if #available(macOS 26, *) { textEditItem?.style = isEditingPDFText ? .prominent : .plain }
+    }
+
+    /// Writes an edit into the file and shows it, keeping the place; undo puts the file as it was.
+    private func applyEdit(_ data: Data, actionName: String) -> Bool {
+        guard let old = try? Data(contentsOf: fileURL) else { return false }
+        guard write(data) else { return false }
+        window?.undoManager?.registerUndo(withTarget: self) { $0.restoreEdit(old, redo: data, actionName: actionName) }
+        window?.undoManager?.setActionName(actionName)
+        return true
+    }
+
+    private func restoreEdit(_ data: Data, redo: Data, actionName: String) {
+        guard write(data) else { return }
+        window?.undoManager?.registerUndo(withTarget: self) { $0.restoreEdit(redo, redo: data, actionName: actionName) }
+        window?.undoManager?.setActionName(actionName)
+        textEditMode?.reload()
+    }
+
+    /// The file replaced atomically by `data`, the document reloaded where the reader was.
+    private func write(_ data: Data) -> Bool {
+        do {
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            model.toasts.show(String(localized: "无法保存修改：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
+            return false
+        }
+        isDirty = false
+        reloadKeepingPlace()
+        model.importer.refreshChangedFiles()
+        return true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
@@ -84,6 +201,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
         pdfView.onMouseDown = { [weak self] in self?.selectionTranslation.mouseWentDown() }
         pdfView.onSelectionFinished = { [weak self] in self?.selectionTranslation.selectionFinished() }
+        pdfView.eraserSizeMenu = { [weak self] in self?.eraserSizeMenu() }
+        pdfView.onEraserSizeStep = { [weak self] step in self?.stepEraserSize(by: step) }
         // 划词翻译's shortcut, while this reader is the key window.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.window, self.model.settings.selectionTranslationEnabled,
@@ -160,7 +279,15 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             self.toolGroup?.selectedIndex = tool.rawValue
             let color = self.state.color
             self.pdfView.inkColor = color.nsColor
-            self.colorItem?.image = Self.colorSwatch(color)
+            let eraserSize = self.state.eraserSize
+            self.pdfView.eraserSize = eraserSize
+            // While erasing, the colour button beside the tools picks the eraser's size instead (READER-30).
+            if let item = self.colorItem {
+                let erasing = tool == .eraser
+                item.image = erasing ? eraserSize.image : Self.colorSwatch(color)
+                item.label = erasing ? String(localized: "大小") : String(localized: "颜色")
+                item.toolTip = erasing ? String(localized: "橡皮擦大小（[ 与 ] 调整）") : String(localized: "批注颜色")
+            }
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -299,6 +426,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     /// Picks up edits made in another app (e.g. Preview) while this tab was in the background.
     private func reloadIfChangedOnDisk() {
         guard !isDirty, let date = Self.modificationDate(fileURL), date != knownModificationDate else { return }
+        reloadKeepingPlace()
+        textEditMode?.reload()
+    }
+
+    /// The file read again, on the same page and at the same place and zoom.
+    private func reloadKeepingPlace() {
         let destination = pdfView.currentDestination
         let scale = pdfView.scaleFactor, autoScales = pdfView.autoScales, mode = pdfView.displayMode
         guard loadDocument() else { return }
@@ -724,6 +857,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     @objc func selectTool(_ sender: Any?) {
         let index = (sender as? NSMenuItem)?.tag ?? (sender as? NSToolbarItemGroup)?.selectedIndex ?? 0
         guard let tool = AnnotationTool(rawValue: index) else { return }
+        // A tool ends 编辑 PDF 文字: annotating and editing the text are not done at once.
+        if isEditingPDFText { toggleTextEditing(nil) }
         // Choosing a markup tool with text already selected marks that text right away.
         if let type = tool.markupType, let selection = pdfView.currentSelection, !(selection.string ?? "").isEmpty {
             editor.addMarkup(type, for: selection)
@@ -748,10 +883,55 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     func menuNeedsUpdate(_ menu: NSMenu) {
         guard menu.identifier == Self.colorMenuIdentifier else { return }
         menu.removeAllItems()
+        if state.tool == .eraser {
+            menu.addItem(.sectionHeader(title: String(localized: "橡皮擦大小")))
+            eraserSizeItems().forEach(menu.addItem)
+            return
+        }
         let colors = AnnotationColor.allCases
         menu.addItem(.colorSwatches(colors.map { .init(name: $0.title, color: $0.nsColor) }, selected: colors.firstIndex(of: state.color)) {
             [weak self] index in self?.choose(colors[index])
         })
+    }
+
+    // MARK: Actions: eraser size (READER-30)
+
+    @objc func selectEraserSize(_ sender: Any?) {
+        guard let item = sender as? NSMenuItem, InkEraser.Size.allCases.indices.contains(item.tag) else { return }
+        choose(InkEraser.Size.allCases[item.tag])
+    }
+
+    /// A size is chosen to erase with: the eraser becomes the tool, and the size is remembered.
+    private func choose(_ size: InkEraser.Size) {
+        state.eraserSize = size
+        model.settings.readerEraserSize = size.rawValue
+        state.tool = .eraser
+    }
+
+    private func stepEraserSize(by step: Int) {
+        let sizes = InkEraser.Size.allCases
+        guard let index = sizes.firstIndex(of: state.eraserSize) else { return }
+        choose(sizes[min(max(index + step, 0), sizes.count - 1)])
+    }
+
+    /// The eraser's sizes, the current one checked: the toolbar button's menu while erasing, and right-click on the page.
+    private func eraserSizeItems() -> [NSMenuItem] {
+        InkEraser.Size.allCases.enumerated().map { index, size in
+            let item = NSMenuItem(title: size.title, action: #selector(selectEraserSize(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.image = size.image
+            item.state = size == state.eraserSize ? .on : .off
+            return item
+        }
+    }
+
+    private func eraserSizeMenu() -> NSMenu {
+        let menu = NSMenu()
+        let header = NSMenuItem.sectionHeader(title: String(localized: "橡皮擦大小"))
+        menu.addItem(header)
+        eraserSizeItems().forEach(menu.addItem)
+        return menu
     }
 
     @objc func addSelectionToNote(_ sender: Any?) {
@@ -781,6 +961,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             return true
         case #selector(selectColor(_:)):
             menuItem.state = AnnotationColor.allCases.firstIndex(of: state.color) == menuItem.tag ? .on : .off
+            return true
+        case #selector(toggleTextEditing(_:)):
+            menuItem.state = isEditingPDFText ? .on : .off
+            return pdfView.document?.isEncrypted != true
+        case #selector(recognizeText(_:)):
+            return model.snapshot.files[fileId]?.isPDF == true && !model.ocr.isRecognizing(fileId)
+        case #selector(selectEraserSize(_:)):
+            menuItem.state = InkEraser.Size.allCases.firstIndex(of: state.eraserSize) == menuItem.tag ? .on : .off
             return true
         case #selector(setSinglePage(_:)):
             menuItem.state = pdfView.displayMode == .singlePageContinuous ? .on : .off
@@ -823,6 +1011,17 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         toolbar.autosavesConfiguration = !UserDefaults.standard.bool(forKey: "FolioUITesting")
         window?.toolbar = toolbar
         removeNotesTitleFromSavedToolbar(toolbar)
+        addEditButtonToSavedToolbar(toolbar)
+    }
+
+    /// 编辑 PDF came in 1.3: it joins toolbars saved before, once, after 翻译 (taken out again, it stays out).
+    private func addEditButtonToSavedToolbar(_ toolbar: NSToolbar) {
+        let key = "ReaderToolbarHasEditText"
+        guard toolbar.autosavesConfiguration, !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        guard !toolbar.items.contains(where: { $0.itemIdentifier == .readerEditText }) else { return }
+        let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .readerTranslate }).map { $0 + 1 } ?? toolbar.items.count
+        toolbar.insertItem(withItemIdentifier: .readerEditText, at: index)
     }
 
     /// The notes title was a toolbar item for a while (macOS 26 drew it as a button): it goes from saved toolbars.
@@ -832,7 +1031,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .readerZoom, .space, .readerTools, .readerColor,
-         .space, .readerTranslate, .readerSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
+         .space, .readerTranslate, .readerEditText, .readerSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -909,6 +1108,15 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             item.searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 200).isActive = true
             searchItem = item
             return item
+        case .readerEditText:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.label = String(localized: "编辑 PDF")
+            item.paletteLabel = String(localized: "编辑 PDF 文字")
+            item.toolTip = String(localized: "编辑 PDF 中的文字")
+            item.image = NSImage(systemSymbolName: "character.cursor.ibeam", accessibilityDescription: item.label)
+            item.action = #selector(toggleTextEditing(_:))
+            textEditItem = item
+            return item
         case .readerPrint:
             let item = NSToolbarItem(itemIdentifier: id)
             item.label = String(localized: "打印")
@@ -940,6 +1148,7 @@ extension NSToolbarItem.Identifier {
     static let readerTranslate = NSToolbarItem.Identifier("ReaderTranslate")
     static let readerSearch = NSToolbarItem.Identifier("ReaderSearch")
     static let readerPrint = NSToolbarItem.Identifier("ReaderPrint")
+    static let readerEditText = NSToolbarItem.Identifier("ReaderEditText")
     static let readerNotesTitle = NSToolbarItem.Identifier("ReaderNotesTitle")
 }
 
@@ -959,6 +1168,9 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
 
     /// Shown over the pages while this paper is being translated.
     private let translationHUD = TranslationProgressHUD()
+    /// 扫描件: the offer to recognise its text, then the progress (OCR-01).
+    let scanBanner = ScanBannerState()
+    private lazy var scanBannerHost = ScanBannerHost(rootView: ScanBanner(state: scanBanner))
     private let backdrop = TranslucentBackdrop()
     private var opaqueBackground: NSColor?
     /// Views whose automatic scale is held while the panes around them move.
@@ -998,7 +1210,7 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
         splitView.dividerStyle = .thin
         splitView.addArrangedSubview(pdfView)
         let container = NSView()
-        for subview in [backdrop, splitView, translationHUD] as [NSView] {
+        for subview in [backdrop, splitView, translationHUD, scanBannerHost] as [NSView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(subview)
         }
@@ -1015,6 +1227,9 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
             translationHUD.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             translationHUD.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20),
             translationHUD.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 20),
+            scanBannerHost.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            scanBannerHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            scanBannerHost.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
         ])
         view = container
     }

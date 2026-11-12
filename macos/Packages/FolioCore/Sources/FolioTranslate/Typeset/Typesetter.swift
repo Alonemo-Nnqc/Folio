@@ -19,9 +19,13 @@ struct Transplant: Sendable, Hashable {
 /// outside `frame`.
 struct Typesetter {
     let language: String
+    /// Set the text as written: no Chinese punctuation or spaces around Latin words put in (text a person typed,
+    /// unlike a translation service's output).
+    var keepsText = false
 
-    init(language: String) {
+    init(language: String, keepsText: Bool = false) {
         self.language = language
+        self.keepsText = keepsText
     }
 
     struct Result {
@@ -259,7 +263,7 @@ struct Typesetter {
         // Placeholders as a translator may have mangled them (`｛v1｝`, `{ V1 }`).
         var text = Placeholders.replace(in: raw) { TextSegment.placeholder($0) }
         // Chinese punctuation next to Chinese text ("训练线性探针,(2)" → "训练线性探针，(2)").
-        if language.lowercased().hasPrefix("zh") {
+        if !keepsText, language.lowercased().hasPrefix("zh") {
             let cjk = #"[\u4E00-\u9FFF\u3400-\u4DBF]"#
             for (ascii, full) in [(",", "，"), (";", "；"), (":", "："), ("?", "？"), ("!", "！")] {
                 let mark = NSRegularExpression.escapedPattern(for: ascii)
@@ -271,7 +275,7 @@ struct Typesetter {
         }
         // One even space between Chinese or Japanese and what is set among it (Latin words, numbers, formulas),
         // whatever the translator left there.
-        if spacesBetweenCharacters {
+        if !keepsText, spacesBetweenCharacters {
             let cjk = #"[\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u30FF]"#
             text = text.replacingOccurrences(of: "(?<=\(cjk))\\s*(?=[A-Za-z0-9{\\[])", with: " ", options: .regularExpression)
             text = text.replacingOccurrences(of: "(?<=[A-Za-z0-9}\\]])\\s*(?=\(cjk))", with: " ", options: .regularExpression)
@@ -329,7 +333,7 @@ struct Typesetter {
         if cursor < ns.length { result.append(NSAttributedString(string: ns.substring(from: cursor), attributes: base)) }
         // Formulas the translation dropped still appear, at the end.
         // (A lone operator such as "×" was probably translated as text: not worth repeating at the end.)
-        for n in 1...max(formulas.count, 1) where n <= formulas.count && !used.contains(n)
+        for n in 1...max(formulas.count, 1) where !keepsText && n <= formulas.count && !used.contains(n)
             && (formulas[n - 1].rect.width > formulas[n - 1].size * 1.2 || !formulas[n - 1].links.isEmpty || !formulas[n - 1].icons.isEmpty) {
             result.append(NSAttributedString(string: " ", attributes: base))
             appendFormula(n)

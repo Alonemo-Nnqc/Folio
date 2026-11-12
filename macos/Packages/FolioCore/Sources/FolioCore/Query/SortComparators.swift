@@ -33,6 +33,8 @@ enum SortComparators {
         case .fileCount: .number(Double(snapshot.filesByItem[item.id]?.count ?? 0))
         case .citationKey: .text(item.citationKey)
         case .tags: .text(snapshot.tags(of: item.id).first?.name)
+        case .journalRank: .number(snapshot.journalMetrics(for: item)?.rankSortKey)
+        case .impactFactor: .number(snapshot.journalMetrics(for: item)?.impactFactor)
         }
     }
 

@@ -10,17 +10,60 @@ import Testing
         #expect(throws: LibraryError.duplicateGroupName("night")) { try lib.createGroup(name: "night") }
     }
 
-    @Test func limitsDepthToTwoLevels() throws {
+    @Test func limitsDepthToFourLevels() throws {
         let lib = try Library.temporary()
-        let parent = try lib.createGroup(name: "P")
-        let child = try lib.createGroup(name: "C", parentId: parent.id)
-        #expect(throws: LibraryError.groupDepthExceeded) { try lib.createGroup(name: "GC", parentId: child.id) }
+        let l1 = try lib.createGroup(name: "L1")
+        let l2 = try lib.createGroup(name: "L2", parentId: l1.id)
+        let l3 = try lib.createGroup(name: "L3", parentId: l2.id)
+        let l4 = try lib.createGroup(name: "L4", parentId: l3.id)
+        #expect(throws: LibraryError.groupDepthExceeded) { try lib.createGroup(name: "L5", parentId: l4.id) }
+        let s = try lib.snapshot()
+        #expect(s.groupDepth(l4.id) == 4)
+        #expect(s.groupAncestors(l4.id) == [l1.id, l2.id, l3.id])
+        #expect(s.groupPath(l4.id) == ["L1", "L2", "L3", "L4"])
+        #expect(s.groupSubtreeHeight(l1.id) == 4)
+        #expect(s.canAddSubgroup(to: l3.id))
+        #expect(!s.canAddSubgroup(to: l4.id))
+        #expect(s.groupsInOrder.map(\.depth) == [0, 1, 2, 3])
+    }
 
-        let other = try lib.createGroup(name: "O")
-        #expect(try lib.canMoveGroup(parent.id, toParent: other.id) == false, "group with children cannot nest")
-        #expect(try lib.canMoveGroup(other.id, toParent: child.id) == false, "cannot move under a subgroup")
-        #expect(try lib.canMoveGroup(other.id, toParent: parent.id))
-        #expect(try lib.canMoveGroup(parent.id, toParent: parent.id) == false)
+    @Test func movingKeepsTheWholeSubtreeWithinFourLevels() throws {
+        let lib = try Library.temporary()
+        let a = try lib.createGroup(name: "A")
+        let a2 = try lib.createGroup(name: "A2", parentId: a.id)
+        let a3 = try lib.createGroup(name: "A3", parentId: a2.id)
+        let b = try lib.createGroup(name: "B")
+        let b2 = try lib.createGroup(name: "B2", parentId: b.id)
+        let leaf = try lib.createGroup(name: "Leaf")
+
+        // A spans three levels: it fits under a top-level group, not under a second-level one.
+        #expect(try lib.canMoveGroup(a.id, toParent: b.id))
+        #expect(try lib.canMoveGroup(a.id, toParent: b2.id) == false)
+        #expect(try lib.canMoveGroup(leaf.id, toParent: a3.id), "a leaf may become the fourth level")
+        #expect(try lib.canMoveGroup(b.id, toParent: a3.id) == false, "B with B2 would reach level 5")
+        #expect(try lib.canMoveGroup(b.id, toParent: a2.id), "B with B2 fills levels 3 and 4")
+        #expect(try lib.canMoveGroup(b.id, toParent: a.id))
+        // Never into itself or its own descendants.
+        #expect(try lib.canMoveGroup(a.id, toParent: a.id) == false)
+        #expect(try lib.canMoveGroup(a.id, toParent: a3.id) == false)
+        #expect(try lib.canMoveGroup(a2.id, toParent: nil))
+        #expect(throws: LibraryError.groupDepthExceeded) { try lib.moveGroup(a.id, toParent: b2.id, index: 0) }
+
+        let s = try lib.snapshot()
+        #expect(s.canMoveGroup(a.id, toParent: b.id))
+        #expect(!s.canMoveGroup(a.id, toParent: b2.id))
+        #expect(!s.canMoveGroup(a.id, toParent: a3.id))
+        #expect(s.canMoveGroup(leaf.id, toParent: a3.id))
+
+        try lib.moveGroup(a.id, toParent: b.id, index: 0)
+        let moved = try lib.snapshot()
+        #expect(moved.groupDepth(a3.id) == 4)
+        #expect(moved.childGroups[b.id] == [a.id, b2.id])
+        // Promoting a subgroup to the top level carries its subtree along.
+        try lib.moveGroup(a2.id, toParent: nil, index: 0)
+        let promoted = try lib.snapshot()
+        #expect(promoted.topLevelGroups.first == a2.id)
+        #expect(promoted.groupDepth(a3.id) == 2)
     }
 
     @Test func movesNestsPromotesAndReorders() throws {
@@ -58,6 +101,21 @@ import Testing
         #expect(try lib.rows(.trash) == [trashed])
     }
 
+    @Test func deletingGroupRemovesAllDescendants() throws {
+        let lib = try Library.temporary()
+        let l1 = try lib.createGroup(name: "L1")
+        let l2 = try lib.createGroup(name: "L2", parentId: l1.id)
+        let l3 = try lib.createGroup(name: "L3", parentId: l2.id)
+        let l4 = try lib.createGroup(name: "L4", parentId: l3.id)
+        let other = try lib.createGroup(name: "Other")
+        let deep = try lib.importItem("Deep", toGroup: l4.id)
+        let middle = try lib.importItem("Middle", toGroup: l2.id)
+        try lib.deleteGroup(l2.id, trashItems: true)
+        let s = try lib.snapshot()
+        #expect(Set(s.groupsById.keys) == [l1.id, other.id])
+        #expect(Set(try lib.rows(.trash)) == [deep, middle])
+    }
+
     @Test func addingTwiceReportsAlreadyPresent() throws {
         let lib = try Library.temporary()
         let parent = try lib.createGroup(name: "P")
@@ -67,6 +125,19 @@ import Testing
         #expect(try lib.addItems([id], toGroup: parent.id, includeSubgroups: true).alreadyPresent == [id],
                 "visible through the subgroup")
         #expect(try lib.addItems([id], toGroup: parent.id, includeSubgroups: false).added == [id])
+    }
+
+    @Test func membershipLooksThroughEveryLevel() throws {
+        let lib = try Library.temporary()
+        let l1 = try lib.createGroup(name: "L1")
+        let l2 = try lib.createGroup(name: "L2", parentId: l1.id)
+        let l3 = try lib.createGroup(name: "L3", parentId: l2.id)
+        let l4 = try lib.createGroup(name: "L4", parentId: l3.id)
+        let id = try lib.importItem("X", toGroup: l4.id)
+        #expect(try lib.addItems([id], toGroup: l1.id, includeSubgroups: true).alreadyPresent == [id])
+        try lib.removeItems([id], fromGroup: l2.id, includeSubgroups: true)
+        #expect(try lib.rows(.group(l4.id)).isEmpty)
+        #expect(try lib.rows(.unfiled) == [id])
     }
 
     @Test func removeFromGroupKeepsItemInLibrary() throws {

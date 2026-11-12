@@ -36,7 +36,7 @@ public enum ViewResolver {
         case .trash:
             return s.items.values.filter(\.isTrashed).map(\.id)
         case .group(let id):
-            let groups = includeSubgroupItems ? s.groupAndChildren(id) : [id]
+            let groups = includeSubgroupItems ? s.groupAndDescendants(id) : [id]
             var ids = Set<String>()
             for g in groups { ids.formUnion(s.groupItems[g] ?? []) }
             return ids.filter { s.items[$0].map { !$0.isTrashed } ?? false }

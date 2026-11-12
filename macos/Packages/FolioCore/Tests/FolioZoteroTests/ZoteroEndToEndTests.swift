@@ -24,9 +24,8 @@ struct ZoteroEndToEndTests {
         #expect(snapshot.items.count == summary.itemsImported)
         #expect(snapshot.files.count == summary.filesImported)
         #expect(summary.groupsCreated == report.collections)
-        #expect(snapshot.groupsById.values.allSatisfy { group in
-            group.parentId.map { snapshot.groupsById[$0]?.parentId == nil } ?? true
-        }, "at most two levels")
+        #expect(snapshot.groupsById.keys.allSatisfy { snapshot.groupDepth($0) <= LibraryGroup.maximumDepth },
+                "at most four levels")
         #expect(snapshot.tags.count == report.tags, "automatic tags excluded by default")
         for file in snapshot.files.values {
             #expect(FileManager.default.fileExists(atPath: library.fileURL(for: file).path))

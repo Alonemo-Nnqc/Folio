@@ -378,8 +378,8 @@ public sealed partial class Library : IDisposable
         {
             if (parentId != null)
             {
-                var parent = FetchGroup(c, tx, parentId) ?? throw LibraryException.NotFound();
-                if (parent.ParentId != null) throw LibraryException.GroupDepthExceeded();
+                if (FetchGroup(c, tx, parentId) == null) throw LibraryException.NotFound();
+                if (Depth(parentId, c, tx) >= LibraryGroup.MaximumDepth) throw LibraryException.GroupDepthExceeded();
             }
             var siblings = Siblings(parentId, c, tx);
             EnsureUniqueName(clean, siblings, null);
@@ -407,16 +407,17 @@ public sealed partial class Library : IDisposable
         if (Exec(c, tx, "UPDATE libraryGroup SET colorHex = ? WHERE id = ?", colorHex, id) == 0) throw LibraryException.NotFound();
     });
 
-    /// <summary>Deletes the group and its subgroups. Items stay in the library unless trashItems.</summary>
+    /// <summary>Deletes the group and all its descendants. Items stay in the library unless trashItems.</summary>
     public void DeleteGroup(string id, bool trashItems) => Database.Write((c, tx) =>
     {
         var ids = new List<string> { id };
-        ids.AddRange(Strings(c, tx, "SELECT id FROM libraryGroup WHERE parentId = ?", id));
+        ids.AddRange(DescendantIds(id, c, tx));
         if (trashItems)
             Exec(c, tx, $"UPDATE item SET trashedAt = ? WHERE trashedAt IS NULL AND id IN (SELECT itemId FROM itemGroup WHERE groupId IN ({Placeholders(ids.Count)}))",
                  [DateTime.UtcNow, .. ids]);
         Exec(c, tx, $"DELETE FROM itemOrder WHERE scope IN ({Placeholders(ids.Count)})", [.. ids.Select(g => ViewScope.Group(g).Key)]);
-        Exec(c, tx, "DELETE FROM libraryGroup WHERE id = ?", id);
+        // Subgroups go with it (ON DELETE CASCADE); deleting them explicitly keeps this independent of that.
+        Exec(c, tx, $"DELETE FROM libraryGroup WHERE id IN ({Placeholders(ids.Count)})", [.. ids]);
     });
 
     public bool CanMoveGroup(string id, string? parentId) => Database.Read(c => CanMove(id, parentId, c, null));
@@ -453,7 +454,7 @@ public sealed partial class Library : IDisposable
     public void RemoveItems(IEnumerable<string> itemIds, string groupId, bool includeSubgroups) => Database.Write((c, tx) =>
     {
         var groups = new List<string> { groupId };
-        if (includeSubgroups) groups.AddRange(Strings(c, tx, "SELECT id FROM libraryGroup WHERE parentId = ?", groupId));
+        if (includeSubgroups) groups.AddRange(DescendantIds(groupId, c, tx));
         var ids = itemIds.ToList();
         if (ids.Count == 0) return;
         Exec(c, tx, $"DELETE FROM itemGroup WHERE itemId IN ({Placeholders(ids.Count)}) AND groupId IN ({Placeholders(groups.Count)})", [.. ids, .. groups]);
@@ -469,17 +470,51 @@ public sealed partial class Library : IDisposable
             throw LibraryException.DuplicateGroupName(name);
     }
 
+    /// <summary>Not into itself or a descendant, and with its subtree no deeper than <see cref="LibraryGroup.MaximumDepth"/> levels.</summary>
     static bool CanMove(string id, string? parentId, SqliteConnection c, SqliteTransaction? tx)
     {
         if (FetchGroup(c, tx, id) == null) return false;
         if (parentId == null) return true;
-        if (parentId == id || FetchGroup(c, tx, parentId) is not { ParentId: null }) return false;
-        return Convert.ToInt64(Scalar(c, tx, "SELECT COUNT(*) FROM libraryGroup WHERE parentId = ?", id)) == 0;
+        if (parentId == id || FetchGroup(c, tx, parentId) == null || DescendantIds(id, c, tx).Contains(parentId)) return false;
+        return Depth(parentId, c, tx) + SubtreeHeight(id, c, tx) <= LibraryGroup.MaximumDepth;
     }
 
-    static List<string> MemberIds(string groupId, bool includeSubgroups, SqliteConnection c, SqliteTransaction? tx) => includeSubgroups
-        ? Strings(c, tx, "SELECT itemId FROM itemGroup WHERE groupId = ? OR groupId IN (SELECT id FROM libraryGroup WHERE parentId = ?)", groupId, groupId)
-        : Strings(c, tx, "SELECT itemId FROM itemGroup WHERE groupId = ?", groupId);
+    /// <summary>Ids of every group below id (not id itself). UNION stops on a (corrupt) cycle.</summary>
+    static List<string> DescendantIds(string id, SqliteConnection c, SqliteTransaction? tx) => Strings(c, tx, """
+        WITH RECURSIVE sub(id) AS (
+          SELECT id FROM libraryGroup WHERE parentId = ?
+          UNION SELECT g.id FROM libraryGroup g JOIN sub ON g.parentId = sub.id)
+        SELECT id FROM sub WHERE id <> ?
+        """, id, id);
+
+    /// <summary>The group's level: 1 for a top-level group.</summary>
+    static int Depth(string id, SqliteConnection c, SqliteTransaction? tx)
+    {
+        int depth = 1;
+        var seen = new HashSet<string> { id };
+        for (var parent = Scalar(c, tx, "SELECT parentId FROM libraryGroup WHERE id = ?", id) as string;
+             parent != null && seen.Add(parent);
+             parent = Scalar(c, tx, "SELECT parentId FROM libraryGroup WHERE id = ?", parent) as string)
+            depth++;
+        return depth;
+    }
+
+    /// <summary>Levels spanned by the group and its subtree: 1 without subgroups.</summary>
+    static int SubtreeHeight(string id, SqliteConnection c, SqliteTransaction? tx) =>
+        Convert.ToInt32(Scalar(c, tx, """
+            WITH RECURSIVE sub(id, level) AS (
+              SELECT ?, 1
+              UNION SELECT g.id, sub.level + 1 FROM libraryGroup g JOIN sub ON g.parentId = sub.id WHERE sub.level < 64)
+            SELECT MAX(level) FROM sub
+            """, id) ?? 1);
+
+    static List<string> MemberIds(string groupId, bool includeSubgroups, SqliteConnection c, SqliteTransaction? tx)
+    {
+        if (!includeSubgroups) return Strings(c, tx, "SELECT itemId FROM itemGroup WHERE groupId = ?", groupId);
+        var groups = new List<string> { groupId };
+        groups.AddRange(DescendantIds(groupId, c, tx));
+        return Strings(c, tx, $"SELECT DISTINCT itemId FROM itemGroup WHERE groupId IN ({Placeholders(groups.Count)})", [.. groups]);
+    }
 
     // MARK: Tags
 

@@ -19,8 +19,22 @@ extension Library {
 
     private func importGroups(_ groups: [PreparedGroup], summary: inout BulkImportSummary) throws -> [String: String] {
         var ids: [String: String] = [:]
-        let ordered = groups.filter { $0.parentKey == nil }.sorted { $0.position < $1.position }
-            + groups.filter { $0.parentKey != nil }.sorted { $0.position < $1.position }
+        // Parents before children: by level, then position. Groups deeper than the limit are skipped.
+        let byKey = Dictionary(groups.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        func level(_ group: PreparedGroup) -> Int {
+            var level = 1
+            var seen: Set<String> = [group.key]
+            var parent = group.parentKey
+            while let key = parent, seen.insert(key).inserted {
+                level += 1
+                parent = byKey[key]?.parentKey
+            }
+            return level
+        }
+        let levels = Dictionary(groups.map { ($0.key, level($0)) }, uniquingKeysWith: { first, _ in first })
+        let ordered = groups
+            .filter { (levels[$0.key] ?? 1) <= LibraryGroup.maximumDepth }
+            .sorted { (levels[$0.key] ?? 1, $0.position) < (levels[$1.key] ?? 1, $1.position) }
         try writer.write { db in
             for group in ordered {
                 let parentId = group.parentKey.flatMap { ids[$0] }

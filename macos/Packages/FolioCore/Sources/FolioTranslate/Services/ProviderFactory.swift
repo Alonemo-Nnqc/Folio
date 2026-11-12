@@ -140,4 +140,6 @@ struct ConcurrencyOverride: TranslationProvider {
     func extractTerms(from excerpt: String, context: TranslationContext) async throws -> [GlossaryEntry] {
         try await base.extractTerms(from: excerpt, context: context)
     }
+
+    func prewarm() async { await base.prewarm() }
 }

@@ -222,13 +222,23 @@ public class LibraryTests
     }
 
     [Fact]
-    public void GroupsNestTwoLevelsAndTagsAreUnique()
+    public void GroupsNestFourLevelsAndTagsAreUnique()
     {
         using var library = Library.Temporary();
         var parent = library.CreateGroup("2026美赛B题");
         var child = library.CreateGroup("参考文献", parent.Id);
-        Assert.Throws<LibraryException>(() => library.CreateGroup("太深", child.Id));
+        var third = library.CreateGroup("综述", child.Id);
+        var fourth = library.CreateGroup("医学", third.Id);
+        Assert.Throws<LibraryException>(() => library.CreateGroup("太深", fourth.Id));
         Assert.Throws<LibraryException>(() => library.CreateGroup("参考文献", parent.Id));
+        var groups = library.Snapshot();
+        Assert.Equal(4, groups.GroupDepth(fourth.Id));
+        Assert.Equal([parent.Id, child.Id, third.Id], groups.GroupAncestors(fourth.Id));
+        Assert.Equal(["2026美赛B题", "参考文献", "综述", "医学"], groups.GroupPath(fourth.Id));
+        Assert.Equal(4, groups.GroupSubtreeHeight(parent.Id));
+        Assert.True(groups.CanAddSubgroup(third.Id));
+        Assert.False(groups.CanAddSubgroup(fourth.Id));
+        Assert.Equal([0, 1, 2, 3], groups.GroupsForMenus().Select(g => g.Depth));
         var id = ((CreateOutcome.Created)library.CreateItem(Paper())).ItemId;
         library.AddItems([id], child.Id, false);
         var snapshot = library.Snapshot();
@@ -238,6 +248,81 @@ public class LibraryTests
         Assert.Throws<LibraryException>(() => library.CreateTag("必读", "#000000"));
         library.SetTag(tag.Id, [id], true);
         Assert.Single(library.Snapshot().TagsOf(id));
+    }
+
+    [Fact]
+    public void MovingKeepsTheWholeSubtreeWithinFourLevels()
+    {
+        using var library = Library.Temporary();
+        var a = library.CreateGroup("A");
+        var a2 = library.CreateGroup("A2", a.Id);
+        var a3 = library.CreateGroup("A3", a2.Id);
+        var b = library.CreateGroup("B");
+        var b2 = library.CreateGroup("B2", b.Id);
+        var leaf = library.CreateGroup("Leaf");
+
+        Assert.True(library.CanMoveGroup(a.Id, b.Id));
+        Assert.False(library.CanMoveGroup(a.Id, b2.Id));
+        Assert.True(library.CanMoveGroup(leaf.Id, a3.Id));
+        Assert.False(library.CanMoveGroup(b.Id, a3.Id));
+        Assert.True(library.CanMoveGroup(b.Id, a2.Id));
+        Assert.True(library.CanMoveGroup(b.Id, a.Id));
+        Assert.False(library.CanMoveGroup(a.Id, a.Id));
+        Assert.False(library.CanMoveGroup(a.Id, a3.Id));
+        Assert.True(library.CanMoveGroup(a2.Id, null));
+        Assert.Throws<LibraryException>(() => library.MoveGroup(a.Id, b2.Id, 0));
+
+        var s = library.Snapshot();
+        Assert.True(s.CanMoveGroup(a.Id, b.Id));
+        Assert.False(s.CanMoveGroup(a.Id, b2.Id));
+        Assert.False(s.CanMoveGroup(a.Id, a3.Id));
+        Assert.True(s.CanMoveGroup(leaf.Id, a3.Id));
+
+        library.MoveGroup(a.Id, b.Id, 0);
+        var moved = library.Snapshot();
+        Assert.Equal(4, moved.GroupDepth(a3.Id));
+        Assert.Equal([a.Id, b2.Id], moved.ChildGroups[b.Id]);
+        library.MoveGroup(a2.Id, null, 0);
+        var promoted = library.Snapshot();
+        Assert.Equal(a2.Id, promoted.TopLevelGroups[0]);
+        Assert.Equal(2, promoted.GroupDepth(a3.Id));
+    }
+
+    [Fact]
+    public void ParentGroupsSeeEveryLevelAndDeleteTheirWholeSubtree()
+    {
+        using var library = Library.Temporary();
+        var l1 = library.CreateGroup("L1");
+        var l2 = library.CreateGroup("L2", l1.Id);
+        var l3 = library.CreateGroup("L3", l2.Id);
+        var l4 = library.CreateGroup("L4", l3.Id);
+        var other = library.CreateGroup("Other");
+        var deep = ((CreateOutcome.Created)library.CreateItem(Paper())).ItemId;
+        library.AddItems([deep], l4.Id, false);
+        var s = library.Snapshot();
+        Assert.Contains(deep, ViewResolver.Members(ViewScope.Group(l1.Id), s, includeSubgroupItems: true));
+        Assert.DoesNotContain(deep, ViewResolver.Members(ViewScope.Group(l1.Id), s, includeSubgroupItems: false));
+        Assert.Equal([deep], library.AddItems([deep], l1.Id, true).AlreadyPresent);
+
+        library.DeleteGroup(l2.Id, trashItems: true);
+        var after = library.Snapshot();
+        Assert.Equal(new HashSet<string> { l1.Id, other.Id }, after.GroupsById.Keys.ToHashSet());
+        Assert.True(after.Items[deep].IsTrashed);
+    }
+
+    [Fact]
+    public void BulkImportCreatesParentsFirstUpToFourLevels()
+    {
+        using var library = Library.Temporary();
+        var groups = new List<PreparedGroup>
+        {
+            new("5", "Five", "4", 0), new("4", "Four", "3", 0), new("3", "Three", "2", 0), new("2", "Two", "1", 0), new("1", "One", null, 9),
+        };
+        var summary = library.ImportPrepared(new PreparedLibrary(groups, [], []));
+        Assert.Equal(4, summary.GroupsCreated);
+        var s = library.Snapshot();
+        var four = s.GroupsById.Values.Single(g => g.Name == "Four");
+        Assert.Equal(["One", "Two", "Three", "Four"], s.GroupPath(four.Id));
     }
 
     [Fact]
@@ -754,8 +839,9 @@ public class ZoteroTests
             INSERT INTO items VALUES (6, 28, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'NOTE');
             INSERT INTO items VALUES (7, 22, '2024-03-01 10:00:00', '2024-03-01 10:00:00', 1, 'GONE');
             INSERT INTO deletedItems VALUES (7, '2024-04-01');
-            INSERT INTO collections VALUES (1, 'C1', 'Vision', NULL, 1), (2, 'C2', 'Segmentation', 1, 1), (3, 'C3', 'Medical', 2, 1);
-            INSERT INTO collectionItems VALUES (3, 1);
+            INSERT INTO collections VALUES (1, 'C1', 'Vision', NULL, 1), (2, 'C2', 'Segmentation', 1, 1), (3, 'C3', 'Medical', 2, 1),
+              (4, 'C4', 'Retina', 3, 1), (5, 'C5', 'Vessels', 4, 1);
+            INSERT INTO collectionItems VALUES (5, 1);
             INSERT INTO tags VALUES (1, 'Important'), (2, 'Computer Science - CV');
             INSERT INTO itemTags VALUES (1, 1, 0), (1, 2, 1);
             INSERT INTO syncedSettings VALUES ('tagColors', 1, '[{"name":"Important","color":"#FF3B30"}]');
@@ -766,7 +852,7 @@ public class ZoteroTests
             using var reader = new Folio.Core.Zotero.ZoteroReader(dir);
             var (prepared, report) = reader.Read(new Folio.Core.Zotero.ZoteroReadOptions());
             Assert.Equal(1, report.RegularItems);
-            Assert.Equal(2, report.Collections);
+            Assert.Equal(4, report.Collections);
             Assert.Equal(1, report.SkippedSnapshots);
             Assert.Equal(1, report.SkippedLinks);
             Assert.Equal(1, report.SkippedNotes);
@@ -777,7 +863,7 @@ public class ZoteroTests
             Assert.Equal("1505.04597", entry.Metadata.ArxivId);
             Assert.Equal("2015-05", entry.Metadata.Date);
             Assert.Equal("BIOSS Centre", entry.Metadata.Authors[1].Family);
-            Assert.Equal(["C2"], entry.GroupKeys);
+            Assert.Equal(["C4"], entry.GroupKeys); // the fifth level folds into the fourth
             Assert.Equal(["Important"], entry.TagNames);
             Assert.Null(entry.Files[0].TranslationKind);
             Assert.Equal(TranslationKind.Dual, entry.Files[1].TranslationKind);
@@ -787,7 +873,7 @@ public class ZoteroTests
             var summary = library.ImportPrepared(prepared);
             Assert.Equal(1, summary.ItemsImported);
             Assert.Equal(2, summary.FilesImported);
-            Assert.Equal(2, summary.GroupsCreated);
+            Assert.Equal(4, summary.GroupsCreated);
             Assert.Equal(1, summary.TagsCreated);
             var s = library.Snapshot();
             var item = s.Items.Values.Single();
