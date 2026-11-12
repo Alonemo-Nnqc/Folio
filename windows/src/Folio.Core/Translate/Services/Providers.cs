@@ -15,7 +15,11 @@ namespace Folio.Core.Translate.Services;
 public sealed record GlossaryEntry(string Source, string Target);
 
 /// <summary>What every request knows about the paper being translated.</summary>
-public sealed record TranslationContext(string SourceLanguage, string TargetLanguage, string? Title, string? Summary, List<GlossaryEntry> Glossary);
+public sealed record TranslationContext(string SourceLanguage, string TargetLanguage, string? Title, string? Summary, List<GlossaryEntry> Glossary)
+{
+    /// <summary>For the words in the paper's figures: the captions of those figures.</summary>
+    public List<string> FigureCaptions { get; init; } = [];
+}
 
 /// <summary>One text to translate and what kind of text it is.</summary>
 public sealed record TranslationItem(string Text, BlockKind Kind)
@@ -137,6 +141,9 @@ public static class LLMBatch
         if (!string.IsNullOrEmpty(context.Summary)) prompt.Append($"\nAbstract: {context.Summary[..Math.Min(1500, context.Summary.Length)]}");
         if (context.Glossary.Count > 0)
             prompt.Append($"\n\nGlossary ({source} → {target}):\n").Append(string.Join("\n", context.Glossary.Select(g => $"- {g.Source} → {g.Target}")));
+        if (context.FigureCaptions.Count > 0)
+            prompt.Append("\n\nThe figure labels to translate come from figures with these captions (for their meaning and terms; do not translate the captions):\n")
+                .Append(string.Join("\n", context.FigureCaptions.Select(c => "- " + c)));
         return prompt.ToString();
     }
 
@@ -152,9 +159,11 @@ public static class LLMBatch
         // Words read from the paper's pictures: labels to translate, each one, not names to keep.
         var labels = items.Select((item, i) => (item, i)).Where(p => p.item.Kind == BlockKind.Figure).Select(p => (p.i + 1).ToString()).ToList();
         if (labels.Count > 0)
-            message += "\n\nItems " + string.Join(", ", labels) + " are labels inside the paper's figures (diagram boxes, legends, axis titles). "
-                + "Translate every one of them, concisely and without final punctuation, even single words such as Encoder, Prompt or Output; "
-                + "keep only proper names and abbreviations (ResNet, SAM, GT) as they are.";
+            message += "\n\nItems " + string.Join(", ", labels) + " are labels inside the paper's figures (diagram boxes, legends, axis titles), "
+                + "read from the images in reading order. Translate every one of them completely, concisely and without final punctuation, "
+                + "even single words such as Encoder, Prompt or Output, using the terms the paper itself uses; keep only proper names and "
+                + "abbreviations (ResNet, SAM, GT) as they are. The labels were read by OCR and may have a misread letter: translate what "
+                + "the label evidently says. A label that is unreadable noise: give it back unchanged.";
         return message;
     }
 

@@ -121,7 +121,10 @@ public static class ProviderFactory
                 var pathOption = service.Fields.FirstOrDefault(f => f.Option.EndsWith("-path"))?.Option;
                 var executable = agent.Which.Locate(pathOption != null ? fields.GetValueOrDefault(pathOption) : null)
                                  ?? throw TranslationConfigurationError.AgentNotFound(agent.Which.Command());
-                provider = new AgentProvider(agent.Which, executable, modelOption != null ? Value(modelOption) : null, ReasoningEffort.AgentEffort(serviceId, fields));
+                var model = modelOption != null ? Value(modelOption) : null;
+                // CodeBuddy without a model chosen: a quick one of the account's, not its own default (minutes a page).
+                if (agent.Which == LocalAgent.Codebuddy && string.IsNullOrEmpty(model)) model = CodeBuddyAccount.QuickModel(CodeBuddyAccount.Models());
+                provider = new AgentProvider(agent.Which, executable, model, ReasoningEffort.AgentEffort(serviceId, fields));
                 break;
             }
             case TranslationBackend.Command:

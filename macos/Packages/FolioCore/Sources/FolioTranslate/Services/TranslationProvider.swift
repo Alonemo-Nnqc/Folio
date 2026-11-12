@@ -18,6 +18,8 @@ struct TranslationContext: Sendable {
     var title: String?
     var summary: String?
     var glossary: [GlossaryEntry]
+    /// For the words in the paper's figures: the captions of those figures.
+    var figureCaptions: [String] = []
 }
 
 /// One text to translate and what kind of text it is.
@@ -143,6 +145,10 @@ enum LLMBatch {
         if !context.glossary.isEmpty {
             prompt += "\n\nGlossary (\(source) → \(target)):\n" + context.glossary.map { "- \($0.source) → \($0.target)" }.joined(separator: "\n")
         }
+        if !context.figureCaptions.isEmpty {
+            prompt += "\n\nThe figure labels to translate come from figures with these captions (for their meaning and terms; do not translate the captions):\n"
+                + context.figureCaptions.map { "- \($0)" }.joined(separator: "\n")
+        }
         return prompt
     }
 
@@ -159,9 +165,11 @@ enum LLMBatch {
         // Words read from the paper's pictures: labels to translate, each one, not names to keep.
         let labels = items.enumerated().filter { $0.element.kind == .figure }.map { String($0.offset + 1) }
         if !labels.isEmpty {
-            message += "\n\nItems " + labels.joined(separator: ", ") + " are labels inside the paper's figures (diagram boxes, legends, axis titles). "
-                + "Translate every one of them, concisely and without final punctuation, even single words such as Encoder, Prompt or Output; "
-                + "keep only proper names and abbreviations (ResNet, SAM, GT) as they are."
+            message += "\n\nItems " + labels.joined(separator: ", ") + " are labels inside the paper's figures (diagram boxes, legends, axis titles), "
+                + "read from the images in reading order. Translate every one of them completely, concisely and without final punctuation, "
+                + "even single words such as Encoder, Prompt or Output, using the terms the paper itself uses; keep only proper names and "
+                + "abbreviations (ResNet, SAM, GT) as they are. The labels were read by OCR and may have a misread letter: translate what "
+                + "the label evidently says. A label that is unreadable noise: give it back unchanged."
         }
         return message
     }

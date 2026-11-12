@@ -73,6 +73,13 @@ function StatusRow({ detail, canTest }: { detail: Detail; canTest: boolean }) {
     } else setState({ message: t("测试服务是否可用") });
     return () => { live = false; };
   }, [detail.id, search]);
+  // Signing in happens in a console window: looked at again when Folio comes back to the front.
+  useEffect(() => {
+    if (state.action !== "loginCodeBuddy") return;
+    const again = () => setSearch((n) => n + 1);
+    window.addEventListener("focus", again);
+    return () => window.removeEventListener("focus", again);
+  }, [state.action]);
   // CodeBuddy: WorkBuddy is here, its command line is not. npm installs it, then a sign-in in a console window.
   const install = async () => {
     setInstalling(true);
@@ -231,12 +238,29 @@ function OutputRows({ o, update, compact }: { o: any; update: (p: Record<string,
 
 /** What gets translated besides the body text: the same switches in 设置 and in the 翻译全文 sheet. */
 function ContentRows({ o, update }: { o: any; update: (p: Record<string, unknown>) => void }) {
+  // Words in pictures are read by Windows' own OCR, which may lack the paper's language.
+  const [ocr, setOcr] = useState<{ missing: boolean; language: string } | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState("");
+  useEffect(() => { if (o.translateImageText) call("translation.ocrStatus").then(setOcr).catch(() => setOcr(null)); }, [o.translateImageText, o.langIn]);
   return (
     <>
       <Row title={t("翻译表格")}><Switch on={o.translateTables} onChange={(v) => update({ translateTables: v })} /></Row>
       <Row title={t("翻译图片中的文字")} detail={t("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")}>
         <Switch on={!!o.translateImageText} onChange={(v) => update({ translateImageText: v })} />
       </Row>
+      {o.translateImageText && ocr?.missing && (
+        <Row title={<span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><AlertTriangle size={14} color="var(--orange)" />{t("Windows 没有安装%@的文字识别", ocr.language)}</span>}
+          detail={ocrMessage || t("图片里的%@文字会用其他语言的识别读取，小字和斜体容易读错。安装后重新启动 Folio 生效。", ocr.language)}>
+          <button className="btn" disabled={installing} onClick={async () => {
+            setInstalling(true);
+            const r = await call("translation.installOcr").catch((e: any) => ({ ok: false, message: e.message }));
+            setInstalling(false);
+            setOcrMessage(r?.message ?? "");
+            if (r?.ok) call("translation.ocrStatus").then(setOcr);
+          }}>{installing ? t("正在安装…") : t("安装…")}</button>
+        </Row>
+      )}
       <Row title={t("翻译参考文献")}><Switch on={o.translateReferences} onChange={(v) => update({ translateReferences: v })} /></Row>
     </>
   );

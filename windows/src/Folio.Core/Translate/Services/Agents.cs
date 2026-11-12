@@ -950,9 +950,13 @@ public static class AgentModels
                 models = ["haiku", "sonnet", "opus"];
                 break;
             case LocalAgent.Codebuddy:
-                // What CodeBuddy's command line lists in its help.
-                models = ["deepseek-v3-2-volc", "auto", "glm-5.1", "glm-5.0", "glm-5.0-turbo", "glm-4.7", "kimi-k2.5", "minimax-m2.7"];
+            {
+                // What the signed-in account offers, else what this version's help names.
+                models = CodeBuddyAccount.Models();
+                if (models.Count == 0) models = CodeBuddyAccount.ModelsInHelp(string.Join("\n", await Lines("--help")));
+                if (CodeBuddyAccount.QuickModel(models) is { } quick) { models.Remove(quick); models.Insert(0, quick); }
                 break;
+            }
             case LocalAgent.Codex:
             {
                 var config = Read(".codex", "config.toml");
@@ -1114,4 +1118,67 @@ public static class AgentModels
         }
         return null;
     }
+}
+
+/// <summary>What CodeBuddy Code keeps of its signed-in account: whether it is signed in, and the models the account may use.</summary>
+public static partial class CodeBuddyAccount
+{
+    static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    /// <summary>Its sign-in, where CodeBuddy keeps it (the file only: what is in it is not Folio's to read).</summary>
+    static IEnumerable<string> AuthFiles()
+    {
+        var name = Path.Combine("CodeBuddyExtension", "Data", "Public", "auth", "Tencent-Cloud.coding-copilot.info");
+        yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), name);
+        yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), name);
+        yield return Path.Combine(Home, ".config", name);
+        yield return Path.Combine(Home, "Library", "Application Support", name);
+    }
+
+    /// <summary>Signed in with the command line (or given a key in the environment).</summary>
+    public static bool IsSignedIn
+    {
+        get
+        {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CODEBUDDY_API_KEY"))) return true;
+            return AuthFiles().Any(f => { try { return new FileInfo(f) is { Exists: true, Length: > 64 }; } catch { return false; } });
+        }
+    }
+
+    /// <summary>The models the signed-in account offers the command line, from the account settings CodeBuddy keeps.</summary>
+    public static List<string> Models()
+    {
+        var folder = Path.Combine(Home, ".codebuddy", "local_storage");
+        if (!Directory.Exists(folder)) return [];
+        foreach (var file in new DirectoryInfo(folder).EnumerateFiles().Where(f => f.Length < 2_000_000).OrderByDescending(f => f.LastWriteTimeUtc))
+        {
+            try
+            {
+                var text = File.ReadAllText(file.FullName);
+                if (!text.StartsWith('[') || JsonNode.Parse(text) is not JsonArray list) continue;
+                foreach (var account in list.OfType<JsonObject>().Where(a => a["userId"] != null))
+                {
+                    if (account["data"]?["agents"] is not JsonArray agents) continue;
+                    var agent = agents.OfType<JsonObject>().FirstOrDefault(a => (LocalAgents.Str(a["description"]) ?? "").Contains("cli", StringComparison.OrdinalIgnoreCase))
+                                ?? agents.OfType<JsonObject>().FirstOrDefault();
+                    if (agent?["models"] is JsonArray models && models.Count > 0) return models.Select(m => LocalAgents.Str(m)).OfType<string>().ToList();
+                }
+            }
+            catch { }
+        }
+        return [];
+    }
+
+    [GeneratedRegex(@"Currently supported:\s*\(([^)]*)\)")]
+    private static partial Regex SupportedInHelp();
+
+    /// <summary>The models named in codebuddy --help ("Currently supported: (hy3, glm-5.3, …)").</summary>
+    public static List<string> ModelsInHelp(string help) =>
+        SupportedInHelp().Match(help) is { Success: true } m ? m.Groups[1].Value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList() : [];
+
+    /// <summary>For translating, when no model is chosen: a quick one the account has (CodeBuddy's own default reasons at
+    /// length, minutes a page). On four labels these answer in about 4 s, the free models in 8 to 10 s.</summary>
+    static readonly string[] Quick = ["deepseek-v4.1-flash", "space-bunny", "glm-5.3-flash", "minimax-m3.1-flash", "deepseek-v3-2-volc"];
+
+    public static string? QuickModel(IReadOnlyCollection<string> models) => Quick.FirstOrDefault(models.Contains);
 }

@@ -152,4 +152,56 @@ public class ImageTextTests
     [InlineData("Fig 3a", true)]
     public void WordsWorthTranslating(string text, bool expected) =>
         Assert.Equal(expected, Folio.Core.Translate.Engine.ImageText.IsWords(text));
+
+    [Theory]
+    [InlineData("Specialist model trained", true)]
+    [InlineData("ResNet50 on 3D data", true)]
+    [InlineData("0 ery! gmen相伊7", false)]
+    [InlineData("Пу Embedding", false)]
+    [InlineData("l1ne c0d3", false)]
+    public void MisreadingsAreLeftOut(string text, bool expected) =>
+        Assert.Equal(expected, Folio.Core.Translate.Engine.ImageText.IsReadable(text));
+
+    [Fact]
+    public void MarkersAreNotLetters()
+    {
+        foreach (var c in "→✓✗•*>") Assert.True(Folio.Core.Translate.Engine.ImageText.IsMarker(new System.Text.Rune(c)));
+        foreach (var c in "a(+%°-") Assert.False(Folio.Core.Translate.Engine.ImageText.IsMarker(new System.Text.Rune(c)));
+    }
+
+    [Fact]
+    public void SizesOfOneKindBecomeOne()
+    {
+        var sizes = Folio.Core.Translate.Engine.ImageText.Harmonized([6.1, 6.4, null, 6.6, 8.6, 8.9, 3.0]);
+        Assert.True(sizes[0] == sizes[1] && sizes[1] == sizes[3]);
+        Assert.True(sizes[4] == sizes[5] && sizes[4] != sizes[0]);
+        Assert.Null(sizes[2]);
+        Assert.Equal(3.0, sizes[6]);
+    }
+
+    [Fact]
+    public void CentredAndLowerCaseLinesAreOneLabel()
+    {
+        Folio.Core.Translate.Engine.ImageText.Line Line(string text, double y, int group, Folio.Core.Translate.Engine.ImageText.Alignment align) =>
+            new(1, new Folio.Core.Translate.Rect(10, y, 60, 6), text, new Folio.Core.Translate.RGBColor(0, 0, 0), null, Folio.Core.Translate.Rect.Null) { Group = group, Align = align };
+        var left = Folio.Core.Translate.Engine.ImageText.Alignment.Left;
+        var center = Folio.Core.Translate.Engine.ImageText.Alignment.Center;
+        var units = Folio.Core.Translate.Engine.ImageTextUnits.Units([
+            Line("Specialist model trained", 100, 1, left), Line("for artery segmentation", 92, 1, left),
+            Line("Domain/Task transfer", 60, 2, left), Line("Continuous segmentation", 52, 2, left),
+            Line("Prompt Class", 30, 3, center), Line("Flag Embedding", 22, 3, center),
+        ]);
+        Assert.Equal(["Specialist model trained for artery segmentation", "Domain/Task transfer", "Continuous segmentation", "Prompt Class Flag Embedding"],
+                     units.Select(u => u.Text));
+    }
+
+    [Fact]
+    public void TranslationsShareOut()
+    {
+        var pieces = Folio.Core.Translate.Engine.ImageTextUnits.Split("为动脉分割训练的专用模型", [1, 1], true);
+        Assert.Equal("为动脉分割训练的专用模型", string.Concat(pieces));
+        Assert.Equal(["trained on", "the HRF set"], Folio.Core.Translate.Engine.ImageTextUnits.Split("trained on the HRF set", [1, 1], false));
+        Assert.True(Folio.Core.Translate.Engine.ImageTextUnits.IsName("SnakeSAM"));
+        Assert.False(Folio.Core.Translate.Engine.ImageTextUnits.IsName("Encoder"));
+    }
 }

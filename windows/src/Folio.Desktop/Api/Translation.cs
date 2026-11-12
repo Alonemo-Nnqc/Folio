@@ -238,16 +238,41 @@ public static partial class Api
                                  message = Loc.S("检测到 WorkBuddy 桌面版，但它的登录只能在应用内使用。安装 CodeBuddy 命令行后，用同一个腾讯账号登录一次即可用于翻译。") };
                 return found == null
                     ? new { ok = false, info = false, action = (string?)null, message = Loc.S("没有在这台电脑上找到 %@，请先安装并登录", which.Command()) }
-                    : new { ok = true, info = false, action = codeBuddy ? "loginCodeBuddy" : null,
-                            message = version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found) };
+                    : codeBuddy && !CodeBuddyAccount.IsSignedIn
+                        // Installed, not signed in yet: one sign-in in a console window, with WorkBuddy's account.
+                        ? new { ok = false, info = false, action = (string?)"loginCodeBuddy", message = Loc.S("已找到 CodeBuddy 命令行，但还没有登录：点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次") }
+                        : new { ok = true, info = false, action = (string?)null,
+                                message = version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found) };
             });
+        });
+        // Words in pictures are read by Windows' own OCR: the paper's language may need installing.
+        Bridge.On("translation.ocrStatus", _ =>
+        {
+            var language = M.Settings.TranslationOptions.LangIn;
+            var name = TranslationOptions.CommonLanguages.FirstOrDefault(l => l.Code == language).Name ?? language;
+            return new { missing = ImageTextServices.MissingOcr(language) != null, language = name };
+        });
+        Bridge.OnAsync("translation.installOcr", async _ =>
+        {
+            if (ImageTextServices.MissingOcr(M.Settings.TranslationOptions.LangIn) is not { } capability) return (object?)new { ok = true };
+            try
+            {
+                bool done = await ImageTextServices.InstallOcr(capability);
+                return new { ok = done && ImageTextServices.MissingOcr(M.Settings.TranslationOptions.LangIn) == null,
+                             message = done ? Loc.S("已安装，重新启动 Folio 后生效") : Loc.S("没有安装成功，可以在 Windows 设置 ▸ 时间和语言 ▸ 语言 中添加该语言并勾选“光学字符识别”") };
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Approval declined.
+                return new { ok = false, message = "" };
+            }
         });
         Bridge.OnAsync("translation.installCodeBuddy", async _ =>
         {
             try
             {
                 await LocalAgents.InstallCodeBuddy();
-                OpenAgentLogin(LocalAgent.Codebuddy);
+                if (!CodeBuddyAccount.IsSignedIn) OpenAgentLogin(LocalAgent.Codebuddy);
                 _agentsCheckedAt = default;
                 RefreshAgents();
                 return (object?)new { ok = true };

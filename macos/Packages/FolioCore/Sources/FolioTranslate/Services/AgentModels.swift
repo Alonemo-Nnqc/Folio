@@ -7,8 +7,10 @@ public enum AgentModels {
         var models: [String] = []
         switch agent {
         case .codebuddy:
-            // What CodeBuddy's command line lists in its help.
-            models = ["auto", "glm-5.1", "glm-5.0", "glm-5.0-turbo", "glm-4.7", "kimi-k2.5", "minimax-m2.7", "deepseek-v3-2-volc"]
+            // What the signed-in account offers, else what this version's help names.
+            models = CodeBuddyAccount.models()
+            if models.isEmpty { models = CodeBuddyAccount.models(inHelp: await lines(executable, ["--help"]).joined(separator: "\n")) }
+            if let quick = CodeBuddyAccount.quickModel(among: models) { models.removeAll { $0 == quick }; models.insert(quick, at: 0) }
         case .claude:
             models = ["haiku", "sonnet", "opus"]
         case .codex:

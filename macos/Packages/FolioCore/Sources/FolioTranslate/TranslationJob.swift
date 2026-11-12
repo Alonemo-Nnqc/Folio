@@ -249,7 +249,9 @@ public final class TranslationJob: @unchecked Sendable {
 
         // 3b. Words in pictures, when asked for: read, translated (the cache first), set over the pictures.
         if options.translateImageText {
-            renderer.imageText = try await translateImageText(cg: cg, pages: selected, layouts: analysed, provider: provider, context: context, cache: cache,
+            var imageContext = context
+            imageContext.glossary = glossary.entries
+            renderer.imageText = try await translateImageText(cg: cg, pages: selected, layouts: analysed, provider: provider, context: imageContext, cache: cache,
                                                               log: log, estimate: estimate, refusals: refusals, emit: emit)
         }
 
@@ -329,7 +331,7 @@ public final class TranslationJob: @unchecked Sendable {
         // A few pages at a time.
         let found = try await withThrowingTaskGroup(of: [ImageText.Line].self) { group in
             var queue = pages[...]
-            var all: [ImageText.Line] = []
+            var all: [[ImageText.Line]] = []
             func next() {
                 guard let number = queue.popFirst() else { return }
                 // Each reads its own copy of the document (Core Graphics documents are not shared across threads).
@@ -340,22 +342,31 @@ public final class TranslationJob: @unchecked Sendable {
             for _ in 0..<4 { next() }
             while let lines = try await group.next() {
                 try Task.checkCancellation()
-                all += lines
+                all.append(lines)
                 next()
             }
             return all
         }
-        let lines = found.sorted { ($0.page, -$0.rect.maxY, $0.rect.minX) < ($1.page, -$1.rect.maxY, $1.rect.minX) }
+        // Page by page, each in reading order.
+        let lines = found.sorted { ($0.first?.page ?? 0) < ($1.first?.page ?? 0) }.flatMap { $0 }
         log.write("image text: \(lines.count) lines")
         guard !lines.isEmpty else { return [:] }
         emit(.stage(String(localized: "翻译图片中的文字", bundle: .module)))
-        // One segment per distinct text (a label repeated in a figure is translated once).
+        // A label set over several lines is translated whole (word order differs between languages) and shared out
+        // across its lines again.
+        let units = ImageTextUnits.units(lines).filter { !ImageTextUnits.isName($0.text) }
+        var context = context
+        let pagesWithText = Set(lines.map(\.page))
+        context.figureCaptions = Array(layouts.filter { pagesWithText.contains($0.number) }
+            .flatMap { $0.blocks.filter { $0.kind == .caption }.map { String($0.text.prefix(400)) } }.prefix(12))
+        // One segment per distinct text (a label repeated in a figure is translated once), in reading order.
         var translations: [String: String] = [:]
         var pending: [TextSegment] = []
-        for text in Set(lines.map(\.text)).sorted() {
+        var seen: Set<String> = []
+        for unit in units where seen.insert(unit.text).inserted {
             // A label a service kept as it was is asked again (another service may well translate it).
-            if let hit = cache.lookup(text), hit != text { translations[text] = hit } else {
-                pending.append(TextSegment(page: 0, block: -1 - pending.count, kind: .figure, source: text, formulas: []))
+            if let hit = cache.lookup(unit.text), hit != unit.text { translations[unit.text] = hit } else {
+                pending.append(TextSegment(page: 0, block: -1 - pending.count, kind: .figure, source: unit.text, formulas: []))
             }
         }
         for batch in Self.batches(pending, limits: provider.limits) {
@@ -366,10 +377,15 @@ public final class TranslationJob: @unchecked Sendable {
                 if text != segment.source { cache.store(text, for: segment.source) }
             }
         }
+        let cjk = ImageText.isCJK(request.options.langOut)
         var byPage: [Int: [(line: ImageText.Line, translation: String)]] = [:]
-        for line in lines {
-            guard let translation = translations[line.text], translation != line.text else { continue }
-            byPage[line.page, default: []].append((line, translation))
+        for unit in units {
+            guard let translation = translations[unit.text], translation != unit.text else { continue }
+            let pieces = ImageTextUnits.split(translation, weights: unit.members.map { lines[$0].vertical ? lines[$0].rect.height : lines[$0].rect.width },
+                                              cjk: cjk, language: request.options.langOut)
+            for (member, piece) in zip(unit.members, pieces) {
+                byPage[lines[member].page, default: []].append((lines[member], piece))
+            }
         }
         return byPage
     }

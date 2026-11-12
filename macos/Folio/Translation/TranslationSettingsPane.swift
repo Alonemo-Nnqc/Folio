@@ -270,6 +270,8 @@ private struct ServiceStatusRow: View {
     @State private var installError: String?
     /// Looked for again after installing.
     @State private var search = 0
+    /// CodeBuddy: whether its command line is signed in (looked at again when the window comes back to the front).
+    @State private var signedIn: Bool?
 
     private var agent: LocalAgent? {
         if case .agent(let agent) = service.backend { return agent }
@@ -279,7 +281,7 @@ private struct ServiceStatusRow: View {
     var body: some View {
         LabeledContent {
             HStack {
-                if agent == .codebuddy, case .some(.some) = location {
+                if agent == .codebuddy, case .some(.some) = location, signedIn == false {
                     // Signed in in WorkBuddy is not signed in here: one sign-in in Terminal, with the same account.
                     Button(String(localized: "在终端登录")) { Self.openTerminal("codebuddy") }
                         .help(String(localized: "在终端打开 codebuddy，选择中国站并用 WorkBuddy 的腾讯账号登录"))
@@ -298,8 +300,12 @@ private struct ServiceStatusRow: View {
             let path = pathValue
             version = nil
             let found = await Task.detached { agent.locate(customPath: path) }.value
+            if agent == .codebuddy { signedIn = CodeBuddyAccount.isSignedIn }
             location = .some(found)
             if let found { version = await Task.detached { agent.version(at: found) }.value }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if agent == .codebuddy { signedIn = CodeBuddyAccount.isSignedIn }
         }
     }
 
@@ -321,6 +327,13 @@ private struct ServiceStatusRow: View {
             }
         } else if agent != nil {
             switch location {
+            case .some(.some) where agent == .codebuddy && signedIn == false:
+                // Installed, not signed in yet: one sign-in in Terminal, with WorkBuddy's account.
+                Label {
+                    Text("已找到 CodeBuddy 命令行，但还没有登录：点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                }
             case .some(.some(let url)):
                 Label {
                     Text(found(url))
@@ -368,7 +381,7 @@ private struct ServiceStatusRow: View {
                 _ = try await LocalAgent.installCodeBuddy()
                 installing = false
                 search += 1
-                Self.openTerminal("codebuddy")
+                if !CodeBuddyAccount.isSignedIn { Self.openTerminal("codebuddy") }
             } catch {
                 installing = false
                 installError = String(localized: "安装没有完成：\(String(describing: error).prefix(300))。也可以在终端运行 npm install -g @tencent-ai/codebuddy-code")

@@ -3876,6 +3876,16 @@
           }
         }
       }
+    },
+    "自动（选用快速模型）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic (a fast model)"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

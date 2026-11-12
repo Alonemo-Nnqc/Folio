@@ -286,7 +286,8 @@ public sealed class TranslationJob
             if (options.TranslateImageText && ImageText.Platform != null)
             {
                 Volatile.Write(ref layingOut, true);
-                renderer.ImageTexts = await TranslateImageText(source, selected, analysed, provider, context, cache, log, estimate, refusals, emit, cancel);
+                renderer.ImageTexts = await TranslateImageText(source, selected, analysed, provider, context with { Glossary = glossary.Entries }, cache, log, estimate,
+                                                               refusals, emit, cancel);
             }
 
             // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
@@ -375,14 +376,25 @@ public sealed class TranslationJob
         var result = new Dictionary<int, List<(ImageText.Line, string)>>();
         if (lines.Count == 0) return result;
         emit(new TranslationEvent.Stage(Loc.S("翻译图片中的文字")));
-        // One segment per distinct text (a label repeated in a figure is translated once).
+        // A label set over several lines is translated whole (word order differs between languages) and shared out
+        // across its lines again.
+        var units = ImageTextUnits.Units(lines).Where(u => !ImageTextUnits.IsName(u.Text)).ToList();
+        var withText = lines.Select(l => l.Page).ToHashSet();
+        context = context with
+        {
+            FigureCaptions = layouts.Where(l => withText.Contains(l.Number))
+                .SelectMany(l => l.Blocks.Where(b => b.Kind == BlockKind.Caption).Select(b => b.Text.Length > 400 ? b.Text[..400] : b.Text)).Take(12).ToList(),
+        };
+        // One segment per distinct text (a label repeated in a figure is translated once), in reading order.
         var translations = new Dictionary<string, string>();
         var pending = new List<TextSegment>();
-        foreach (var text in lines.Select(l => l.Text).Distinct().Order(StringComparer.Ordinal))
+        var seen = new HashSet<string>();
+        foreach (var unit in units)
         {
+            if (!seen.Add(unit.Text)) continue;
             // A label a service kept as it was is asked again (another service may well translate it).
-            if (cache.Lookup(text) is { } hit && hit != text) translations[text] = hit;
-            else pending.Add(new TextSegment { Page = 0, Block = -1 - pending.Count, Kind = BlockKind.Figure, Source = text });
+            if (cache.Lookup(unit.Text) is { } hit && hit != unit.Text) translations[unit.Text] = hit;
+            else pending.Add(new TextSegment { Page = 0, Block = -1 - pending.Count, Kind = BlockKind.Figure, Source = unit.Text });
         }
         foreach (var batch in Batches(pending, provider.Limits))
         {
@@ -394,11 +406,18 @@ public sealed class TranslationJob
                 if (text != batch[i].Source) cache.Store(text, batch[i].Source);
             }
         }
-        foreach (var line in lines)
+        bool cjk = ImageText.IsCjk(Request.Options.LangOut);
+        foreach (var unit in units)
         {
-            if (!translations.TryGetValue(line.Text, out var translation) || translation == line.Text) continue;
-            if (!result.TryGetValue(line.Page, out var list)) result[line.Page] = list = [];
-            list.Add((line, translation));
+            if (!translations.TryGetValue(unit.Text, out var translation) || translation == unit.Text) continue;
+            var pieces = ImageTextUnits.Split(translation, unit.Members.Select(m => lines[m].Vertical ? lines[m].Rect.H : lines[m].Rect.W).ToList(), cjk,
+                                              Request.Options.LangOut);
+            for (int k = 0; k < unit.Members.Count; k++)
+            {
+                var line = lines[unit.Members[k]];
+                if (!result.TryGetValue(line.Page, out var list)) result[line.Page] = list = [];
+                list.Add((line, pieces[k]));
+            }
         }
         return result;
     }

@@ -111,7 +111,10 @@ enum ProviderFactory {
             guard let executable = agent.locate(customPath: pathOption.flatMap { fields[$0] }) else {
                 throw TranslationConfigurationError.agentNotFound(agent.command)
             }
-            provider = AgentProvider(agent: agent, executable: executable, model: modelOption.flatMap(value),
+            var model = modelOption.flatMap(value)
+            // CodeBuddy without a model chosen: a quick one of the account's, not its own default (minutes a page).
+            if agent == .codebuddy, model?.isEmpty != false { model = CodeBuddyAccount.quickModel(among: CodeBuddyAccount.models()) }
+            provider = AgentProvider(agent: agent, executable: executable, model: model,
                                      effort: ReasoningEffort.agentEffort(serviceID: serviceID, fields: fields))
         case .command:
             provider = CommandProvider(command: try required("--clitranslator-command"),

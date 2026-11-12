@@ -114,9 +114,9 @@ public static class TranslationServiceCatalog
         // Agents
         AgentService("claudecode", "Claude Code", LocalAgent.Claude,
             [AgentModel("--claude-code-model", "haiku / sonnet / opus", "haiku"), AgentPath("--claude-code-path", "claude")], null),
-        // Its own default (a free model that reasons at length) takes minutes a page; this one seconds.
+        // Left empty: a quick model of the account's (its own default reasons at length, minutes a page).
         AgentService("codebuddy", Loc.S("CodeBuddy（WorkBuddy）"), LocalAgent.Codebuddy,
-            [AgentModel("--codebuddy-model", "deepseek-v3-2-volc", "deepseek-v3-2-volc"), AgentPath("--codebuddy-path", "codebuddy")],
+            [AgentModel("--codebuddy-model", Loc.S("自动（选用快速模型）")), AgentPath("--codebuddy-path", "codebuddy")],
             Loc.S("使用 CodeBuddy 命令行，与 WorkBuddy 同一个腾讯账号。WorkBuddy 桌面版的登录只能在应用内使用，需另装命令行并登录一次。")),
         AgentService("codex", "Codex", LocalAgent.Codex, [AgentModel("--codex-model"), AgentPath("--codex-path", "codex")], null),
         AgentService("geminicli", "Gemini CLI", LocalAgent.Gemini, [AgentModel("--gemini-cli-model"), AgentPath("--gemini-cli-path", "gemini")], null),

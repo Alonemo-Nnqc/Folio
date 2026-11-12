@@ -164,9 +164,9 @@ public enum TranslationServiceCatalog {
             agentPath("--claude-code-path", command: "claude"),
         ]),
         .init(id: "codebuddy", displayName: "CodeBuddy（WorkBuddy）", backend: .agent(.codebuddy), category: .agent, fields: [
-            // Its own default (a free model that reasons at length) takes minutes a page; this one seconds.
-            .init(option: "--codebuddy-model", title: TranslationServiceCatalog.modelFieldTitle, defaultValue: "deepseek-v3-2-volc",
-                  placeholder: "deepseek-v3-2-volc"),
+            // Left empty: a quick model of the account's (its own default reasons at length, minutes a page).
+            .init(option: "--codebuddy-model", title: TranslationServiceCatalog.modelFieldTitle,
+                  placeholder: String(localized: "自动（选用快速模型）", bundle: .module)),
             agentPath("--codebuddy-path", command: "codebuddy"),
         ], note: String(localized: "使用 CodeBuddy 命令行，与 WorkBuddy 同一个腾讯账号。WorkBuddy 桌面版的登录只能在应用内使用，需另装命令行并登录一次。", bundle: .module)),
         .init(id: "codex", displayName: "Codex", backend: .agent(.codex), category: .agent, fields: [

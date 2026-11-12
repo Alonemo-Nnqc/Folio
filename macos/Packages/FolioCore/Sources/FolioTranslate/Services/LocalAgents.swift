@@ -662,3 +662,55 @@ enum LocalProcess {
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
+
+/// What CodeBuddy Code keeps of its signed-in account: whether it is signed in, and the models the account may use.
+public enum CodeBuddyAccount {
+    /// Its sign-in, where CodeBuddy keeps it (the file only: what is in it is not Folio's to read).
+    static var authFiles: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let name = "CodeBuddyExtension/Data/Public/auth/Tencent-Cloud.coding-copilot.info"
+        return [home.appending(path: "Library/Application Support/\(name)"), home.appending(path: ".config/\(name)")]
+    }
+
+    /// Signed in with the command line (or given a key in the environment).
+    public static var isSignedIn: Bool {
+        if let key = ProcessInfo.processInfo.environment["CODEBUDDY_API_KEY"], !key.isEmpty { return true }
+        return authFiles.contains { url in
+            ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0) > 64
+        }
+    }
+
+    /// The models the signed-in account offers the command line, from the account settings CodeBuddy keeps.
+    public static func models() -> [String] {
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codebuddy/local_storage")
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let newest = files.sorted {
+            ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+                > ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+        }
+        for file in newest where ((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) < 2_000_000 {
+            guard let data = try? Data(contentsOf: file), data.first == UInt8(ascii: "["),
+                  let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { continue }
+            for account in list where account["userId"] != nil {
+                guard let agents = (account["data"] as? [String: Any])?["agents"] as? [[String: Any]] else { continue }
+                let agent = agents.first { ($0["description"] as? String)?.localizedCaseInsensitiveContains("cli") == true } ?? agents.first
+                if let models = agent?["models"] as? [String], !models.isEmpty { return models }
+            }
+        }
+        return []
+    }
+
+    /// The models named in `codebuddy --help` ("Currently supported: (hy3, glm-5.3, …)").
+    static func models(inHelp help: String) -> [String] {
+        guard let match = help.firstMatch(of: /Currently supported:\s*\(([^)]*)\)/) else { return [] }
+        return match.output.1.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// For translating, when no model is chosen: a quick one the account has (CodeBuddy's own default reasons at length,
+    /// minutes a page). Measured on four labels: these answer in about 4 s, the free models in 8 to 10 s.
+    static let quickModels = ["deepseek-v4.1-flash", "space-bunny", "glm-5.3-flash", "minimax-m3.1-flash", "deepseek-v3-2-volc"]
+
+    static func quickModel(among models: [String]) -> String? {
+        quickModels.first { models.contains($0) }
+    }
+}

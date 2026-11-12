@@ -10572,6 +10572,16 @@
           }
         }
       }
+    },
+    "已找到 CodeBuddy 命令行，但还没有登录：点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The CodeBuddy command line is installed but not signed in: click “Sign In in Terminal” and sign in once with your WorkBuddy (Tencent) account"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
