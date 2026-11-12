@@ -163,6 +163,14 @@ public enum TranslationServiceCatalog {
             .init(option: "--claude-code-model", title: TranslationServiceCatalog.modelFieldTitle, defaultValue: "haiku", placeholder: "haiku / sonnet / opus"),
             agentPath("--claude-code-path", command: "claude"),
         ]),
+        .init(id: "workbuddy", displayName: "WorkBuddy", backend: .agent(.workbuddy), category: .agent, fields: [
+            .init(option: "--workbuddy-api-key", title: "CodeBuddy API Key", kind: .secret,
+                  placeholder: String(localized: "在 copilot.tencent.com/profile 生成", bundle: .module)),
+            .init(option: "--workbuddy-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: "auto / glm-5.1 / kimi-k2.5"),
+            .init(option: "--workbuddy-site", title: String(localized: "站点", bundle: .module),
+                  placeholder: String(localized: "留空为国内版；国际版填 international", bundle: .module), isAdvanced: true),
+            agentPath("--workbuddy-path", command: "codebuddy"),
+        ], note: String(localized: "使用 WorkBuddy 自带的 CodeBuddy 命令行。WorkBuddy 应用里的登录不能给其他程序使用，请在 copilot.tencent.com/profile 生成 API Key 填在这里。", bundle: .module)),
         .init(id: "codex", displayName: "Codex", backend: .agent(.codex), category: .agent, fields: [
             .init(option: "--codex-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--codex-path", command: "codex"),

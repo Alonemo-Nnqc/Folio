@@ -20,7 +20,7 @@ public sealed record TranslationContext(string SourceLanguage, string TargetLang
 /// <summary>One text to translate and what kind of text it is.</summary>
 public sealed record TranslationItem(string Text, BlockKind Kind)
 {
-    public bool IsShort => Kind is BlockKind.Heading or BlockKind.TableCell or BlockKind.Title;
+    public bool IsShort => Kind is BlockKind.Heading or BlockKind.TableCell or BlockKind.Title or BlockKind.Figure;
 }
 
 /// <summary>How a provider likes its work: how much text per request and how many requests at once.</summary>
@@ -147,8 +147,14 @@ public static class LLMBatch
     {
         string Json(string s) => JsonSerializer.Serialize(s, Unescaped);
         var message = "{" + string.Join(", ", items.Select((item, i) => $"{Json((i + 1).ToString())}: {Json(item.Text)}")) + "}";
-        var shortItems = items.Select((item, i) => (item, i)).Where(p => p.item.IsShort).Select(p => (p.i + 1).ToString()).ToList();
+        var shortItems = items.Select((item, i) => (item, i)).Where(p => p.item.IsShort && p.item.Kind != BlockKind.Figure).Select(p => (p.i + 1).ToString()).ToList();
         if (shortItems.Count > 0) message += "\n\nShort items (headings or table cells): " + string.Join(", ", shortItems);
+        // Words read from the paper's pictures: labels to translate, each one, not names to keep.
+        var labels = items.Select((item, i) => (item, i)).Where(p => p.item.Kind == BlockKind.Figure).Select(p => (p.i + 1).ToString()).ToList();
+        if (labels.Count > 0)
+            message += "\n\nItems " + string.Join(", ", labels) + " are labels inside the paper's figures (diagram boxes, legends, axis titles). "
+                + "Translate every one of them, concisely and without final punctuation, even single words such as Encoder, Prompt or Output; "
+                + "keep only proper names and abbreviations (ResNet, SAM, GT) as they are.";
         return message;
     }
 

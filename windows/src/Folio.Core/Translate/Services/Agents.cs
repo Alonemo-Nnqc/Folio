@@ -192,7 +192,8 @@ public static partial class LocalAgents
                                    "--disable-slash-commands", "--system-prompt", system, .. thinking], "--model"), false, false);
             case LocalAgent.Codex:
                 return ([.. WithModel(["exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "--color", "never",
-                                       "-c", "mcp_servers={}", "-o", outputFile, .. thinking], "-m"), "-"], false, true);
+                                       "-c", "mcp_servers={}", "-c", "notify=[]", "-c", "tools.web_search=false", "-c", "project_doc_max_bytes=0",
+                                       "-c", "model_reasoning_summary=\"none\"", "-o", outputFile, .. thinking], "-m"), "-"], false, true);
             case LocalAgent.Gemini:
                 return ([.. WithModel(["-o", "json", "-e", "none"], "-m"), "-p", " "], false, true);
             case LocalAgent.Grok:
@@ -280,7 +281,7 @@ public static class AgentFailure
         new(ProviderError.Kinds.AgentSetup, $"agent-setup {agent.Command()}: " + FirstMeaningfulLine(text));
 
     public static bool RefusesTheLevel(string text) => Regex.IsMatch(text,
-        @"(--effort|--reasoning(-effort)?|--thinking|reasoning[_ ]effort)[^\n]{0,60}(not supported|unsupported|conflicts?|invalid|unknown)|(not supported|unsupported|conflicts? with|invalid|unknown)[^\n]{0,60}(--effort|--reasoning|--thinking|reasoning[_ ]effort)",
+        @"(--effort|--reasoning(-effort)?|--thinking|reasoning[_ ]effort)[^\n]{0,60}(not supported|unsupported|conflicts?|invalid|unknown)|(not supported|unsupported|conflicts? with|invalid|unknown)[^\n]{0,60}(--effort|--reasoning|--thinking|reasoning[_ ]effort)|has no (effort|reasoning|thinking) levels|ignoring --(effort|reasoning-effort|thinking)",
         RegexOptions.IgnoreCase);
 
     public static ProviderError Classify(string text, LocalAgent agent)
@@ -299,6 +300,8 @@ public static class AgentFailure
         if (Has(@"\b(http|status|code)[ :=]*402\b|insufficient.?(balance|quota|credit)|out of credits|usage limit|quota exceeded|exceeded your"))
             return ProviderError.HttpStatus(402, detail);
         if (RefusesTheLevel(clean)) return Setup(agent, clean);
+        // Not available where the user is: no retry changes that.
+        if (Has(@"location is not supported|not (available|supported) in your (country|region|location)|unsupported (country|region|location)|FAILED_PRECONDITION")) return Setup(agent, clean);
         if (Has(@"(model|deployment)[^\n]{0,80}(not found|does not exist|not available|not supported|unavailable|invalid)|unknown model|invalid model|no such model"))
             return ProviderError.HttpStatus(404, detail + " model_not_found");
         if (Has(@"not (logged|signed) in|please (log|sign) ?in|log ?in (first|required)|run .{0,30}(login|auth)|no inference provider|not authenticated|authentication (is )?(required|failed)|unauthori[sz]ed|\b401\b|invalid.?api.?key|no api key|missing api key|set an api key|not configured|no (provider|model) (is )?(configured|selected)|first.?run|onboard|error authenticating|failed to authenticate|oauth|session expired|ineligible|no longer supported|migrate to"))
@@ -339,7 +342,8 @@ public static class AgentFailure
 public sealed class AgentProvider(LocalAgent agent, string executable, string? model, string? effort) : ChatModel
 {
     bool _usualLevelRefused;
-    public override ProviderLimits Limits { get; } = new(5000, 60, 4, true, 8, 0.006);
+    /// <summary>Each call starts the agent (seconds before it answers): large batches, eight side by side.</summary>
+    public override ProviderLimits Limits { get; } = new(5000, 60, 8, true, 8, 0.006);
 
     public override async Task<string> Complete(string system, string user, CancellationToken cancel)
     {

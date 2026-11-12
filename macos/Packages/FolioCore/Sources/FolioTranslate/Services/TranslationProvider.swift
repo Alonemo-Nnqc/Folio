@@ -25,7 +25,7 @@ struct TranslationItem: Sendable, Hashable {
     var text: String
     var kind: BlockKind
 
-    var isShort: Bool { kind == .heading || kind == .tableCell || kind == .title }
+    var isShort: Bool { kind == .heading || kind == .tableCell || kind == .title || kind == .figure }
 }
 
 /// How a provider likes its work: how much text per request and how many requests at once.
@@ -154,8 +154,15 @@ enum LLMBatch {
             return String(decoding: data, as: UTF8.self)
         }
         var message = "{" + items.enumerated().map { "\(json(String($0.offset + 1))): \(json($0.element.text))" }.joined(separator: ", ") + "}"
-        let short = items.enumerated().filter { $0.element.isShort }.map { String($0.offset + 1) }
+        let short = items.enumerated().filter { $0.element.isShort && $0.element.kind != .figure }.map { String($0.offset + 1) }
         if !short.isEmpty { message += "\n\nShort items (headings or table cells): " + short.joined(separator: ", ") }
+        // Words read from the paper's pictures: labels to translate, each one, not names to keep.
+        let labels = items.enumerated().filter { $0.element.kind == .figure }.map { String($0.offset + 1) }
+        if !labels.isEmpty {
+            message += "\n\nItems " + labels.joined(separator: ", ") + " are labels inside the paper's figures (diagram boxes, legends, axis titles). "
+                + "Translate every one of them, concisely and without final punctuation, even single words such as Encoder, Prompt or Output; "
+                + "keep only proper names and abbreviations (ResNet, SAM, GT) as they are."
+        }
         return message
     }
 

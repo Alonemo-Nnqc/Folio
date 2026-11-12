@@ -241,9 +241,15 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     }
                     Audit?.Record(layout.Number, entry.Segment.Block, placement?.Frame ?? entry.Frame, result, entry.Plan);
                 }
+                // Figure labels drawn as text: their glyphs leave the page for their translations.
+                var figureTexts = ImageTexts.GetValueOrDefault(layout.Number) ?? [];
+                foreach (var (line, _) in figureTexts)
+                {
+                    removal.Kept.ExceptWith(line.Glyphs);
+                    removal.Glyphs.UnionWith(line.Glyphs);
+                }
                 removals[layout.Number] = removal;
-                foreach (var (line, translation) in ImageTexts.GetValueOrDefault(layout.Number) ?? [])
-                    ImageText.Draw(line, translation, Language, canvas, pageTop, usedGlyphs);
+                if (figureTexts.Count > 0) ImageText.Draw(figureTexts, Language, canvas, pageTop, usedGlyphs);
                 document.EndPage();
             }
             document.Close();

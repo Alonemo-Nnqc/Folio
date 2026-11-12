@@ -249,7 +249,7 @@ public final class TranslationJob: @unchecked Sendable {
 
         // 3b. Words in pictures, when asked for: read, translated (the cache first), set over the pictures.
         if options.translateImageText {
-            renderer.imageText = try await translateImageText(cg: cg, pages: selected, provider: provider, context: context, cache: cache,
+            renderer.imageText = try await translateImageText(cg: cg, pages: selected, layouts: analysed, provider: provider, context: context, cache: cache,
                                                               log: log, estimate: estimate, refusals: refusals, emit: emit)
         }
 
@@ -321,7 +321,7 @@ public final class TranslationJob: @unchecked Sendable {
     /// The batch's translations, in order; nil for a paragraph the service refused (content review), which keeps its
     /// original. A translation that lost or duplicated a formula's placeholder is asked for once more.
     /// TRANS-40: the words in the pictures of `pages`, with their translations, by page.
-    private func translateImageText(cg: CGPDFDocument, pages: [Int], provider: TranslationProvider, context: TranslationContext,
+    private func translateImageText(cg: CGPDFDocument, pages: [Int], layouts: [PageLayout], provider: TranslationProvider, context: TranslationContext,
                                     cache: TranslationCache, log: TranslationLog, estimate: ProgressEstimate, refusals: RefusalCount,
                                     emit: @escaping @Sendable (TranslationEvent) -> Void) async throws -> [Int: [(line: ImageText.Line, translation: String)]] {
         emit(.stage(String(localized: "识别图片中的文字", bundle: .module)))
@@ -334,7 +334,8 @@ public final class TranslationJob: @unchecked Sendable {
                 guard let number = queue.popFirst() else { return }
                 // Each reads its own copy of the document (Core Graphics documents are not shared across threads).
                 let url = request.input
-                group.addTask { CGPDFDocument(url as CFURL).map { ImageText.recognize(document: $0, number: number, languages: languages) } ?? [] }
+                let layout = layouts.first { $0.number == number }
+                group.addTask { CGPDFDocument(url as CFURL).map { ImageText.recognize(document: $0, number: number, languages: languages, layout: layout) } ?? [] }
             }
             for _ in 0..<4 { next() }
             while let lines = try await group.next() {
@@ -352,8 +353,9 @@ public final class TranslationJob: @unchecked Sendable {
         var translations: [String: String] = [:]
         var pending: [TextSegment] = []
         for text in Set(lines.map(\.text)).sorted() {
-            if let hit = cache.lookup(text) { translations[text] = hit } else {
-                pending.append(TextSegment(page: 0, block: -1 - pending.count, kind: .caption, source: text, formulas: []))
+            // A label a service kept as it was is asked again (another service may well translate it).
+            if let hit = cache.lookup(text), hit != text { translations[text] = hit } else {
+                pending.append(TextSegment(page: 0, block: -1 - pending.count, kind: .figure, source: text, formulas: []))
             }
         }
         for batch in Self.batches(pending, limits: provider.limits) {
@@ -361,7 +363,7 @@ public final class TranslationJob: @unchecked Sendable {
             for (segment, text) in zip(batch, texts) {
                 guard let text, !text.isEmpty else { continue }
                 translations[segment.source] = text
-                cache.store(text, for: segment.source)
+                if text != segment.source { cache.store(text, for: segment.source) }
             }
         }
         var byPage: [Int: [(line: ImageText.Line, translation: String)]] = [:]
@@ -425,8 +427,13 @@ public final class TranslationJob: @unchecked Sendable {
                 if case .invalidResponse = error.kind, batch.count > 1, attempt >= 1 { break }
             }
         }
-        if batch.count > 1 {
-            // Halves until the paragraph that is the problem is found.
+        // Halves until the paragraph that is the problem is found: a refusal or an unreadable reply. A failure of the
+        // service itself (it is down, a process error) is the same for half the text, and is not tried again and again.
+        let byContent: Bool = refused || {
+            if case .invalidResponse = (lastError as? ProviderError)?.kind { return true }
+            return false
+        }()
+        if batch.count > 1, byContent {
             let half = batch.count / 2
             let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
             let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)

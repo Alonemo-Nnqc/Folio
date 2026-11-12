@@ -3,7 +3,7 @@ import Foundation
 /// Coding agents that can translate from the command line with the user's own login, no key needed in Folio.
 /// Each has a documented way to answer one prompt and exit; the arguments follow its own `--help` and documentation.
 public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
-    case claude, codex, gemini, grok, antigravity, copilot, cursor, qwen, opencode, kiro, cline, kimi, droid, amp, goose, pi, hermes, openclaw, deepseek
+    case claude, codex, gemini, grok, antigravity, copilot, cursor, qwen, opencode, kiro, cline, kimi, droid, amp, goose, pi, hermes, openclaw, deepseek, workbuddy
 
     /// The command, under its usual name.
     public var command: String { commands[0] }
@@ -30,6 +30,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .hermes: ["hermes"]
         case .openclaw: ["openclaw"]
         case .deepseek: ["dsh"]
+        // WorkBuddy's own copy of the CodeBuddy command line (in the app), else CodeBuddy Code installed apart.
+        case .workbuddy: ["codebuddy"]
         }
     }
 
@@ -55,6 +57,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .hermes: "hermesagent"
         case .openclaw: "openclawagent"
         case .deepseek: "deepseekharness"
+        case .workbuddy: "workbuddy"
         }
     }
 
@@ -66,6 +69,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .grok: ["low", "medium", "high"]
         case .pi: ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         case .hermes: ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+        case .workbuddy: ["minimal", "low", "medium", "high", "xhigh", "max"]
         default: []
         }
     }
@@ -74,7 +78,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     /// agent takes (agy, 4000 characters: 20 s at low, 65 s at high).
     public var defaultEffort: String? {
         switch self {
-        case .claude, .antigravity, .codex, .grok, .hermes: "low"
+        case .claude, .antigravity, .codex, .grok, .hermes, .workbuddy: "low"
         case .pi: "off"
         default: nil
         }
@@ -98,7 +102,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         guard Self.effort(inModelName: model) == nil, !(modelDecidesEffort && named),
               let level = effort ?? defaultEffort, !level.isEmpty else { return [] }
         switch self {
-        case .claude, .antigravity: return ["--effort", level]
+        case .claude, .antigravity, .workbuddy: return ["--effort", level]
         case .codex: return ["-c", "model_reasoning_effort=\"\(level)\""]
         case .grok: return ["--reasoning-effort", level]
         case .pi: return ["--thinking", level]
@@ -119,6 +123,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case (.hermes, _): (#"(?i)hermes agent"#, 8000)
         case (.kimi, _): (#"(?i)kimi"#, 2000)
         case (.deepseek, _): (#"(?i)deepseek"#, 2000)
+        case (.workbuddy, _): (#"(?i)codebuddy"#, 2000)
         default: nil
         }
     }
@@ -141,6 +146,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     /// the usual install folders.
     public func locate(customPath: String? = nil) -> URL? {
         let fileManager = FileManager.default
+        // WorkBuddy: its command line runs on the app's own runtime (Electron run as Node, as WorkBuddy runs it).
+        if self == .workbuddy, customPath?.isEmpty != false, let app = Self.workBuddyApp() { return app }
         if let customPath, !customPath.isEmpty {
             let expanded = (customPath as NSString).expandingTildeInPath
             return fileManager.isExecutableFile(atPath: expanded) ? URL(filePath: expanded) : nil
@@ -175,8 +182,47 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         return allCases.indices.filter { found.flags[$0] }.map { allCases[$0] }
     }
 
+    /// WorkBuddy's runtime, when the app (and the command line in it) is installed.
+    static func workBuddyApp() -> URL? {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        for app in [URL(filePath: "/Applications/WorkBuddy.app"), home.appending(path: "Applications/WorkBuddy.app")] {
+            let runtime = app.appending(path: "Contents/MacOS/Electron")
+            if FileManager.default.isExecutableFile(atPath: runtime.path), FileManager.default.fileExists(atPath: workBuddyScript(runtime).path) { return runtime }
+        }
+        return nil
+    }
+
+    /// The command line inside WorkBuddy, beside the runtime `executable`.
+    static func workBuddyScript(_ executable: URL) -> URL {
+        executable.deletingLastPathComponent().deletingLastPathComponent().appending(path: "Resources/app.asar.unpacked/cli/bin/codebuddy")
+    }
+
+    /// Whether `executable` is WorkBuddy's runtime (the command line then comes first among the arguments).
+    static func isWorkBuddyRuntime(_ executable: URL) -> Bool { executable.path.hasSuffix(".app/Contents/MacOS/Electron") }
+
+    /// What the command needs in its environment: WorkBuddy's runtime runs as Node with its lean bundle; the key and
+    /// site of the user's CodeBuddy account.
+    func environment(executable: URL, apiKey: String?, site: String?) -> [String: String] {
+        guard self == .workbuddy else { return [:] }
+        var env: [String: String] = [:]
+        if Self.isWorkBuddyRuntime(executable) {
+            env["ELECTRON_RUN_AS_NODE"] = "1"
+            env["CODEBUDDY_FORCE_LITE_WB_BUNDLE"] = "1"
+        }
+        if let apiKey, !apiKey.isEmpty { env["CODEBUDDY_API_KEY"] = apiKey }
+        // WorkBuddy is the China edition: its keys come from copilot.tencent.com; "international" for codebuddy.ai.
+        let site = site?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+        if site.isEmpty || site == "internal" || site.contains("国内") || site.contains("china") { env["CODEBUDDY_INTERNET_ENVIRONMENT"] = "internal" }
+        else if !site.hasPrefix("int") { env["CODEBUDDY_INTERNET_ENVIRONMENT"] = site }
+        return env
+    }
+
     /// The version the command reports, if it answers.
     public func version(at url: URL) -> String? {
+        if self == .workbuddy, Self.isWorkBuddyRuntime(url) {
+            let info = url.deletingLastPathComponent().deletingLastPathComponent().appending(path: "Info.plist")
+            return (NSDictionary(contentsOf: info)?["CFBundleShortVersionString"] as? String).map { "WorkBuddy \($0)" }
+        }
         // Some check for updates first (Hermes): a slow network must not make them look broken.
         guard let result = CommandProbe.run(url.path, ["--version"], environment: LocalProcess.environment(), timeout: 25), result.status == 0 else { return nil }
         return CommandProbe.version(in: result.output)
@@ -196,8 +242,11 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
             return (args, false, false)
         case .codex:
             // Without the user's MCP servers, which each take time to start.
+            // Nothing it does not need for a translation: no MCP servers, no notification program after each turn, no web
+            // search, no project instructions, no reasoning summary (each costs time on every call).
             var args = ["exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "--color", "never",
-                        "-c", "mcp_servers={}", "-o", outputFile.path] + thinking
+                        "-c", "mcp_servers={}", "-c", "notify=[]", "-c", "tools.web_search=false", "-c", "project_doc_max_bytes=0",
+                        "-c", "model_reasoning_summary=\"none\"", "-o", outputFile.path] + thinking
             if let model { args += ["-m", model] }
             return (args + ["-"], false, true)
         case .gemini:
@@ -267,13 +316,19 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
             return (args + ["--prompt"], true, true)
         case .deepseek:
             return (["--profile", "headless"], true, true)
+        case .workbuddy:
+            // As Claude Code: one answer, no tools, nothing saved; the command line first when it runs in WorkBuddy's runtime.
+            var args = ["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
+                        "--max-turns", "1", "--system-prompt", system] + thinking
+            if let model { args += ["--model", model] }
+            return (args, false, false)
         }
     }
 
     /// The model's answer in what the command printed.
     func answer(stdout: String, outputFile: URL) throws -> String {
         switch self {
-        case .claude:
+        case .claude, .workbuddy:
             // The whole output is one JSON object; its `result` may itself contain code fences.
             let trimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let object = ((try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) as? [String: Any]) ?? LLMBatch.jsonObject(in: stdout) else { return stdout }
@@ -315,7 +370,7 @@ enum AgentFailure {
 
     /// The command would not take the thinking level with this model.
     static func refusesTheLevel(_ text: String) -> Bool {
-        text.range(of: #"(--effort|--reasoning(-effort)?|--thinking|reasoning[_ ]effort)[^\n]{0,60}(not supported|unsupported|conflicts?|invalid|unknown)|(not supported|unsupported|conflicts? with|invalid|unknown)[^\n]{0,60}(--effort|--reasoning|--thinking|reasoning[_ ]effort)"#,
+        text.range(of: #"(--effort|--reasoning(-effort)?|--thinking|reasoning[_ ]effort)[^\n]{0,60}(not supported|unsupported|conflicts?|invalid|unknown)|(not supported|unsupported|conflicts? with|invalid|unknown)[^\n]{0,60}(--effort|--reasoning|--thinking|reasoning[_ ]effort)|has no (effort|reasoning|thinking) levels|ignoring --(effort|reasoning-effort|thinking)"#,
                    options: [.regularExpression, .caseInsensitive]) != nil
     }
 
@@ -332,6 +387,8 @@ enum AgentFailure {
             return ProviderError(kind: .http(402), detail: detail)
         }
         if refusesTheLevel(clean) { return setup(agent, clean) }
+        // Not available where the user is: no retry changes that.
+        if has(#"location is not supported|not (available|supported) in your (country|region|location)|unsupported (country|region|location)|FAILED_PRECONDITION"#) { return setup(agent, clean) }
         if has(#"(model|deployment)[^\n]{0,80}(not found|does not exist|not available|not supported|unavailable|invalid)|unknown model|invalid model|no such model"#) {
             return ProviderError(kind: .http(404), detail: detail + " model_not_found")
         }
@@ -377,11 +434,14 @@ struct AgentProvider: ChatModel {
     var agent: LocalAgent
     var executable: URL
     var model: String?
+    /// Set for the command's environment (WorkBuddy's runtime, an account's key).
+    var environment: [String: String] = [:]
     /// The thinking level chosen; nil: the usual one, "": the agent's own.
     var effort: String?
     /// Set once a model has refused the usual level, so later batches do not ask again.
     let usualLevelRefused = RefusalMemory()
-    var limits = ProviderLimits(batchCharacters: 5000, batchItems: 60, concurrency: 4, usesContext: true, startupSeconds: 8, secondsPerCharacter: 0.006)
+    /// Each call starts the agent (seconds before it answers): large batches, eight side by side.
+    var limits = ProviderLimits(batchCharacters: 5000, batchItems: 60, concurrency: 8, usesContext: true, startupSeconds: 8, secondsPerCharacter: 0.006)
 
     func complete(system: String, user: String) async throws -> String {
         do {
@@ -400,8 +460,9 @@ struct AgentProvider: ChatModel {
         let (arguments, promptArgument, combine) = agent.arguments(model: model, effort: effort, system: system, outputFile: outputFile)
         let prompt = combine ? system + "\n\n---\n\nTranslate this JSON object:\n" + user : user
         do {
-            let stdout = try await LocalProcess.run([executable.path] + arguments + (promptArgument ? [prompt] : []),
-                                                    input: promptArgument ? "" : prompt, timeout: 600)
+            let lead = agent == .workbuddy && LocalAgent.isWorkBuddyRuntime(executable) ? [LocalAgent.workBuddyScript(executable).path] : []
+            let stdout = try await LocalProcess.run([executable.path] + lead + arguments + (promptArgument ? [prompt] : []),
+                                                    input: promptArgument ? "" : prompt, timeout: 600, environment: environment)
             let reply = AgentFailure.stripANSI(try agent.answer(stdout: stdout, outputFile: outputFile))
             if let failure = AgentFailure.inReply(reply, agent: agent) { throw failure }
             return reply
@@ -425,14 +486,14 @@ final class RefusalMemory: @unchecked Sendable {
 /// Runs a command with text on stdin and returns its stdout. The environment has the login shell's PATH (agents
 /// built on Node need it), the real HOME and proxy settings; the working directory is an empty folder.
 enum LocalProcess {
-    static func run(_ command: [String], input: String, timeout: TimeInterval) async throws -> String {
+    static func run(_ command: [String], input: String, timeout: TimeInterval, environment extra: [String: String] = [:]) async throws -> String {
         // When the job ends (another batch failed, the user cancelled) the command stops at once, instead of running
         // on for minutes with nobody waiting for it.
         let handle = Handle()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
-                    continuation.resume(with: Result { try runBlocking(command, input: input, timeout: timeout, handle: handle) })
+                    continuation.resume(with: Result { try runBlocking(command, input: input, timeout: timeout, handle: handle, environment: extra) })
                 }
             }
         } onCancel: {
@@ -465,13 +526,13 @@ enum LocalProcess {
     }
 
     /// Runs the command on this thread until it ends.
-    static func runBlocking(_ command: [String], input: String, timeout: TimeInterval, handle: Handle? = nil) throws -> String {
+    static func runBlocking(_ command: [String], input: String, timeout: TimeInterval, handle: Handle? = nil, environment extra: [String: String] = [:]) throws -> String {
         let workDirectory = FileManager.default.temporaryDirectory.appending(path: "folio-translate-work", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
         let process = Process()
         process.executableURL = URL(filePath: command[0])
         process.arguments = Array(command.dropFirst())
-        process.environment = environment()
+        process.environment = environment().merging(extra) { _, new in new }
         process.currentDirectoryURL = workDirectory
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin

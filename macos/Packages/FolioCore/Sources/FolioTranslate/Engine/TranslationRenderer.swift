@@ -228,9 +228,14 @@ final class TranslationRenderer {
                     }
                     audit?.record(page: layout.number, block: entry.segment.block, frame: placement?.frame ?? entry.frame, result: result, plan: entry.plan)
                 }
+                // Figure labels drawn as text: their glyphs leave the page for their translations.
+                for entry in imageText[layout.number] ?? [] where !entry.line.glyphs.isEmpty {
+                    removal.kept.subtract(entry.line.glyphs)
+                    removal.glyphs.formUnion(entry.line.glyphs)
+                }
                 removals[layout.number] = removal
-                for entry in imageText[layout.number] ?? [] {
-                    ImageText.draw(entry.line, translation: entry.translation, language: language, in: context)
+                if let entries = imageText[layout.number], !entries.isEmpty {
+                    ImageText.draw(entries, language: language, in: context)
                 }
                 context.endPDFPage()
             }
