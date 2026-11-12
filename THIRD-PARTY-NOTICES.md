@@ -21,6 +21,7 @@ Folio itself is under the MIT License (see `LICENSE`). Its apps contain the thir
 | [Inno Setup](https://jrsoftware.org/isinfo.php) | 7.1.1 | Windows installer | Inno Setup License |
 | [React](https://github.com/facebook/react) | 18.3.1 | Windows | MIT |
 | [Lucide](https://github.com/lucide-icons/lucide) | 0.468.0 | Windows | ISC |
+| [Hyphenation patterns for American English (hyph-utf8, hyph-en-us)](https://github.com/hyphenation/tex-hyphen) | 2005-05-30 | Windows | Permissive (see below) |
 
 citeproc-js and the citation styles are not modified. Their sources and full terms are in the repository at [`macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md`](https://github.com/Alonemo-Nnqc/Folio/blob/main/macos/Packages/FolioCore/Sources/FolioCitation/Resources/LICENSES.md) and `citeproc-LICENSE.txt` beside it.
 
@@ -364,6 +365,19 @@ Apache License
       of your accepting any such warranty or additional liability.
 
    END OF TERMS AND CONDITIONS
+```
+
+## Hyphenation patterns for American English (hyph-en-us)
+
+<https://github.com/hyphenation/tex-hyphen> — `windows/src/Folio.Core/Resources/hyph-en-us.txt`, used by the PDF text editor
+to hyphenate English words when a paragraph is set again.
+
+```
+Copyright (C) 1990, 2004, 2005 Gerard D.C. Kuiken
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.
 ```
 
 ## PdfPig

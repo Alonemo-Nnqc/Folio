@@ -32,11 +32,11 @@ struct ScanBanner: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                     if state.editing {
-                        Text("正在编辑 PDF 文字：点击文字块即可修改，⌘↩ 完成一段")
+                        Text("编辑 PDF 文字：点按文字直接修改，改动自动保存，⌘Z 可撤销")
                             .font(.callout)
-                        Button(String(localized: "完成"), action: state.finishEditing)
+                        Button(String(localized: "退出编辑"), action: state.finishEditing)
                             .controlSize(.small)
-                            .buttonStyle(.borderedProminent)
+                            .help("Esc")
                     } else if let progress = state.progress {
                         Text(progress.total > 0 ? String(localized: "正在识别文字（\(progress.done)/\(progress.total) 页）") : String(localized: "正在识别文字…"))
                             .font(.callout.monospacedDigit())

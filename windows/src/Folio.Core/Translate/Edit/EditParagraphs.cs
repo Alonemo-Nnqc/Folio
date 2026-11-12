@@ -74,6 +74,9 @@ public static partial class EditParagraphs
             var previous = lines[i - 1];
             var line = lines[i];
             bool starts = previous.Baseline - line.Baseline > Math.Max(pitch * 1.75, size * 2.4);
+            // Further below than the paragraph's lines are apart, after a line that ends a sentence: the next paragraph
+            // (or a heading) set off by space rather than an indent.
+            if (!starts && previous.Baseline - line.Baseline > pitch * 1.35 && (EndsSentence(previous) || previous.MaxX < right - size * 1.5)) starts = true;
             if (!starts && Math.Abs(previous.Size - line.Size) > 0.8 && line.MaxX - line.MinX < (right - left) * 0.3) starts = true;
             if (!starts && (previous.Size - line.Size > 0.8 || (previous.Font.IsBold && !line.Font.IsBold))
                 && (previous.MaxX < right - size * 2 || (pieces[^1].Count == 1 && previous.Font.IsBold)))

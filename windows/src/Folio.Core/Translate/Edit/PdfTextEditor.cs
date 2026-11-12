@@ -20,14 +20,41 @@ public static class PdfTextEditor
 
     /// <summary>The page's layout with every block of text offered: the translator leaves some alone (author lines,
     /// figures' labels), the editor does not; formulas stay as they are.</summary>
-    static PageLayout? Analyse(PdfSource source, int page)
+    internal static PageLayout? Analyse(PdfSource source, int page)
     {
-        var layout = Analyzer().Analyze(source, [page]).FirstOrDefault();
+        var analyzer = Analyzer();
+        // Headings and captions are told apart from the size most of the document's text is set in, not the page's.
+        analyzer.KnownBodySize = BodySize(source);
+        var layout = analyzer.Analyze(source, [page]).FirstOrDefault();
         if (layout == null) return null;
         // One block per paragraph (the translator's blocks run some together and cut others).
         layout.Blocks = EditParagraphs.Refine(layout.Blocks);
         foreach (var block in layout.Blocks) if (block.Kind != BlockKind.Formula) block.Translate = true;
         return layout;
+    }
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfSource, object> BodySizes = new();
+
+    /// <summary>The size most text of the document is set in, from its first pages (as the macOS editor finds it).</summary>
+    static double BodySize(PdfSource source)
+    {
+        if (BodySizes.TryGetValue(source, out var known)) return (double)known;
+        var counts = new Dictionary<double, int>();
+        int pages = Math.Min(source.Pages.Count, 8);
+        for (int number = 1; number <= pages; number++)
+        {
+            var interpreter = new ContentInterpreter();
+            interpreter.Run(source.Pages[number - 1]);
+            foreach (var g in interpreter.Glyphs)
+                if (g.IsVisible && g.IsHorizontal && g.Size > 0.5 && g.Size < 400)
+                {
+                    var key = Math.Round(g.Size * 2) / 2;
+                    counts[key] = counts.GetValueOrDefault(key) + 1;
+                }
+        }
+        double size = counts.Count == 0 ? 10 : counts.MaxBy(kv => kv.Value).Key;
+        BodySizes.AddOrUpdate(source, size);
+        return size;
     }
 
     /// <summary>The text blocks of page (1-based), in reading order.</summary>

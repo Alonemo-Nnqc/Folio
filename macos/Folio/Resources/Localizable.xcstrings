@@ -9923,6 +9923,46 @@
         }
       }
     },
+    "这里不能编辑：这段文字的排版无法原样修改" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't edit here: this text's layout can't be changed in place"
+          }
+        }
+      }
+    },
+    "这段文字比原来长，已超出原有的位置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This text is now longer and runs past where it was"
+          }
+        }
+      }
+    },
+    "撤销键入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo Typing"
+          }
+        }
+      }
+    },
+    "退出编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done Editing"
+          }
+        }
+      }
+    },
     "无法修改这段文字：%@" : {
       "localizations" : {
         "en" : {
@@ -10033,12 +10073,12 @@
         }
       }
     },
-    "正在编辑 PDF 文字：点击文字块即可修改，⌘↩ 完成一段" : {
+    "编辑 PDF 文字：点按文字直接修改，改动自动保存，⌘Z 可撤销" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Editing PDF text: click a block to change it, ⌘↩ to finish"
+            "value" : "Editing PDF text: click any text to change it. Changes are saved as you go; ⌘Z undoes them."
           }
         }
       }

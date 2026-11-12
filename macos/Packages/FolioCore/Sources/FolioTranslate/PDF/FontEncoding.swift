@@ -82,6 +82,14 @@ struct FontEncoding {
 
     // MARK: Text
 
+    /// The code the font gives `text` by its own tables (ToUnicode, encoding), when it says so plainly: for drawing a
+    /// character the page does not show yet in a font that has all its glyphs (EDIT-01).
+    func code(for text: String) -> Int? {
+        if let hit = known.first(where: { $0.value == text }) { return hit.key }
+        if codeIsUnicode, text.unicodeScalars.count == 1, let scalar = text.unicodeScalars.first { return Int(scalar.value) }
+        return nil
+    }
+
     func text(_ code: Int) -> (text: String, reliable: Bool)? {
         if let text = known[code] { return (text, true) }
         if codeIsUnicode, let scalar = UnicodeScalar(code), Self.usable(String(Character(scalar))) { return (String(Character(scalar)), true) }

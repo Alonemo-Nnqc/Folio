@@ -95,27 +95,36 @@ enum FeatureSelfTest {
             check(reader.save(), "saved")
             flush()
 
-            // EDIT-01: edit mode, the first editable block of page 1 replaced, then undone.
+            // EDIT-01: edit mode; a word typed into a paragraph in place, kept, undone and redone — only that page shown
+            // again, the document on screen the same.
             reader.toggleTextEditing(nil)
             check(reader.isEditingPDFText, "edit mode on")
-            let data = try? Data(contentsOf: model.fileURL(textFile))
-            let editor = data.flatMap { try? PDFTextEditor(data: $0) }
-            let block = editor?.blocks(onPage: 0).first { $0.isEditable && $0.text.count > 8 }
-            check(block != nil, "an editable block on page 1")
-            if let editor, let block {
-                let original = block.text
-                let replaced = try? editor.replace(block, with: "Folio 编辑自测 EDIT-01")
-                check(replaced != nil, "block replaced")
-                if let replaced { check(reader.selfTestCommit(replaced), "edit written") }
-                let after = reader.pdfView.document?.page(at: 0)?.string ?? ""
-                check(after.contains("Folio 编辑自测"), "page shows the new text")
-                check(!after.contains(String(original.prefix(20))) || original.count < 20, "old text is gone")
+            try? await Task.sleep(for: .seconds(3))
+            let documentBefore = reader.pdfView.document
+            if let layer = reader.selfTestEditLayer, let block = layer.selfTestEditable.first(where: { $0.page == 0 }) ?? layer.selfTestEditable.first,
+               let word = block.text.split(separator: " ").map(String.init).first(where: { $0.count >= 5 && $0.allSatisfy(\.isLetter) }) {
+                lines.append("INFO editing block \(block.page)-\(block.index) after “\(word)”")
+                check(layer.selfTestOpen(page: block.page, block: block.index, caretAfter: word), "a paragraph opens with the caret in it")
+                check(reader.window?.firstResponder === layer, "the paragraph takes the keys")
+                layer.insertText(" Foliotest", replacementRange: NSRange(location: NSNotFound, length: 0))
+                check(layer.selfTestText?.contains("\(word) Foliotest") == true, "typing goes in at the caret")
+                lines.append("INFO lines set again: \(layer.selfTestRewritten)")
+                check(layer.selfTestRewritten.count <= 3, "only the lines the change reaches are set again")
+                snapshot(reader, name: "editing", log: log)
+                layer.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+                try? await Task.sleep(for: .milliseconds(800))
+                let shown = { reader.pdfView.document?.page(at: block.page)?.string ?? "" }
+                check(shown().contains("Foliotest"), "Esc keeps it: the page shows the new text")
+                check(reader.pdfView.document === documentBefore, "the document was not loaded again")
+                let file = (try? Data(contentsOf: model.fileURL(textFile))).flatMap { PDFDocument(data: $0) }?.page(at: block.page)?.string ?? ""
+                check(file.contains("Foliotest"), "the file has the new text")
                 reader.window?.undoManager?.undo()
-                let undone = reader.pdfView.document?.page(at: 0)?.string ?? ""
-                check(!undone.contains("Folio 编辑自测"), "undo restores the original")
+                check(!shown().contains("Foliotest"), "undo takes it back")
                 reader.window?.undoManager?.redo()
-                check((reader.pdfView.document?.page(at: 0)?.string ?? "").contains("Folio 编辑自测"), "redo applies it again")
-            }
+                check(shown().contains("Foliotest"), "redo puts it in again")
+                reader.window?.undoManager?.undo()
+                try? await Task.sleep(for: .seconds(2))
+            } else { check(false, "an editable paragraph with a word to type after") }
             reader.toggleTextEditing(nil)
             check(!reader.isEditingPDFText, "edit mode off")
 
@@ -160,19 +169,19 @@ enum FeatureSelfTest {
                         window.sendEvent(event)
                     }
                 }
-                try? await Task.sleep(for: .milliseconds(400))
-                try? await Task.sleep(for: .milliseconds(300))
-                snapshot(reader, name: "editing", log: log)
-                let editorView = window.firstResponder as? NSTextView
-                check(editorView != nil, "a click opens the block for editing (first responder: \(String(describing: window.firstResponder.map { type(of: $0) })))")
-                if let editorView {
-                    editorView.selectAll(nil)
-                    editorView.insertText("Folio 鼠标编辑自测", replacementRange: editorView.selectedRange())
-                    window.makeFirstResponder(reader.pdfView)
-                    // A click elsewhere finishes it: here the mode is ended, which saves the open edit.
+                try? await Task.sleep(for: .milliseconds(500))
+                let layer = window.firstResponder as? PDFTextEditMode
+                check(layer?.isEditingBlock == true, "a click puts the caret in the paragraph (first responder: \(String(describing: window.firstResponder.map { type(of: $0) })))")
+                if let layer {
+                    layer.insertText("Foliomouse", replacementRange: NSRange(location: NSNotFound, length: 0))
+                    snapshot(reader, name: "typed", log: log)
+                    // A click elsewhere keeps it: here the mode is ended, which keeps the open edit too.
                     reader.toggleTextEditing(nil)
-                    try? await Task.sleep(for: .seconds(3))
-                    check((reader.pdfView.document?.page(at: 0)?.string ?? "").contains("Folio 鼠标编辑自测"), "the typed text is in the file")
+                    try? await Task.sleep(for: .seconds(1))
+                    check((reader.pdfView.document?.page(at: 0)?.string ?? "").contains("Foliomouse"), "the typed text is in the file")
+                    reader.window?.undoManager?.undo()
+                    try? await Task.sleep(for: .milliseconds(500))
+                    check(!(reader.pdfView.document?.page(at: 0)?.string ?? "").contains("Foliomouse"), "and undone")
                 }
             } else { check(false, "a visible editable block") }
             if reader.isEditingPDFText { reader.toggleTextEditing(nil) }

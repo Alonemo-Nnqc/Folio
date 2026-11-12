@@ -109,14 +109,19 @@ public sealed class PdfWriter
 {
     readonly List<byte[]?> _bodies = [];
     public int Count => _bodies.Count;
+    /// <summary>Objects are numbered from Offset + 1 (an incremental update numbers its objects after the file's).</summary>
+    public int Offset { get; init; }
 
-    public int Reserve() { _bodies.Add(null); return _bodies.Count; }
+    public int Reserve() { _bodies.Add(null); return _bodies.Count + Offset; }
+
+    /// <summary>The objects written, by number (an incremental update writes them after the file).</summary>
+    public IEnumerable<(int Number, byte[] Body)> Objects => _bodies.Select((b, i) => (i + 1 + Offset, b ?? "null"u8.ToArray()));
 
     public void Set(int number, PdfValue value)
     {
         var ms = new MemoryStream();
         value.Serialize(ms);
-        _bodies[number - 1] = ms.ToArray();
+        _bodies[number - 1 - Offset] = ms.ToArray();
     }
 
     public int Add(PdfValue value)
@@ -142,11 +147,11 @@ public sealed class PdfWriter
         body.Write("\nstream\n"u8);
         body.Write(payload);
         body.Write("\nendstream"u8);
-        _bodies[number - 1] = body.ToArray();
+        _bodies[number - 1 - Offset] = body.ToArray();
     }
 
-    public void SetRaw(int number, byte[] body) => _bodies[number - 1] = body;
-    public byte[]? Raw(int number) => _bodies[number - 1];
+    public void SetRaw(int number, byte[] body) => _bodies[number - 1 - Offset] = body;
+    public byte[]? Raw(int number) => _bodies[number - 1 - Offset];
 
     public int AddStream(Dictionary<string, PdfValue> dict, byte[] data, bool compress = true)
     {
@@ -206,6 +211,9 @@ public sealed class PdfCopier(PdfWriter writer, PdfSource source)
     readonly Dictionary<long, int> _copied = [];
     /// <summary>Output page object for each source page dictionary; page references elsewhere point at it.</summary>
     public Dictionary<long, int> PageMap { get; } = [];
+    /// <summary>Writing an incremental update of the source itself: its objects are referred to where they are, not
+    /// copied.</summary>
+    public bool InPlace { get; init; }
 
     public PdfValue Copy(IToken? raw)
     {
@@ -228,6 +236,7 @@ public sealed class PdfCopier(PdfWriter writer, PdfSource source)
     /// <summary>The dictionary as an indirect object. Pages become references to their output page (or null).</summary>
     public PdfValue Copy(PDict dictionary)
     {
+        if (InPlace && dictionary.Reference is { } own) return PdfValue.Ref((int)own.ObjectNumber);
         var key = dictionary.Key;
         if (PageMap.TryGetValue(key, out var page)) return PdfValue.Ref(page);
         if (_copied.TryGetValue(key, out var number)) return PdfValue.Ref(number);
@@ -251,6 +260,7 @@ public sealed class PdfCopier(PdfWriter writer, PdfSource source)
 
     public PdfValue Copy(PStream stream)
     {
+        if (InPlace && stream.Reference is { } own) return PdfValue.Ref((int)own.ObjectNumber);
         var key = stream.Key;
         if (_copied.TryGetValue(key, out var existing)) return PdfValue.Ref(existing);
         int number = Writer.Reserve();

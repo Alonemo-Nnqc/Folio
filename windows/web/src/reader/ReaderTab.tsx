@@ -330,6 +330,10 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     if (result.cmd === "reloadCurrent") {
       const url = pane.preview ? await call("reader.previewUrl", { path: pane.preview }) : await call("reader.url", { session: pane.session });
       pane.send({ cmd: "reload", url });
+    } else if (result.cmd === "pageChanged") {
+      // 编辑 PDF 文字: only that page is read again and drawn again.
+      const url = pane.preview ? await call("reader.previewUrl", { path: pane.preview }) : await call("reader.url", { session: pane.session });
+      pane.send({ cmd: "pageChanged", page: result.page, url });
     } else pane.send(result);
   };
 
@@ -479,10 +483,19 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
             call("toast.show", { message: t("无法读取第 %lld 页的文字：%@", m.page, e?.message ?? String(e)), icon: "warning" });
           });
         break;
-      case "editText":
-        call("reader.editText", { session: pane.session, page: m.page, block: m.block, expected: m.expected, text: m.text })
-          .then((r) => applyResult(pane, r))
-          .catch((e) => { call("toast.show", { message: t("无法修改这段文字：%@", e.message ?? String(e)), icon: "warning" }); applyResult(pane, { cmd: "reloadCurrent" }); });
+      // A paragraph edited in place: its changes go to the app as they are typed, and it is written when it is left.
+      case "paragraph":
+        call(`reader.${m.op}`, { session: pane.session, ...m.args })
+          .then((result) => pane.send({ cmd: "paragraphResult", req: m.req, result }))
+          .catch((e) => pane.send({ cmd: "paragraphResult", req: m.req, error: e?.message ?? String(e) }));
+        break;
+      case "paragraphCommit":
+        call("reader.paragraphCommit", { session: pane.session, id: m.id })
+          .then((r) => (r ? applyResult(pane, r) : pane.send({ cmd: "paragraphSettled", page: m.page })))
+          .catch((e) => {
+            call("toast.show", { message: t("无法修改这段文字：%@", e?.message ?? String(e)), icon: "warning" });
+            pane.send({ cmd: "paragraphSettled", page: m.page });
+          });
         break;
       case "editRefused": call("toast.show", { message: t("这里不能编辑：%@", m.reason), icon: "warning" }); break;
       case "leaveEditing": if (editingRef.current) setEditing(false); break;
@@ -755,8 +768,8 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       {editing && (
         <div className="scan-banner" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>
           <SquarePen size={15} strokeWidth={1.8} />
-          <span>{t("正在编辑 PDF 文字：点击文字块即可修改，Ctrl+Enter 完成一段")}</span>
-          <button className="btn small primary" onClick={() => setEditing(false)}>{t("完成")}</button>
+          <span>{t("编辑 PDF 文字：点按文字直接修改，改动自动保存，Ctrl+Z 可撤销")}</span>
+          <button className="btn small" title="Esc" onClick={() => setEditing(false)}>{t("退出编辑")}</button>
         </div>
       )}
       {!editing && (ocr || (isScan && !scanDismissed)) && (

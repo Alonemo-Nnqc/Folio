@@ -10,8 +10,8 @@ sealed class PdfSession(string path)
     Task _writes = Task.CompletedTask;
     /// <summary>Annotation changes append (undone by cutting the end off: Before/After); a text edit rewrites the file
     /// (undone by writing the whole file back: Whole holds the other version).</summary>
-    readonly Stack<(long Before, long After, byte[]? Whole)> _undo = new();
-    readonly Stack<(long Before, byte[] Tail, byte[]? Whole)> _redo = new();
+    readonly Stack<(long Before, long After, byte[]? Whole, int? Page)> _undo = new();
+    readonly Stack<(long Before, byte[] Tail, byte[]? Whole, int? Page)> _redo = new();
     DateTime _loadedStamp;
     long _loadedLength;
 
@@ -36,13 +36,14 @@ sealed class PdfSession(string path)
     }
 
     /// <summary>Runs a change to the PDF, remembers how to undo it (changes only append, so undoing is cutting the end off).
-    /// The result goes to the page; the page itself has already drawn the change.</summary>
-    public Task<object?> Change(Func<string, object?> change) => Enqueue(() =>
+    /// The result goes to the page; the page itself has already drawn the change. A change of a page's content (编辑 PDF
+    /// 文字) names the page: undoing or redoing it has that page drawn again.</summary>
+    public Task<object?> Change(Func<string, object?> change, int? page = null) => Enqueue(() =>
     {
         long before = new FileInfo(path).Length;
         var message = change(path);
         long after = new FileInfo(path).Length;
-        if (after != before) lock (_undo) { _undo.Push((before, after, null)); _redo.Clear(); }
+        if (after != before) lock (_undo) { _undo.Push((before, after, null, page)); _redo.Clear(); }
         return message;
     });
 
@@ -53,7 +54,7 @@ sealed class PdfSession(string path)
         var old = File.ReadAllBytes(path);
         var data = make(path);
         WriteWhole(data);
-        lock (_undo) { _undo.Push((0, data.Length, old)); _redo.Clear(); }
+        lock (_undo) { _undo.Push((0, data.Length, old, null)); _redo.Clear(); }
         return new { cmd = "reloadCurrent" };
     });
 
@@ -69,17 +70,17 @@ sealed class PdfSession(string path)
         lock (_undo)
         {
             if (_undo.Count == 0) return null;
-            var (before, after, whole) = _undo.Pop();
+            var (before, after, whole, page) = _undo.Pop();
             if (new FileInfo(path).Length != after) { _undo.Clear(); _redo.Clear(); throw new IOException(Loc.S("文件已被其他程序修改")); }
             if (whole != null)
             {
                 var current = File.ReadAllBytes(path);
                 WriteWhole(whole);
-                _redo.Push((whole.Length, [], current));
+                _redo.Push((whole.Length, [], current, null));
                 return new { cmd = "reloadCurrent" };
             }
-            _redo.Push((before, AnnotationWriter.TruncateTo(path, before), null));
-            return new { cmd = "undone" };
+            _redo.Push((before, AnnotationWriter.TruncateTo(path, before), null, page));
+            return page is { } changed ? new { cmd = "pageChanged", page = changed } : (object)new { cmd = "undone" };
         }
     });
 
@@ -88,22 +89,25 @@ sealed class PdfSession(string path)
         lock (_undo)
         {
             if (_redo.Count == 0) return null;
-            var (before, tail, whole) = _redo.Pop();
+            var (before, tail, whole, page) = _redo.Pop();
             if (new FileInfo(path).Length != before) { _undo.Clear(); _redo.Clear(); throw new IOException(Loc.S("文件已被其他程序修改")); }
             if (whole != null)
             {
                 var current = File.ReadAllBytes(path);
                 WriteWhole(whole);
-                _undo.Push((0, whole.Length, current));
+                _undo.Push((0, whole.Length, current, null));
                 return new { cmd = "reloadCurrent" };
             }
             AnnotationWriter.Append(path, tail);
-            _undo.Push((before, before + tail.Length, null));
-            return new { cmd = "redone" };
+            _undo.Push((before, before + tail.Length, null, page));
+            return page is { } changed ? new { cmd = "pageChanged", page = changed } : (object)new { cmd = "redone" };
         }
     });
 
-    Task<object?> Enqueue(Func<object?> work)
+    /// <summary>Work that reads the file, after the changes before it are written.</summary>
+    public Task<object?> Read(Func<string, object?> work) => Enqueue(() => work(path), wrote: false);
+
+    Task<object?> Enqueue(Func<object?> work, bool wrote = true)
     {
         var done = new TaskCompletionSource<object?>();
         _writes = _writes.ContinueWith(_ =>
@@ -113,15 +117,18 @@ sealed class PdfSession(string path)
                 var message = work();
                 App.Ui.TryEnqueue(() =>
                 {
-                    RememberFile();
-                    App.Model.Importer.RefreshChangedFiles();
+                    if (wrote)
+                    {
+                        RememberFile();
+                        App.Model.Importer.RefreshChangedFiles();
+                    }
                     done.SetResult(message);
                 });
             }
             catch (Exception e)
             {
                 CrashLog.Write(e);
-                App.Model.Toasts.Show(Loc.S("无法保存标注：%@", e.Message), "warning");
+                App.Model.Toasts.Show(Loc.S("无法保存修改：%@", e.Message), "warning");
                 // What the page shows may no longer be what the file holds.
                 App.Ui.TryEnqueue(() =>
                 {
@@ -140,6 +147,45 @@ public static partial class Api
     static readonly Dictionary<string, PdfSession> Sessions = [];
 
     static PdfSession Session(Args a) => Sessions.TryGetValue(a.Str("session"), out var s) ? s : throw new InvalidOperationException("Reader session is gone");
+
+    /// <summary>A paragraph open for editing in place, with its own undo while it is edited.</summary>
+    sealed class OpenParagraph(Folio.Core.Translate.Edit.ParagraphEditing editing, long fileLength)
+    {
+        public Folio.Core.Translate.Edit.ParagraphEditing Editing { get; } = editing;
+        public long FileLength { get; } = fileLength;
+        public List<Folio.Core.Translate.Edit.PdfParagraph.State> Undo { get; } = [];
+        public List<Folio.Core.Translate.Edit.PdfParagraph.State> Redo { get; } = [];
+        public (int Kind, DateTime At)? Last { get; set; }
+    }
+
+    static readonly Dictionary<string, OpenParagraph> Paragraphs = [];
+
+    static (string Id, OpenParagraph Open) Paragraph(Args a)
+    {
+        var id = a.Str("id");
+        lock (Paragraphs) return Paragraphs.TryGetValue(id, out var open) ? (id, open) : throw new InvalidOperationException("Paragraph is gone");
+    }
+
+    /// <summary>What the page's editor needs after each change: the text of each atom (the caret steps over them), where
+    /// the caret cannot stand, the lines with their caret positions (page space), and the lines set again as a one-page
+    /// PDF with where it paints over the page.</summary>
+    static object ParagraphState(string id, OpenParagraph open)
+    {
+        var editing = open.Editing;
+        var paragraph = editing.Paragraph;
+        var preview = editing.Preview();
+        var bounds = paragraph.Bounds;
+        return new
+        {
+            id, page = editing.PageNumber, count = paragraph.Count, texts = paragraph.Texts(),
+            noStops = Enumerable.Range(0, paragraph.Count + 1).Where(i => !paragraph.IsStop(i)).ToList(),
+            lines = paragraph.ShownLines().Select(l => new { b = l.Baseline, t = l.Top, d = l.Bottom, s = l.Stops.Select(st => new[] { st.Index, Math.Round(st.X, 3) }).ToList() }).ToList(),
+            bounds = new[] { bounds.MinX, bounds.MinY, bounds.MaxX, bounds.MaxY },
+            overflows = paragraph.Overflows, modified = paragraph.IsModified, canUndo = open.Undo.Count > 0, canRedo = open.Redo.Count > 0,
+            preview = preview is { } p ? Convert.ToBase64String(p.Pdf) : null,
+            paint = preview is { } q ? q.Paint.Select(r => new[] { r.MinX, r.MinY, r.MaxX, r.MaxY }).ToList() : null,
+        };
+    }
 
     static object Resolved(IReadOnlyList<string> temps, IReadOnlyList<long> numbers) =>
         new { cmd = "resolved", map = temps.Zip(numbers, (temp, number) => new { temp, id = $"{number}R" }).ToArray() };
@@ -242,11 +288,94 @@ public static partial class Api
                 color = b.Color, bold = b.IsBold, italic = b.IsItalic, serif = b.IsSerif, alignment = b.Alignment, editable = b.IsEditable, reason = b.Reason,
             }).ToList());
         });
-        Bridge.OnAsync("reader.editText", a =>
+        // 编辑 PDF 文字 in place (EDIT-01): a paragraph opened, edited a change at a time (each answered with the lines as
+        // they are now and a preview of them), and written into the file as an update of its page only.
+        Bridge.OnAsync("reader.paragraphOpen", a =>
         {
+            var session = Session(a);
             int page = a.Int("page"), index = a.Int("block");
-            string expected = a.Str("expected"), text = a.Str("text");
-            return Session(a).Rewrite(path => Folio.Core.Translate.Edit.PdfTextEditor.Replace(path, page, index, expected, text));
+            return session.Read(path =>
+            {
+                var data = File.ReadAllBytes(path);
+                var editing = Folio.Core.Translate.Edit.ParagraphEditing.Open(path, data, page, index);
+                if (editing == null) return new { refused = Loc.S("这段文字的排版无法原样修改") };
+                var id = Guid.NewGuid().ToString("N");
+                var open = new OpenParagraph(editing, data.Length);
+                lock (Paragraphs) Paragraphs[id] = open;
+                lock (open) return ParagraphState(id, open);
+            });
+        });
+        Bridge.OnAsync("reader.paragraphEdit", a =>
+        {
+            var (id, open) = Paragraph(a);
+            int start = a.Int("start"), end = a.Int("end"), kind = a.Int("kind");
+            var text = a.Str("text");
+            bool record = a.Bool("record", true);
+            return Task.Run<object?>(() =>
+            {
+                lock (open)
+                {
+                    var paragraph = open.Editing.Paragraph;
+                    // One undo step for a run of typing (or deleting); a new one after a pause or another kind of edit.
+                    if (record && !(open.Last is { } last && last.Kind == kind && (DateTime.UtcNow - last.At).TotalSeconds < 1.5))
+                    {
+                        open.Undo.Add(paragraph.Snapshot);
+                        open.Redo.Clear();
+                    }
+                    open.Last = record ? (kind, DateTime.UtcNow) : open.Last;
+                    paragraph.Replace(start, end, text);
+                    return ParagraphState(id, open);
+                }
+            });
+        });
+        Bridge.OnAsync("reader.paragraphUndo", a =>
+        {
+            var (id, open) = Paragraph(a);
+            bool redo = a.Bool("redo", false);
+            return Task.Run<object?>(() =>
+            {
+                lock (open)
+                {
+                    var from = redo ? open.Redo : open.Undo;
+                    var to = redo ? open.Undo : open.Redo;
+                    if (from.Count == 0) return null;
+                    var paragraph = open.Editing.Paragraph;
+                    to.Add(paragraph.Snapshot);
+                    paragraph.Snapshot = from[^1];
+                    from.RemoveAt(from.Count - 1);
+                    open.Last = null;
+                    return ParagraphState(id, open);
+                }
+            });
+        });
+        Bridge.OnAsync("reader.paragraphCommit", a =>
+        {
+            var session = Session(a);
+            var (id, open) = Paragraph(a);
+            lock (Paragraphs) Paragraphs.Remove(id);
+            var editing = open.Editing;
+            if (!editing.Paragraph.IsModified) { editing.Dispose(); return Task.FromResult<object?>(null); }
+            if (editing.Paragraph.Overflows) App.Model.Toasts.Show(Loc.S("这段文字比原来长，已超出原有的位置"), "warning");
+            int page = editing.PageNumber;
+            return session.Change(path =>
+            {
+                try
+                {
+                    // Written over what it was read from: the file must not have changed under it.
+                    if (new FileInfo(path).Length != open.FileLength) throw new IOException(Loc.S("文件已被其他程序修改"));
+                    lock (open) editing.Apply();
+                }
+                finally { editing.Dispose(); }
+                return new { cmd = "pageChanged", page };
+            }, page);
+        });
+        Bridge.On("reader.paragraphClose", a =>
+        {
+            var id = a.Str("id");
+            OpenParagraph? open;
+            lock (Paragraphs) { if (Paragraphs.Remove(id, out open)) { } }
+            open?.Editing.Dispose();
+            return null;
         });
         Bridge.OnAsync("reader.addText", a =>
         {
@@ -288,8 +417,6 @@ public static partial class Api
             ["openFailed"] = Loc.S("无法打开这个 PDF"), ["encrypted"] = Loc.S("这个 PDF 需要密码"),
             ["Highlight"] = Loc.S("高亮"), ["Underline"] = Loc.S("下划线"), ["StrikeOut"] = Loc.S("删除线"),
             ["Text"] = Loc.S("便签"), ["FreeText"] = Loc.S("文本框"), ["Ink"] = Loc.S("手绘"),
-            ["editHint"] = Loc.S("点击编辑"), ["editWriting"] = Loc.S("正在写入…"), ["editKeys"] = Loc.S("Esc 取消 · Ctrl+Enter 完成"),
-            ["editPlaceholders"] = Loc.S("{v1} 这样的标记是公式或引用，保留它们即可原样保留"), ["cancel"] = Loc.S("取消"), ["done"] = Loc.S("完成"),
         });
     }
 

@@ -132,7 +132,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         pdfView.clearSelection()
         let mode = PDFTextEditMode(pdfView: pdfView)
         mode.data = { [weak self] in self.flatMap { try? Data(contentsOf: $0.fileURL, options: .alwaysMapped) } }
-        mode.commit = { [weak self] data, name in self?.applyEdit(data, actionName: name) ?? false }
+        mode.commit = { [weak self] data, page, name in self?.applyEdit(data, page: page, actionName: name) ?? false }
         mode.showMessage = { [weak self] text in self?.model.toasts.show(text, systemImage: "square.and.pencil") }
         mode.alphaValue = 0
         mode.attach()
@@ -145,32 +145,34 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         updateEditItem()
     }
 
-    /// The self-test's way in: an edit made by the editor, written as a click would.
-    func selfTestCommit(_ data: Data) -> Bool { applyEdit(data, actionName: String(localized: "编辑文字")) }
+    /// The edit layer, for the self-test.
+    var selfTestEditLayer: PDFTextEditMode? { textEditMode }
 
     private func updateEditItem() {
         textEditItem?.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: textEditItem?.label)
         if #available(macOS 26, *) { textEditItem?.style = isEditingPDFText ? .prominent : .plain }
     }
 
-    /// Writes an edit into the file and shows it, keeping the place; undo puts the file as it was.
-    private func applyEdit(_ data: Data, actionName: String) -> Bool {
+    /// Writes an edit of page `page` into the file and shows that page again (the rest of the document stays as it is
+    /// on screen); undo puts the file as it was.
+    private func applyEdit(_ data: Data, page: Int, actionName: String) -> Bool {
         guard let old = try? Data(contentsOf: fileURL) else { return false }
-        guard write(data) else { return false }
-        window?.undoManager?.registerUndo(withTarget: self) { $0.restoreEdit(old, redo: data, actionName: actionName) }
+        guard write(data, page: page) else { return false }
+        window?.undoManager?.registerUndo(withTarget: self) { $0.restoreEdit(old, redo: data, page: page, actionName: actionName) }
         window?.undoManager?.setActionName(actionName)
         return true
     }
 
-    private func restoreEdit(_ data: Data, redo: Data, actionName: String) {
-        guard write(data) else { return }
-        window?.undoManager?.registerUndo(withTarget: self) { $0.restoreEdit(redo, redo: data, actionName: actionName) }
+    private func restoreEdit(_ data: Data, redo: Data, page: Int, actionName: String) {
+        guard write(data, page: page) else { return }
+        window?.undoManager?.registerUndo(withTarget: self) { $0.restoreEdit(redo, redo: data, page: page, actionName: actionName) }
         window?.undoManager?.setActionName(actionName)
-        textEditMode?.reload()
+        textEditMode?.pageChanged(page)
     }
 
-    /// The file replaced atomically by `data`, the document reloaded where the reader was.
-    private func write(_ data: Data) -> Bool {
+    /// The file replaced atomically by `data`, in which only page `page` changed: that page is shown again in place (no
+    /// reload of the document, no jump).
+    private func write(_ data: Data, page: Int) -> Bool {
         do {
             try data.write(to: fileURL, options: .atomic)
         } catch {
@@ -178,8 +180,31 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             return false
         }
         isDirty = false
-        reloadKeepingPlace()
+        knownModificationDate = Self.modificationDate(fileURL)
+        if !swapPage(page, from: data) { reloadKeepingPlace() }
         model.importer.refreshChangedFiles()
+        return true
+    }
+
+    /// Page `index` of the document on screen replaced by the same page of `data`, where the reader is.
+    private func swapPage(_ index: Int, from data: Data) -> Bool {
+        guard let document = pdfView.document, let fresh = PDFDocument(data: data), fresh.pageCount == document.pageCount else { return false }
+        fresh.delegate = self
+        guard let page = fresh.page(at: index), let old = document.page(at: index) else { return false }
+        let destination = pdfView.currentDestination
+        let destinationIndex = destination?.page.map { document.index(for: $0) }
+        let point = destination?.point
+        let scale = pdfView.scaleFactor, autoScales = pdfView.autoScales
+        let wasCurrent = pdfView.currentPage === old
+        document.removePage(at: index)
+        document.insert(page, at: index)
+        if autoScales { pdfView.autoScales = true } else { pdfView.scaleFactor = scale }
+        if let destinationIndex, let point, let target = document.page(at: destinationIndex) {
+            pdfView.go(to: PDFDestination(page: target, at: point))
+        } else if wasCurrent {
+            pdfView.go(to: page)
+        }
+        refreshAnnotationRows()
         return true
     }
 

@@ -335,23 +335,52 @@ public static partial class AnnotationWriter
         finally { document.Dispose(); }
         if (changed.Count == 0 && offsets.Count == 0) return;
 
-        // Cross-reference section and trailer for the update.
-        long xrefOffset = original.Length + body.Length;
-        var xref = new StringBuilder("xref\n");
-        foreach (var (number, generation, offset) in offsets.OrderBy(o => o.Number))
-            xref.Append(CultureInfo.InvariantCulture, $"{number} 1\n{offset:D10} {generation:D5} n\r\n");
-        xref.Append("trailer\n<<");
-        xref.Append(CultureInfo.InvariantCulture, $"/Size {Math.Max(size, next)} /Root {Serialize(new IndirectReferenceToken(trailer.Root))} /Prev {startXref}");
-        if (trailer.Info is { } info) xref.Append(" /Info ").Append(Serialize(info));
-        if (trailer.Identifier is { Count: > 0 } ids) xref.Append(" /ID [").Append(string.Join(' ', ids.Select(Serialize))).Append(']');
-        xref.Append(CultureInfo.InvariantCulture, $">>\nstartxref\n{xrefOffset}\n%%EOF\n");
+        // Cross-reference section and trailer for the update: a table, or a stream when the file's own is a stream (a
+        // table after a stream is more than some readers, Core Graphics among them, accept).
+        string trailerEntries()
+        {
+            var t = new StringBuilder();
+            t.Append(CultureInfo.InvariantCulture, $"/Root {Serialize(new IndirectReferenceToken(trailer.Root))} /Prev {startXref}");
+            if (trailer.Info is { } info) t.Append(" /Info ").Append(Serialize(info));
+            if (trailer.Identifier is { Count: > 0 } ids) t.Append(" /ID [").Append(string.Join(' ', ids.Select(Serialize))).Append(']');
+            return t.ToString();
+        }
+        byte[] xrefBytes;
+        long xrefOffset;
+        if (IsXrefStream(original, startXref))
+        {
+            long number = next++;
+            xrefOffset = original.Length + body.Length + 1;
+            var rows = offsets.Append((number, 0, xrefOffset)).OrderBy(o => o.Item1).ToList();
+            var data = new MemoryStream();
+            foreach (var (_, generation, offset) in rows)
+            {
+                data.WriteByte(1);
+                data.Write([(byte)(offset >> 24), (byte)(offset >> 16), (byte)(offset >> 8), (byte)offset]);
+                data.Write([(byte)(generation >> 8), (byte)generation]);
+            }
+            var index = string.Join(' ', rows.Select(r => $"{r.Item1} 1"));
+            var head = $"\n{number} 0 obj\n<</Type /XRef /Size {Math.Max(size, next)} {trailerEntries()} /Index [{index}] /W [1 4 2] /Length {data.Length}>>\nstream\n";
+            xrefBytes = [.. Encoding.Latin1.GetBytes(head), .. data.ToArray(), .. Encoding.ASCII.GetBytes($"\nendstream\nendobj\nstartxref\n{xrefOffset}\n%%EOF\n")];
+        }
+        else
+        {
+            xrefOffset = original.Length + body.Length;
+            var xref = new StringBuilder("xref\n");
+            foreach (var (number, generation, offset) in offsets.OrderBy(o => o.Number))
+                xref.Append(CultureInfo.InvariantCulture, $"{number} 1\n{offset:D10} {generation:D5} n\r\n");
+            xref.Append("trailer\n<<");
+            xref.Append(CultureInfo.InvariantCulture, $"/Size {Math.Max(size, next)} ").Append(trailerEntries());
+            xref.Append(CultureInfo.InvariantCulture, $">>\nstartxref\n{xrefOffset}\n%%EOF\n");
+            xrefBytes = Encoding.ASCII.GetBytes(xref.ToString());
+        }
 
         Swap(path, output =>
         {
             output.Write(original);
             body.Position = 0;
             body.CopyTo(output);
-            output.Write(Encoding.ASCII.GetBytes(xref.ToString()));
+            output.Write(xrefBytes);
         });
     }
 
@@ -377,6 +406,14 @@ public static partial class AnnotationWriter
         var bytes = Encoding.Latin1.GetBytes($"\n{number} {generation} obj\n{content}\nendobj\n");
         offsets.Add((number, generation, baseOffset + body.Length + 1));
         body.Write(bytes);
+    }
+
+    /// <summary>Whether the cross-reference section at offset is a stream ("12 0 obj <</Type /XRef …").</summary>
+    static bool IsXrefStream(byte[] data, long offset)
+    {
+        if (offset < 0 || offset >= data.Length) return false;
+        var head = Encoding.Latin1.GetString(data, (int)offset, (int)Math.Min(64, data.Length - offset)).TrimStart();
+        return !head.StartsWith("xref", StringComparison.Ordinal) && head.Contains(" obj", StringComparison.Ordinal);
     }
 
     static long FindStartXref(byte[] data)

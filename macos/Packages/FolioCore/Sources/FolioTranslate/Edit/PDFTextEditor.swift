@@ -301,8 +301,111 @@ public final class PDFTextEditor: @unchecked Sendable {
         return rewriter.finish()
     }
 
+    // MARK: Editing in place
+
+    /// The paragraph `block` of page `page` (0-based) opened for editing in place, or nil when it cannot be edited.
+    public func paragraph(page: Int, block index: Int) -> PDFParagraph? {
+        guard let entry = analysed(page), entry.layout.blocks.indices.contains(index) else { return nil }
+        let block = entry.layout.blocks[index]
+        guard !block.lines.isEmpty, block.lines.allSatisfy({ !$0.isRotated }) else { return nil }
+        let parts = Self.parts(of: block)
+        guard Self.problem(with: block, text: parts.text, interpreter: entry.interpreter) == nil else { return nil }
+        // How far down it may grow: to the top of what is under it in its column, else the lowest text of the page.
+        let rect = block.rect
+        let below = entry.layout.blocks.enumerated().filter { $0.offset != index }.map(\.element.rect)
+            + entry.layout.figures + entry.layout.tables
+        let under = below.filter { other in
+            other.maxY <= rect.minY + 1 && min(other.maxX, rect.maxX) - max(other.minX, rect.minX) > min(other.width, rect.width) * 0.3
+        }
+        let lowest = entry.layout.blocks.map(\.rect.minY).min() ?? entry.layout.mediaBox.minY + 36
+        let floor = under.map(\.maxY).max().map { $0 + 2 } ?? min(lowest, rect.minY)
+        return PDFParagraph(page: page, block: index, layoutBlock: block, formulas: parts.formulas, interpreter: entry.interpreter,
+                            mediaBox: entry.layout.mediaBox, floor: floor)
+    }
+
+    /// The file with `paragraph`'s edits written in: only the lines that changed are drawn again, with the page's own
+    /// fonts; everything else of the page and of the file stays as it was.
+    public func apply(_ paragraph: PDFParagraph) throws -> Data {
+        guard let entry = analysed(paragraph.page), entry.layout.blocks.indices.contains(paragraph.block) else { throw PDFTextEditError.blockChanged }
+        let layout = entry.layout, interpreter = entry.interpreter
+        let drawing = paragraph.drawing()
+        guard !drawing.rewritten.isEmpty || !drawing.glyphs.isEmpty else { return data }
+        let block = layout.blocks[paragraph.block]
+
+        // 1. The glyphs of the lines drawn again leave the page; everything else stays.
+        var kept: Set<Int> = []
+        for (k, other) in layout.blocks.enumerated() where k != paragraph.block {
+            for line in other.lines { for c in line.chars { kept.formUnion(c.glyphs) } }
+        }
+        for (li, line) in block.lines.enumerated() where !drawing.rewritten.contains(li) {
+            for c in line.chars { kept.formUnion(c.glyphs) }
+        }
+        var removal = PageRemoval(kept: kept)
+        for li in drawing.rewritten.sorted() where li < block.lines.count {
+            let line = block.lines[li]
+            removal.rects.append(line.rect.insetBy(dx: -0.5, dy: -line.size * 0.1))
+            for c in line.chars { removal.glyphs.formUnion(c.glyphs) }
+        }
+        removal.glyphs.subtract(kept)
+        let removed = Set(interpreter.glyphs.indices.filter { removal.removes(interpreter.glyphs[$0], index: $0) })
+        var edits = TranslationRenderer.glyphEdits(interpreter: interpreter, removing: removed)
+        let (rules, chips) = TranslationRenderer.graphicEdits(interpreter: interpreter, rects: removal.rects, transplants: drawing.transplants, edits: &edits)
+
+        // 2. The page again: its content without those lines, then the lines in their new places.
+        let rewriter = DocumentRewriter(source: cg)
+        let token = Self.token()
+        let editor = ContentEditor(streams: interpreter.streams, edits: edits, copier: rewriter.copier, namePrefix: "FolioE\(token)n")
+        var (body, resources) = editor.pageContent()
+        var content = Data("q\n".utf8)
+        content.append(body)
+        content.append(contentsOf: Array("\nQ\n".utf8))
+        var fonts: [String: PDFValue] = [:]
+        var fontNames: [Int: String] = [:]
+        content.append(Data(PDFParagraph.content(drawing.glyphs) { font in
+            if let name = fontNames[font] { return name }
+            let name = "FolioE\(token)g\(fontNames.count)"
+            fontNames[font] = name
+            fonts[name] = rewriter.copier.copy(dictionary: interpreter.fonts[font].dict)
+            return name
+        }.utf8))
+        var xobjects: [String: Int] = [:]
+        let claimed = removal.glyphs.union(drawing.transplants.flatMap(\.formula.glyphs))
+        let orphans = removed.subtracting(claimed).filter { interpreter.glyphs[$0].isVisible }
+        let formulas = TranslationRenderer.formulaContent(drawing.transplants, orphans: orphans, droppedRules: rules, chips: chips, interpreter: interpreter,
+                                                          copier: rewriter.copier, prefix: "FolioE\(token)", xobjects: &xobjects, fonts: &fonts)
+        content.append(contentsOf: Array(formulas.content.utf8))
+        // Characters no font of the page has, in a system font of the same kind.
+        if !drawing.fallback.isEmpty {
+            let overlayData = NSMutableData()
+            var media = layout.mediaBox
+            if let consumer = CGDataConsumer(data: overlayData as CFMutableData), let context = CGContext(consumer: consumer, mediaBox: &media, nil) {
+                context.beginPDFPage(nil)
+                for run in drawing.fallback {
+                    let attributed = NSAttributedString(string: run.text, attributes: [
+                        kCTFontAttributeName as NSAttributedString.Key: run.font,
+                        kCTForegroundColorAttributeName as NSAttributedString.Key: CGColor(red: run.color.r, green: run.color.g, blue: run.color.b, alpha: 1),
+                    ])
+                    context.textPosition = run.origin
+                    CTLineDraw(CTLineCreateWithAttributedString(attributed), context)
+                }
+                context.endPDFPage()
+                context.closePDF()
+            }
+            if let overlay = CGDataProvider(data: overlayData as CFData).flatMap({ CGPDFDocument($0) }), let form = rewriter.foreignPageForm(overlay, page: 1) {
+                let name = "FolioE\(token)T"
+                xobjects[name] = form
+                content.append(contentsOf: Array("q /\(name) Do Q\n".utf8))
+            }
+        }
+        let pageResources = interpreter.streams[[]]?.resources
+        merge(&resources, key: "XObject", adding: xobjects.mapValues { .ref($0) }, source: pageResources, copier: rewriter.copier)
+        merge(&resources, key: "Font", adding: fonts, source: pageResources, copier: rewriter.copier)
+        rewriter.replace(page: layout.number, with: .init(content: content, resources: resources, linkPlaces: drawing.linkPlaces))
+        return rewriter.finish()
+    }
+
     /// `resources[key]` with `extra` entries added (the copied entry may be a reference to the dictionary).
-    private func merge(_ resources: inout [String: PDFValue], key: String, adding extra: [String: PDFValue],
+    func merge(_ resources: inout [String: PDFValue], key: String, adding extra: [String: PDFValue],
                        source: CGPDFDictionaryRef?, copier: PDFCopier) {
         guard !extra.isEmpty else { return }
         var entries: [String: PDFValue] = [:]
@@ -317,7 +420,7 @@ public final class PDFTextEditor: @unchecked Sendable {
 
     /// A short random tag for the names this edit adds to the page's resources, so they never clash with the names of
     /// earlier edits.
-    private static func token() -> String {
+    static func token() -> String {
         let letters = Array("abcdefghijkmnpqrstuvwxyz23456789")
         return String((0..<5).map { _ in letters.randomElement()! })
     }

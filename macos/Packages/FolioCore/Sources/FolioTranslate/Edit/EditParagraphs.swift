@@ -75,6 +75,9 @@ enum EditParagraphs {
             var starts = false
             // Far below the line before: not the same paragraph (a page number, a footnote swept in).
             if previous.baseline - line.baseline > max(pitch * 1.75, size * 2.4) { starts = true }
+            // Further below than the paragraph's lines are apart, after a line that ends a sentence: the next paragraph
+            // (or a heading) set off by space rather than an indent.
+            if !starts, previous.baseline - line.baseline > pitch * 1.35, endsSentence(previous) || previous.maxX < right - size * 1.5 { starts = true }
             // A short line in another size: a page number or a footnote mark swept into the column.
             if !starts, abs(previous.size - line.size) > 0.8, line.maxX - line.minX < (right - left) * 0.3 { starts = true }
             // A heading on its own line above the text: bold or larger, short, then plain text.

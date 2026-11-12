@@ -145,6 +145,38 @@ case "selection-bench":
     try await Task.sleep(for: .seconds(5))
     await timed("third passage, 5 s later", passages[2])
     await timed("first passage again (cache)", passages[0])
+case "para":
+    // para <pdf> <page> <block> <find> <replace> <out.pdf> [png prefix]: an edit in place (EDIT-01) — the paragraph's first
+    // `find` replaced — written to out.pdf, with the paragraph before and after rendered to <prefix>-before/after.png.
+    let data = try Data(contentsOf: url(arguments[1]))
+    let editor = try PDFTextEditor(data: data)
+    let pageIndex = (Int(arguments[2]) ?? 1) - 1
+    guard let paragraph = editor.paragraph(page: pageIndex, block: Int(arguments[3]) ?? 0) else { print("not editable"); break }
+    print("text:", paragraph.string.prefix(400))
+    guard let range = paragraph.range(of: arguments[4]) else { print("not found"); break }
+    paragraph.replace(range, with: arguments[5])
+    print("rewritten lines:", paragraph.rewrittenLines)
+    let start = Date()
+    let out = try editor.apply(paragraph)
+    try out.write(to: url(arguments[6]))
+    print(String(format: "written %d bytes in %.3f s", out.count, Date().timeIntervalSince(start)))
+    if arguments.count > 7 {
+        let area = paragraph.bounds.insetBy(dx: -12, dy: -12)
+        for (name, bytes) in [("before", data), ("after", out)] {
+            guard let doc = CGPDFDocument(CGDataProvider(data: bytes as CFData)!), let page = doc.page(at: pageIndex + 1) else { continue }
+            let scale = 3.0
+            let ctx = CGContext(data: nil, width: Int(area.width * scale), height: Int(area.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            ctx.fill(CGRect(x: 0, y: 0, width: area.width * scale, height: area.height * scale))
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -area.minX, y: -area.minY)
+            ctx.drawPDFPage(page)
+            let dest = CGImageDestinationCreateWithURL(url(arguments[7] + "-\(name).png") as CFURL, "public.png" as CFString, 1, nil)!
+            CGImageDestinationAddImage(dest, ctx.makeImage()!, nil)
+            CGImageDestinationFinalize(dest)
+        }
+    }
 case "edit-preview":
     // edit-preview <pdf> <page> <out.png>: the page with the editor's blocks drawn over it (blue: editable, grey: not),
     // numbered, to see how the page is cut into blocks.
