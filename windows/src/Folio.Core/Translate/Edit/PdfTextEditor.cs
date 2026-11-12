@@ -24,6 +24,8 @@ public static class PdfTextEditor
     {
         var layout = Analyzer().Analyze(source, [page]).FirstOrDefault();
         if (layout == null) return null;
+        // One block per paragraph (the translator's blocks run some together and cut others).
+        layout.Blocks = EditParagraphs.Refine(layout.Blocks);
         foreach (var block in layout.Blocks) if (block.Kind != BlockKind.Formula) block.Translate = true;
         return layout;
     }
@@ -40,13 +42,18 @@ public static class PdfTextEditor
     static List<PdfTextBlock> Blocks(PageLayout layout)
     {
         var result = new List<PdfTextBlock>();
-        var segments = SegmentBuilder.Segments(layout).Where(s => !s.IsLead).ToDictionary(s => s.Block);
+        var all = SegmentBuilder.Segments(layout);
+        var segments = all.Where(s => !s.IsLead).ToDictionary(s => s.Block);
+        var leads = all.Where(s => s.IsLead).ToDictionary(s => s.Block);
         for (int index = 0; index < layout.Blocks.Count; index++)
         {
             var block = layout.Blocks[index];
             if (block.Lines.Count == 0) continue;
             segments.TryGetValue(index, out var segment);
-            var text = segment?.Source ?? block.Text;
+            // The paragraph's text with the bold words it starts with ("Latent Path-Field Generation. Finally, …"); lines
+            // are joined with a space, which Chinese and Japanese do not have between characters.
+            var text = segment == null ? block.Text : Shown(segment, leads.GetValueOrDefault(index));
+            text = EditParagraphs.ClosingCjkBreaks(text);
             if (text.Trim().Length == 0) continue;
             string? reason = null;
             if (segment == null) reason = block.Kind == BlockKind.Formula ? Loc.S("公式不能编辑") : Loc.S("这里的文字不能编辑");
@@ -62,6 +69,11 @@ public static class PdfTextEditor
         return result;
     }
 
+    /// <summary>What the user edits: a run-in heading, then the paragraph, its placeholders numbered after the heading's
+    /// (as the renderer numbers them).</summary>
+    static string Shown(TextSegment body, TextSegment? lead) =>
+        lead == null ? body.Source : lead.Source + " " + Placeholders.Replace(body.Source, n => TextSegment.Placeholder(n + lead.Formulas.Count));
+
     static bool TextSegmentHasOnlyFormulas(TextSegment segment) =>
         System.Text.RegularExpressions.Regex.Replace(segment.Source, @"\{v\d+\}", "").Trim().Length == 0;
 
@@ -74,10 +86,24 @@ public static class PdfTextEditor
         var layout = Analyse(source, page) ?? throw new InvalidOperationException(Loc.S("这段文字已经变了，请重新选择"));
         var segments = SegmentBuilder.Segments(layout);
         var segment = segments.FirstOrDefault(s => !s.IsLead && s.Block == index);
-        if (segment == null || segment.Source != expected) throw new InvalidOperationException(Loc.S("这段文字已经变了，请重新选择"));
+        var lead = segments.FirstOrDefault(s => s.IsLead && s.Block == index);
+        if (segment == null || EditParagraphs.ClosingCjkBreaks(Shown(segment, lead)) != expected) throw new InvalidOperationException(Loc.S("这段文字已经变了，请重新选择"));
         text = text.Replace("\r\n", "\n").Replace('\r', '\n');
         // Empty text takes the block away: a space is set, which draws nothing.
-        var translations = new Dictionary<string, string> { [segment.Id] = text.Trim().Length == 0 ? " " : text };
+        var translations = new Dictionary<string, string>();
+        if (lead != null)
+        {
+            // The run-in heading stays bold while the text still starts with it; the renderer numbers the paragraph's
+            // placeholders after the heading's, so they go back to its own numbers. Otherwise it all becomes the paragraph.
+            int shift = lead.Formulas.Count;
+            if (text.StartsWith(lead.Source, StringComparison.Ordinal))
+            {
+                translations[lead.Id] = lead.Source;
+                text = Placeholders.Replace(text[lead.Source.Length..].TrimStart(), n => TextSegment.Placeholder(Math.Max(1, n - shift)));
+            }
+            else translations[lead.Id] = " ";
+        }
+        translations[segment.Id] = text.Trim().Length == 0 ? " " : text;
         // Every page goes into the output; only the edited one is analysed (the others are copied as they are).
         var layouts = Enumerable.Range(1, source.Pages.Count).Select(n =>
         {
@@ -85,7 +111,7 @@ public static class PdfTextEditor
             var geometry = PdfComposer.Geometry(source.Pages[n - 1]);
             return new PageLayout { Number = n, MediaBox = geometry.MediaBox, CropBox = geometry.CropBox };
         }).ToList();
-        var renderer = new TranslationRenderer(source, Language(text));
+        var renderer = new TranslationRenderer(source, Language(text)) { KeepLineSpacing = true };
         var output = renderer.Render(layouts, segments, translations, true, false, TranslationOptions.DualLayouts.sideBySide, null);
         return output.Mono ?? throw new InvalidOperationException(Loc.S("无法写入修改"));
     }

@@ -927,6 +927,9 @@ for (const type of ["pointerup", "pointercancel"]) {
 }
 
 container.addEventListener("pointerdown", (e) => {
+  // The edit layer's paragraphs, editor and buttons are its own: no selecting, no panning (which would capture the
+  // pointer and take the click from 完成).
+  if (editMode && e.target.closest?.(".folio-edit-layer")) return;
   if (e.button === 1 && e.pointerType === "mouse") {
     e.preventDefault();
     startPan(e);
@@ -1150,6 +1153,12 @@ container.addEventListener("touchend", (e) => { if (e.touches.length < 2) touchG
 
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest?.("input, textarea");
+  // Esc in 编辑 PDF 文字 with no paragraph open leaves it.
+  if (e.key === "Escape" && editMode && !editing && !overlayOpen) {
+    e.preventDefault();
+    post({ type: "leaveEditing" });
+    return;
+  }
   if (e.key === "Escape" && overlayOpen && !e.isComposing) {
     e.preventDefault();
     post({ type: "escape" });
@@ -1616,6 +1625,8 @@ let editMode = false;
 const textBlocks = new Map(); // page → blocks
 const asked = new Set();
 let editing = null;
+/** The paragraph just written: it flashes once when the page comes back. */
+let justWritten = null;
 
 function setEditMode(on) {
   editMode = on;
@@ -1649,8 +1660,14 @@ function drawEditLayer(page) {
     const [x2, y2] = view.viewport.convertToViewportPoint(block.rect[2], block.rect[3]);
     const box = document.createElement("div");
     box.className = `edit-block${block.editable ? "" : " locked"}`;
-    box.style.cssText = `left:${Math.min(x1, x2) - 3}px;top:${Math.min(y1, y2) - 2}px;width:${Math.abs(x2 - x1) + 6}px;height:${Math.abs(y2 - y1) + 4}px`;
-    box.title = block.editable ? "" : block.reason ?? "";
+    const pad = Math.max(2, 3 * view.viewport.scale);
+    box.style.cssText = `left:${Math.min(x1, x2) - pad}px;top:${Math.min(y1, y2) - pad * 0.6}px;width:${Math.abs(x2 - x1) + pad * 2}px;height:${Math.abs(y2 - y1) + pad * 1.2}px`;
+    // What a click does, shown above the paragraph's corner while the pointer is on it.
+    box.dataset.tag = block.editable ? labels?.editHint ?? "点击编辑" : block.reason ?? "";
+    if (justWritten && justWritten.page === page && overlaps(justWritten.rect, block.rect)) {
+      box.classList.add("flash");
+      setTimeout(() => box.classList.remove("flash"), 1200);
+    }
     box.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();
@@ -1661,6 +1678,12 @@ function drawEditLayer(page) {
     layer.appendChild(box);
   }
   view.div.appendChild(layer);
+  if (justWritten?.page === page) justWritten = null;
+}
+
+function overlaps(a, b) {
+  const w = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), h = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+  return w > 0 && h > 0;
 }
 
 function beginEditing(page, block, box, view) {
@@ -1679,6 +1702,24 @@ function beginEditing(page, block, box, view) {
   box.style.minHeight = `${blockHeight}px`;
   box.classList.add("open");
   box.appendChild(area);
+  // 取消 and 完成 under it, with their keys, and a word about the purple placeholders when there are any.
+  const bar = document.createElement("div");
+  bar.className = "edit-bar";
+  const hint = document.createElement("span");
+  hint.textContent = block.text.includes("{v") ? labels?.editPlaceholders ?? "{v1} 这样的标记是公式或引用，保留它们即可原样保留" : labels?.editKeys ?? "Esc 取消 · Ctrl+Enter 完成";
+  const cancel = document.createElement("button");
+  cancel.textContent = labels?.cancel ?? "取消";
+  cancel.title = "Esc";
+  const done = document.createElement("button");
+  done.className = "primary";
+  done.textContent = labels?.done ?? "完成";
+  done.title = "Ctrl+Enter";
+  for (const b of [cancel, done]) b.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); });
+  cancel.addEventListener("click", () => finishEditing(false));
+  done.addEventListener("click", () => finishEditing(true));
+  bar.append(hint, cancel, done);
+  bar.addEventListener("pointerdown", (e) => e.stopPropagation());
+  box.appendChild(bar);
   const grow = () => { area.style.height = "auto"; area.style.height = `${Math.max(blockHeight, area.scrollHeight)}px`; };
   area.addEventListener("input", grow);
   area.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -1688,7 +1729,8 @@ function beginEditing(page, block, box, view) {
     else if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); finishEditing(true); }
   });
   editing = { page, block, box, area };
-  requestAnimationFrame(() => { grow(); area.focus(); area.select(); });
+  // The caret at the end of the text, ready to type (as on the Mac); Ctrl+A selects it all.
+  requestAnimationFrame(() => { grow(); area.focus(); area.setSelectionRange(area.value.length, area.value.length); });
 }
 
 function finishEditing(save) {
@@ -1697,10 +1739,13 @@ function finishEditing(save) {
   editing = null;
   const text = area.value;
   area.remove();
+  box.querySelector(".edit-bar")?.remove();
   box.classList.remove("open");
   box.style.minHeight = "";
   if (save && text !== block.text) {
     box.classList.add("busy");
+    box.dataset.tag = labels?.editWriting ?? "正在写入…";
+    justWritten = { page, rect: block.rect };
     post({ type: "editText", page, block: block.index, expected: block.text, text });
   }
 }

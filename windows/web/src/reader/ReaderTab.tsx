@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookText, ChevronDown, ChevronUp, Columns2, Eraser, ScanText, TextCursorInput, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
+import { BookText, ChevronDown, ChevronUp, Columns2, Eraser, ScanText, SquarePen, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
 import { CustomizeToolbarSheet, TOOLBAR_ITEMS, toolbarIds } from "./toolbar";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
@@ -485,6 +485,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
           .catch((e) => { call("toast.show", { message: t("无法修改这段文字：%@", e.message ?? String(e)), icon: "warning" }); applyResult(pane, { cmd: "reloadCurrent" }); });
         break;
       case "editRefused": call("toast.show", { message: t("这里不能编辑：%@", m.reason), icon: "warning" }); break;
+      case "leaveEditing": if (editingRef.current) setEditing(false); break;
       case "erase": call("reader.erase", { session: pane.session, page: m.page, ids: m.ids, paths: m.paths, radius: m.radius }).then((r) => applyResult(pane, r)); break;
       case "eraserStep": {
         const index = ERASER_SIZES.findIndex((s) => s.key === eraserSizeRef.current);
@@ -653,7 +654,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         label: c.title, dot: c.hex, checked: c.key === color,
         action: () => { setColor(c.key); setSetting("highlightColor", c.key); main.send({ cmd: "tool", tool: toolRef.current, color: c.key }); },
       })))}><span className="color-dot" style={{ background: colorHex }} /></button>;
-      case "editText": return plain(t("编辑 PDF 中的文字"), TextCursorInput, () => setEditing(!editingRef.current), editing ? " on" : "");
+      case "editText": return plain(t("编辑 PDF 中的文字"), SquarePen, () => setEditing(!editingRef.current), editing ? " on" : "");
       case "translate": return <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><BookText size={17} strokeWidth={1.7} /></button>;
       case "selectionTranslate": return plain(t("翻译所选文字"), TranslateIcon, () => main.send({ cmd: "translateSelection" }));
       case "search": return searchOpen || query ? (
@@ -753,7 +754,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       {running && <div className="hud"><TranslationProgress itemId={file.itemId} /></div>}
       {editing && (
         <div className="scan-banner" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>
-          <TextCursorInput size={15} strokeWidth={1.8} />
+          <SquarePen size={15} strokeWidth={1.8} />
           <span>{t("正在编辑 PDF 文字：点击文字块即可修改，Ctrl+Enter 完成一段")}</span>
           <button className="btn small primary" onClick={() => setEditing(false)}>{t("完成")}</button>
         </div>

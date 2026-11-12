@@ -112,7 +112,9 @@ public final class PDFTextEditor: @unchecked Sendable {
         let chars = PageText.characters(of: page, interpreter: interpreter)
         var analyzer = LayoutAnalyzer()
         analyzer.bodySize = documentBodySize()
-        let layout = analyzer.analyzePage(number: index + 1, cgPage: cgPage, interpreter: interpreter, chars: chars)
+        var layout = analyzer.analyzePage(number: index + 1, cgPage: cgPage, interpreter: interpreter, chars: chars)
+        // One block per paragraph (the translator's blocks run some together and cut others).
+        layout.blocks = EditParagraphs.refine(layout.blocks)
         pages[index] = (layout, interpreter)
         return (layout, interpreter)
     }
@@ -168,7 +170,9 @@ public final class PDFTextEditor: @unchecked Sendable {
     /// The block's text with its formulas as placeholders; a bold heading run into its first line is part of the text
     /// (`lead`), set in bold again when the new text still starts with it.
     static func parts(of block: LayoutBlock) -> (text: String, formulas: [FormulaSpan], lead: String?) {
-        let (body, formulas, lead) = SegmentBuilder.text(of: block)
+        let (joined, formulas, lead) = SegmentBuilder.text(of: block)
+        // Lines are joined with a space, which Chinese and Japanese do not have between characters.
+        let body = EditParagraphs.closingCJKBreaks(joined)
         guard let lead, !lead.text.isEmpty else { return (body, formulas, nil) }
         let shift = lead.formulas.count
         let shifted = Placeholders.replace(in: body) { TextSegment.placeholder($0 + shift) }

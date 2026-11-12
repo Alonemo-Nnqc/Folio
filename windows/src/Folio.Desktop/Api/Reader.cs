@@ -288,6 +288,8 @@ public static partial class Api
             ["openFailed"] = Loc.S("无法打开这个 PDF"), ["encrypted"] = Loc.S("这个 PDF 需要密码"),
             ["Highlight"] = Loc.S("高亮"), ["Underline"] = Loc.S("下划线"), ["StrikeOut"] = Loc.S("删除线"),
             ["Text"] = Loc.S("便签"), ["FreeText"] = Loc.S("文本框"), ["Ink"] = Loc.S("手绘"),
+            ["editHint"] = Loc.S("点击编辑"), ["editWriting"] = Loc.S("正在写入…"), ["editKeys"] = Loc.S("Esc 取消 · Ctrl+Enter 完成"),
+            ["editPlaceholders"] = Loc.S("{v1} 这样的标记是公式或引用，保留它们即可原样保留"), ["cancel"] = Loc.S("取消"), ["done"] = Loc.S("完成"),
         });
     }
 

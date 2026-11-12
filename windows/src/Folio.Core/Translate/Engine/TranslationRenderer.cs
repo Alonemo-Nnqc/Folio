@@ -78,6 +78,10 @@ public sealed class TranslationRenderer(PdfSource source, string language)
         public byte[]? Mono, Dual, Base, Overlay;
     }
 
+    /// <summary>Text keeps the original's line spacing, closer only when it needs to fit (the PDF editor, as on the Mac):
+    /// a translation fills its paragraph's height instead.</summary>
+    public bool KeepLineSpacing { get; set; }
+
     /// <summary>Also produce <see cref="Output.Base"/> and <see cref="Output.Overlay"/>.</summary>
     public bool AuditLayers { get; set; }
 
@@ -212,7 +216,8 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     var entry = planned[k];
                     var block = layout.Blocks[entry.Segment.Block];
                     var placement = outcome.Placements.TryGetValue(k, out var p) ? p : (PageFlow.Placement?)null;
-                    var result = typesetter.Finish(entry.Plan, placement?.Pitch ?? pitches[k], entry.Segment.Formulas, placement?.FirstBaseline);
+                    var pitch = KeepLineSpacing ? Math.Min(entry.Plan.FillPitch, block.Pitch * entry.Plan.Scale) : placement?.Pitch ?? pitches[k];
+                    var result = typesetter.Finish(entry.Plan, pitch, entry.Segment.Formulas, KeepLineSpacing ? null : placement?.FirstBaseline);
                     typesetter.Draw(result, canvas, pageTop, usedGlyphs);
                     TransplantsOf(layout.Number).AddRange(result.Transplants);
                     removal.Add(block);

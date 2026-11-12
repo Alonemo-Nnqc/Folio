@@ -119,6 +119,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             mode.finish()
             NSAnimationContext.runAnimationGroup({ $0.duration = 0.15; mode.animator().alphaValue = 0 }, completionHandler: { mode.removeFromSuperview() })
             textEditMode = nil
+            pdfView.editLayer = nil
+            window?.invalidateCursorRects(for: pdfView)
             content.scanBanner.editing = false
             updateEditItem()
             return
@@ -131,11 +133,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         let mode = PDFTextEditMode(pdfView: pdfView)
         mode.data = { [weak self] in self.flatMap { try? Data(contentsOf: $0.fileURL, options: .alwaysMapped) } }
         mode.commit = { [weak self] data, name in self?.applyEdit(data, actionName: name) ?? false }
-        mode.showMessage = { [weak self] text in self?.model.toasts.show(text, systemImage: "character.cursor.ibeam") }
+        mode.showMessage = { [weak self] text in self?.model.toasts.show(text, systemImage: "square.and.pencil") }
         mode.alphaValue = 0
-        pdfView.addSubview(mode)
+        mode.attach()
         NSAnimationContext.runAnimationGroup { $0.duration = 0.15; mode.animator().alphaValue = 1 }
         textEditMode = mode
+        pdfView.editLayer = mode
         content.scanBanner.editing = true
         content.scanBanner.finishEditing = { [weak self] in self?.toggleTextEditing(nil) }
         mode.reload()
@@ -146,8 +149,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     func selfTestCommit(_ data: Data) -> Bool { applyEdit(data, actionName: String(localized: "编辑文字")) }
 
     private func updateEditItem() {
-        textEditItem?.image = NSImage(systemSymbolName: isEditingPDFText ? "character.cursor.ibeam" : "character.cursor.ibeam",
-                                      accessibilityDescription: textEditItem?.label)
+        textEditItem?.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: textEditItem?.label)
         if #available(macOS 26, *) { textEditItem?.style = isEditingPDFText ? .prominent : .plain }
     }
 
@@ -204,6 +206,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         pdfView.onSelectionFinished = { [weak self] in self?.selectionTranslation.selectionFinished() }
         pdfView.eraserSizeMenu = { [weak self] in self?.eraserSizeMenu() }
         pdfView.onEraserSizeStep = { [weak self] step in self?.stepEraserSize(by: step) }
+        pdfView.onLeaveEditing = { [weak self] in if self?.isEditingPDFText == true { self?.toggleTextEditing(nil) } }
         // 划词翻译's shortcut, while this reader is the key window.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.window, self.model.settings.selectionTranslationEnabled,
@@ -1105,7 +1108,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             item.label = String(localized: "编辑 PDF")
             item.paletteLabel = String(localized: "编辑 PDF 文字")
             item.toolTip = String(localized: "编辑 PDF 中的文字")
-            item.image = NSImage(systemSymbolName: "character.cursor.ibeam", accessibilityDescription: item.label)
+            item.image = NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: item.label)
             item.action = #selector(toggleTextEditing(_:))
             textEditItem = item
             return item

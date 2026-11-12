@@ -130,7 +130,30 @@ enum FeatureSelfTest {
                 let hit = window.contentView?.superview?.hitTest(inWindow) ?? window.contentView?.hitTest(inWindow)
                 lines.append("INFO edit layer: \(reader.textEditState)")
                 lines.append("INFO hit view at block: \(hit.map { String(describing: type(of: $0)) } ?? "nil")")
+                var chain: [String] = []
+                var v: NSView? = hit
+                while let view = v, chain.count < 8 { chain.append("\(type(of: view))[\(view.subviews.count)]"); v = view.superview }
+                lines.append("INFO hit chain: \(chain.joined(separator: " < "))")
+                if let doc = reader.pdfView.documentView { lines.append("INFO document view subviews: \(doc.subviews.map { String(describing: type(of: $0)) })") }
                 check(hit is PDFTextEditMode, "the edit layer takes the click")
+                // The scroll wheel scrolls the pages under the layer.
+                let before = reader.pdfView.documentView?.visibleRect.origin.y ?? 0
+                if let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: -120, wheel2: 0, wheel3: 0) {
+                    cg.location = CGPoint(x: window.frame.minX + inWindow.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - (window.frame.minY + inWindow.y))
+                    if let scroll = NSEvent(cgEvent: cg) { hit?.scrollWheel(with: scroll) }
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+                let after = reader.pdfView.documentView?.visibleRect.origin.y ?? 0
+                check(abs(after - before) > 20, "the scroll wheel scrolls over a paragraph (\(Int(before)) → \(Int(after)))")
+                reader.pdfView.documentView?.scroll(NSPoint(x: reader.pdfView.documentView?.visibleRect.minX ?? 0, y: before))
+                try? await Task.sleep(for: .milliseconds(300))
+                // The pointer over a paragraph is an I-beam (the layer's, not PDFKit's).
+                if let moved = NSEvent.mouseEvent(with: .mouseMoved, location: inWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                  windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0) {
+                    reader.pdfView.mouseMoved(with: moved)
+                }
+                check(NSCursor.current == NSCursor.iBeam, "the pointer is an I-beam over a paragraph")
+                snapshot(reader, name: "hover", log: log)
                 for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
                     if let event = NSEvent.mouseEvent(with: type, location: inWindow, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                                       windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1) {
@@ -138,6 +161,8 @@ enum FeatureSelfTest {
                     }
                 }
                 try? await Task.sleep(for: .milliseconds(400))
+                try? await Task.sleep(for: .milliseconds(300))
+                snapshot(reader, name: "editing", log: log)
                 let editorView = window.firstResponder as? NSTextView
                 check(editorView != nil, "a click opens the block for editing (first responder: \(String(describing: window.firstResponder.map { type(of: $0) })))")
                 if let editorView {
@@ -166,6 +191,46 @@ enum FeatureSelfTest {
             flush()
             SimulatedDrop.append("DONE\n", to: log)
         }
+    }
+
+    /// The visible part of the pages with the edit layer over them, into `<log>.<name>.png`: the page drawn by PDFKit
+    /// (snapshots of PDFView itself come out blank), the layer and its editor by themselves.
+    static func snapshot(_ reader: ReaderWindowController, name: String, log: String) {
+        guard let documentView = reader.pdfView.documentView, let layer = documentView.subviews.first(where: { $0 is PDFTextEditMode }),
+              let page = reader.pdfView.document?.page(at: 0) else { return }
+        let visible = documentView.visibleRect
+        let scale: CGFloat = 2
+        let image = NSImage(size: visible.size)
+        image.lockFocusFlipped(documentView.isFlipped)
+        NSColor(white: 0.9, alpha: 1).setFill()
+        NSRect(origin: .zero, size: visible.size).fill()
+        // The page, where it is shown.
+        let pageRect = documentView.convert(reader.pdfView.convert(page.bounds(for: .mediaBox), from: page), from: reader.pdfView)
+        if let context = NSGraphicsContext.current?.cgContext {
+            context.saveGState()
+            context.translateBy(x: pageRect.minX - visible.minX, y: pageRect.minY - visible.minY)
+            if documentView.isFlipped { context.translateBy(x: 0, y: pageRect.height); context.scaleBy(x: 1, y: -1) }
+            context.scaleBy(x: pageRect.width / page.bounds(for: .mediaBox).width, y: pageRect.height / page.bounds(for: .mediaBox).height)
+            NSColor.white.setFill()
+            context.fill(page.bounds(for: .mediaBox))
+            page.draw(with: .mediaBox, to: context)
+            context.restoreGState()
+        }
+        image.unlockFocus()
+        if let rep = layer.bitmapImageRepForCachingDisplay(in: visible) {
+            layer.cacheDisplay(in: visible, to: rep)
+            image.lockFocus()
+            rep.draw(in: NSRect(origin: .zero, size: visible.size))
+            image.unlockFocus()
+        }
+        let out = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(visible.width * scale), pixelsHigh: Int(visible.height * scale), bitsPerSample: 8,
+                                   samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        out.size = visible.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: out)
+        image.draw(in: NSRect(origin: .zero, size: visible.size))
+        NSGraphicsContext.restoreGraphicsState()
+        try? out.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: log + ".\(name).png"))
     }
 
     /// Page 1 of `source` drawn into a grey 200 dpi bitmap, written as a PDF of that picture only.

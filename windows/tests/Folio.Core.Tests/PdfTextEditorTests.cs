@@ -51,4 +51,33 @@ public class PdfTextEditorTests
         }
         finally { File.Delete(path); }
     }
+
+    [Fact]
+    public void ARunInHeadingIsPartOfItsParagraph()
+    {
+        var builder = new PdfDocumentBuilder();
+        var font = builder.AddStandard14Font(Standard14Font.TimesRoman);
+        var bold = builder.AddStandard14Font(Standard14Font.TimesBold);
+        var page = builder.AddPage(PageSize.Letter);
+        var heading = page.AddText("Results.", 11, new PdfPoint(72, 640), bold);
+        double x = 72 + heading.Max(l => l.EndBaseLine.X) - 72 + 4;
+        page.AddText("The method was compared with four others on every dataset,", 11, new PdfPoint(x, 640), font);
+        page.AddText("and it found the thin vessels the others missed in most images.", 11, new PdfPoint(72, 626), font);
+        page.AddText("Further work will look at three dimensional data and at speed.", 11, new PdfPoint(72, 612), font);
+        var path = Path.Combine(Path.GetTempPath(), $"lead-{Guid.NewGuid():N}.pdf");
+        File.WriteAllBytes(path, builder.Build());
+        try
+        {
+            var block = PdfTextEditor.Blocks(path, 1).First(b => b.Text.Contains("method"));
+            Assert.StartsWith("Results. The method", block.Text);
+            var data = PdfTextEditor.Replace(path, 1, block.Index, block.Text, "Results. Folio rewrote this paragraph, its heading kept.");
+            using var edited = PdfDocument.Open(data);
+            var text = string.Join(" ", edited.GetPage(1).GetWords().Select(w => w.Text));
+            Assert.Contains("Results.", text);
+            Assert.Contains("Folio rewrote this paragraph", text);
+            Assert.DoesNotContain("compared", text);
+            Assert.Equal(1, text.Split("Results.").Length - 1);
+        }
+        finally { File.Delete(path); }
+    }
 }

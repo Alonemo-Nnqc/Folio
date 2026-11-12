@@ -28,7 +28,7 @@ struct ScanBanner: View {
         Group {
             if state.isVisible {
                 HStack(spacing: 10) {
-                    Image(systemName: state.editing ? "character.cursor.ibeam" : "text.viewfinder")
+                    Image(systemName: state.editing ? "square.and.pencil" : "text.viewfinder")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
                     if state.editing {

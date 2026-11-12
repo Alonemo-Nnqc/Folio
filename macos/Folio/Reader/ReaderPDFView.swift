@@ -56,6 +56,10 @@ final class ReaderPDFView: PDFView {
     /// The eraser's size menu (right-click while erasing) and stepping through the sizes with [ and ].
     var eraserSizeMenu: () -> NSMenu? = { nil }
     var onEraserSizeStep: (Int) -> Void = { _ in }
+    /// 编辑 PDF 文字's layer while it is on: the pointer is its, not PDFKit's (cursor, hover, clicks on the margins).
+    weak var editLayer: PDFTextEditMode?
+    /// Esc while editing the text (no paragraph open): leave 编辑 PDF 文字.
+    var onLeaveEditing: () -> Void = {}
     /// The mouse went down on the page / was released over a text selection made with the select tool (划词翻译).
     var onMouseDown: () -> Void = {}
     var onSelectionFinished: () -> Void = {}
@@ -113,6 +117,12 @@ final class ReaderPDFView: PDFView {
     // MARK: Mouse
 
     override func mouseDown(with event: NSEvent) {
+        // While editing the text, a click outside the paragraphs does nothing (no selection, no annotation).
+        if let editLayer {
+            editLayer.window?.makeFirstResponder(self)
+            if editLayer.isEditingBlock { editLayer.finish() }
+            return
+        }
         window?.makeFirstResponder(self)
         onMouseDown()
         let point = convert(event.locationInWindow, from: nil)
@@ -207,7 +217,22 @@ final class ReaderPDFView: PDFView {
         if tool == .eraser { addCursorRect(visibleRect, cursor: eraserCursor) }
     }
 
+    /// While editing the text, the layer over the pages answers first: PDFKit adds its page views over it as they come
+    /// into view.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let editLayer, let documentView = editLayer.superview, let superview,
+           bounds.contains(convert(point, from: superview)),
+           let hit = editLayer.hitTest(documentView.convert(point, from: superview)) {
+            return hit
+        }
+        return super.hitTest(point)
+    }
+
     override func mouseMoved(with event: NSEvent) {
+        if let editLayer {
+            editLayer.pointerMoved(event)
+            return
+        }
         super.mouseMoved(with: event)
         // PDFView resets the cursor while tracking; keep the tool cursor.
         if [.note, .text, .ink].contains(tool) { NSCursor.crosshair.set() }
@@ -239,6 +264,10 @@ final class ReaderPDFView: PDFView {
     // MARK: Keyboard
 
     override func keyDown(with event: NSEvent) {
+        if editLayer != nil, event.keyCode == 53 {   // Esc
+            onLeaveEditing()
+            return
+        }
         // [ and ] make the eraser smaller and larger, as in drawing apps.
         if tool == .eraser, event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.shift, .capsLock]).isEmpty,
            let key = event.charactersIgnoringModifiers, key == "[" || key == "]" {

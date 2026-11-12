@@ -1,4 +1,7 @@
+import AppKit
+import CoreText
 import Foundation
+import ImageIO
 import FolioTranslate
 
 // `folio-translate` — developer tool for the native translation engine.
@@ -142,6 +145,41 @@ case "selection-bench":
     try await Task.sleep(for: .seconds(5))
     await timed("third passage, 5 s later", passages[2])
     await timed("first passage again (cache)", passages[0])
+case "edit-preview":
+    // edit-preview <pdf> <page> <out.png>: the page with the editor's blocks drawn over it (blue: editable, grey: not),
+    // numbered, to see how the page is cut into blocks.
+    let data = try Data(contentsOf: url(arguments[1]))
+    let editor = try PDFTextEditor(data: data)
+    let index = (Int(arguments[2]) ?? 1) - 1
+    let blocks = editor.blocks(onPage: index)
+    guard let document = CGPDFDocument(CGDataProvider(data: data as CFData)!), let page = document.page(at: index + 1) else { break }
+    let box = page.getBoxRect(.mediaBox)
+    let scale = 2.0
+    let width = Int(box.width * scale), height = Int(box.height * scale)
+    let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+    context.scaleBy(x: scale, y: scale)
+    context.translateBy(x: -box.minX, y: -box.minY)
+    context.drawPDFPage(page)
+    for block in blocks {
+        let color = block.isEditable ? CGColor(red: 0, green: 0.45, blue: 1, alpha: 1) : CGColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
+        context.setStrokeColor(color)
+        context.setFillColor(color.copy(alpha: 0.08)!)
+        context.setLineWidth(0.8)
+        context.fill(block.rect)
+        context.stroke(block.rect)
+        let label = NSAttributedString(string: "\(block.index)", attributes: [.font: NSFont.boldSystemFont(ofSize: 6), .foregroundColor: NSColor(cgColor: color)!])
+        let line = CTLineCreateWithAttributedString(label)
+        context.textPosition = CGPoint(x: block.rect.minX - 7, y: block.rect.maxY - 5)
+        CTLineDraw(line, context)
+    }
+    let image = context.makeImage()!
+    let destination = CGImageDestinationCreateWithURL(url(arguments[3]) as CFURL, "public.png" as CFString, 1, nil)!
+    CGImageDestinationAddImage(destination, image, nil)
+    CGImageDestinationFinalize(destination)
+    for block in blocks { print(String(format: "%3d %@ %@", block.index, block.isEditable ? "✎" : "·", String(block.text.prefix(90)).replacingOccurrences(of: "\n", with: " "))) }
 case "edit":
     // edit <pdf> <page>: the text blocks of a page (1-based) as the PDF editor sees them.
     // edit <pdf> <page> <block> <text> <out.pdf>: replaces a block's text (`{v1}` … put its formulas back).

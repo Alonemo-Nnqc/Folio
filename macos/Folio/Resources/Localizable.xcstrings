@@ -10382,6 +10382,46 @@
           }
         }
       }
+    },
+    "点击编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click to edit"
+          }
+        }
+      }
+    },
+    "正在写入…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Writing…"
+          }
+        }
+      }
+    },
+    "Esc 取消 · ⌘↩ 完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esc to cancel · ⌘↩ to finish"
+          }
+        }
+      }
+    },
+    "紫色的 {v1} 是公式或引用，保留它们即可原样保留" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Purple {v1} marks are formulas or citations: keep them and they stay as they are"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
