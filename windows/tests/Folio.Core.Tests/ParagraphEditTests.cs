@@ -138,3 +138,18 @@ public class ParagraphEditTests
         Assert.Empty(Hyphenation.Points("word"));
     }
 }
+
+/// <summary>TRANS-40: which words read from a picture are translated.</summary>
+public class ImageTextTests
+{
+    [Theory]
+    [InlineData("Performance Drop", true)]
+    [InlineData("Encoder", true)]
+    [InlineData("GT", false)]
+    [InlineData("CNN", false)]
+    [InlineData("0.85", false)]
+    [InlineData("x", false)]
+    [InlineData("Fig 3a", true)]
+    public void WordsWorthTranslating(string text, bool expected) =>
+        Assert.Equal(expected, Folio.Core.Translate.Engine.ImageText.IsWords(text));
+}

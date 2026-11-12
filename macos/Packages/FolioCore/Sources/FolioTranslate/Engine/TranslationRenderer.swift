@@ -108,6 +108,9 @@ final class TranslationRenderer {
     /// Also produce `Output.base` and `Output.overlay`.
     var auditLayers = false
 
+    /// Words in pictures and their translations, by page: set over the pictures (TRANS-40).
+    var imageText: [Int: [(line: ImageText.Line, translation: String)]] = [:]
+
     private enum Layers { case all, base, overlay }
 
     /// Renders `pages` (layouts in page order). `translations` maps segment ids to translated text; segments
@@ -226,6 +229,9 @@ final class TranslationRenderer {
                     audit?.record(page: layout.number, block: entry.segment.block, frame: placement?.frame ?? entry.frame, result: result, plan: entry.plan)
                 }
                 removals[layout.number] = removal
+                for entry in imageText[layout.number] ?? [] {
+                    ImageText.draw(entry.line, translation: entry.translation, language: language, in: context)
+                }
                 context.endPDFPage()
             }
             context.closePDF()

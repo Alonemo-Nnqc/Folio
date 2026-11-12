@@ -121,7 +121,6 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             textEditMode = nil
             pdfView.editLayer = nil
             window?.invalidateCursorRects(for: pdfView)
-            content.scanBanner.editing = false
             updateEditItem()
             return
         }
@@ -139,8 +138,6 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         NSAnimationContext.runAnimationGroup { $0.duration = 0.15; mode.animator().alphaValue = 1 }
         textEditMode = mode
         pdfView.editLayer = mode
-        content.scanBanner.editing = true
-        content.scanBanner.finishEditing = { [weak self] in self?.toggleTextEditing(nil) }
         mode.reload()
         updateEditItem()
     }

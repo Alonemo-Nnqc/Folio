@@ -282,6 +282,13 @@ public sealed class TranslationJob
             cancel.ThrowIfCancellationRequested();
             if (refusals.Count > 0) emit(new TranslationEvent.Notice(Loc.S("翻译服务拒绝翻译 %lld 个段落（内容审核），这些段落保留了原文。", refusals.Count)));
 
+            // 3b. Words in pictures, when asked for: read, translated (the cache first), set over the pictures.
+            if (options.TranslateImageText && ImageText.Platform != null)
+            {
+                Volatile.Write(ref layingOut, true);
+                renderer.ImageTexts = await TranslateImageText(source, selected, provider, context, cache, log, estimate, refusals, emit, cancel);
+            }
+
             // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
             Volatile.Write(ref layingOut, true);
             emit(new TranslationEvent.Stage(TranslationStageText.Layout));
@@ -351,6 +358,50 @@ public sealed class TranslationJob
 
     /// <summary>One batch, retried on passing failures; a batch that keeps failing is split in halves. Null for a
     /// paragraph the service refused (content review). A translation that lost a formula's placeholder is asked for again.</summary>
+    /// <summary>TRANS-40: the words in the pictures of pages, with their translations, by page.</summary>
+    async Task<Dictionary<int, List<(ImageText.Line Line, string Translation)>>> TranslateImageText(PdfSource source, List<int> pages,
+        ITranslationProvider provider, TranslationContext context, TranslationCache cache, TranslationLog log, ProgressEstimate estimate,
+        RefusalCount refusals, Action<TranslationEvent> emit, CancellationToken cancel)
+    {
+        emit(new TranslationEvent.Stage(Loc.S("识别图片中的文字")));
+        var lines = new List<ImageText.Line>();
+        foreach (var number in pages)
+        {
+            cancel.ThrowIfCancellationRequested();
+            try { lines.AddRange(await ImageText.Recognize(Request.Input, source, number, Request.Options.LangIn)); }
+            catch (Exception e) when (e is not OperationCanceledException) { log.Write($"image text p{number}: {e.Message}"); }
+        }
+        log.Write($"image text: {lines.Count} lines");
+        var result = new Dictionary<int, List<(ImageText.Line, string)>>();
+        if (lines.Count == 0) return result;
+        emit(new TranslationEvent.Stage(Loc.S("翻译图片中的文字")));
+        // One segment per distinct text (a label repeated in a figure is translated once).
+        var translations = new Dictionary<string, string>();
+        var pending = new List<TextSegment>();
+        foreach (var text in lines.Select(l => l.Text).Distinct().Order(StringComparer.Ordinal))
+        {
+            if (cache.Lookup(text) is { } hit) translations[text] = hit;
+            else pending.Add(new TextSegment { Page = 0, Block = -1 - pending.Count, Kind = BlockKind.Caption, Source = text });
+        }
+        foreach (var batch in Batches(pending, provider.Limits))
+        {
+            var texts = await TranslateBatch(batch, provider, context, log, estimate, refusals, cancel);
+            for (int i = 0; i < batch.Count; i++)
+            {
+                if (texts[i] is not { Length: > 0 } text) continue;
+                translations[batch[i].Source] = text;
+                cache.Store(text, batch[i].Source);
+            }
+        }
+        foreach (var line in lines)
+        {
+            if (!translations.TryGetValue(line.Text, out var translation) || translation == line.Text) continue;
+            if (!result.TryGetValue(line.Page, out var list)) result[line.Page] = list = [];
+            list.Add((line, translation));
+        }
+        return result;
+    }
+
     async Task<List<string?>> TranslateBatch(List<TextSegment> batch, ITranslationProvider provider, TranslationContext context, TranslationLog log,
                                              ProgressEstimate estimate, RefusalCount refusals, CancellationToken cancel)
     {

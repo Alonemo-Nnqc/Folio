@@ -440,6 +440,10 @@ private struct OptionsSection: View {
                 Toggle(isOn: $settings.translationOptions.translateReferences) {
                     Text("翻译参考文献")
                 }
+                Toggle(isOn: $settings.translationOptions.translateImageText) {
+                    Text("翻译图片中的文字")
+                    Text("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")
+                }
                 LabeledContent {
                     HStack {
                         Text(settings.translationOptions.glossaryFile?.lastPathComponent ?? String(localized: "未选择"))

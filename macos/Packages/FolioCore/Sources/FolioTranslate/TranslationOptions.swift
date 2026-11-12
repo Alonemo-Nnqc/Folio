@@ -34,6 +34,8 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
     public var translateTables: Bool = true
     /// Translate the reference list too.
     public var translateReferences: Bool = false
+    /// Translate the words inside pictures too (read with OCR, set back over the picture in place).
+    public var translateImageText: Bool = false
     /// Parallel requests; nil = the service's own.
     public var concurrency: Int?
     /// Translate again instead of reusing earlier translations of the same text.
@@ -65,7 +67,7 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case langIn, langOut, outputs, dualLayout, pages, onlyIncludeTranslatedPages, glossaryFile
-        case translateTables, translateReferences, concurrency, ignoreCache, duplicates
+        case translateTables, translateReferences, translateImageText, concurrency, ignoreCache, duplicates
     }
 
     /// Reads settings saved by any version: missing keys keep their defaults.
@@ -81,6 +83,7 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
         glossaryFile = try? c.decodeIfPresent(URL.self, forKey: .glossaryFile)
         translateTables = try c.decodeIfPresent(Bool.self, forKey: .translateTables) ?? true
         translateReferences = try c.decodeIfPresent(Bool.self, forKey: .translateReferences) ?? false
+        translateImageText = try c.decodeIfPresent(Bool.self, forKey: .translateImageText) ?? false
         concurrency = try c.decodeIfPresent(Int.self, forKey: .concurrency)
         ignoreCache = try c.decodeIfPresent(Bool.self, forKey: .ignoreCache) ?? false
         duplicates = (try? c.decodeIfPresent(Duplicates.self, forKey: .duplicates)) ?? .keepBoth

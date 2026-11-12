@@ -7687,6 +7687,26 @@
         }
       }
     },
+    "翻译图片中的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate Text in Images"
+          }
+        }
+      }
+    },
+    "识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reads the words in figures and puts the translation in their place, leaving the rest of the picture as it is. Takes a little longer."
+          }
+        }
+      }
+    },
     "翻译引擎" : {
       "localizations" : {
         "en" : {
@@ -9953,16 +9973,6 @@
         }
       }
     },
-    "退出编辑" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done Editing"
-          }
-        }
-      }
-    },
     "无法修改这段文字：%@" : {
       "localizations" : {
         "en" : {
@@ -10069,16 +10079,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refreshing journal metrics…"
-          }
-        }
-      }
-    },
-    "编辑 PDF 文字：点按文字直接修改，改动自动保存，⌘Z 可撤销" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Editing PDF text: click any text to change it. Changes are saved as you go; ⌘Z undoes them."
           }
         }
       }

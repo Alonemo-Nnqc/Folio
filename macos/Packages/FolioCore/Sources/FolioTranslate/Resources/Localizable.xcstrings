@@ -3836,6 +3836,26 @@
           }
         }
       }
+    },
+    "识别图片中的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading text in images"
+          }
+        }
+      }
+    },
+    "翻译图片中的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translating text in images"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

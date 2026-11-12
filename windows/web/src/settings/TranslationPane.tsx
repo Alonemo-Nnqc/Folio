@@ -174,6 +174,9 @@ export function OptionsSection({ compact }: { compact: boolean }) {
         <Card>
           <Row title={t("翻译表格")}><Switch on={o.translateTables} onChange={(v) => update({ translateTables: v })} /></Row>
           <Row title={t("翻译参考文献")}><Switch on={o.translateReferences} onChange={(v) => update({ translateReferences: v })} /></Row>
+          <Row title={t("翻译图片中的文字")} detail={t("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")}>
+            <Switch on={!!o.translateImageText} onChange={(v) => update({ translateImageText: v })} />
+          </Row>
           <Row title={t("术语表（选填）")} detail={t("CSV：原文, 译文")}>
             <span className="secondary ellipsis" style={{ maxWidth: 160 }}>{o.glossaryFile ? o.glossaryFile.split(/[\\/]/).pop() : t("未选择")}</span>
             {o.glossaryFile && <button className="btn" onClick={() => update({ glossaryFile: null })}>{t("清除")}</button>}

@@ -13,11 +13,7 @@ final class ScanBannerState {
     var cancel: () -> Void = {}
     var dismiss: () -> Void = {}
     var dismissed = false
-    /// 编辑 PDF 文字 is on: the bar says so and finishes it.
-    var editing = false
-    var finishEditing: () -> Void = {}
-
-    var isVisible: Bool { editing || (isScan && !dismissed) || progress != nil }
+    var isVisible: Bool { (isScan && !dismissed) || progress != nil }
 }
 
 /// A glass capsule at the top of the pages: "这是扫描件，识别文字后即可选中、搜索与翻译 [识别文字]", then the progress.
@@ -28,16 +24,10 @@ struct ScanBanner: View {
         Group {
             if state.isVisible {
                 HStack(spacing: 10) {
-                    Image(systemName: state.editing ? "square.and.pencil" : "text.viewfinder")
+                    Image(systemName: "text.viewfinder")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.secondary)
-                    if state.editing {
-                        Text("编辑 PDF 文字：点按文字直接修改，改动自动保存，⌘Z 可撤销")
-                            .font(.callout)
-                        Button(String(localized: "退出编辑"), action: state.finishEditing)
-                            .controlSize(.small)
-                            .help("Esc")
-                    } else if let progress = state.progress {
+                    if let progress = state.progress {
                         Text(progress.total > 0 ? String(localized: "正在识别文字（\(progress.done)/\(progress.total) 页）") : String(localized: "正在识别文字…"))
                             .font(.callout.monospacedDigit())
                         ProgressView(value: progress.fraction)

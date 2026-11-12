@@ -56,6 +56,7 @@ case "translate":
         case "--mono": options.outputs = .mono
         case "--dual": options.outputs = .dual
         case "--fresh": options.ignoreCache = true
+        case "--images": options.translateImageText = true
         case "--concurrency": options.concurrency = Int(next())
         case "--field": let kv = next().split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).map(String.init); fields[kv[0]] = kv[1]
         case "--secret": let kv = next().split(separator: "=", maxSplits: 1).map(String.init); secrets[kv[0]] = kv[1]

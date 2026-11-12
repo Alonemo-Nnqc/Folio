@@ -765,14 +765,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       <PanelToggle onClick={toggleNotes} />
 
       {running && <div className="hud"><TranslationProgress itemId={file.itemId} /></div>}
-      {editing && (
-        <div className="scan-banner" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>
-          <SquarePen size={15} strokeWidth={1.8} />
-          <span>{t("编辑 PDF 文字：点按文字直接修改，改动自动保存，Ctrl+Z 可撤销")}</span>
-          <button className="btn small" title="Esc" onClick={() => setEditing(false)}>{t("退出编辑")}</button>
-        </div>
-      )}
-      {!editing && (ocr || (isScan && !scanDismissed)) && (
+      {(ocr || (isScan && !scanDismissed)) && (
         <div className="scan-banner" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>
           <ScanText size={15} strokeWidth={1.8} />
           {ocr ? (

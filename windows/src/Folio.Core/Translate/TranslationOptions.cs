@@ -26,6 +26,8 @@ public sealed class TranslationOptions
     [JsonPropertyName("glossaryFile")] public string? GlossaryFile { get; set; }
     [JsonPropertyName("translateTables")] public bool TranslateTables { get; set; } = true;
     [JsonPropertyName("translateReferences")] public bool TranslateReferences { get; set; }
+    /// <summary>Translate the words inside pictures too (read with OCR, set back over the picture in place).</summary>
+    [JsonPropertyName("translateImageText")] public bool TranslateImageText { get; set; }
     [JsonPropertyName("concurrency")] public int? Concurrency { get; set; }
     [JsonPropertyName("ignoreCache")] public bool IgnoreCache { get; set; }
     [JsonPropertyName("duplicates")] public DuplicateHandling Duplicates { get; set; } = DuplicateHandling.keepBoth;

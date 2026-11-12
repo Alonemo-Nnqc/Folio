@@ -247,6 +247,12 @@ public final class TranslationJob: @unchecked Sendable {
             emit(.notice(String(localized: "翻译服务拒绝翻译 \(refusals.count) 个段落（内容审核），这些段落保留了原文。", bundle: .module)))
         }
 
+        // 3b. Words in pictures, when asked for: read, translated (the cache first), set over the pictures.
+        if options.translateImageText {
+            renderer.imageText = try await translateImageText(cg: cg, pages: selected, provider: provider, context: context, cache: cache,
+                                                              log: log, estimate: estimate, refusals: refusals, emit: emit)
+        }
+
         // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
         emit(.stage(TranslationStageText.layout))
         let renderSeconds = 0.5 + Double(layouts.count) * 0.08
@@ -314,6 +320,58 @@ public final class TranslationJob: @unchecked Sendable {
     /// One batch, retried on passing failures; a batch that keeps failing is split in halves.
     /// The batch's translations, in order; nil for a paragraph the service refused (content review), which keeps its
     /// original. A translation that lost or duplicated a formula's placeholder is asked for once more.
+    /// TRANS-40: the words in the pictures of `pages`, with their translations, by page.
+    private func translateImageText(cg: CGPDFDocument, pages: [Int], provider: TranslationProvider, context: TranslationContext,
+                                    cache: TranslationCache, log: TranslationLog, estimate: ProgressEstimate, refusals: RefusalCount,
+                                    emit: @escaping @Sendable (TranslationEvent) -> Void) async throws -> [Int: [(line: ImageText.Line, translation: String)]] {
+        emit(.stage(String(localized: "识别图片中的文字", bundle: .module)))
+        let languages = ImageText.recognitionLanguages(for: request.options.langIn)
+        // A few pages at a time.
+        let found = try await withThrowingTaskGroup(of: [ImageText.Line].self) { group in
+            var queue = pages[...]
+            var all: [ImageText.Line] = []
+            func next() {
+                guard let number = queue.popFirst() else { return }
+                // Each reads its own copy of the document (Core Graphics documents are not shared across threads).
+                let url = request.input
+                group.addTask { CGPDFDocument(url as CFURL).map { ImageText.recognize(document: $0, number: number, languages: languages) } ?? [] }
+            }
+            for _ in 0..<4 { next() }
+            while let lines = try await group.next() {
+                try Task.checkCancellation()
+                all += lines
+                next()
+            }
+            return all
+        }
+        let lines = found.sorted { ($0.page, -$0.rect.maxY, $0.rect.minX) < ($1.page, -$1.rect.maxY, $1.rect.minX) }
+        log.write("image text: \(lines.count) lines")
+        guard !lines.isEmpty else { return [:] }
+        emit(.stage(String(localized: "翻译图片中的文字", bundle: .module)))
+        // One segment per distinct text (a label repeated in a figure is translated once).
+        var translations: [String: String] = [:]
+        var pending: [TextSegment] = []
+        for text in Set(lines.map(\.text)).sorted() {
+            if let hit = cache.lookup(text) { translations[text] = hit } else {
+                pending.append(TextSegment(page: 0, block: -1 - pending.count, kind: .caption, source: text, formulas: []))
+            }
+        }
+        for batch in Self.batches(pending, limits: provider.limits) {
+            let texts = try await translate(batch, provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
+            for (segment, text) in zip(batch, texts) {
+                guard let text, !text.isEmpty else { continue }
+                translations[segment.source] = text
+                cache.store(text, for: segment.source)
+            }
+        }
+        var byPage: [Int: [(line: ImageText.Line, translation: String)]] = [:]
+        for line in lines {
+            guard let translation = translations[line.text], translation != line.text else { continue }
+            byPage[line.page, default: []].append((line, translation))
+        }
+        return byPage
+    }
+
     private func translate(_ batch: [TextSegment], provider: TranslationProvider, context: TranslationContext,
                            log: TranslationLog, estimate: ProgressEstimate, refusals: RefusalCount) async throws -> [String?] {
         let items = batch.map { TranslationItem(text: $0.source, kind: $0.kind) }

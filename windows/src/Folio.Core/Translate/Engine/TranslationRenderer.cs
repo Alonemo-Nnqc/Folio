@@ -85,6 +85,9 @@ public sealed class TranslationRenderer(PdfSource source, string language)
     /// <summary>Also produce <see cref="Output.Base"/> and <see cref="Output.Overlay"/>.</summary>
     public bool AuditLayers { get; set; }
 
+    /// <summary>Words in pictures and their translations, by page: set over the pictures (TRANS-40).</summary>
+    public Dictionary<int, List<(ImageText.Line Line, string Translation)>> ImageTexts { get; set; } = [];
+
     enum Layers { All, Base, Overlay }
 
     /// <summary>Renders the pages of <paramref name="layouts"/>. <paramref name="translations"/> maps segment ids to
@@ -118,7 +121,7 @@ public sealed class TranslationRenderer(PdfSource source, string language)
         }
         // 1. Translations, one overlay page per output page.
         var overlayStream = new MemoryStream();
-        using (var document = SKDocument.CreatePdf(overlayStream, new SKDocumentPdfMetadata { Producer = "Folio", Creator = "Folio" }))
+        using (var document = SKDocument.CreatePdf(overlayStream, new SKDocumentPdfMetadata { Producer = "Folio", Creator = "Folio", EncodingQuality = 101 }))
         {
             var typesetter = new Typesetter(Language);
             foreach (var layout in layouts)
@@ -239,6 +242,8 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     Audit?.Record(layout.Number, entry.Segment.Block, placement?.Frame ?? entry.Frame, result, entry.Plan);
                 }
                 removals[layout.Number] = removal;
+                foreach (var (line, translation) in ImageTexts.GetValueOrDefault(layout.Number) ?? [])
+                    ImageText.Draw(line, translation, Language, canvas, pageTop, usedGlyphs);
                 document.EndPage();
             }
             document.Close();

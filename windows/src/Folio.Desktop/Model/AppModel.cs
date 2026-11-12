@@ -60,6 +60,7 @@ public sealed partial class AppModel : IImportUi
         Translations = new TranslationCoordinator(this);
         JournalMetrics = new JournalMetricsCoordinator(this);
         Ocr = new OcrCoordinator(this);
+        Folio.Core.Translate.Engine.ImageText.Platform = ImageTextServices.Create();
         _externalChanges = new System.Windows.Forms.Timer { Interval = 1500 };
         _externalChanges.Tick += (_, _) => CheckExternalChanges();
     }
