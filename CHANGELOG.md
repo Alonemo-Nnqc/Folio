@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-13
+
 ### 新增
 - “已翻译”标签：已有译文的文献，在列表标题后显示绿色的“已翻译”标签，悬停可查看有哪些译文（如“双语对照 · Google、译文 · DeepSeek”）；翻译进行中暂时隐藏（#15）。
 - 编辑 PDF 文字：阅读器工具栏“编辑 PDF”（或 批注 ▸ 编辑 PDF 文字）进入编辑模式，点按文字即出现光标，直接在页面上原位修改，无需打开编辑框或点“完成”。改动使用原文的字体、字形、字号、颜色与词距，只重排改动波及的几行（英文按词典断词、中文遵守标点禁则，排不下时稍收紧行距，仍超出会提示），其余排版纹丝不动；公式、引用与链接随文字移动。点别处、按 Esc 或回车即自动保存，只重绘被修改的那一页；编辑中 ⌘Z/Ctrl+Z 撤销键入，保存后可整体撤销。适合修正对照翻译中不准确的译文。进入编辑模式后不再弹出提示条（工具栏按钮高亮即表示正在编辑，按 Esc 或再点按钮退出）。
@@ -141,7 +143,8 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.0...v1.0.1
