@@ -10582,6 +10582,56 @@
           }
         }
       }
+    },
+    "「%@」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”: %@"
+          }
+        }
+      }
+    },
+    "推荐“%@”：翻译不需要深度思考，越低越快" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is recommended: translating needs little thinking, and less is faster"
+          }
+        }
+      }
+    },
+    "%@（推荐）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (Recommended)"
+          }
+        }
+      }
+    },
+    "有新版本可用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Available"
+          }
+        }
+      }
+    },
+    "Folio 使用文档" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folio User Guide"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -1,6 +1,7 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "所有功能的图文说明：添加与整理文献、阅读批注、翻译、引用、AI 接入、常见问题" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Every feature explained with pictures: adding and organizing papers, reading and annotating, translation, citations, AI, FAQ" } } } },
     "已安装，重新启动 Folio 后生效" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Installed. Restart Folio for it to take effect" } } } },
     "没有安装成功，可以在 Windows 设置 ▸ 时间和语言 ▸ 语言 中添加该语言并勾选“光学字符识别”" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The installation didn't succeed. You can add the language in Windows Settings ▸ Time & language ▸ Language and select “Optical character recognition”" } } } },
     "Windows 没有安装%@的文字识别" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Windows has no text recognition for %@" } } } },

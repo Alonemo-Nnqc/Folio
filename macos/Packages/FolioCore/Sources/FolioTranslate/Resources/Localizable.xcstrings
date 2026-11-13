@@ -3886,6 +3886,26 @@
           }
         }
       }
+    },
+    "%@（正在第 %lld 次尝试）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (trying again, attempt %lld)"
+          }
+        }
+      }
+    },
+    "正在等待%@回复（已等 %lld 分钟）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for %@ to reply (%lld min so far)"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

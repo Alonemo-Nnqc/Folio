@@ -174,12 +174,12 @@ public static class ImageText
             double sx = picture.W / bitmap.Width, sy = picture.H / bitmap.Height;
             var runs = new List<Run>();
             try { runs.AddRange((await Read(bitmap, services, language, latin, partial)).Where(r => r.Box.H < r.Box.W * 1.2 || r.Text.Length <= 1)); } catch { }
-            // Sideways labels: read on the picture turned a quarter each way, where they lie across. The OCR reads only
-            // upright words: the way a label reads best (as words) is the way it reads.
+            // Sideways labels: read on the picture turned a quarter each way (whole: sideways labels are rarely the smallest),
+            // where they lie across. The OCR reads only upright words: the way a label reads best is the way it reads.
             var sideways = new List<Run>();
             try
             {
-                foreach (var run in await Read(bitmap.TurnedClockwise(), services, language, latin, partial))
+                foreach (var run in await Read(bitmap.TurnedClockwise(), services, language, latin, partial, tiles: false))
                 {
                     // Back to the picture: x' = h - 1 - y, y' = x.
                     var b = run.Box;
@@ -187,7 +187,7 @@ public static class ImageText
                     run.Vertical = true;
                     sideways.Add(run);
                 }
-                foreach (var run in await Read(bitmap.TurnedCounterClockwise(), services, language, latin, partial))
+                foreach (var run in await Read(bitmap.TurnedCounterClockwise(), services, language, latin, partial, tiles: false))
                 {
                     // Back: x' = y, y' = w - 1 - x.
                     var b = run.Box;
@@ -301,23 +301,33 @@ public static class ImageText
     /// (overlapping, so that a label cut at a tile's edge is whole in the next): OCR reads small labels better at full size,
     /// and reads only so many pixels. A line read in a tile wins; the whole picture's reading, made smaller, adds what the
     /// tiles missed (labels longer than the overlap).</summary>
-    static async Task<List<Run>> Read(Bitmap bitmap, Services services, string language, bool latin, bool partial)
+    static async Task<List<Run>> Read(Bitmap bitmap, Services services, string language, bool latin, bool partial, bool tiles = true)
     {
         List<Run> Runs(List<Reading> readings) => readings.SelectMany(r => RunsIn(r, bitmap, latin, partial)).ToList();
         const double tile = 1400, overlap = 280;
         int reduce = (int)Math.Ceiling(Math.Max(bitmap.Width, bitmap.Height) / 2600.0);
         var wholeReadings = await Observe(bitmap.Reduced(reduce), services, language);
         var whole = Runs(wholeReadings.Select(r => new Reading(r.Words.Select(w => (w.Text, Scaled(w.Box, reduce))).ToList(), Scaled(r.Line, reduce))).ToList());
-        if (Math.Max(bitmap.Width, bitmap.Height) <= tile * 1.15) return whole;
-        var tiled = new List<Reading>();
+        if (!tiles || Math.Max(bitmap.Width, bitmap.Height) <= tile * 1.15) return whole;
+        var frames = new List<Rect>();
         var all = new Rect(0, 0, bitmap.Width, bitmap.Height);
         for (double y = 0; y < bitmap.Height; y += tile - overlap)
         {
             for (double x = 0; x < bitmap.Width; x += tile - overlap)
             {
                 var frame = new Rect(x, y, tile, tile).Intersection(all);
-                if (frame.IsNull || frame.W <= overlap || (frame.H <= overlap && y > 0)) continue;
-                foreach (var reading in await Observe(bitmap.Cropped(frame), services, language))
+                if (!frame.IsNull && frame.W > overlap && (frame.H > overlap || y == 0)) frames.Add(frame);
+                if (frame.MaxX >= bitmap.Width) break;
+            }
+            if (y + tile >= bitmap.Height) break;
+        }
+        // The tiles side by side (each reading is independent).
+        var byTile = await Task.WhenAll(frames.Select(f => Observe(bitmap.Cropped(f), services, language)));
+        var tiled = new List<Reading>();
+        for (int t = 0; t < frames.Count; t++)
+        {
+            var frame = frames[t];
+                foreach (var reading in byTile[t])
                 {
                     var line = reading.Line.Offset(frame.MinX, frame.MinY);
                     // Cut by the tile's edge (not the picture's): read whole elsewhere. A word cut in half at the edge is left
@@ -327,9 +337,6 @@ public static class ImageText
                         || (line.MinY < frame.MinY + 3 && frame.MinY > 0) || (line.MaxY > frame.MaxY - 3 && frame.MaxY < bitmap.Height)) continue;
                     tiled.Add(new Reading(reading.Words.Select(w => (w.Text, w.Box.Offset(frame.MinX, frame.MinY))).ToList(), line));
                 }
-                if (frame.MaxX >= bitmap.Width) break;
-            }
-            if (y + tile >= bitmap.Height) break;
         }
         var accepted = new List<Run>();
         bool Overlapping(Run run) => accepted.Any(a => a.Box.Intersection(run.Box) is { IsNull: false } i && i.Area > Math.Min(a.Box.Area, run.Box.Area) * 0.3);

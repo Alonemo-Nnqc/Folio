@@ -1034,11 +1034,22 @@ public static class AgentModels
     /// <summary>Codex's own list of what each model accepts: its thinking levels and the one it uses by default.</summary>
     public static (List<string> Levels, string? Usual)? CodexLevels(string? model)
     {
-        var name = string.IsNullOrWhiteSpace(model) ? Value("model", Read(".codex", "config.toml")) : model.Trim();
-        if (name == null || JsonFile(Path.Combine(Home, ".codex", "models_cache.json"))?["models"] is not JsonArray list) return null;
-        if (list.OfType<JsonObject>().FirstOrDefault(m => LocalAgents.Str(m["slug"]) == name) is not { } entry
-            || entry["supported_reasoning_levels"] is not JsonArray levels) return null;
-        return (levels.Select(l => LocalAgents.Str(l?["effort"]) ?? LocalAgents.Str(l)).OfType<string>().ToList(), LocalAgents.Str(entry["default_reasoning_level"]));
+        var config = Read(".codex", "config.toml");
+        var name = string.IsNullOrWhiteSpace(model) ? Value("model", config) : model.Trim();
+        if (name == null) return null;
+        // The catalog the configuration names (a provider's own, as CC Switch writes) is what Codex goes by; its cache of
+        // OpenAI's list may say otherwise about the same name.
+        var files = new List<string>();
+        if (Value("model_catalog_json", config) is { } catalog) files.Add(Path.IsPathRooted(catalog) ? catalog : Path.Combine(Home, ".codex", catalog));
+        files.Add(Path.Combine(Home, ".codex", "models_cache.json"));
+        foreach (var file in files)
+        {
+            if (JsonFile(file)?["models"] is not JsonArray list) continue;
+            if (list.OfType<JsonObject>().FirstOrDefault(m => LocalAgents.Str(m["slug"]) == name) is not { } entry
+                || entry["supported_reasoning_levels"] is not JsonArray levels) continue;
+            return (levels.Select(l => LocalAgents.Str(l?["effort"]) ?? LocalAgents.Str(l)).OfType<string>().ToList(), LocalAgents.Str(entry["default_reasoning_level"]));
+        }
+        return null;
     }
 
     static JsonNode? JsonFile(string path)

@@ -147,6 +147,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc func openProjectPage(_ sender: Any?) { NSWorkspace.shared.open(Self.projectURL) }
 
+    /// The user guide on the product site (every feature, step by step, with pictures).
+    static let documentationURL = URL(string: "https://alonemo-nnqc.github.io/Folio/docs.html")!
+
+    @objc func openDocumentation(_ sender: Any?) { NSWorkspace.shared.open(Self.documentationURL) }
+
     @objc func reportIssue(_ sender: Any?) {
         NSWorkspace.shared.open(Self.projectURL.appending(path: "issues/new/choose"))
     }

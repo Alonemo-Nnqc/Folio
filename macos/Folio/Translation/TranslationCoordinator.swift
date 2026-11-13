@@ -247,6 +247,10 @@ final class TranslationCoordinator {
             jobs[itemId]?.preview = url
         case .notice(let text):
             jobs[itemId]?.notices.append(text)
+        case .problem(let text):
+            // At once, with what the service said: the translation is not stuck, and the cause may be the user's to fix.
+            let title = model?.snapshot.items[itemId]?.title ?? ""
+            model?.toasts.show(String(localized: "「\(title)」：\(text)"), systemImage: "exclamationmark.triangle")
         case .finished(let mono, let dual):
             let notices = jobs[itemId]?.notices ?? []
             jobs[itemId] = nil

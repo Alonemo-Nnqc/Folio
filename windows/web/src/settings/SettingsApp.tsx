@@ -98,6 +98,7 @@ function General() {
       </Card>
       <Header>{t("帮助")}</Header>
       <Card>
+        <Row title={t("Folio 使用文档")} detail={t("所有功能的图文说明：添加与整理文献、阅读批注、翻译、引用、AI 接入、常见问题")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/docs.html" })}>{t("打开")}</button></Row>
         <Row title={t("欢迎使用 Folio…")}><button className="btn" onClick={() => call("window.onboarding")}>{t("打开")}</button></Row>
         <Row title={t("Folio 主页")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/" })}>{t("打开")}</button><button className="btn" onClick={() => call("shell.open", { target: "https://github.com/Alonemo-Nnqc/Folio/issues" })}>{t("报告问题…")}</button></Row>
       </Card>

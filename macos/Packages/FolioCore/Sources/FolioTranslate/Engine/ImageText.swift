@@ -144,21 +144,36 @@ enum ImageText {
             let turnedLines = upright.filter { $0.box.height >= $0.box.width * 1.2 && abs($0.direction.dy) > abs($0.direction.dx) }
             // Sideways labels: read on the picture turned a quarter each way, where they lie across. Words read both
             // ways (upside down too) are taken the way they read best.
-            var sideways: [Run] = []
-            for var run in read(raster.turnedClockwise(), languages: languages) {
-                // Back to the picture: x' = h - 1 - y, y' = x.
-                let box = run.box
-                run.box = CGRect(x: box.minY, y: Double(raster.height) - box.maxX, width: box.height, height: box.width)
-                run.vertical = true
-                sideways.append(run)
+            // Text recognition sees sideways text in the upright picture too (as tall lines): only where it did (or, a
+            // small picture, everywhere) is the picture read turned, which is most of the time reading takes.
+            var regions: [CGRect] = []
+            let whole = CGRect(x: 0, y: 0, width: raster.width, height: raster.height)
+            if raster.width * raster.height <= 1_500_000 {
+                regions = [whole]
+            } else {
+                for line in upright where line.box.height >= line.box.width * 1.2 {
+                    let around = line.box.insetBy(dx: -line.box.width * 2, dy: -line.box.width).intersection(whole)
+                    if let k = regions.firstIndex(where: { $0.intersects(around) }) { regions[k] = regions[k].union(around) } else { regions.append(around) }
+                }
             }
-            for var run in read(raster.turnedCounterClockwise(), languages: languages) {
-                // Back: x' = y, y' = w - 1 - x.
-                let box = run.box
-                run.box = CGRect(x: Double(raster.width) - box.maxY, y: box.minX, width: box.height, height: box.width)
-                run.vertical = true
-                run.readsDown = true
-                sideways.append(run)
+            var sideways: [Run] = []
+            for region in regions {
+                let part = region == whole ? raster : raster.cropped(region)
+                for var run in read(part.turnedClockwise(), languages: languages) {
+                    // Back to the picture: x' = h - 1 - y, y' = x.
+                    let box = run.box
+                    run.box = CGRect(x: box.minY, y: Double(part.height) - box.maxX, width: box.height, height: box.width).offsetBy(dx: region.minX, dy: region.minY)
+                    run.vertical = true
+                    sideways.append(run)
+                }
+                for var run in read(part.turnedCounterClockwise(), languages: languages) {
+                    // Back: x' = y, y' = w - 1 - x.
+                    let box = run.box
+                    run.box = CGRect(x: Double(part.width) - box.maxY, y: box.minX, width: box.height, height: box.width).offsetBy(dx: region.minX, dy: region.minY)
+                    run.vertical = true
+                    run.readsDown = true
+                    sideways.append(run)
+                }
             }
             // Which way each reads: as text recognition saw it upright, else by its letters; labels neither can tell
             // (short ones, few tall letters) read as most of the picture's do.
@@ -413,12 +428,26 @@ enum ImageText {
         let whole = runs(observe(image, languages: languages))
         let tile = 1400.0, overlap = 280.0
         guard Double(max(raster.width, raster.height)) > tile * 1.15 else { return whole }
-        var tiled: [Reading] = []
+        var frames: [CGRect] = []
         for y in stride(from: 0.0, to: Double(raster.height), by: tile - overlap) {
             for x in stride(from: 0.0, to: Double(raster.width), by: tile - overlap) {
                 let frame = CGRect(x: x, y: y, width: tile, height: tile).intersection(CGRect(x: 0, y: 0, width: raster.width, height: raster.height))
-                guard frame.width > overlap, frame.height > overlap || y == 0, let part = raster.cropped(frame).image else { continue }
-                for var reading in observe(part, languages: languages) {
+                if frame.width > overlap, frame.height > overlap || y == 0 { frames.append(frame) }
+                if frame.maxX >= Double(raster.width) { break }
+            }
+            if y + tile >= Double(raster.height) { break }
+        }
+        // The tiles side by side (each reading is independent).
+        final class Readings: @unchecked Sendable { var byTile: [[Reading]]; let lock = NSLock(); init(_ n: Int) { byTile = Array(repeating: [], count: n) } }
+        let readings = Readings(frames.count)
+        DispatchQueue.concurrentPerform(iterations: frames.count) { k in
+            guard let part = raster.cropped(frames[k]).image else { return }
+            let found = observe(part, languages: languages)
+            readings.lock.withLock { readings.byTile[k] = found }
+        }
+        var tiled: [Reading] = []
+        for (k, frame) in frames.enumerated() {
+                for var reading in readings.byTile[k] {
                     reading.line = reading.line.offsetBy(dx: frame.minX, dy: frame.minY)
                     reading.words = reading.words.map { ($0.0, $0.1.offsetBy(dx: frame.minX, dy: frame.minY)) }
                     // Cut by the tile's edge (not the picture's): read whole elsewhere.
@@ -428,9 +457,6 @@ enum ImageText {
                         || (line.minY < frame.minY + 3 && frame.minY > 0) || (line.maxY > frame.maxY - 3 && frame.maxY < Double(raster.height)) { continue }
                     tiled.append(reading)
                 }
-                if frame.maxX >= Double(raster.width) { break }
-            }
-            if y + tile >= Double(raster.height) { break }
         }
         var accepted: [Run] = []
         func overlapping(_ run: Run) -> Bool {

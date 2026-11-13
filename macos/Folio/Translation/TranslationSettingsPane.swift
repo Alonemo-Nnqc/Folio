@@ -874,20 +874,18 @@ struct ReasoningPicker: View {
                 Text("思考程度")
                 Text("由所选模型决定")
             }
-        case let .choices(choices, _):
-            if choices.count > 5 {
-                Picker(selection: selection) {
-                    ForEach(choices) { Text($0.title).tag($0.value) }
-                } label: {
-                    Text("思考程度")
+        case let .choices(choices, recommended):
+            // The level Folio uses until one is chosen is marked: translating needs little thinking, and less is faster.
+            let usual = choices.first { $0.value == recommended }?.title
+            Picker(selection: selection) {
+                ForEach(choices) { choice in
+                    Text(choice.value == recommended && !choice.value.isEmpty ? String(localized: "\(choice.title)（推荐）") : choice.title).tag(choice.value)
                 }
-            } else {
-                Picker(selection: selection) {
-                    ForEach(choices) { Text($0.title).tag($0.value) }
-                } label: {
-                    Text("思考程度")
+            } label: {
+                Text("思考程度")
+                if let usual, !recommended.isEmpty {
+                    Text("推荐“\(usual)”：翻译不需要深度思考，越低越快")
                 }
-                .pickerStyle(.segmented)
             }
         }
     }

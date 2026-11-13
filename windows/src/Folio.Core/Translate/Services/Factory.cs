@@ -234,16 +234,24 @@ public static class ReasoningEffort
         }
     }
 
+    /// <summary>Where a service's level is kept: its own option, or for any local agent "--&lt;service&gt;-effort" (an agent
+    /// added later is never left without one, which would keep its choice from being stored).</summary>
+    static string? OptionFor(string serviceId)
+    {
+        if (ValueOption.TryGetValue(serviceId, out var known)) return known;
+        return TranslationServiceCatalog.Service(serviceId)?.Backend is TranslationBackend.Agent ? $"--{serviceId}-effort" : null;
+    }
+
     public static string? Current(string serviceId, IReadOnlyDictionary<string, string> fields)
     {
-        if (GetSupport(serviceId, fields) is not Support.Choices choices || !ValueOption.TryGetValue(serviceId, out var option)) return null;
+        if (GetSupport(serviceId, fields) is not Support.Choices choices || OptionFor(serviceId) is not { } option) return null;
         var stored = fields.GetValueOrDefault(option) ?? choices.Default;
         return choices.List.Any(c => c.Value == stored) ? stored : choices.Default;
     }
 
     public static void Set(string value, string serviceId, IDictionary<string, string> fields)
     {
-        if (ValueOption.TryGetValue(serviceId, out var option)) fields[option] = value;
+        if (OptionFor(serviceId) is { } option) fields[option] = value;
     }
 
     public static Dictionary<string, string> Apply(string serviceId, IReadOnlyDictionary<string, string> fields)

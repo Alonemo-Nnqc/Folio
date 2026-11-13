@@ -14,7 +14,7 @@
 [![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-blue)](#安装)
 [![许可证](https://img.shields.io/github/license/Alonemo-Nnqc/Folio)](LICENSE)
 
-[产品主页](https://alonemo-nnqc.github.io/Folio/) · [下载](https://github.com/Alonemo-Nnqc/Folio/releases/latest) · 简体中文 | [English](README.en.md)
+[产品主页](https://alonemo-nnqc.github.io/Folio/) · [使用文档](https://alonemo-nnqc.github.io/Folio/docs.html) · [下载](https://github.com/Alonemo-Nnqc/Folio/releases/latest) · 简体中文 | [English](README.en.md)
 
 <img src="assets/screenshots/library.jpg" alt="Folio 文献库窗口" width="900">
 
@@ -89,6 +89,8 @@ xattr -dr com.apple.quarantine /Applications/Folio.app
 **Windows**：运行安装程序即可，不需要管理员权限，也不需要另外安装 .NET。Folio 目前没有代码签名，如果看到“Windows 已保护你的电脑”，点 **更多信息**，再点 **仍要运行**。更多说明见 [windows/README.md](windows/README.md#安装)。
 
 ## 使用
+
+完整的图文使用说明见 **[使用文档](https://alonemo-nnqc.github.io/Folio/docs.html)**（也可在 Mac 的“帮助”菜单、Windows 的 设置 ▸ 通用 ▸ 帮助 中打开）。
 
 第一次打开时，欢迎向导会带你完成几项设置（每一步都可以跳过）：导入 Zotero 文献库、安装浏览器插件、为本机的 AI 智能体添加 MCP 与技能、选择翻译服务。
 

@@ -8,7 +8,6 @@ import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, SearchBox, Segmented } from "../ui/controls";
 import { dragPointer, formatDate } from "../ui/util";
 import { ITEMS_MIME, setDraggingItems } from "./Sidebar";
-import { UpdateButton } from "../ui/update";
 import { toggleQuickLook } from "./QuickLook";
 
 const ROW = 32;
@@ -326,7 +325,6 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
           <button title={t("翻译")} disabled={selection.length === 0} onClick={() => translate(selection)}><BookText size={17} strokeWidth={1.7} /></button>
           <button title={t("引用与导出")} disabled={selection.length === 0} onClick={(e) => openMenuAt(e.currentTarget, citeMenu(selection))}><Share size={16} strokeWidth={1.7} /></button>
         </div>
-        <UpdateButton />
         <SearchBox inputRef={searchRef} value={searching} placeholder={t("搜索文献")} onChange={(v) => { typing.current = true; setSearching(v); call("library.search", { text: v }).finally(() => { typing.current = false; }); }} />
       </div>
       {tabs}

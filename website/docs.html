@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Folio 使用文档</title>
+  <meta name="description" content="Folio 使用文档：安装、添加与整理文献、阅读与批注、编辑 PDF、整篇翻译与划词翻译、引用导出、浏览器插件、AI 接入、设置详解、快捷键与常见问题。">
+  <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="assets/img/favicon.png">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <meta property="og:title" content="Folio 使用文档">
+  <meta property="og:description" content="从安装到整篇翻译、AI 接入，一步一步讲清楚。">
+  <meta property="og:image" content="https://alonemo-nnqc.github.io/Folio/assets/img/og.jpg">
+  <link rel="stylesheet" href="assets/css/docs.css">
+  <script src="assets/js/docs.js" defer></script>
+</head>
+<body>
+
+<header class="topbar">
+  <button class="toc-toggle" type="button" aria-label="目录">目录</button>
+  <a class="brand" href="index.html"><img src="assets/img/icon.webp" alt="" width="26" height="26">Folio<small>使用文档</small></a>
+  <nav>
+    <a href="index.html">产品主页</a>
+    <a href="https://github.com/Alonemo-Nnqc/Folio/releases/latest">下载</a>
+    <a href="https://github.com/Alonemo-Nnqc/Folio/issues">反馈问题</a>
+    <a href="https://github.com/Alonemo-Nnqc/Folio">GitHub</a>
+  </nav>
+</header>
+
+<div class="layout">
+<aside class="toc" aria-label="目录">
+  <input class="search" type="search" placeholder="搜索文档，例如“翻译”“快捷键”" aria-label="搜索文档">
+  <div class="empty">没有找到相关内容，换个说法试试。</div>
+  <ol>
+    <li><a href="#start">1. 快速开始</a>
+      <ol><li><a href="#install">安装</a></li><li><a href="#first-run">首次打开</a></li><li><a href="#library-folder">文献库存在哪里</a></li></ol></li>
+    <li><a href="#tour">2. 认识界面</a></li>
+    <li><a href="#add">3. 添加文献</a>
+      <ol><li><a href="#add-pdf">拖入 PDF</a></li><li><a href="#add-id">DOI / arXiv / ISBN</a></li><li><a href="#add-import">导入 BibTeX、Zotero</a></li><li><a href="#metadata">元数据识别与修正</a></li><li><a href="#ocr">扫描件识别文字</a></li></ol></li>
+    <li><a href="#organize">4. 整理与查找</a>
+      <ol><li><a href="#groups">分组</a></li><li><a href="#tags">标签、状态与评分</a></li><li><a href="#search">搜索</a></li><li><a href="#columns">列表与列</a></li><li><a href="#metrics">期刊分区与影响因子</a></li><li><a href="#trash">回收站</a></li></ol></li>
+    <li><a href="#read">5. 阅读与批注</a>
+      <ol><li><a href="#reader">阅读器</a></li><li><a href="#annotate">批注工具</a></li><li><a href="#edit-pdf">编辑 PDF 文字</a></li><li><a href="#quicklook">快速预览</a></li><li><a href="#notes">笔记</a></li></ol></li>
+    <li><a href="#translate">6. 整篇翻译</a>
+      <ol><li><a href="#translate-how">开始翻译</a></li><li><a href="#translate-options">翻译选项</a></li><li><a href="#services">选择翻译服务</a></li><li><a href="#agents">用本机智能体翻译</a></li><li><a href="#thinking">模型与思考程度</a></li><li><a href="#image-text">翻译图片中的文字</a></li><li><a href="#parallel">对照阅读</a></li><li><a href="#speed">速度与出错</a></li></ol></li>
+    <li><a href="#selection">7. 划词翻译</a></li>
+    <li><a href="#cite">8. 引用与导出</a></li>
+    <li><a href="#browser">9. 浏览器插件</a></li>
+    <li><a href="#ai">10. AI 接入</a></li>
+    <li><a href="#settings">11. 设置详解</a></li>
+    <li><a href="#sync">12. 多台电脑与同步</a></li>
+    <li><a href="#update">13. 更新</a></li>
+    <li><a href="#keys">14. 快捷键</a></li>
+    <li><a href="#faq">15. 常见问题</a></li>
+    <li><a href="#privacy">16. 隐私与数据</a></li>
+  </ol>
+</aside>
+
+<main class="doc" id="main">
+
+<header class="intro">
+  <h1>Folio 使用文档</h1>
+  <p class="lead">从安装到整篇翻译、AI 接入，一步一步讲清楚。Mac 版和 Windows 版的功能一一对应，文中凡有区别都会标出 <span class="os mac">Mac</span><span class="os win">Windows</span>。</p>
+  <div class="cards">
+    <a href="#add"><b>添加第一篇论文</b><span>拖进来，标题、作者、期刊自动填好</span></a>
+    <a href="#translate"><b>整篇翻译</b><span>保留版面、公式与图表，边译边读</span></a>
+    <a href="#ai"><b>让 AI 读你的文献库</b><span>一个开关接入 Claude Code、Codex 等</span></a>
+  </div>
+  <video controls preload="none" poster="assets/img/poster.webp" src="assets/video/folio-promo.mp4"></video>
+  <p style="color:var(--sub);font-size:13.5px">两分钟宣传片，先看一遍整体印象。</p>
+</header>
+
+<!-- 1 -->
+<section id="start">
+<h2 id="start-title"><span class="num">1</span>快速开始</h2>
+
+<h3 id="install">安装</h3>
+<p>在 <a href="https://github.com/Alonemo-Nnqc/Folio/releases/latest">下载页</a>选择你的系统对应的安装包：</p>
+<div class="table"><table>
+<tr><th>系统</th><th>要求</th><th>安装包</th></tr>
+<tr><td><span class="os mac">Mac</span></td><td>macOS 14 Sonoma 及以上，Apple 芯片或 Intel</td><td><code>Folio-x.y.z-macOS.dmg</code></td></tr>
+<tr><td><span class="os win">Windows</span> Intel / AMD</td><td>Windows 10 2004 及以上</td><td><code>Folio-x.y.z-Windows-x64-Setup.exe</code></td></tr>
+<tr><td><span class="os win">Windows</span> ARM</td><td>Windows 10 2004 及以上</td><td><code>Folio-x.y.z-Windows-ARM64-Setup.exe</code></td></tr>
+</table></div>
+<h4><span class="os mac">Mac</span> 安装步骤</h4>
+<ol class="steps">
+  <li>打开下载的 DMG，把 Folio 图标拖到“应用程序”文件夹。</li>
+  <li>第一次打开时，macOS 可能提示“无法验证开发者”（Folio 尚未经过 Apple 公证）。打开 <span class="path">系统设置 ▸ 隐私与安全性</span>，滚到页面底部点 <b>仍要打开</b>。</li>
+  <li>也可以在“终端”里运行下面这行，一次解决：<pre><code>xattr -dr com.apple.quarantine /Applications/Folio.app</code></pre></li>
+</ol>
+<h4><span class="os win">Windows</span> 安装步骤</h4>
+<ol class="steps">
+  <li>双击安装程序。不需要管理员权限，也不需要另装 .NET。</li>
+  <li>如果出现“Windows 已保护你的电脑”，点 <b>更多信息</b>，再点 <b>仍要运行</b>（Folio 暂未做代码签名）。</li>
+</ol>
+
+<h3 id="first-run">首次打开</h3>
+<p>第一次打开时会出现欢迎向导，帮你完成几件事，<b>每一步都可以跳过</b>，之后都能在设置里改：</p>
+<ul>
+  <li><b>从 Zotero 导入</b>：已有 Zotero 文献库的话一键搬过来，不会改动 Zotero 本身。</li>
+  <li><b>安装浏览器插件</b>：在论文网页上一键保存到 Folio（见<a href="#browser">第 9 节</a>）。</li>
+  <li><b>AI 接入</b>：为电脑上已装的 AI 智能体打开 Folio 的接口（见<a href="#ai">第 10 节</a>）。</li>
+  <li><b>选择翻译服务</b>：先用免费的 Google / Microsoft 即可，随时可换。</li>
+</ul>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/onboarding.webp" alt="欢迎向导" loading="lazy"></div>
+<figcaption>欢迎向导。之后想再看一遍：<span class="os mac">Mac</span> <span class="path">帮助 ▸ 欢迎使用 Folio…</span>，<span class="os win">Windows</span> <span class="path">设置 ▸ 通用 ▸ 帮助</span>。</figcaption></figure>
+
+<h3 id="library-folder">文献库存在哪里</h3>
+<p>Folio 把所有论文、批注、笔记放在一个普通文件夹里，叫“文献库”：</p>
+<ul>
+  <li><span class="os mac">Mac</span> 默认是用户文件夹下的 <code>~/Folio</code></li>
+  <li><span class="os win">Windows</span> 默认是 <code>C:\Users\你的用户名\Folio</code></li>
+</ul>
+<p>想换位置（比如放进同步盘），在 <span class="path">设置 ▸ 文献库 ▸ 文献库位置</span> 点 <b>更改…</b>，Folio 会把整个文献库搬过去。两个系统的文献库格式完全相同，可以直接打开对方的文献库文件夹。</p>
+<div class="callout tip"><div><p>不要手动改文献库文件夹里的文件名或删除文件，请在 Folio 里操作；PDF 里的批注 Folio 会自己写回文件。</p></div></div>
+</section>
+
+<!-- 2 -->
+<section id="tour">
+<h2><span class="num">2</span>认识界面</h2>
+<p>文献库窗口分三栏：左边是<b>边栏</b>（文献库、分组、标签），中间是<b>文献列表</b>，右边是<b>检查器</b>（所选文献的信息、标注和笔记）。把鼠标移到图上的数字，看看每一处是做什么的：</p>
+<figure data-tour="tour-legend"><div class="frame">
+  <img src="assets/img/docs/library.webp" alt="文献库窗口" loading="lazy">
+  <button class="hotspot" style="left:2.1%;top:4.2%">1</button>
+  <button class="hotspot" style="left:14.2%;top:4.2%">2</button>
+  <button class="hotspot" style="left:9%;top:12%">3</button>
+  <button class="hotspot" style="left:12%;top:28.7%">4</button>
+  <button class="hotspot" style="left:9%;top:65.6%">5</button>
+  <button class="hotspot" style="left:49.2%;top:4.2%">6</button>
+  <button class="hotspot" style="left:55.2%;top:4.2%">7</button>
+  <button class="hotspot" style="left:69%;top:4.2%">8</button>
+  <button class="hotspot" style="left:31%;top:8.1%">9</button>
+  <button class="hotspot" style="left:33%;top:36%">10</button>
+  <button class="hotspot" style="left:89.5%;top:20%">11</button>
+  <button class="hotspot" style="left:87.4%;top:4.2%">12</button>
+</div><figcaption>Windows 版的文献库窗口；Mac 版布局相同，按钮在窗口顶部的工具栏里。</figcaption></figure>
+<ol class="legend" id="tour-legend">
+  <li><b class="n">1</b><span><b>设置</b>：点一下打开设置（<span class="os mac">Mac</span> 在菜单 <span class="path">Folio ▸ 设置…</span>，<kbd>⌘</kbd><kbd>,</kbd>）。</span></li>
+  <li><b class="n">2</b><span><b>显示 / 隐藏边栏</b>。</span></li>
+  <li><b class="n">3</b><span><b>文献库</b>：所有文献、未分组、回收站。</span></li>
+  <li><b class="n">4</b><span><b>分组</b>：像文件夹一样，可嵌套四级。点“分组”旁的 ＋ 新建。</span></li>
+  <li><b class="n">5</b><span><b>标签</b>：彩色标签，一篇文献可以有多个。</span></li>
+  <li><b class="n">6</b><span><b>添加</b>：添加文件、通过 DOI 等添加、导入。</span></li>
+  <li><b class="n">7</b><span><b>打开 · 翻译 · 引用与导出</b>：对所选文献操作。</span></li>
+  <li><b class="n">8</b><span><b>搜索</b>：搜标题、作者、期刊、标签、笔记和全文。</span></li>
+  <li><b class="n">9</b><span><b>列标题</b>：点击排序，右键选择要显示的列。</span></li>
+  <li><b class="n">10</b><span><b>文献列表</b>：双击打开阅读，右键查看全部操作。▸ 展开可看到附件和译文。</span></li>
+  <li><b class="n">11</b><span><b>检查器</b>：信息、标注、笔记三个标签页。</span></li>
+  <li><b class="n">12</b><span><b>显示 / 隐藏检查器</b>。</span></li>
+</ol>
+<div class="callout note"><div><p>有新版本时，<b>边栏左下角</b>会出现一张小卡片“有新版本可用”，点它即可更新（见<a href="#update">第 13 节</a>）。</p></div></div>
+<div class="pair">
+<figure><div class="frame"><img src="assets/img/docs/item-selected.webp" alt="选中文献后的检查器" loading="lazy"></div><figcaption>选中一篇文献，右边的检查器显示它的信息、分区与影响因子、评分、阅读状态和附件。</figcaption></figure>
+<figure><div class="frame"><img src="assets/img/docs/library-dark.webp" alt="深色模式" loading="lazy"></div><figcaption>深色模式。在 <span class="path">设置 ▸ 通用 ▸ 外观</span> 切换，或跟随系统。</figcaption></figure>
+</div>
+</section>
+
+<!-- 3 -->
+<section id="add">
+<h2><span class="num">3</span>添加文献</h2>
+
+<h3 id="add-pdf">拖入 PDF（最常用）</h3>
+<ol class="steps">
+  <li>把一个或多个 PDF 拖进文献库窗口（拖到某个分组上，就直接放进那个分组）。</li>
+  <li>Folio 会在几秒内识别标题、作者、期刊、年份、DOI，建好条目。</li>
+  <li>识别完成后，可以在检查器里检查或修改信息。</li>
+</ol>
+<div class="pair">
+<figure><div class="frame"><img src="assets/img/import_drop.webp" alt="拖入 PDF" loading="lazy"></div><figcaption>把 PDF 拖进窗口。</figcaption></figure>
+<figure><div class="frame"><img src="assets/img/import_done.webp" alt="识别完成" loading="lazy"></div><figcaption>几秒后条目就建好了。</figcaption></figure>
+</div>
+<p>也可以点工具栏的 <b>＋ ▸ 添加文件…</b>（<span class="os mac">Mac</span> <kbd>⌘</kbd><kbd>O</kbd>，<span class="os win">Windows</span> <kbd>Ctrl</kbd><kbd>O</kbd>）选择文件。</p>
+<figure class="narrow"><div class="frame"><img src="assets/img/docs/add-menu.webp" alt="添加菜单" loading="lazy"></div><figcaption>工具栏的 ＋ 菜单：添加文件、通过标识符添加、新建分组 / 标签、导入。</figcaption></figure>
+
+<h3 id="add-id">通过 DOI、arXiv 编号或 ISBN 添加</h3>
+<p>手头只有 DOI、arXiv 编号（如 <code>2501.01234</code>）或书的 ISBN 时：点 <b>＋ ▸ 通过标识符添加…</b>（<kbd>⇧</kbd><kbd>⌘</kbd><kbd>O</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd>），粘贴进去即可，一次可以粘贴多个。能找到开放获取 PDF 时会一并下载。</p>
+
+<h3 id="add-import">导入 BibTeX / RIS，或从 Zotero 迁移</h3>
+<ul>
+  <li><b>BibTeX / RIS</b>：<b>＋ ▸ 导入 BibTeX / RIS…</b>，选择 <code>.bib</code> 或 <code>.ris</code> 文件。</li>
+  <li><b>Zotero</b>：<b>＋ ▸ 从 Zotero 导入…</b>，或 <span class="path">设置 ▸ 文献库 ▸ 导入</span>。条目、分组、标签、附件和笔记都会搬过来；<b>只读不写，不会改动 Zotero 的数据</b>。</li>
+  <li><b>浏览器</b>：在论文页面点 Folio 插件按钮，一键保存（见<a href="#browser">第 9 节</a>）。</li>
+</ul>
+
+<h3 id="metadata">元数据识别与修正</h3>
+<p>Folio 会依次查询 Zotero 识别服务、Crossref、arXiv、OpenAlex、DBLP、CVF 等来源。识别不准或没识别出来时：</p>
+<ul>
+  <li><b>重新检索</b>：右键文献 ▸ <b>重新检索元数据</b>（<kbd>⌥</kbd><kbd>⌘</kbd><kbd>R</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd>）。</li>
+  <li><b>手动修改</b>：在检查器里直接点字段编辑（标题、作者、年份、期刊、DOI 等），文献类型可在顶部切换。</li>
+  <li>识别完成后，Folio 默认按“作者_年份_标题”重命名文件，可在 <span class="path">设置 ▸ 文献库 ▸ 文件</span> 关闭。</li>
+</ul>
+<figure class="narrow"><div class="frame"><img src="assets/img/docs/context-menu.webp" alt="文献右键菜单" loading="lazy"></div><figcaption>右键菜单集中了对一篇文献的全部操作：打开、加入分组、标签、阅读状态、评分、引用、笔记、翻译、识别文字、附件、重新检索、删除。</figcaption></figure>
+
+<h3 id="ocr">扫描件识别文字（OCR）</h3>
+<p>扫描版 PDF 里的字其实是图片，无法选中、搜索和翻译。Folio 导入扫描件后会<b>自动识别文字</b>（中英文），识别后就能选中、搜索、翻译，也能重新检索元数据。也可以手动触发：右键文献 ▸ <b>识别文字（OCR）</b>，或在阅读器里点“识别文字”。</p>
+<div class="callout note"><div><p><span class="os win">Windows</span> 使用 Windows 自带的文字识别，需要系统装有对应语言的“光学字符识别”组件（中文 Windows 默认只有中文）。识别英文论文效果不好时，请看<a href="#image-text">“翻译图片中的文字”</a>里的说明。</p></div></div>
+</section>
+
+<!-- 4 -->
+<section id="organize">
+<h2><span class="num">4</span>整理与查找</h2>
+
+<h3 id="groups">分组</h3>
+<ul>
+  <li><b>新建</b>：点边栏“分组”旁的 ＋，或 <kbd>⇧</kbd><kbd>⌘</kbd><kbd>N</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd>。右键某个分组 ▸ <b>新建子分组…</b>，最多嵌套<b>四级</b>。</li>
+  <li><b>放入分组</b>：把文献拖到分组上，或右键文献 ▸ <b>添加到</b>。一篇文献可以同时在多个分组里（不是复制，只是归类）。</li>
+  <li><b>整理分组</b>：拖动分组可调整层级；右键分组可重命名、设置颜色、删除（删除分组不会删除里面的文献）。</li>
+  <li>在 <span class="path">设置 ▸ 通用 ▸ 列表</span> 打开“父分组中显示子分组的条目”，点父分组时就能看到下面所有子分组的文献。</li>
+</ul>
+
+<h3 id="tags">标签、阅读状态与评分</h3>
+<ul>
+  <li><b>标签</b>：右键文献 ▸ <b>标签</b>，勾选或新建。右键边栏里的标签可改名、换颜色。点边栏的标签，列表就只显示带这个标签的文献。</li>
+  <li><b>阅读状态</b>：未读 / 在读 / 已读，在检查器或右键菜单里设置。打开未读的论文时会自动标为“在读”（可在设置里关闭）。</li>
+  <li><b>评分</b>：一到五星，在检查器里点星星。</li>
+</ul>
+<figure class="medium"><div class="frame"><img src="assets/img/tag_mustread.webp" alt="按标签筛选" loading="lazy"></div><figcaption>点边栏的标签，只看这一类论文。</figcaption></figure>
+
+<h3 id="search">搜索</h3>
+<p>在右上角搜索框输入关键词（<kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd>），会同时搜索标题、作者、期刊、年份、标签、笔记以及 <b>PDF 全文</b>。多个词用空格隔开，表示都要包含。</p>
+<figure><div class="frame"><img src="assets/img/search.webp" alt="搜索" loading="lazy"></div><figcaption>输入关键词，列表即时筛选出相关文献。</figcaption></figure>
+
+<h3 id="columns">列表与列</h3>
+<ul>
+  <li><b>排序</b>：点列标题；再点一次反向。</li>
+  <li><b>选择显示的列</b>：在列标题上右键，可选标题、来源、作者、年份、分区、影响因子、标签、评分、阅读状态、添加日期等。拖动列标题调整顺序，拖动边线调整宽度。</li>
+  <li><b>多个文件</b>：一篇文献可以挂多个文件（正文、补充材料、译文）。点行首的 ▸ 展开查看。右键 ▸ <b>添加文件…</b> 可补充附件。</li>
+</ul>
+
+<h3 id="metrics">期刊分区与影响因子</h3>
+<p>在 <span class="path">设置 ▸ 检索 ▸ 期刊指标</span> 填入 easyScholar 密钥后，检查器会在“来源”下方显示中科院分区、JCR 分区、影响因子、CCF 等彩色标签，列表也可以添加“分区”“影响因子”列并排序。</p>
+<ol class="steps">
+  <li>登录 <a href="https://www.easyscholar.cc">easyScholar</a>，在“开放接口”页面复制 SecretKey。</li>
+  <li>粘贴到 <span class="path">设置 ▸ 检索 ▸ easyScholar 密钥</span>，点 <b>测试</b> 确认可用。</li>
+  <li>打开“自动获取期刊分区与影响因子”。同一期刊只查询一次，结果缓存 30 天；右键文献 ▸ <b>刷新期刊指标</b> 可立即更新。</li>
+</ol>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/settings-retrieval.webp" alt="检索设置" loading="lazy"></div><figcaption>设置 ▸ 检索：元数据检索与期刊指标。</figcaption></figure>
+
+<h3 id="trash">回收站</h3>
+<p>删除的文献先进回收站，可以随时还原。右键回收站 ▸ <b>清空回收站…</b> 才会真正删除。默认会自动彻底删除放了超过 30 天的内容，可在 <span class="path">设置 ▸ 文献库 ▸ 文件</span> 关闭。</p>
+</section>
+
+<!-- 5 -->
+<section id="read">
+<h2><span class="num">5</span>阅读与批注</h2>
+
+<h3 id="reader">阅读器</h3>
+<ul>
+  <li><b>打开</b>：双击文献，或选中后按 <kbd>Return</kbd> / <kbd>Enter</kbd>。每篇论文一个标签页，可以同时开多篇，Folio 会记住每篇读到的位置。</li>
+  <li><b>翻页与缩放</b>：滚动阅读；<kbd>⌘</kbd><kbd>+</kbd> / <kbd>⌘</kbd><kbd>-</kbd>（Windows 用 <kbd>Ctrl</kbd>）缩放。首次打开的缩放、单页 / 双页显示可在 <span class="path">设置 ▸ 阅读</span> 设定。</li>
+  <li><b>查找</b>：<kbd>⌘</kbd><kbd>F</kbd> / <kbd>Ctrl</kbd><kbd>F</kbd> 在当前论文中查找，<kbd>⌘</kbd><kbd>G</kbd> 下一个。</li>
+  <li><b>目录与缩略图</b>：在阅读器侧边栏切换，点击跳转。</li>
+  <li><b>打印</b>：<kbd>⌘</kbd><kbd>P</kbd> / <kbd>Ctrl</kbd><kbd>P</kbd>。</li>
+  <li><b>自定义工具栏</b>：<span class="os mac">Mac</span> 在工具栏上右键 ▸ 自定义工具栏…；<span class="os win">Windows</span> 右键阅读器工具栏 ▸ <b>自定义工具栏…</b>，可添加缩放、翻页、对照阅读、打印等按钮并拖动排序。</li>
+  <li>想用别的阅读器打开 PDF：<span class="path">设置 ▸ 通用 ▸ 打开</span> 里选择“系统默认应用”或指定应用。</li>
+</ul>
+<figure><div class="frame"><img src="assets/img/reader.webp" alt="阅读器" loading="lazy"></div><figcaption>阅读器：左侧目录，上方是批注工具，右侧可以边读边写笔记。</figcaption></figure>
+
+<h3 id="annotate">批注工具</h3>
+<p>批注<b>直接写进 PDF 文件</b>，换任何 PDF 阅读器都能看到。工具栏上的工具：</p>
+<div class="table"><table>
+<tr><th>工具</th><th>用法</th></tr>
+<tr><td>高亮 / 下划线 / 删除线</td><td>选中工具后拖选文字；也可以先选中文字再点工具。点批注可改颜色或删除。默认高亮颜色在 <span class="path">设置 ▸ 阅读 ▸ 批注</span>。</td></tr>
+<tr><td>便签</td><td>在页面上点一下，写下评论。</td></tr>
+<tr><td>文本框</td><td>在页面上放一段文字，可拖动、调整大小。</td></tr>
+<tr><td>手绘</td><td>用鼠标或触控板 / 触控笔自由画线、圈画。</td></tr>
+<tr><td>橡皮擦</td><td>擦掉手绘笔迹的任意部分（<kbd>⌃</kbd><kbd>⌘</kbd><kbd>E</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>E</kbd>）。大小分小、中、大三档，按 <kbd>[</kbd> <kbd>]</kbd> 切换。</td></tr>
+</table></div>
+<p>检查器的 <b>标注</b> 标签页列出这篇论文的全部批注，点一条就跳到那一页。批注作者名可在 <span class="path">设置 ▸ 阅读 ▸ 批注作者</span> 设置。</p>
+
+<h3 id="edit-pdf">编辑 PDF 文字</h3>
+<p>发现原文或译文有错字、译得不准？可以直接改 PDF 里的文字：</p>
+<ol class="steps">
+  <li>在阅读器工具栏点 <b>编辑 PDF</b>（或菜单 <span class="path">批注 ▸ 编辑 PDF 文字</span>），按钮高亮表示正在编辑。</li>
+  <li>点要改的文字，出现光标后直接输入、删除，就像在文档里打字。</li>
+  <li>点页面别处、按 <kbd>Esc</kbd> 或回车即自动保存。编辑中 <kbd>⌘</kbd><kbd>Z</kbd> / <kbd>Ctrl</kbd><kbd>Z</kbd> 撤销键入，保存后也可以整体撤销。</li>
+</ol>
+<div class="callout tip"><div><p>改动会沿用原文的字体、字号、颜色与词距，只重排受影响的几行，其余排版不变；公式、引用和链接会跟着文字移动。排不下时会稍微收紧行距，仍然超出会提示你。</p></div></div>
+
+<h3 id="quicklook">快速预览</h3>
+<p>在列表里选中文献后按 <kbd>空格</kbd>（<span class="os win">Windows</span> 也可以按鼠标中键，或很多触控板的三指点按），不打开阅读器就能快速翻看 PDF；按方向键切换到上一篇 / 下一篇。</p>
+
+<h3 id="notes">笔记</h3>
+<ul>
+  <li>每篇文献有一篇 <b>Markdown 笔记</b>：检查器的“笔记”标签页，或右键 ▸ <b>编辑笔记</b>（<kbd>⌥</kbd><kbd>⌘</kbd><kbd>N</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>N</kbd>）。</li>
+  <li>阅读时选中一段文字，右键 ▸ <b>添加到笔记</b>（<span class="os mac">Mac</span> <kbd>⌃</kbd><kbd>⌘</kbd><kbd>M</kbd>），会连同页码一起记下；划词翻译的小窗里也能把译文加入笔记。</li>
+  <li>笔记就是普通的 Markdown 文本，保存在文献库里，可以用任何编辑器打开。</li>
+</ul>
+<figure class="narrow"><div class="frame"><img src="assets/img/docs/notes.webp" alt="笔记" loading="lazy"></div><figcaption>检查器的“笔记”标签页。</figcaption></figure>
+</section>
+
+<!-- 6 -->
+<section id="translate">
+<h2><span class="num">6</span>整篇翻译</h2>
+<p>Folio 内置翻译引擎，不用另外下载。翻译后的 PDF <b>保留原来的版面、公式、图表</b>，引用和章节链接依然能点；翻译途中就能打开边译边读。译文作为附件存进同一篇文献，命名如“论文（简体中文译文 · DeepSeek · deepseek-chat）.pdf”。</p>
+
+<h3 id="translate-how">开始翻译</h3>
+<ol class="steps">
+  <li>选中一篇或多篇文献（多选即批量翻译），右键 ▸ <b>翻译全文…</b>，或工具栏的翻译按钮（<kbd>⌃</kbd><kbd>⌘</kbd><kbd>T</kbd> / <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd>）。</li>
+  <li>在弹出的面板里确认翻译服务、语言和选项（这些会成为之后的默认值），点 <b>开始翻译</b>。</li>
+  <li>列表里会显示进度；完成后弹出提示，点“打开译文”即可阅读。翻译途中也可以打开阅读器，已经译好的页会先显示出来。</li>
+</ol>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/translate-sheet.webp" alt="翻译全文面板" loading="lazy"></div><figcaption>“翻译全文”面板：服务、语言、输出形式、页码范围，以及是否翻译表格、图片中的文字、参考文献。</figcaption></figure>
+<figure><div class="frame"><img src="assets/img/translating.webp" alt="翻译进行中" loading="lazy"></div><figcaption>翻译进行中：进度条显示当前在做什么、译到第几段。</figcaption></figure>
+
+<h3 id="translate-options">翻译选项</h3>
+<div class="table"><table>
+<tr><th>选项</th><th>说明</th></tr>
+<tr><td>原文语言 / 译文语言</td><td>一般是英语 → 简体中文，也支持日、韩、法、德、西等常用语言。</td></tr>
+<tr><td>生成</td><td><b>纯译文</b>（只有译文的 PDF）、<b>双语对照</b>，或两者都要。</td></tr>
+<tr><td>双语排版</td><td>原文与译文<b>左右并排</b>，或原文页与译文页<b>交替</b>。</td></tr>
+<tr><td>页码范围</td><td>只译部分页，如 <code>1-3,5</code>；留空译全部。</td></tr>
+<tr><td>翻译表格</td><td>表格逐格翻译。</td></tr>
+<tr><td>翻译图片中的文字</td><td>识别插图里的文字并在原位置换成译文，见<a href="#image-text">下文</a>。</td></tr>
+<tr><td>翻译参考文献</td><td>默认不翻译参考文献列表。</td></tr>
+<tr><td>术语表（选填）</td><td>一个 CSV 文件，每行“原文, 译文”，让专有名词按你的译法翻译。即使不填，使用大模型时 Folio 也会先从论文里自动提取术语表，让同一个词前后译法一致。</td></tr>
+<tr><td>再次翻译</td><td>同一服务与模型重复翻译时，<b>保留两者</b>或<b>替换旧的译文</b>。</td></tr>
+<tr><td>同时翻译 / 同时请求数</td><td>批量翻译时同时进行几篇；每篇同时发几个请求。遇到服务限流（报错 429）时调小。</td></tr>
+<tr><td>重新翻译（不使用缓存）</td><td>Folio 会缓存已译段落，再译同一篇时直接复用、几乎瞬间完成；勾选此项则全部重译。</td></tr>
+</table></div>
+<p>以上选项在“翻译全文”面板和 <span class="path">设置 ▸ 翻译</span> 中都能改。</p>
+
+<h3 id="services">选择翻译服务</h3>
+<p>在 <span class="path">设置 ▸ 翻译 ▸ 翻译服务</span> 选择。服务分五类，按需选用：</p>
+<div class="table"><table>
+<tr><th>类别</th><th>服务</th><th>适合谁</th></tr>
+<tr><td>免费</td><td>Google、Microsoft</td><td>开箱即用，不用任何配置。频繁使用可能被限流，两者会自动互为备用。</td></tr>
+<tr><td>本机</td><td>Ollama、LM Studio、<span class="os mac">Mac</span> Apple 系统翻译（离线，需要 macOS 26）</td><td>不想把论文发到网上；需要电脑上先运行模型。</td></tr>
+<tr><td>本机智能体</td><td>Claude Code、Codex、Gemini CLI、CodeBuddy（WorkBuddy）、Grok CLI、Antigravity CLI、GitHub Copilot CLI、Cursor CLI、Qwen Code、Kimi CLI、Kiro CLI、Cline CLI、opencode、Factory Droid、Amp、goose、pi、Hermes Agent、OpenClaw、DeepSeek Harness</td><td>已经装好并登录了这些 AI 编程工具的人：<b>用你已有的账号翻译，不用另配 API Key</b>。翻译质量高。</td></tr>
+<tr><td>大模型 API</td><td>OpenAI、Anthropic Claude、Gemini、DeepSeek、阿里云百炼、智谱 AI、SiliconFlow、ModelScope、Groq、xAI Grok、Azure OpenAI、OpenAI 兼容接口（中转站等）</td><td>有 API Key 的人。速度快、质量高。</td></tr>
+<tr><td>机器翻译 API</td><td>DeepL、Azure 翻译、腾讯云机器翻译、通义千问 MT、自定义命令行翻译器</td><td>需要稳定的商用机器翻译。</td></tr>
+</table></div>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/settings-translation.webp" alt="翻译设置" loading="lazy"></div><figcaption>设置 ▸ 翻译。选择服务后，下方会出现该服务需要填写的项目（API Key、地址、模型等）。</figcaption></figure>
+<ul>
+  <li><b>填写 API Key</b>：密钥由系统加密保存（Mac 钥匙串、Windows DPAPI），不会明文存放。</li>
+  <li><b>测试</b>：填好后点“测试”，用一句话确认服务可用。</li>
+  <li><b>配置</b>：同一个服务可以“存为配置…”保存多套地址 / 模型 / Key（比如两个中转站），在“配置”下拉框里切换。</li>
+</ul>
+
+<h3 id="agents">用本机智能体翻译</h3>
+<p>电脑上装好并登录了 Claude Code、Codex、Gemini CLI 等 AI 工具，Folio 会自动找到它们，列在服务菜单的“本机”分组里（没装的不显示）。选中后状态行会显示“已找到 …（版本）”。</p>
+<div class="callout tip"><div><p>没找到？先在终端里运行一次该工具并完成登录，再回到设置页。装在特殊位置的，可以在服务的“高级”里填写命令路径。</p></div></div>
+<h4>CodeBuddy（WorkBuddy）</h4>
+<p>WorkBuddy 桌面版的登录只能在它自己的应用里用，其他程序借用不了。Folio 用的是同一账号的 <b>CodeBuddy 命令行</b>：</p>
+<ol class="steps">
+  <li>选择服务“CodeBuddy（WorkBuddy）”。如果检测到你装了 WorkBuddy 但还没装命令行，会显示提示和 <b>安装 CodeBuddy 命令行</b> 按钮，点一下自动安装。</li>
+  <li>安装完成后会自动打开终端（Windows 是命令行窗口），选择<b>中国站</b>，用 WorkBuddy 的腾讯账号登录一次。</li>
+  <li>回到 Folio，状态变为“已找到”即可使用。只有尚未登录时才会出现“在终端登录”按钮。</li>
+</ol>
+<p>模型列表读取你账号实际可用的全部模型；不选模型时 Folio 自动选用账号里速度快的模型。</p>
+
+<h3 id="thinking">模型与思考程度</h3>
+<ul>
+  <li><b>模型</b>：在“模型”框里输入，或点右侧箭头从服务提供的列表里选（列表读自服务本身或智能体自己的配置）。留空表示用服务 / 智能体的默认模型。</li>
+  <li><b>思考程度</b>：支持推理的模型和智能体会显示这一项（如 低 / 中 / 高）。标有“<b>（推荐）</b>”的是 Folio 默认使用的档位——翻译不需要深度思考，<b>越低越快</b>，质量差别很小。</li>
+  <li>有的模型名字本身就带档位（如 <code>gemini-3.8-flash-high</code>），这时思考程度“由所选模型决定”；不支持推理的模型会显示“当前模型不支持”。</li>
+  <li><b>由智能体决定</b>：不传这个参数，沿用智能体自己的设置。</li>
+</ul>
+
+<h3 id="image-text">翻译图片中的文字</h3>
+<p>论文插图（流程图、框图、坐标轴、图例）里的英文，打开“<b>翻译图片中的文字</b>”后也会翻译：Folio 识别图中的文字，只擦掉文字笔画，在原位置换上译文。图形、线条和配色保持不变，字号、对齐、居中和对称关系也照原样保留。</p>
+<ul>
+  <li>跨几行的标注会作为一整句翻译，再按原来的行数分回去；✓ ✗、箭头等图标保持原样；SnakeSAM、ResNet 这类名称不翻译。</li>
+  <li>会结合论文标题、摘要、术语表和图注来翻译图中的专业名词，与正文译法一致。</li>
+  <li>图片文字与正文同时识别、同时翻译，一般只多花几秒。</li>
+</ul>
+<div class="callout warn"><div>
+<p><span class="os win">Windows</span> 图片文字由 Windows 自带的“文字识别”读取，它按语言分别安装，<b>中文 Windows 默认只有中文</b>。用中文识别读英文插图，小字和斜体容易读错，Folio 会把读不准的标注保留原文，以免出现乱码。</p>
+<p>要完整翻译英文插图，请安装英文文字识别：打开 <span class="path">设置 ▸ 翻译</span>，在“翻译图片中的文字”下方会提示“Windows 没有安装英语的文字识别”，点 <b>安装…</b>，在 Windows 的弹窗里确认管理员权限，装完重新启动 Folio。也可以在 <span class="path">Windows 设置 ▸ 时间和语言 ▸ 语言</span> 添加英语并勾选“光学字符识别”。</p>
+<p><span class="os mac">Mac</span> 自带多语言识别，不需要额外安装。</p>
+</div></div>
+
+<h3 id="parallel">对照阅读</h3>
+<p>翻译完成后，在阅读器里点 <b>对照阅读</b>，原文与译文并排显示，方便逐段对照。阅读器工具栏的翻译按钮菜单里也能随时切换、重新翻译或取消翻译。</p>
+<figure><div class="frame"><img src="assets/img/parallel.webp" alt="对照阅读" loading="lazy"></div><figcaption>对照阅读：左边原文，右边保留排版的译文。</figcaption></figure>
+
+<h3 id="speed">速度与出错</h3>
+<ul>
+  <li><b>为什么有的服务慢</b>：本机智能体每次请求都要启动一个程序，单批需要几秒到几十秒；Folio 会把论文分成多批<b>同时</b>翻译（默认 8 批并行）。推理模型想得越多越慢，把思考程度调低是最有效的提速办法。</li>
+  <li><b>出错时</b>：每次请求失败，Folio 都会<b>立刻弹出提示</b>，写明服务返回的具体原因（如“服务器拒绝连接”“API Key 无效”“额度用完”），并显示正在第几次重试。一分钟没有收到回复时，进度会显示“正在等待某某回复（已等 N 分钟）”。</li>
+  <li><b>最终失败</b>会弹窗说明原因，可以点“重试”，或点“查看日志”。翻译日志在 <span class="path">设置 ▸ 翻译 ▸ 翻译引擎 ▸ 翻译日志</span>。</li>
+  <li><b>部分段落被拒绝</b>：有的服务有内容审核，被拒的段落保留原文，完成时会告诉你有几段。</li>
+</ul>
+<div class="callout tip"><div><p>常见错误和对应的解决办法见<a href="#faq">常见问题</a>。</p></div></div>
+</section>
+
+<!-- 7 -->
+<section id="selection">
+<h2><span class="num">7</span>划词翻译</h2>
+<p>阅读时选中一段文字，就能在小窗里看到译文，可以拷贝、加入笔记，或换一个服务再译。</p>
+<ul>
+  <li><b>触发方式</b>（<span class="path">设置 ▸ 划词翻译 ▸ 触发方式</span>）：选中后显示翻译按钮（默认）/ 选中后自动翻译 / 仅使用快捷键。</li>
+  <li><b>快捷键</b>：默认 <kbd>⌥</kbd><kbd>D</kbd> / <kbd>Alt</kbd><kbd>D</kbd>，点快捷键按钮后按下新组合即可修改。</li>
+  <li><b>服务</b>：可与全文翻译相同，也可单独选一个更快的服务。免费服务被限流时，Google 与 Microsoft 会自动互为备用。</li>
+  <li>小窗可以拖到任意位置，之后都在那里显示；关掉后恢复跟随选区。</li>
+</ul>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/settings-selection.webp" alt="划词翻译设置" loading="lazy"></div><figcaption>设置 ▸ 划词翻译。</figcaption></figure>
+</section>
+
+<!-- 8 -->
+<section id="cite">
+<h2><span class="num">8</span>引用与导出</h2>
+<ul>
+  <li><b>复制引用</b>：选中文献，<kbd>⇧</kbd><kbd>⌘</kbd><kbd>C</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd> 按默认样式复制参考文献条目，直接粘贴到论文里。</li>
+  <li><b>其他样式</b>：工具栏的“引用与导出”或右键 ▸ <b>引用与导出 ▸ 复制引用</b>，可选 GB/T 7714-2015、APA、IEEE、MLA、Chicago、Harvard、Vancouver、Nature、BibTeX。默认样式在 <span class="path">设置 ▸ 通用</span> 设置。</li>
+  <li><b>文内引用</b>：“复制文内引用”得到 (Chen et al., 2025) 或 [1] 这样的格式。</li>
+  <li><b>导出</b>：导出 BibTeX、RIS、CSL JSON 文件（<kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd> / <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd>），供 LaTeX、Word 插件或其他软件使用。</li>
+</ul>
+<figure class="narrow"><div class="frame"><img src="assets/img/docs/cite-menu.webp" alt="引用与导出菜单" loading="lazy"></div><figcaption>“引用与导出”菜单。</figcaption></figure>
+</section>
+
+<!-- 9 -->
+<section id="browser">
+<h2><span class="num">9</span>浏览器插件</h2>
+<p>在期刊网站、arXiv、Google Scholar 等论文页面点一下插件按钮，论文（能下载时连同 PDF）就存进 Folio；在搜索结果页还能批量保存。Folio 需要在运行中。</p>
+<h4>Chrome、Edge、Brave、Arc、Vivaldi、Opera</h4>
+<ol class="steps">
+  <li>打开 <span class="path">设置 ▸ 浏览器</span>，在你的浏览器旁点 <b>安装…</b>。Folio 会打开浏览器的扩展页面，并显示 Folio 插件文件夹（<span class="os mac">Mac</span> 安装向导里有一个可拖动的文件夹卡片，<span class="os win">Windows</span> 会在资源管理器中选中它）。</li>
+  <li>在扩展页面打开右上角（Edge 在左侧）的 <b>开发者模式</b>。</li>
+  <li>把插件文件夹<b>直接拖进扩展页面</b>，松开即安装。也可以点“加载已解压的扩展程序”选择这个文件夹。</li>
+</ol>
+<p>Folio 更新后插件文件会自动更新。</p>
+<h4>Firefox</h4>
+<p>在地址栏打开 <code>about:debugging#/runtime/this-firefox</code>，点“临时载入附加组件…”，选择插件文件夹里的 <code>manifest.json</code>。Firefox 重启后需要重新载入。</p>
+<h4><span class="os mac">Mac</span> Safari</h4>
+<ol class="steps">
+  <li>Safari ▸ 设置 ▸ 高级，勾选“显示网页开发者功能”。</li>
+  <li>Safari ▸ 设置 ▸ 开发者，勾选“允许未签名的扩展”（每次重新打开 Safari 后需再勾选一次）。</li>
+  <li>Safari ▸ 设置 ▸ 扩展，勾选“Folio 文献保存”，并允许它在所有网站上使用。</li>
+</ol>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/settings-browser.webp" alt="浏览器设置" loading="lazy"></div><figcaption>设置 ▸ 浏览器：列出电脑上找到的浏览器和安装状态。</figcaption></figure>
+<div class="callout note"><div><p>插件通过本机的 <code>127.0.0.1:23120</code> 与 Folio 通信，只接受浏览器扩展的请求，不对外开放。不需要时可在 <span class="path">设置 ▸ 浏览器</span> 关闭“允许浏览器插件保存到 Folio”。</p></div></div>
+</section>
+
+<!-- 10 -->
+<section id="ai">
+<h2><span class="num">10</span>AI 接入</h2>
+<p>Folio 内置 MCP 服务器和命令行工具 <code>folio-cli</code>，让 Claude Code、Codex、Gemini CLI、Cursor 等 AI 智能体能<b>按描述找论文、读全文和批注、生成准确的引用</b>，甚至帮你整理分组和标签。</p>
+<ol class="steps">
+  <li>打开 <span class="path">设置 ▸ AI</span>。Folio 列出电脑上找到的智能体（装好后点“重新检测”）。</li>
+  <li>每个智能体有两个开关：<b>MCP</b>（让它调用 Folio 的 26 个工具）和 <b>技能</b>（教它怎么用 Folio、哪些操作要先问你）。打开即写入该智能体的配置，修改前自动备份；关闭即移除。</li>
+  <li>重启智能体或开始新会话后生效。然后就可以对它说：“在我的文献库里找关于血管分割的综述，并给出 GB/T 7714 格式的引用。”</li>
+</ol>
+<figure class="medium"><div class="frame"><img src="assets/img/docs/settings-ai.webp" alt="AI 设置" loading="lazy"></div><figcaption>设置 ▸ AI。</figcaption></figure>
+<ul>
+  <li><b>只读模式</b>：关闭“允许 AI 修改文献库”后，智能体只能检索、阅读和引用。</li>
+  <li><b>其他应用</b>：VS Code、Zed、Windsurf 等支持 MCP 的编辑器，用“拷贝 MCP 配置”手动添加；也可以导出技能文件夹或技能包。</li>
+  <li><b>命令行</b>：<code>folio-cli search | get | cite | export | add | open</code> 供只能运行命令的工具使用，<code>folio-cli status</code> 检查文献库和权限。位置：<span class="os mac">Mac</span> <code>/Applications/Folio.app/Contents/MacOS/folio-cli</code>，<span class="os win">Windows</span> 在 <code>Folio.exe</code> 旁边。</li>
+</ul>
+</section>
+
+<!-- 11 -->
+<section id="settings">
+<h2><span class="num">11</span>设置详解</h2>
+<p>打开设置：<span class="os mac">Mac</span> <kbd>⌘</kbd><kbd>,</kbd>；<span class="os win">Windows</span> 点左上角齿轮。</p>
+<h3 id="settings-general">通用</h3>
+<div class="pair">
+<figure><div class="frame"><img src="assets/img/docs/settings-general.webp" alt="通用设置" loading="lazy"></div></figure>
+<div>
+<ul>
+  <li><b>外观</b>：自动 / 浅色 / 深色；<b>背景透明度</b>调节列表与阅读器背景的磨砂程度（macOS 26 的 Liquid Glass、Windows 11 的亚克力）。</li>
+  <li><b>打开</b>：PDF 用 Folio 阅读器、系统默认应用或指定应用打开；打开未读论文时标为“在读”；启动时重新打开上次的标签页。</li>
+  <li><b>列表</b>：父分组中显示子分组的条目；默认引用样式。</li>
+  <li><b>语言</b>：界面语言，跟随系统、简体中文或 English，重新启动后生效。</li>
+  <li><b>软件更新</b>：检查更新、自动检查、自动下载、接收测试版。</li>
+  <li><b>帮助</b>：欢迎向导、使用文档、主页、报告问题。</li>
+</ul>
+</div></div>
+<h3 id="settings-reader">阅读</h3>
+<p>首次打开的缩放（适合页宽 / 实际大小）、单页或双页连续、页面阴影；默认高亮颜色、批注作者。</p>
+<h3 id="settings-library">文献库</h3>
+<p>文献库位置（更改会搬移整个文献库）、打开其他文献库、按“作者_年份_标题”重命名文件、自动清理回收站、从 Zotero 导入。</p>
+<h3 id="settings-retrieval">检索</h3>
+<p>添加 PDF 后自动检索元数据、使用 Zotero 识别服务（会发送 PDF 前 5 页文字，无需账号）、联系邮箱与 OpenAlex API Key（选填，可提高查询配额）、期刊指标。</p>
+<h3 id="settings-translation">翻译 / 划词翻译 / 浏览器 / AI</h3>
+<p>分别见<a href="#translate">第 6 节</a>、<a href="#selection">第 7 节</a>、<a href="#browser">第 9 节</a>、<a href="#ai">第 10 节</a>。</p>
+<div class="pair">
+<figure><div class="frame"><img src="assets/img/docs/settings-reader.webp" alt="阅读设置" loading="lazy"></div><figcaption>设置 ▸ 阅读</figcaption></figure>
+<figure><div class="frame"><img src="assets/img/docs/settings-library.webp" alt="文献库设置" loading="lazy"></div><figcaption>设置 ▸ 文献库</figcaption></figure>
+</div>
+</section>
+
+<!-- 12 -->
+<section id="sync">
+<h2><span class="num">12</span>多台电脑与同步</h2>
+<p>Folio 不需要账号，也没有服务器。想在实验室和家里、Mac 和 Windows 之间用同一个文献库：</p>
+<ol class="steps">
+  <li>把文献库文件夹移到同步盘（iCloud 云盘、OneDrive、坚果云、Dropbox 等）：<span class="path">设置 ▸ 文献库 ▸ 文献库位置 ▸ 更改…</span>。</li>
+  <li>在另一台电脑上安装 Folio，<span class="path">设置 ▸ 文献库 ▸ 打开其他文献库…</span>，选择同步盘里的同一个文件夹。</li>
+</ol>
+<div class="callout warn"><div><p>请等同步完成后再在另一台电脑上打开，并<b>避免两台电脑同时修改</b>同一个文献库，以免同步盘产生冲突副本。</p></div></div>
+</section>
+
+<!-- 13 -->
+<section id="update">
+<h2><span class="num">13</span>更新</h2>
+<ul>
+  <li>Folio 会定期自动检查新版本（可在 <span class="path">设置 ▸ 通用 ▸ 软件更新</span> 关闭）。发现新版本时，<b>边栏左下角</b>出现“有新版本可用”卡片，不会打断你阅读；点它查看更新内容并安装。</li>
+  <li>打开“自动下载更新”后会在后台下好，卡片变为“重新启动以更新”，点一下即完成。</li>
+  <li>手动检查：<span class="os mac">Mac</span> <span class="path">Folio ▸ 检查更新…</span>；<span class="os win">Windows</span> <span class="path">设置 ▸ 通用 ▸ 检查更新…</span>。</li>
+</ul>
+</section>
+
+<!-- 14 -->
+<section id="keys">
+<h2><span class="num">14</span>快捷键</h2>
+<div class="table"><table>
+<tr><th>操作</th><th><span class="os mac">Mac</span></th><th><span class="os win">Windows</span></th></tr>
+<tr><td>添加文件</td><td><kbd>⌘</kbd><kbd>O</kbd></td><td><kbd>Ctrl</kbd><kbd>O</kbd></td></tr>
+<tr><td>通过 DOI / arXiv / ISBN 添加</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>O</kbd></td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></td></tr>
+<tr><td>新建分组</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>N</kbd></td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd></td></tr>
+<tr><td>导入 BibTeX / RIS</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>I</kbd></td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>I</kbd></td></tr>
+<tr><td>导出参考文献</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd></td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>E</kbd></td></tr>
+<tr><td>复制引用</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>C</kbd></td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd></td></tr>
+<tr><td>搜索 / 查找</td><td><kbd>⌘</kbd><kbd>F</kbd></td><td><kbd>Ctrl</kbd><kbd>F</kbd></td></tr>
+<tr><td>快速预览</td><td><kbd>空格</kbd> 或 <kbd>⌘</kbd><kbd>Y</kbd></td><td><kbd>空格</kbd> 或鼠标中键</td></tr>
+<tr><td>添加选中文字到笔记（阅读时）</td><td><kbd>⌃</kbd><kbd>⌘</kbd><kbd>M</kbd></td><td>右键 ▸ 添加到笔记</td></tr>
+<tr><td>编辑笔记</td><td><kbd>⌥</kbd><kbd>⌘</kbd><kbd>N</kbd></td><td><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>N</kbd></td></tr>
+<tr><td>翻译全文</td><td><kbd>⌃</kbd><kbd>⌘</kbd><kbd>T</kbd></td><td><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd></td></tr>
+<tr><td>划词翻译（默认）</td><td><kbd>⌥</kbd><kbd>D</kbd></td><td><kbd>Alt</kbd><kbd>D</kbd></td></tr>
+<tr><td>重新检索元数据</td><td><kbd>⌥</kbd><kbd>⌘</kbd><kbd>R</kbd></td><td><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>R</kbd></td></tr>
+<tr><td>在 Finder / 资源管理器中显示</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>R</kbd></td><td><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>R</kbd></td></tr>
+<tr><td>橡皮擦</td><td><kbd>⌃</kbd><kbd>⌘</kbd><kbd>E</kbd></td><td><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>E</kbd></td></tr>
+<tr><td>显示 / 隐藏边栏</td><td><kbd>⌃</kbd><kbd>⌘</kbd><kbd>S</kbd></td><td>点边栏按钮</td></tr>
+<tr><td>显示 / 隐藏检查器</td><td><kbd>⌥</kbd><kbd>⌘</kbd><kbd>I</kbd></td><td>点检查器按钮</td></tr>
+<tr><td>回到文献库窗口</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>L</kbd></td><td>—</td></tr>
+<tr><td>打印</td><td><kbd>⌘</kbd><kbd>P</kbd></td><td><kbd>Ctrl</kbd><kbd>P</kbd></td></tr>
+<tr><td>设置</td><td><kbd>⌘</kbd><kbd>,</kbd></td><td>点左上角齿轮</td></tr>
+<tr><td>删除到回收站</td><td><kbd>⌘</kbd><kbd>⌫</kbd></td><td><kbd>Delete</kbd></td></tr>
+</table></div>
+<p>右键菜单里每一项旁边也会显示它的快捷键。</p>
+</section>
+
+<!-- 15 -->
+<section id="faq">
+<h2><span class="num">15</span>常见问题</h2>
+<details class="faq"><summary>拖入的 PDF 没有识别出标题和作者？</summary><div>
+<p>可能是扫描件（先等 OCR 完成）、或者 PDF 里没有 DOI 等信息。右键 ▸ 重新检索元数据；仍不行就在检查器里手动填写 DOI 后再检索，或直接手动填写各字段。</p></div></details>
+<details class="faq"><summary>翻译提示“API Key 无效 / 未授权”？</summary><div>
+<p>在 <span class="path">设置 ▸ 翻译</span> 重新粘贴 Key（注意不要带空格），点“测试”。使用中转站时，确认 Base URL 正确，一般以 <code>/v1</code> 结尾。</p></div></details>
+<details class="faq"><summary>翻译提示“请求太频繁（429）”或“额度用完”？</summary><div>
+<p>服务限流了。Folio 会自动等待后重试；频繁出现时把 <span class="path">设置 ▸ 翻译 ▸ 同时请求数</span> 调小，或换一个服务。额度用完需要到服务商处充值。</p></div></details>
+<details class="faq"><summary>用智能体翻译提示“还不能使用 / 需要登录”？</summary><div>
+<p>先在终端里运行一次该智能体（例如 <code>claude</code>、<code>codex</code>），按提示完成登录，然后回到 Folio 重试。CodeBuddy 见<a href="#agents">CodeBuddy 的说明</a>。</p></div></details>
+<details class="faq"><summary>翻译很慢怎么办？</summary><div>
+<p>把“思考程度”调到推荐的最低档；选择速度更快的模型（例如 flash / mini 系列）；免费服务被限流时换成大模型 API。只想先看一部分时，在“页码范围”里只填前几页。</p></div></details>
+<details class="faq"><summary>译文里个别地方翻得不对？</summary><div>
+<p>直接用<a href="#edit-pdf">编辑 PDF 文字</a>修改；或者把常用术语写进术语表 CSV，下次翻译会按你的译法。勾选“重新翻译（不使用缓存）”可以整篇重译。</p></div></details>
+<details class="faq"><summary>图片里的文字没有翻译，或在 Windows 上识别得不好？</summary><div>
+<p>确认翻译时打开了“翻译图片中的文字”。Windows 需要安装论文语言的文字识别，见<a href="#image-text">翻译图片中的文字</a>。字太小（印刷后难以辨认，如截图中的软件按钮）的文字会被跳过。</p></div></details>
+<details class="faq"><summary>浏览器插件点了没反应？</summary><div>
+<p>确认 Folio 正在运行，且 <span class="path">设置 ▸ 浏览器</span> 中“允许浏览器插件保存到 Folio”已打开；Safari 每次重启后要重新勾选“允许未签名的扩展”。</p></div></details>
+<details class="faq"><summary>打不开文献库 / 提示文献库位置无效？</summary><div>
+<p>同步盘可能还没下载完。等同步完成后，在 <span class="path">设置 ▸ 文献库</span> 中重新选择文献库位置。</p></div></details>
+<details class="faq"><summary>怎么反馈问题？</summary><div>
+<p>在 <a href="https://github.com/Alonemo-Nnqc/Folio/issues">GitHub Issues</a> 提交，或用 <span class="os mac">Mac</span> <span class="path">帮助 ▸ 报告问题…</span>、<span class="os win">Windows</span> <span class="path">设置 ▸ 通用 ▸ 帮助 ▸ 报告问题…</span>。翻译相关的问题，附上翻译日志会更快定位。</p></div></details>
+</section>
+
+<!-- 16 -->
+<section id="privacy">
+<h2><span class="num">16</span>隐私与数据</h2>
+<p>Folio 不收集任何使用数据，文献库完全保存在你自己的电脑上，MIT 开源。只有以下情况会访问网络：</p>
+<ul>
+  <li><b>识别元数据</b>：向 Zotero 识别服务、Crossref、arXiv、OpenAlex、DBLP 等查询（Zotero 识别服务可关闭）。</li>
+  <li><b>翻译</b>：把论文文本发送给你选择的翻译服务（本地模型和 Apple 系统翻译不会发送到外部）。</li>
+  <li><b>期刊指标</b>：填写 easyScholar 密钥后查询期刊名。</li>
+  <li><b>检查更新</b>：从 GitHub Releases 读取版本信息（可关闭自动检查）。</li>
+</ul>
+<p>翻译服务的 API Key 由系统加密保存（Mac 钥匙串、Windows DPAPI）。</p>
+<footer class="doc-foot">本文档适用于 Folio 1.3。界面截图来自 Mac 版与 Windows 版，两者功能一致。发现文档有误或想补充？欢迎在 <a href="https://github.com/Alonemo-Nnqc/Folio/issues">GitHub</a> 告诉我们。</footer>
+</section>
+
+</main>
+</div>
+</body>
+</html>

@@ -222,6 +222,13 @@ public sealed class TranslationCoordinator(AppModel model)
             case TranslationEvent.Notice notice when job != null:
                 job.Notices.Add(notice.Text);
                 break;
+            case TranslationEvent.Problem problem:
+            {
+                // At once, with what the service said: the translation is not stuck, and the cause may be the user's to fix.
+                var title = model.Snapshot.Items.TryGetValue(itemId, out var problemItem) ? problemItem.Title : "";
+                model.Toasts.Show(Loc.S("「%@」：%@", title, problem.Text), "warning");
+                break;
+            }
             case TranslationEvent.Finished finished:
             {
                 var notices = job?.Notices ?? [];

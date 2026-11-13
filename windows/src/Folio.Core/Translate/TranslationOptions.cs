@@ -87,6 +87,9 @@ public abstract record TranslationEvent
     public sealed record Preview(string Path) : TranslationEvent;
     /// <summary>Something the user should know once the translation is done.</summary>
     public sealed record Notice(string Text) : TranslationEvent;
+    /// <summary>Something going wrong now that the job works around (a request failed and is tried again): shown at once,
+    /// with what the service said, so that a translation never just seems to hang.</summary>
+    public sealed record Problem(string Text) : TranslationEvent;
     public sealed record Finished(string? Mono, string? Dual) : TranslationEvent;
     public sealed record Failed(string Message, string LogPath) : TranslationEvent;
     public sealed record Cancelled : TranslationEvent;

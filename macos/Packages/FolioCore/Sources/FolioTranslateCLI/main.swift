@@ -76,6 +76,7 @@ case "translate":
         case .progress(let value): if arguments.contains("--progress") { print(t, "progress", value) }
         case .preview(let u): print(t, "preview", u.lastPathComponent)
         case .notice(let text): print(t, "notice", text)
+        case .problem(let text): print(t, "problem", text)
         case .finished(let m, let d): print(t, "finished", m?.path ?? "-", d?.path ?? "-")
         case .failed(let message, let log): print(t, "FAILED", message, log.path)
         case .cancelled: print(t, "cancelled")

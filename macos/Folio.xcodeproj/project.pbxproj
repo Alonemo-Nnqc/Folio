@@ -98,6 +98,7 @@
 		97CF6EEC520A880BCAE68556 /* TagChipsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E97D45E0A435766ED8C239 /* TagChipsView.swift */; };
 		9A0708AA37DCC8C2CD061071 /* icon-128.png in Resources */ = {isa = PBXBuildFile; fileRef = 7F437FB8C6F9DC0450D88957 /* icon-128.png */; };
 		9BC407B2EFB4A4175FFBE90A /* icon-38.png in Resources */ = {isa = PBXBuildFile; fileRef = A92CE01362263A90E8057718 /* icon-38.png */; };
+		A061103A2EC339F5C7E85178 /* UpdatePill.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7E0FD45AC71DD898680FA2E /* UpdatePill.swift */; };
 		A2AF05B185AE1181A12A8AF0 /* OnboardingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8078E9C30033F669C906D128 /* OnboardingWindowController.swift */; };
 		A314213F519A614194F2DABB /* THIRD-PARTY-NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = D89444F2337769AF5BCFC156 /* THIRD-PARTY-NOTICES.md */; };
 		A5588AAA10F73CC9344282E1 /* TagEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 556FF5E658E123C80F710DB3 /* TagEditorSheet.swift */; };
@@ -320,6 +321,7 @@
 		C5A1F0001E4BF60E89623E36 /* ColorSwatchMenuItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorSwatchMenuItem.swift; sourceTree = "<group>"; };
 		C6687325A39DAD179F8265D6 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 		C769320D1CD58259274445D7 /* SidebarViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarViewController.swift; sourceTree = "<group>"; };
+		C7E0FD45AC71DD898680FA2E /* UpdatePill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdatePill.swift; sourceTree = "<group>"; };
 		C98AAA2320C6674271F19228 /* TagPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagPalette.swift; sourceTree = "<group>"; };
 		CB58DF3C02CACCC518B5F030 /* JournalMetricsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalMetricsSettings.swift; sourceTree = "<group>"; };
 		CE635178A40334BB32990CF4 /* FolioSafariExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FolioSafariExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -435,6 +437,7 @@
 				F8CF17144941A2E4DB2BAB2D /* LibrarySplitViewController.swift */,
 				0485AEFD783CE58C20AD2F5B /* LibraryWindowController.swift */,
 				C769320D1CD58259274445D7 /* SidebarViewController.swift */,
+				C7E0FD45AC71DD898680FA2E /* UpdatePill.swift */,
 			);
 			path = Library;
 			sourceTree = "<group>";
@@ -1141,6 +1144,7 @@
 				CD3C42FE1D7095A079695E1B /* TranslationSelfTest.swift in Sources */,
 				BBC7EE9E2DA263FFDD2F7D60 /* TranslationSettingsPane.swift in Sources */,
 				BC1F7CF390155C837A3BF912 /* TranslucentBackdrop.swift in Sources */,
+				A061103A2EC339F5C7E85178 /* UpdatePill.swift in Sources */,
 				CE7B9DCE69F8C04E7EB1EEAA /* ZoteroImportSheet.swift in Sources */,
 				10CEAA29ED2842A7238C8B93 /* main.swift in Sources */,
 			);

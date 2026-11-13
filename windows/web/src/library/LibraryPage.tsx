@@ -1,3 +1,4 @@
+import { UpdateButton } from "../ui/update";
 import { useState } from "react";
 import { PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
 import { call, droppedPaths } from "../rpc";
@@ -129,6 +130,7 @@ export function LibraryPage({ visible }: { visible: boolean }) {
         <div className="column column-sidebar" style={{ width: "100%" }}>
           <div className="titlebar-row drag" />
           <Sidebar />
+          <UpdateButton />
           <Splitter side="left" width={sidebarWidth ?? storedSidebar} min={210} max={400} onLive={setSidebarWidth} onDone={(w) => { setSetting("sidebarWidth", w); setSidebarWidth(null); }} />
         </div>
       </SlidePanel>

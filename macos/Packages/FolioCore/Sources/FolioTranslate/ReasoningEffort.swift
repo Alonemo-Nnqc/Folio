@@ -39,6 +39,14 @@ public enum ReasoningEffort {
         "--siliconflow-enable-thinking", "--siliconflow-send-enable-thinking-param",
     ]
 
+    /// Where a service's level is kept: its own option, or for any local agent "--<service>-effort" (an agent added
+    /// later is never left without one, which would keep its choice from being stored).
+    static func option(for serviceID: String) -> String? {
+        if let known = valueOption[serviceID] { return known }
+        if let service = TranslationServiceCatalog.service(id: serviceID), case .agent = service.backend { return "--\(serviceID)-effort" }
+        return nil
+    }
+
     static let modelOption: [String: String] = [
         "openai": "--openai-model", "openaicompatible": "--openai-compatible-model",
     ]
@@ -135,14 +143,14 @@ public enum ReasoningEffort {
     /// The stored choice, or the service's default when nothing was chosen.
     public static func current(serviceID: String, fields: [String: String]) -> String? {
         guard case let .choices(choices, defaultValue) = support(serviceID: serviceID, fields: fields),
-              let option = valueOption[serviceID] else { return nil }
+              let option = option(for: serviceID) else { return nil }
         let stored = fields[option] ?? defaultValue
         return choices.contains { $0.value == stored } ? stored : defaultValue
     }
 
     /// Stores a choice in the field map (UI).
     public static func set(_ value: String, serviceID: String, fields: inout [String: String]) {
-        guard let option = valueOption[serviceID] else { return }
+        guard let option = option(for: serviceID) else { return }
         fields[option] = value
     }
 

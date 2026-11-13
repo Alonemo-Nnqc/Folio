@@ -11,6 +11,9 @@ public enum TranslationEvent: Sendable, Hashable {
     case preview(URL)
     /// Something the user should know once the translation is done ("3 paragraphs kept their original").
     case notice(String)
+    /// Something going wrong now, that the job is working around (a request failed and is tried again): shown at once,
+    /// with what the service said, so that a translation never just seems to hang.
+    case problem(String)
     case finished(mono: URL?, dual: URL?)
     case failed(message: String, logURL: URL)
     case cancelled

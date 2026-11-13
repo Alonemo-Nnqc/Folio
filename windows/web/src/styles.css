@@ -373,12 +373,22 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .dots i.on { background: var(--accent); }
 
 /* The toolbar's 更新 button */
-.update-button { flex: none; height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 13px 0 10px; border: 0; border-radius: 15px; background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.18), inset 0 .5px 0 rgba(255,255,255,.25); animation: update-in .35s cubic-bezier(.2,.9,.3,1.2); app-region: no-drag; transition: filter .12s, transform .12s; }
-.update-button:hover { filter: brightness(1.08); }
-.update-button:active { transform: scale(.97); }
-.update-button:disabled { opacity: .8; }
-.update-button .spinner.small { width: 12px; height: 12px; border-color: rgba(255,255,255,.4); border-top-color: #fff; }
-@keyframes update-in { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+/* The update card at the foot of the sidebar. */
+.update-card { flex: none; margin: 4px 10px 10px; display: flex; align-items: center; gap: 9px; padding: 7px 9px; border: 0; border-radius: 12px; text-align: left; color: var(--text);
+  background: var(--popup); backdrop-filter: blur(24px) saturate(1.6); box-shadow: 0 0 0 .5px var(--separator-strong), 0 2px 8px rgba(0, 0, 0, .08);
+  animation: update-in .35s cubic-bezier(.2, .9, .3, 1.2); transition: transform .15s, box-shadow .15s; }
+.update-card:hover { transform: translateY(-1px); box-shadow: 0 0 0 .5px var(--separator-strong), 0 4px 14px rgba(0, 0, 0, .12); }
+.update-card:active { transform: scale(.98); }
+.update-card:disabled { opacity: .85; }
+.update-card .badge { width: 22px; height: 22px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, white), var(--accent)); }
+.update-card .badge .spinner.small { width: 11px; height: 11px; border-color: rgba(255, 255, 255, .4); border-top-color: #fff; }
+.update-card .text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.update-card .title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.update-card .version { font-size: 11px; color: var(--secondary); }
+.update-card .chev { flex: none; color: var(--tertiary, var(--secondary)); opacity: .6; transition: opacity .15s, transform .15s; }
+.update-card:hover .chev { opacity: 1; transform: translateX(1px); }
+@keyframes update-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* Sliders (设置 ▸ 背景透明度) */
 .slider { -webkit-appearance: none; appearance: none; width: 180px; height: 18px; background: transparent; margin: 0; }

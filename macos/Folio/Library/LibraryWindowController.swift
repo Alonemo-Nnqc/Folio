@@ -79,10 +79,6 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
-            self.showUpdateButton(AppDelegate.shared.updater.pendingUpdate)
-        })
-        observers.append(ObservationLoop { [weak self] in
-            guard let self else { return }
             let index = InspectorTab.allCases.firstIndex(of: self.model.inspectorTab) ?? 0
             (self.inspectorTabsItem?.view as? NSSegmentedControl)?.selectedSegment = index
         })
@@ -261,33 +257,6 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         }
     }
 
-    /// The 更新 button: there while an update waits, just before the search field.
-    private func showUpdateButton(_ update: SoftwareUpdater.PendingUpdate?) {
-        guard let toolbar = window?.toolbar else { return }
-        let index = toolbar.items.firstIndex { $0.itemIdentifier == .folioUpdate }
-        if let update {
-            if index == nil {
-                let search = toolbar.items.firstIndex { $0.itemIdentifier == .folioSearch } ?? toolbar.items.count
-                toolbar.insertItem(withItemIdentifier: .folioUpdate, at: search)
-            }
-            if let item = toolbar.items.first(where: { $0.itemIdentifier == .folioUpdate }) { configureUpdate(item, update) }
-        } else if let index {
-            toolbar.removeItem(at: index)
-        }
-    }
-
-    private func configureUpdate(_ item: NSToolbarItem, _ update: SoftwareUpdater.PendingUpdate) {
-        item.label = update.isDownloaded ? String(localized: "重新启动以更新") : String(localized: "更新")
-        item.toolTip = update.isDownloaded ? String(localized: "Folio \(update.version) 已下载，点按重新启动并安装")
-                                           : String(localized: "Folio \(update.version) 可供更新")
-        item.image = NSImage(systemSymbolName: update.isDownloaded ? "arrow.clockwise.circle" : "arrow.down.circle",
-                             accessibilityDescription: item.label)
-    }
-
-    @objc func installUpdate(_ sender: Any?) {
-        AppDelegate.shared.updater.checkForUpdates(sender)
-    }
-
     @objc private func inspectorTabChosen(_ sender: NSSegmentedControl) {
         guard InspectorTab.allCases.indices.contains(sender.selectedSegment) else { return }
         model.inspectorTab = InspectorTab.allCases[sender.selectedSegment]
@@ -344,20 +313,6 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             // The field would otherwise stretch over all free toolbar space.
             item.searchField.widthAnchor.constraint(lessThanOrEqualToConstant: 220).isActive = true
             searchItem = item
-            return item
-        case .folioUpdate:
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.paletteLabel = String(localized: "更新")
-            item.action = #selector(installUpdate(_:))
-            item.target = self
-            item.isBordered = true
-            if #available(macOS 26, *) {
-                item.style = .prominent
-            }
-            if let update = AppDelegate.shared.updater.pendingUpdate { configureUpdate(item, update) } else {
-                item.label = String(localized: "更新")
-                item.image = NSImage(systemSymbolName: "arrow.down.circle", accessibilityDescription: item.label)
-            }
             return item
         case .folioInspectorTabs:
             let control = NSSegmentedControl(labels: InspectorTab.allCases.map(\.title), trackingMode: .selectOne,
@@ -497,5 +452,4 @@ extension NSToolbarItem.Identifier {
     static let folioReveal = NSToolbarItem.Identifier("FolioReveal")
     static let folioRetrieve = NSToolbarItem.Identifier("FolioRetrieve")
     static let folioInspectorTabs = NSToolbarItem.Identifier("FolioInspectorTabs")
-    static let folioUpdate = NSToolbarItem.Identifier("FolioUpdate")
 }
