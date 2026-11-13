@@ -129,6 +129,7 @@ targets:
     sources:
       - path: FolioTests
       - path: Folio/Views/Sidebar/SidebarDragRules.swift
+      - path: Folio/Views/Sidebar/SidebarNode.swift
       - path: Folio/Views/ItemList/ItemMenuBuilder.swift
       - path: Folio/Views/ItemList/ListDropRules.swift
       - path: Folio/App/CitationStyleOption.swift

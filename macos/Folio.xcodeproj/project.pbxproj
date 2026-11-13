@@ -123,6 +123,7 @@
 		C3F1665C738808F88EADC010 /* icon-16.png in Resources */ = {isa = PBXBuildFile; fileRef = FB0422971A5139BBA14F818E /* icon-16.png */; };
 		C47CB8B8D146ECE418E9A9CD /* ItemListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B94876CD8070170F80510F8 /* ItemListViewController.swift */; };
 		C48037879CB4E088FD6C45FC /* AppKitExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C08E65E40FAB06A537FB0B3 /* AppKitExtensions.swift */; };
+		C7176104ECC94F4C8EE81948 /* SidebarNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F56119AC33A554616DDE332 /* SidebarNode.swift */; };
 		C7189C380097C6F1E53E374D /* KeyShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09EE7502AD7D1CFDFDD72F36 /* KeyShortcut.swift */; };
 		C76D5E8BD9C0EDBCD5784FCC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAD3544693B93059CC5B0428 /* SettingsView.swift */; };
 		C7872D907B14D5E1A5F16D3D /* ItemMenuBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC85C8C0033A3E34583F5B /* ItemMenuBuilder.swift */; };
@@ -1043,6 +1044,7 @@
 				D60C124781EB51F41F7A00F1 /* ListDropRulesTests.swift in Sources */,
 				947CC943F1DD46C3A2F548DC /* SidebarDragRules.swift in Sources */,
 				5046C263990C9F8BBB7495CB /* SidebarDragRulesTests.swift in Sources */,
+				C7176104ECC94F4C8EE81948 /* SidebarNode.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
