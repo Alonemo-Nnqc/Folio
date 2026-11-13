@@ -357,9 +357,10 @@ public sealed class ZoteroReader : IDisposable
             return (new PreparedLibrary(groups, preparedTags, entries), report);
         }
 
-        /// <summary>First- and second-level collections become groups; deeper ones give their items to their nearest exported ancestor.</summary>
+        /// <summary>Collections on levels 1–4 become groups (SIDE-17); deeper ones give their items to their fourth-level ancestor.</summary>
         static (List<PreparedGroup>, Dictionary<long, string>) Flatten(List<RawCollection> collections)
         {
+            const int maximumDepth = LibraryGroup.MaximumDepth;
             var byId = collections.ToDictionary(c => c.Id);
             int Depth(long id)
             {
@@ -372,11 +373,11 @@ public sealed class ZoteroReader : IDisposable
             {
                 long current = id;
                 var seen = new HashSet<long>();
-                while (Depth(current) > 2 && byId.TryGetValue(current, out var c) && c.ParentId is { } parent && seen.Add(current)) current = parent;
+                while (Depth(current) > maximumDepth && byId.TryGetValue(current, out var c) && c.ParentId is { } parent && seen.Add(current)) current = parent;
                 return current;
             }
             var compare = Comparer<string>.Create((a, b) => CultureInfo.CurrentCulture.CompareInfo.Compare(a, b, CompareOptions.IgnoreCase | CompareOptions.NumericOrdering));
-            var exportable = collections.Where(c => Depth(c.Id) <= 2).ToList();
+            var exportable = collections.Where(c => Depth(c.Id) <= maximumDepth).ToList();
             var position = new Dictionary<long, double>();
             foreach (var (c, i) in exportable.Where(c => c.ParentId == null).OrderBy(c => c.Name, compare).Select((c, i) => (c, i))) position[c.Id] = i;
             foreach (var siblings in exportable.Where(c => c.ParentId != null).GroupBy(c => c.ParentId))

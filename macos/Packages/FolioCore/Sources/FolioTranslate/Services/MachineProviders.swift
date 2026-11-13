@@ -123,6 +123,8 @@ struct GoogleWebProvider: SingleTextProvider {
         return try await translateEach(items, context: context)
     }
 
+    func prewarm() async { await HTTP.warm(URL(string: "https://translate.googleapis.com/")!) }
+
     func translateOne(_ text: String, context: TranslationContext) async throws -> String {
         var components = URLComponents(string: "https://translate.googleapis.com/translate_a/single")!
         components.queryItems = [
@@ -146,7 +148,9 @@ struct GoogleWebProvider: SingleTextProvider {
 /// Bing Translator's web endpoint (no key): a token from the translator page, then one text per request.
 struct BingWebProvider: SingleTextProvider {
     var limits = ProviderLimits(batchCharacters: 950, batchItems: 20, concurrency: 8, usesContext: false, startupSeconds: 1.8, secondsPerCharacter: 0.0035)
-    private static let session = SessionCache()
+    /// The translator page's session: fetched once (it is a 300 KB page, the slow part of a first translation), renewed
+    /// in the background a minute before it runs out.
+    static let sessions = TokenStore<Session> { let session = try await fetchSession(); return (session, session.lifetime) }
 
     /// Several short texts in one request, a line each (it keeps lines): most of a request's time is the same
     /// however little it carries. If the lines do not come back one for one, each text goes on its own.
@@ -159,17 +163,8 @@ struct BingWebProvider: SingleTextProvider {
 
     struct Session: Sendable {
         var ig: String, iid: String, key: String, token: String, host: String
-    }
-
-    actor SessionCache {
-        var session: Session?
-        var expiry = Date.distantPast
-        func current() -> Session? { Date() < expiry ? session : nil }
-        func store(_ value: Session) {
-            session = value
-            expiry = Date().addingTimeInterval(20 * 60)
-        }
-        func clear() { session = nil }
+        /// Seconds the token is good for: what the page says (an hour), less a margin.
+        var lifetime: TimeInterval = 20 * 60
     }
 
     private static let agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
@@ -187,15 +182,26 @@ struct BingWebProvider: SingleTextProvider {
             throw ProviderError(kind: .invalidResponse, detail: "Bing translator page changed", host: "www.bing.com")
         }
         let iid = first(#"data-iid="(translator\.\d+)""#) ?? "translator.5028"
-        return Session(ig: ig, iid: iid, key: String(helper.output.1), token: String(helper.output.2), host: "www.bing.com")
+        var session = Session(ig: ig, iid: iid, key: String(helper.output.1), token: String(helper.output.2), host: "www.bing.com")
+        // [key, token, lifetime in milliseconds]
+        if let match = page.firstMatch(of: /params_AbusePreventionHelper\s*=\s*\[\s*\d+\s*,\s*"[^"]+"\s*,\s*(\d+)/),
+           let milliseconds = Double(match.output.1), milliseconds > 120_000 {
+            session.lifetime = min(milliseconds / 1000, 3600) - 60
+        }
+        return session
+    }
+
+    /// The session fetched ahead (which opens the connection to Bing too); with one at hand, just the connection.
+    func prewarm() async {
+        if await Self.sessions.cached() != nil {
+            await HTTP.warm(URL(string: "https://www.bing.com/translator")!)
+        } else if (try? await Self.sessions.get()) != nil {
+            _ = HTTP.shouldWarm("www.bing.com")
+        }
     }
 
     func translateOne(_ text: String, context: TranslationContext) async throws -> String {
-        let session: Session
-        if let cached = await Self.session.current() { session = cached } else {
-            session = try await Self.fetchSession()
-            await Self.session.store(session)
-        }
+        let session = try await Self.sessions.get()
         var components = URLComponents(string: "https://\(session.host)/ttranslatev3")!
         components.queryItems = [.init(name: "isVertical", value: "1"), .init(name: "IG", value: session.ig), .init(name: "IID", value: session.iid)]
         var request = URLRequest(url: components.url!, timeoutInterval: 30)
@@ -212,7 +218,7 @@ struct BingWebProvider: SingleTextProvider {
         guard let array = try? HTTP.json(data) as? [[String: Any]], let translations = array.first?["translations"] as? [[String: Any]],
               let result = translations.first?["text"] as? String else {
             // An expired token answers with an error object: fetch a new one next time.
-            await Self.session.clear()
+            await Self.sessions.invalidate()
             throw ProviderError(kind: .invalidResponse, detail: "unexpected reply from Bing: " + String(decoding: data.prefix(200), as: UTF8.self))
         }
         return result
@@ -229,15 +235,23 @@ struct MicrosoftTranslatorProvider: TranslationProvider {
 
     var access: Access
     var limits = ProviderLimits(batchCharacters: 9000, batchItems: 50, concurrency: 4, usesContext: false)
-    private static let tokenCache = TokenCache()
+    /// Edge's bearer token (a JWT good for about ten minutes): shared, and renewed a minute before it runs out while in use.
+    static let edgeTokens = TokenStore<String> {
+        let data = try await HTTP.send(HTTP.request(URL(string: "https://edge.microsoft.com/translate/auth")!, method: "GET", timeout: 20))
+        let token = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { throw ProviderError(kind: .invalidResponse, detail: "empty token from Microsoft Edge", host: "edge.microsoft.com") }
+        return (token, (JWT.lifetime(token) ?? 9 * 60) - 30)
+    }
 
-    actor TokenCache {
-        var token: String?
-        var expiry = Date.distantPast
-        func current() -> String? { Date() < expiry ? token : nil }
-        func store(_ value: String) {
-            token = value
-            expiry = Date().addingTimeInterval(8 * 60)
+    /// The token fetched (Edge) and the connection to the translation endpoint opened, side by side.
+    func prewarm() async {
+        switch access {
+        case .edge:
+            async let token: Void = { _ = try? await Self.edgeTokens.get() }()
+            await HTTP.warm(URL(string: "https://api-edge.cognitive.microsofttranslator.com/")!)
+            await token
+        case .azure(_, _, let endpoint):
+            if let url = URL(string: endpoint.isEmpty ? "https://api.cognitive.microsofttranslator.com/" : endpoint) { await HTTP.warm(url) }
         }
     }
 
@@ -247,15 +261,7 @@ struct MicrosoftTranslatorProvider: TranslationProvider {
         switch access {
         case .edge:
             base = "https://api-edge.cognitive.microsofttranslator.com"
-            let token: String
-            if let cached = await Self.tokenCache.current() {
-                token = cached
-            } else {
-                let data = try await HTTP.send(HTTP.request(URL(string: "https://edge.microsoft.com/translate/auth")!, method: "GET", timeout: 20))
-                token = String(decoding: data, as: UTF8.self)
-                await Self.tokenCache.store(token)
-            }
-            headers["Authorization"] = "Bearer \(token)"
+            headers["Authorization"] = "Bearer \(try await Self.edgeTokens.get())"
         case .azure(let key, let region, let endpoint):
             base = endpoint.isEmpty ? "https://api.cognitive.microsofttranslator.com" : endpoint
             headers["Ocp-Apim-Subscription-Key"] = key
@@ -268,7 +274,14 @@ struct MicrosoftTranslatorProvider: TranslationProvider {
             .init(name: "to", value: LanguageCodes.microsoft(context.targetLanguage)), .init(name: "textType", value: "html"),
         ]
         let body = items.map { ["Text": Self.html($0.text)] }
-        let data = try await HTTP.send(HTTP.request(components.url!, headers: headers, json: body, timeout: 60))
+        let data: Data
+        do {
+            data = try await HTTP.send(HTTP.request(components.url!, headers: headers, json: body, timeout: 60))
+        } catch let error as ProviderError where error.kind == .http(401) {
+            // A token the service no longer takes: the next attempt fetches another.
+            if case .edge = access { await Self.edgeTokens.invalidate() }
+            throw error
+        }
         guard let array = try HTTP.json(data) as? [[String: Any]], array.count == items.count else {
             throw ProviderError(kind: .invalidResponse, detail: "unexpected reply from Microsoft Translator")
         }
@@ -297,6 +310,8 @@ struct MicrosoftTranslatorProvider: TranslationProvider {
 struct DeepLProvider: TranslationProvider {
     var key: String
     var limits = ProviderLimits(batchCharacters: 25000, batchItems: 50, concurrency: 3, usesContext: false)
+
+    func prewarm() async { await HTTP.warm(URL(string: key.hasSuffix(":fx") ? "https://api-free.deepl.com/" : "https://api.deepl.com/")!) }
 
     func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
         let host = key.hasSuffix(":fx") ? "https://api-free.deepl.com" : "https://api.deepl.com"
@@ -331,6 +346,8 @@ struct TencentProvider: TranslationProvider {
     var secretKey: String
     var region: String
     var limits = ProviderLimits(batchCharacters: 5000, batchItems: 20, concurrency: 3, usesContext: false)
+
+    func prewarm() async { await HTTP.warm(URL(string: "https://tmt.tencentcloudapi.com/")!) }
 
     func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String] {
         let host = "tmt.tencentcloudapi.com"
@@ -385,6 +402,8 @@ struct QwenMTProvider: SingleTextProvider {
     var model: String
     var domains: String?
     var limits = ProviderLimits(batchCharacters: 3000, batchItems: 1, concurrency: 6, usesContext: false)
+
+    func prewarm() async { await HTTP.warm(endpoint) }
 
     func translateOne(_ text: String, context: TranslationContext) async throws -> String {
         var options: [String: Any] = ["source_lang": LanguageCodes.qwen(context.sourceLanguage), "target_lang": LanguageCodes.qwen(context.targetLanguage)]

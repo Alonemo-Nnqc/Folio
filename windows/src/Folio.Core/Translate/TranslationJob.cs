@@ -31,6 +31,8 @@ public sealed class TranslationJob
     /// <summary>The user stopped it. The token above also stops the other batches when one fails: that is a failure, not a cancel.</summary>
     volatile bool _cancelled;
     readonly RateGate _rateGate = new();
+    /// <summary>What goes wrong while the job works (shown at once), and when a request last came back.</summary>
+    readonly JobActivity _activity = new();
 
     /// <summary>Where translations are cached and logs written. Tests point it at a scratch folder.</summary>
     public static string SupportDirectory { get; set; } = Path.Combine(AppSettings.Folder, "Translation");
@@ -86,6 +88,7 @@ public sealed class TranslationJob
     {
         var options = Request.Options;
         var reported = new MonotonicProgress(emit);
+        _activity.Attach(emit);
         log.Write($"translate {Path.GetFileName(Request.Input)} with {Request.ServiceId} {options.LangIn}→{options.LangOut}");
         var provider = ProviderFactory.Make(Request.ServiceId, Request.FieldValues, Request.Secrets, options.Concurrency);
 
@@ -137,6 +140,7 @@ public sealed class TranslationJob
                     log.Write($"glossary: {glossary.Entries.Count} terms");
                 }
                 catch (Exception e) { log.Write($"term extraction failed, continuing without: {e.Message}"); }
+                glossary.MarkComplete();
             });
         }
         reported.Report(0.06);
@@ -188,6 +192,8 @@ public sealed class TranslationJob
             int total = segments.Count;
             var (doneChars, totalChars) = state.Characters;
             var estimate = new ProgressEstimate(doneChars, totalChars, provider.Limits);
+            var serviceName = TranslationServiceCatalog.Service(Request.ServiceId)?.DisplayName ?? Request.ServiceId;
+            _activity.Touch();
             var target = new ProgressTarget(() => 0.08 + 0.86 * estimate.Fraction());
             using var tickerStop = new CancellationTokenSource();
             bool layingOut = false;
@@ -195,6 +201,7 @@ public sealed class TranslationJob
             {
                 double shown = target.Value();
                 int lastCount = -1;
+                string lastWaiting = "";
                 while (!tickerStop.IsCancellationRequested)
                 {
                     double goal = target.Value();
@@ -203,15 +210,29 @@ public sealed class TranslationJob
                     if (shown <= 0.94 && !Volatile.Read(ref layingOut))
                     {
                         int count = Math.Max(state.DoneCount, Math.Min(total - 1, (int)(total * (shown - 0.08) / 0.86)));
-                        if (count != lastCount)
+                        double idle = _activity.IdleSeconds;
+                        if (idle >= 60)
+                        {
+                            // Nothing back for a minute: say what it waits for, rather than seem to hang.
+                            var waiting = Loc.S("正在等待%@回复（已等 %lld 分钟）", serviceName, (int)(idle / 60));
+                            if (waiting != lastWaiting) { lastWaiting = waiting; emit(new TranslationEvent.Stage(waiting)); }
+                            lastCount = -1;
+                        }
+                        else if (count != lastCount)
                         {
                             lastCount = count;
+                            lastWaiting = "";
                             emit(new TranslationEvent.Stage(TranslationStageText.Paragraphs(count, total)));
                         }
                     }
                     try { await Task.Delay(200, tickerStop.Token); } catch (OperationCanceledException) { }
                 }
             });
+            // 3b. Words in pictures, when asked for: read while the text is being translated (not after it), then translated
+            // as soon as the paper's terms are known, side by side with the text's batches.
+            var imageWork = options.TranslateImageText && ImageText.Platform != null
+                ? Task.Run(() => TranslateImageText(source, selected, analysed, provider, context, glossary, cache, log, estimate, refusals, cancel))
+                : null;
             try
             {
                 async Task RunBatch(List<TextSegment> batch)
@@ -282,6 +303,13 @@ public sealed class TranslationJob
             cancel.ThrowIfCancellationRequested();
             if (refusals.Count > 0) emit(new TranslationEvent.Notice(Loc.S("翻译服务拒绝翻译 %lld 个段落（内容审核），这些段落保留了原文。", refusals.Count)));
 
+            if (imageWork != null)
+            {
+                Volatile.Write(ref layingOut, true);
+                emit(new TranslationEvent.Stage(Loc.S("翻译图片中的文字")));
+                renderer.ImageTexts = await imageWork;
+            }
+
             // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
             Volatile.Write(ref layingOut, true);
             emit(new TranslationEvent.Stage(TranslationStageText.Layout));
@@ -328,15 +356,20 @@ public sealed class TranslationJob
         return $"{request.ServiceId}|{model}{thinking}|{request.Options.LangIn}|{request.Options.LangOut}|v1";
     }
 
+    /// <summary>Batches of about one size. A short text is cut into as many batches as the service runs at once (down to a
+    /// third of its usual size), so that all of them run side by side: four batches where eight could run take twice as long.</summary>
     public static List<List<TextSegment>> Batches(List<TextSegment> segments, ProviderLimits limits)
     {
+        int totalCharacters = segments.Sum(s => s.Source.Length);
+        int even = (int)Math.Ceiling(totalCharacters / (double)Math.Max(limits.Concurrency, 1));
+        int size = Math.Min(limits.BatchCharacters, Math.Max(Math.Max(limits.BatchCharacters / 3, 400), even));
         var result = new List<List<TextSegment>>();
         var current = new List<TextSegment>();
         int characters = 0;
         foreach (var segment in segments)
         {
             int length = segment.Source.Length;
-            if (current.Count > 0 && (characters + length > limits.BatchCharacters || current.Count >= limits.BatchItems))
+            if (current.Count > 0 && (characters + length > size || current.Count >= limits.BatchItems))
             {
                 result.Add(current);
                 current = [];
@@ -351,6 +384,71 @@ public sealed class TranslationJob
 
     /// <summary>One batch, retried on passing failures; a batch that keeps failing is split in halves. Null for a
     /// paragraph the service refused (content review). A translation that lost a formula's placeholder is asked for again.</summary>
+    /// <summary>TRANS-40: the words in the pictures of pages, with their translations, by page.</summary>
+    async Task<Dictionary<int, List<(ImageText.Line Line, string Translation)>>> TranslateImageText(PdfSource source, List<int> pages, List<PageLayout> layouts,
+        ITranslationProvider provider, TranslationContext context, GlossaryBox glossary, TranslationCache cache, TranslationLog log, ProgressEstimate estimate,
+        RefusalCount refusals, CancellationToken cancel)
+    {
+        var lines = new List<ImageText.Line>();
+        foreach (var number in pages)
+        {
+            cancel.ThrowIfCancellationRequested();
+            try { lines.AddRange(await ImageText.Recognize(Request.Input, source, number, Request.Options.LangIn, layouts.FirstOrDefault(l => l.Number == number))); }
+            catch (Exception e) when (e is not OperationCanceledException) { log.Write($"image text p{number}: {e.Message}"); }
+        }
+        log.Write($"image text: {lines.Count} lines");
+        var result = new Dictionary<int, List<(ImageText.Line, string)>>();
+        if (lines.Count == 0) return result;
+        // The paper's terms, if they come within a few seconds: labels are not held up long for them.
+        for (var deadline = DateTime.UtcNow.AddSeconds(8); provider.Limits.UsesContext && !glossary.IsComplete && DateTime.UtcNow < deadline;)
+            await Task.Delay(200, cancel);
+        context = context with { Glossary = glossary.Entries };
+        // A label set over several lines is translated whole (word order differs between languages) and shared out
+        // across its lines again.
+        var units = ImageTextUnits.Units(lines).Where(u => !ImageTextUnits.IsName(u.Text)).ToList();
+        var withText = lines.Select(l => l.Page).ToHashSet();
+        context = context with
+        {
+            FigureCaptions = layouts.Where(l => withText.Contains(l.Number))
+                .SelectMany(l => l.Blocks.Where(b => b.Kind == BlockKind.Caption).Select(b => b.Text.Length > 400 ? b.Text[..400] : b.Text)).Take(12).ToList(),
+        };
+        // One segment per distinct text (a label repeated in a figure is translated once), in reading order.
+        var translations = new Dictionary<string, string>();
+        var pending = new List<TextSegment>();
+        var seen = new HashSet<string>();
+        foreach (var unit in units)
+        {
+            if (!seen.Add(unit.Text)) continue;
+            // A label a service kept as it was is asked again (another service may well translate it).
+            if (cache.Lookup(unit.Text) is { } hit && hit != unit.Text) translations[unit.Text] = hit;
+            else pending.Add(new TextSegment { Page = 0, Block = -1 - pending.Count, Kind = BlockKind.Figure, Source = unit.Text });
+        }
+        // The batches side by side, as the text's.
+        var batches = Batches(pending, provider.Limits with { BatchItems = Math.Max(provider.Limits.BatchItems, 120) });
+        var done = await Task.WhenAll(batches.Select(batch => TranslateBatch(batch, provider, context, log, estimate, refusals, cancel)));
+        for (int b = 0; b < batches.Count; b++)
+            for (int i = 0; i < batches[b].Count; i++)
+            {
+                if (done[b][i] is not { Length: > 0 } text) continue;
+                translations[batches[b][i].Source] = text;
+                if (text != batches[b][i].Source) cache.Store(text, batches[b][i].Source);
+            }
+        bool cjk = ImageText.IsCjk(Request.Options.LangOut);
+        foreach (var unit in units)
+        {
+            if (!translations.TryGetValue(unit.Text, out var translation) || translation == unit.Text) continue;
+            var pieces = ImageTextUnits.Split(translation, unit.Members.Select(m => lines[m].Vertical ? lines[m].Rect.H : lines[m].Rect.W).ToList(), cjk,
+                                              Request.Options.LangOut);
+            for (int k = 0; k < unit.Members.Count; k++)
+            {
+                var line = lines[unit.Members[k]];
+                if (!result.TryGetValue(line.Page, out var list)) result[line.Page] = list = [];
+                list.Add((line, pieces[k]));
+            }
+        }
+        return result;
+    }
+
     async Task<List<string?>> TranslateBatch(List<TextSegment> batch, ITranslationProvider provider, TranslationContext context, TranslationLog log,
                                              ProgressEstimate estimate, RefusalCount refusals, CancellationToken cancel)
     {
@@ -362,7 +460,8 @@ public sealed class TranslationJob
         }
         Exception? lastError = null;
         bool refused = false;
-        for (int attempt = 0; attempt < 6; attempt++)
+        const int attemptCount = 5;
+        for (int attempt = 0; attempt < attemptCount; attempt++)
         {
             cancel.ThrowIfCancellationRequested();
             await _rateGate.Wait(cancel);
@@ -374,6 +473,7 @@ public sealed class TranslationJob
                 var texts = (await provider.Translate(items, context, cancel)).Select(Clean).ToList();
                 log.Write(string.Create(CultureInfo.InvariantCulture, $"batch of {batch.Count} ({characters} chars) in {watch.Elapsed.TotalSeconds:F1} s"));
                 estimate.Finish(request);
+                _activity.Touch();
                 var broken = Enumerable.Range(0, batch.Count).Where(i => !PlaceholdersIntact(texts[i], batch[i].Source)).ToList();
                 if (broken.Count > 0 && provider.Limits.UsesContext)
                 {
@@ -398,14 +498,22 @@ public sealed class TranslationJob
                 log.Write($"attempt {attempt + 1} failed: {e.Detail[..Math.Min(500, e.Detail.Length)]}");
                 if (e.Kind == ProviderError.Kinds.Refused) { refused = true; break; }
                 if (!e.IsRetryable) throw;
-                double wait = e.RetryAfter ?? Math.Min(30, Math.Pow(2, attempt) * 1.5);
+                _activity.Touch();
+                // The last attempt: the job ends with the error, no waiting first.
+                if (attempt + 1 >= attemptCount) break;
+                // Shown now, with what the service said: the job is not stuck, and the user may well fix the cause.
+                var said = Message(e);
+                _activity.Report(Loc.S("%@（正在第 %lld 次尝试）", said, attempt + 2), said);
+                double wait = e.RetryAfter ?? Math.Min(20, Math.Pow(2, attempt) * 1.5);
                 if (e.Kind == ProviderError.Kinds.Http && e.Status == 429) await _rateGate.Pause(wait);
                 else await Task.Delay(TimeSpan.FromSeconds(wait), cancel);
                 // An unreadable reply for a big batch: try smaller ones.
                 if (e.Kind == ProviderError.Kinds.InvalidResponse && batch.Count > 1 && attempt >= 1) break;
             }
         }
-        if (batch.Count > 1)
+        // Halves until the paragraph that is the problem is found: a refusal or an unreadable reply. A failure of the
+        // service itself is the same for half the text, and is not tried again and again.
+        if (batch.Count > 1 && (refused || lastError is ProviderError { Kind: ProviderError.Kinds.InvalidResponse }))
         {
             int half = batch.Count / 2;
             var first = await TranslateBatch(batch[..half], provider, context, log, estimate, refusals, cancel);
@@ -506,7 +614,12 @@ sealed class RateGate
 sealed class GlossaryBox(List<GlossaryEntry> entries)
 {
     readonly List<GlossaryEntry> _stored = [.. entries];
+    volatile bool _complete;
     public List<GlossaryEntry> Entries { get { lock (_stored) return [.. _stored]; } }
+
+    /// <summary>The paper's terms are in (or could not be had).</summary>
+    public bool IsComplete => _complete;
+    public void MarkComplete() => _complete = true;
 
     public void Add(List<GlossaryEntry> terms)
     {
@@ -777,5 +890,35 @@ sealed class TranslationLog
         {
             try { File.AppendAllText(_path, $"{DateTime.Now:HH:mm:ss.fff} {line}\n"); } catch { }
         }
+    }
+}
+
+/// <summary>What goes wrong while a job works, shown at once (the same thing not more than every 20 seconds), and when a
+/// request last came back (or failed): a minute without either, and the progress says what it waits for.</summary>
+sealed class JobActivity
+{
+    readonly object _lock = new();
+    Action<TranslationEvent>? _emit;
+    readonly Dictionary<string, DateTime> _shown = [];
+    DateTime _last = DateTime.UtcNow;
+
+    public void Attach(Action<TranslationEvent> emit) { lock (_lock) { _emit = emit; _last = DateTime.UtcNow; } }
+
+    public void Touch() { lock (_lock) _last = DateTime.UtcNow; }
+
+    public double IdleSeconds { get { lock (_lock) return (DateTime.UtcNow - _last).TotalSeconds; } }
+
+    /// <summary>Shows message, unless the same thing (key) was shown in the last 20 seconds.</summary>
+    public void Report(string message, string? key = null)
+    {
+        key ??= message;
+        Action<TranslationEvent>? send;
+        lock (_lock)
+        {
+            if (_shown.TryGetValue(key, out var at) && (DateTime.UtcNow - at).TotalSeconds < 20) return;
+            _shown[key] = DateTime.UtcNow;
+            send = _emit;
+        }
+        send?.Invoke(new TranslationEvent.Problem(message));
     }
 }

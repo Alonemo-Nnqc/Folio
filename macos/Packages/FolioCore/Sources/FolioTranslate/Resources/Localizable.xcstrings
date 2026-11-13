@@ -2866,6 +2866,1046 @@
           }
         }
       }
+    },
+    "%lld 区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zone %lld"
+          }
+        }
+      }
+    },
+    "中科院 %lld 区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CAS Zone %lld"
+          }
+        }
+      }
+    },
+    "5 年 IF %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5-yr IF %@"
+          }
+        }
+      }
+    },
+    "5 年影响因子（JCR）：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "5-year Impact Factor (JCR): %@"
+          }
+        }
+      }
+    },
+    "EI 检索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indexed in EI"
+          }
+        }
+      }
+    },
+    "JCR 分区（Clarivate）：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JCR quartile (Clarivate): %@"
+          }
+        }
+      }
+    },
+    "JCR 分区（Clarivate）：Q%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JCR quartile (Clarivate): Q%lld"
+          }
+        }
+      }
+    },
+    "SSCI 分区（Clarivate）：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SSCI quartile (Clarivate): %@"
+          }
+        }
+      }
+    },
+    "SSCI 分区（Clarivate）：Q%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SSCI quartile (Clarivate): Q%lld"
+          }
+        }
+      }
+    },
+    "PDF 已加密或受密码保护，无法识别文字。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The PDF is encrypted or password-protected, so its text can't be recognized."
+          }
+        }
+      }
+    },
+    "easyScholar 密钥" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "easyScholar key"
+          }
+        }
+      }
+    },
+    "easyScholar 密钥无效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid easyScholar key"
+          }
+        }
+      }
+    },
+    "easyScholar 暂时无法使用（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "easyScholar is unavailable right now (%@)"
+          }
+        }
+      }
+    },
+    "easyScholar 未收录该期刊" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not listed by easyScholar"
+          }
+        }
+      }
+    },
+    "中国科学引文数据库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chinese Science Citation Database"
+          }
+        }
+      }
+    },
+    "中国计算机学会推荐：%@ 类" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CCF recommended: class %@"
+          }
+        }
+      }
+    },
+    "中科院分区（升级版）：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CAS zone (upgraded): %@"
+          }
+        }
+      }
+    },
+    "中科院分区（基础版）：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CAS zone (basic): %@"
+          }
+        }
+      }
+    },
+    "中科院国际期刊预警名单：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CAS journal warning list: %@"
+          }
+        }
+      }
+    },
+    "为有期刊名的条目获取中科院分区、JCR 分区和影响因子，同一期刊只查询一次并缓存 30 天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch CAS zones, JCR quartiles and impact factors for items with a journal; each journal is looked up once and cached for 30 days"
+          }
+        }
+      }
+    },
+    "代码和算法不能编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code and algorithms can't be edited"
+          }
+        }
+      }
+    },
+    "公式不能编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Formulas can't be edited"
+          }
+        }
+      }
+    },
+    "分区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rank"
+          }
+        }
+      }
+    },
+    "刷新期刊指标" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh Journal Metrics"
+          }
+        }
+      }
+    },
+    "北大中文核心期刊" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PKU Core Journal"
+          }
+        }
+      }
+    },
+    "北大核心" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PKU Core"
+          }
+        }
+      }
+    },
+    "南大核心（CSSCI）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CSSCI core"
+          }
+        }
+      }
+    },
+    "图中的文字不能编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text in figures can't be edited"
+          }
+        }
+      }
+    },
+    "填写 easyScholar 密钥后，这里会显示中科院分区、JCR 分区与影响因子" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an easyScholar key to see CAS zones, JCR quartiles and impact factors here"
+          }
+        }
+      }
+    },
+    "大" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Large"
+          }
+        }
+      }
+    },
+    "小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Small"
+          }
+        }
+      }
+    },
+    "如何获取密钥…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How to get a key…"
+          }
+        }
+      }
+    },
+    "密钥无效，已停止获取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid key; fetching stopped"
+          }
+        }
+      }
+    },
+    "密钥无效，请检查是否完整复制" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid key. Check that it was copied completely"
+          }
+        }
+      }
+    },
+    "小类：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subcategory: %@"
+          }
+        }
+      }
+    },
+    "已识别「%@」的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognized the text of “%@”"
+          }
+        }
+      }
+    },
+    "影响因子" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impact Factor"
+          }
+        }
+      }
+    },
+    "影响因子（JCR）：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impact Factor (JCR): %@"
+          }
+        }
+      }
+    },
+    "所选条目没有期刊名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected items have no journal"
+          }
+        }
+      }
+    },
+    "拖动可移开小窗" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to move this window"
+          }
+        }
+      }
+    },
+    "拷贝期刊指标" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Journal Metrics"
+          }
+        }
+      }
+    },
+    "按期刊名「%@」没有查到分区信息，可核对期刊全称后刷新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No ranks found for the journal “%@”. Check its full name and refresh"
+          }
+        }
+      }
+    },
+    "擦除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase"
+          }
+        }
+      }
+    },
+    "数据由 easyScholar 开放接口免费提供：登录 easyScholar 后，在“开放接口”页面复制 SecretKey。密钥保存在钥匙串中。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Data is provided free by the easyScholar open API: sign in to easyScholar and copy the SecretKey from its “Open API” page. The key is kept in the keychain."
+          }
+        }
+      }
+    },
+    "旋转的文字不能编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rotated text can't be edited"
+          }
+        }
+      }
+    },
+    "无法保存修改：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't save the change: %@"
+          }
+        }
+      }
+    },
+    "无法修改这段文字：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't change this text: %@"
+          }
+        }
+      }
+    },
+    "无法识别「%@」的文字：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't recognize the text of “%1$@”: %2$@"
+          }
+        }
+      }
+    },
+    "无法读取这个 PDF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read this PDF"
+          }
+        }
+      }
+    },
+    "无法连接 easyScholar：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't connect to easyScholar: %@"
+          }
+        }
+      }
+    },
+    "期刊指标" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal Metrics"
+          }
+        }
+      }
+    },
+    "期刊指标：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal metrics: %@"
+          }
+        }
+      }
+    },
+    "橡皮擦" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eraser"
+          }
+        }
+      }
+    },
+    "橡皮擦大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eraser Size"
+          }
+        }
+      }
+    },
+    "橡皮擦大小（[ 与 ] 调整）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eraser size ([ and ] to adjust)"
+          }
+        }
+      }
+    },
+    "橡皮擦大小：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eraser size: %@"
+          }
+        }
+      }
+    },
+    "正在刷新期刊指标…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refreshing journal metrics…"
+          }
+        }
+      }
+    },
+    "正在编辑 PDF 文字：点击文字块即可修改，⌘↩ 完成一段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editing PDF text: click a block to change it, ⌘↩ to finish"
+          }
+        }
+      }
+    },
+    "正在获取 %lld 个期刊的指标…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetching metrics for %lld journals…"
+          }
+        }
+      }
+    },
+    "正在获取期刊指标…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetching journal metrics…"
+          }
+        }
+      }
+    },
+    "正在识别扫描件文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognizing text in the scan"
+          }
+        }
+      }
+    },
+    "正在识别文字…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognizing text…"
+          }
+        }
+      }
+    },
+    "正在识别文字（%lld/%lld 页）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognizing text (page %1$lld of %2$lld)"
+          }
+        }
+      }
+    },
+    "没有在页面上识别到文字。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No text was found on the pages."
+          }
+        }
+      }
+    },
+    "用该密钥查询一次 Nature 的指标" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look up Nature's metrics once with this key"
+          }
+        }
+      }
+    },
+    "编辑 PDF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit PDF"
+          }
+        }
+      }
+    },
+    "编辑 PDF 中的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit the text of the PDF"
+          }
+        }
+      }
+    },
+    "编辑 PDF 文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit PDF Text"
+          }
+        }
+      }
+    },
+    "编辑文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Text"
+          }
+        }
+      }
+    },
+    "自动获取期刊分区与影响因子" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch journal ranks and impact factors automatically"
+          }
+        }
+      }
+    },
+    "获取期刊指标" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch journal metrics"
+          }
+        }
+      }
+    },
+    "设置期刊指标…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up journal metrics…"
+          }
+        }
+      }
+    },
+    "识别后的文件与原文件外观不一致，已保留原文件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The recognized file didn't look like the original, so the original was kept."
+          }
+        }
+      }
+    },
+    "识别文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognize Text"
+          }
+        }
+      }
+    },
+    "识别文字（OCR）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognize Text (OCR)"
+          }
+        }
+      }
+    },
+    "识别结果无法写入这个 PDF。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The recognized text couldn't be written into this PDF."
+          }
+        }
+      }
+    },
+    "请先在设置中填写 easyScholar 密钥" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an easyScholar key in Settings first"
+          }
+        }
+      }
+    },
+    "请先填写密钥" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a key first"
+          }
+        }
+      }
+    },
+    "请求过于频繁，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Too many requests; try again later"
+          }
+        }
+      }
+    },
+    "跳过：%lld 条笔记、%lld 条 Zotero 批注、%lld 个网页快照、%lld 个回收站条目。超过四级的分组会并入第四级。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skipped: %1$lld notes, %2$lld Zotero annotations, %3$lld web snapshots, %4$lld items in the trash. Collections nested deeper than four levels are merged into the fourth level."
+          }
+        }
+      }
+    },
+    "这个 PDF 已加密，无法编辑文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF is encrypted, so its text can't be edited"
+          }
+        }
+      }
+    },
+    "这个 PDF 已经有文字，不需要识别。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF already has text; there is nothing to recognize."
+          }
+        }
+      }
+    },
+    "这是扫描件，识别文字后即可选中、搜索与翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a scan. Recognize its text to select, search and translate it"
+          }
+        }
+      }
+    },
+    "这段文字使用 Type 3 字体，无法安全编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This text uses a Type 3 font and can't be edited safely"
+          }
+        }
+      }
+    },
+    "这段文字已经变化，请重新选择" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This text has changed; select it again"
+          }
+        }
+      }
+    },
+    "这段文字用作裁剪路径，不能编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This text is used as a clipping path and can't be edited"
+          }
+        }
+      }
+    },
+    "这里不能编辑：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This can't be edited: %@"
+          }
+        }
+      }
+    },
+    "连接成功" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected"
+          }
+        }
+      }
+    },
+    "连接成功：Nature %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connected: Nature %@"
+          }
+        }
+      }
+    },
+    "预警" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warning"
+          }
+        }
+      }
+    },
+    "，Top 期刊" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", Top journal"
+          }
+        }
+      }
+    },
+    "大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Size"
+          }
+        }
+      }
+    },
+    "颜色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color"
+          }
+        }
+      }
+    },
+    "完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "取消" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "测试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test"
+          }
+        }
+      }
+    },
+    "中科院 %lld 区 Top" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CAS Zone %lld Top"
+          }
+        }
+      }
+    },
+    "识别图片中的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading text in images"
+          }
+        }
+      }
+    },
+    "翻译图片中的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translating text in images"
+          }
+        }
+      }
+    },
+    "使用 CodeBuddy 命令行，与 WorkBuddy 同一个腾讯账号。WorkBuddy 桌面版的登录只能在应用内使用，需另装命令行并登录一次。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses the CodeBuddy command line with the same Tencent account as WorkBuddy. WorkBuddy's desktop sign-in works only inside the app: install the command line and sign in once."
+          }
+        }
+      }
+    },
+    "CodeBuddy 命令行还没登录：请在 设置 ▸ 翻译 ▸ CodeBuddy 点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The CodeBuddy command line isn't signed in: in Settings ▸ Translation ▸ CodeBuddy, click “Sign In in Terminal”, sign in once with your WorkBuddy (Tencent) account, then try again"
+          }
+        }
+      }
+    },
+    "自动（选用快速模型）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic (a fast model)"
+          }
+        }
+      }
+    },
+    "%@（正在第 %lld 次尝试）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (trying again, attempt %lld)"
+          }
+        }
+      }
+    },
+    "正在等待%@回复（已等 %lld 分钟）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for %@ to reply (%lld min so far)"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

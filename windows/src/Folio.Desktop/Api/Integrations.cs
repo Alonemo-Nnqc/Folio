@@ -57,6 +57,14 @@ public static partial class Api
     {
         // Browser.
         Bridge.On("browser.state", _ => new { connector = ConnectorState(), browsers = BrowserRows() });
+        Bridge.On("browser.revealExtension", a =>
+        {
+            var browser = BrowserExtensions.Detect().FirstOrDefault(b => b.Id == a.Str("id"));
+            if (browser == null) return null;
+            try { Shell.Reveal(BrowserExtensions.PrepareCopy(browser.Family)); }
+            catch (Exception e) { M.Toasts.Show(e.Message, "warning"); }
+            return null;
+        });
         Bridge.On("browser.install", a =>
         {
             var browser = BrowserExtensions.Detect().FirstOrDefault(b => b.Id == a.Str("id"));
@@ -64,10 +72,13 @@ public static partial class Api
             try
             {
                 var folder = BrowserExtensions.PrepareCopy(browser.Family);
-                Shell.CopyText(folder);
+                // Recent Chromium browsers (Edge 157, for one) open a new tab instead of an internal page passed on the
+                // command line, so the page's address is copied for the address bar.
+                Shell.CopyText(browser.ExtensionsPage);
                 BrowserExtensions.OpenExtensionsPage(browser);
-                Shell.OpenPath(folder);
-                M.Toasts.Show(Loc.S("插件文件夹的路径已复制，在扩展页面中选择“加载已解压的扩展程序”"), "copy");
+                // The folder selected in Explorer: dragged onto the extensions page (developer mode on), it is installed.
+                Shell.Reveal(folder);
+                M.Toasts.Show(Loc.S("已拷贝扩展页面的地址 %@，并在资源管理器中选中了 Folio 插件文件夹：浏览器没有打开扩展页面时，把地址粘贴到地址栏回车；打开“开发者模式”后，把文件夹拖进扩展页面即可", browser.ExtensionsPage), "copy");
             }
             catch (Exception e) { M.Toasts.Show(e.Message, "warning"); }
             return null;

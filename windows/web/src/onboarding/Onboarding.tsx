@@ -45,7 +45,7 @@ function BrowserPage() {
     <div className="guide-page">
       <Compass size={32} color="var(--accent)" />
       <h2>{t("浏览器插件")}</h2>
-      <div className="secondary" style={{ marginBottom: 18 }}>{t("插件会以“已解压的扩展程序”方式加载：点击“安装”后，Folio 准备好插件文件夹并打开浏览器的扩展页面，打开“开发者模式”，选择“加载已解压的扩展程序”，再选中这个文件夹。")}</div>
+      <div className="secondary" style={{ marginBottom: 18 }}>{t("插件会以“已解压的扩展程序”方式加载：点击“安装”后，Folio 打开浏览器的扩展页面，并在资源管理器中选中插件文件夹。打开“开发者模式”，把这个文件夹拖进扩展页面即可（也可以点“加载已解压的扩展程序”选中它）。")}</div>
       {browsers === null && <span className="spinner" />}
       {browsers?.length === 0 && <div className="secondary">{t("没有找到支持的浏览器")}</div>}
       {browsers && browsers.length > 0 && <div className="set-card">{browsers.map((b) => <div key={b.id} className="set-row"><div className="main"><div>{b.name}</div><div className="detail">{b.status}</div></div><div className="ctl"><button className="btn" onClick={() => call("browser.install", { id: b.id })}>{b.installed ? t("更新") : t("安装…")}</button></div></div>)}</div>}

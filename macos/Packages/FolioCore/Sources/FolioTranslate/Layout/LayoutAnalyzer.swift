@@ -18,7 +18,7 @@ struct LayoutAnalyzer {
 
     /// State carried from page to page.
     private var inReferences = false
-    private(set) var bodySize = 10.0
+    var bodySize = 10.0
     /// Where the text of the column at a position starts and ends, on the page being analysed.
     private var columnOf: ((Double) -> (lo: Double, hi: Double))?
     /// How wide the page's lines of body text usually are.

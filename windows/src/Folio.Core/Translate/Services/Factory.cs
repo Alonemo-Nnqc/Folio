@@ -121,7 +121,10 @@ public static class ProviderFactory
                 var pathOption = service.Fields.FirstOrDefault(f => f.Option.EndsWith("-path"))?.Option;
                 var executable = agent.Which.Locate(pathOption != null ? fields.GetValueOrDefault(pathOption) : null)
                                  ?? throw TranslationConfigurationError.AgentNotFound(agent.Which.Command());
-                provider = new AgentProvider(agent.Which, executable, modelOption != null ? Value(modelOption) : null, ReasoningEffort.AgentEffort(serviceId, fields));
+                var model = modelOption != null ? Value(modelOption) : null;
+                // CodeBuddy without a model chosen: a quick one of the account's, not its own default (minutes a page).
+                if (agent.Which == LocalAgent.Codebuddy && string.IsNullOrEmpty(model)) model = CodeBuddyAccount.QuickModel(CodeBuddyAccount.Models());
+                provider = new AgentProvider(agent.Which, executable, model, ReasoningEffort.AgentEffort(serviceId, fields));
                 break;
             }
             case TranslationBackend.Command:
@@ -231,16 +234,24 @@ public static class ReasoningEffort
         }
     }
 
+    /// <summary>Where a service's level is kept: its own option, or for any local agent "--&lt;service&gt;-effort" (an agent
+    /// added later is never left without one, which would keep its choice from being stored).</summary>
+    static string? OptionFor(string serviceId)
+    {
+        if (ValueOption.TryGetValue(serviceId, out var known)) return known;
+        return TranslationServiceCatalog.Service(serviceId)?.Backend is TranslationBackend.Agent ? $"--{serviceId}-effort" : null;
+    }
+
     public static string? Current(string serviceId, IReadOnlyDictionary<string, string> fields)
     {
-        if (GetSupport(serviceId, fields) is not Support.Choices choices || !ValueOption.TryGetValue(serviceId, out var option)) return null;
+        if (GetSupport(serviceId, fields) is not Support.Choices choices || OptionFor(serviceId) is not { } option) return null;
         var stored = fields.GetValueOrDefault(option) ?? choices.Default;
         return choices.List.Any(c => c.Value == stored) ? stored : choices.Default;
     }
 
     public static void Set(string value, string serviceId, IDictionary<string, string> fields)
     {
-        if (ValueOption.TryGetValue(serviceId, out var option)) fields[option] = value;
+        if (OptionFor(serviceId) is { } option) fields[option] = value;
     }
 
     public static Dictionary<string, string> Apply(string serviceId, IReadOnlyDictionary<string, string> fields)
@@ -372,6 +383,9 @@ public static class TranslationErrorClassifier
                         return Loc.S("codex 连不上它的服务商 %@：回复还没完成连接就断了。这个地址打开的是网站而不是接口，中转服务的地址通常要以 /v1 结尾（例如 %@/v1）。请在 CC Switch 或 codex 的配置里改正后再试", url, url);
                     return Loc.S("codex 连不上它的服务商：回复还没完成连接就断了。请检查 codex 配置里的服务商地址和网络后再试");
                 }
+                // CodeBuddy: signed in in WorkBuddy is not signed in here.
+                if (name == "codebuddy" && System.Text.RegularExpressions.Regex.IsMatch(original, @"(?i)authenticat|log ?in|401"))
+                    return Loc.S("CodeBuddy 命令行还没登录：请在 设置 ▸ 翻译 ▸ CodeBuddy 点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次后再试");
                 if (name == "dsh" && Matches(haystack, ["missing_credential", "account_sign_in_required"]))
                     return Loc.S("DeepSeek Harness 的命令行不能使用桌面版的账号登录。请在 DeepSeek Harness 的模型设置中填写 DeepSeek API Key（或设置环境变量 DEEPSEEK_API_KEY）后再试");
                 var why = TrimmedSentence(FirstMatch(@"agent-setup [\w-]+:\s*([^\n]+)", original) ?? raw);

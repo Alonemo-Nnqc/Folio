@@ -1,0 +1,175 @@
+/* Folio 使用指南 — flat and quiet, in the manner of Apple's support pages: type, space and plain reference tables. */
+
+:root {
+  --bg: #ffffff;
+  --tile: #f5f5f7;
+  --ink: #1d1d1f;
+  --sub: #6e6e73;
+  --faint: #86868b;
+  --line: #d2d2d7;
+  --hair: #e8e8ed;
+  --blue: #0066cc;
+  --accent: #0071e3;
+  --orange: #ff6a3d;
+  --green: #30a46c;
+  --win: #ffffff;
+  --bar: #e8e8ed;
+  --text-bar: #d9d9de;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue",
+    "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --nav-h: 52px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --tile: #161617;
+    --ink: #f5f5f7;
+    --sub: #a1a1a6;
+    --faint: #86868b;
+    --line: #424245;
+    --hair: #2a2a2c;
+    --blue: #2997ff;
+    --accent: #0a84ff;
+    --win: #1d1d1f;
+    --bar: #2c2c2e;
+    --text-bar: #3a3a3c;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 24px); -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 17px; line-height: 1.6;
+  letter-spacing: -0.01em; -webkit-font-smoothing: antialiased; overflow-x: clip; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+img { max-width: 100%; display: block; }
+
+/* ── Global bar ─────────────────────────────────────────── */
+.bar { position: sticky; top: 0; z-index: 50; height: var(--nav-h); border-bottom: 1px solid var(--hair);
+  background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: saturate(1.8) blur(20px); -webkit-backdrop-filter: saturate(1.8) blur(20px); }
+.bar-inner { max-width: 1180px; margin: 0 auto; height: 100%; display: flex; align-items: center; gap: 22px; padding: 0 22px; }
+.brand { display: flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; font-size: 17px; letter-spacing: -0.02em; }
+.brand:hover { text-decoration: none; }
+.brand img { width: 22px; height: 22px; }
+.bar nav { margin-left: auto; display: flex; gap: 26px; font-size: 13px; }
+.bar nav a { color: var(--sub); }
+.bar nav a:hover { color: var(--ink); text-decoration: none; }
+.menu-button { display: none; margin-left: auto; border: 0; background: none; color: var(--ink); font: inherit; font-size: 14px; padding: 6px 0; }
+
+/* ── Layout ─────────────────────────────────────────────── */
+.layout { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 64px; padding: 0 22px; }
+.index { position: sticky; top: var(--nav-h); align-self: start; max-height: calc(100vh - var(--nav-h)); overflow-y: auto; padding: 44px 0 40px; scrollbar-width: none; }
+.index::-webkit-scrollbar { display: none; }
+.index input { width: 100%; height: 34px; border: 0; border-radius: 9px; background: var(--tile); color: var(--ink); font: inherit; font-size: 14px;
+  padding: 0 12px; margin-bottom: 22px; outline: none; }
+.index input:focus { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+.index ol { list-style: none; margin: 0; padding: 0; }
+.index li { margin: 0; }
+.index a { display: block; color: var(--sub); font-size: 14px; line-height: 1.4; padding: 7px 0; }
+.index a:hover { color: var(--ink); text-decoration: none; }
+.index a.on { color: var(--ink); font-weight: 600; }
+.index .none { display: none; color: var(--faint); font-size: 13px; }
+
+.content { min-width: 0; padding: 0 0 140px; max-width: 760px; }
+
+/* ── Hero ───────────────────────────────────────────────── */
+.hero { padding: 72px 0 40px; border-bottom: 1px solid var(--hair); margin-bottom: 8px; }
+.eyebrow { color: var(--orange); font-size: 14px; font-weight: 600; letter-spacing: 0; margin: 0 0 8px; }
+.hero h1 { font-size: 56px; line-height: 1.07; font-weight: 700; letter-spacing: -0.035em; margin: 0 0 18px; }
+.hero p { font-size: 21px; line-height: 1.45; color: var(--sub); margin: 0 0 28px; letter-spacing: -0.015em; max-width: 640px; }
+.hero .starts { display: flex; flex-wrap: wrap; gap: 10px 28px; font-size: 17px; }
+.more::after { content: " ›"; }
+
+/* ── Chapters ───────────────────────────────────────────── */
+.chapter { padding: 72px 0 12px; border-bottom: 1px solid var(--hair); }
+.chapter:last-of-type { border-bottom: 0; }
+.chapter h2 { font-size: 40px; line-height: 1.1; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 14px; }
+.chapter > .lead { font-size: 21px; line-height: 1.45; color: var(--sub); margin: 0 0 30px; letter-spacing: -0.015em; }
+.chapter h3 { font-size: 24px; line-height: 1.25; letter-spacing: -0.02em; margin: 44px 0 10px; }
+.chapter p { margin: 0 0 14px; }
+.chapter ul { padding-left: 1.15em; margin: 0 0 16px; }
+.chapter li { margin: 6px 0; }
+.chapter li::marker { color: var(--faint); }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--tile); padding: 2px 6px; border-radius: 6px; }
+pre { background: var(--tile); border-radius: 12px; padding: 14px 18px; overflow-x: auto; font-size: 14px; margin: 10px 0 18px; }
+pre code { background: none; padding: 0; }
+kbd { font-family: var(--sans); font-size: 0.82em; font-weight: 500; padding: 2px 7px; border-radius: 6px; background: var(--tile); color: var(--ink); white-space: nowrap; }
+.path { font-weight: 600; }
+.os { display: inline-block; font-size: 12px; font-weight: 600; color: var(--sub); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; line-height: 19px; margin-right: 4px; vertical-align: 1px; }
+
+/* Numbered steps: plain numbers, no circles. */
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 8px 0 22px; }
+ol.steps > li { counter-increment: s; position: relative; padding: 0 0 0 34px; margin: 0 0 12px; }
+ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; font-weight: 600; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* Something worth knowing: a quiet tile with a word above it. */
+.key { background: var(--tile); border-radius: 18px; padding: 22px 26px; margin: 26px 0; }
+.key h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--orange); letter-spacing: 0.02em; }
+.key p:last-child, .key ul:last-child { margin-bottom: 0; }
+.key.plain h4 { color: var(--sub); }
+
+/* Choices side by side. */
+.choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--hair); border-radius: 18px; overflow: hidden; margin: 22px 0 30px; }
+.choices > div { background: var(--bg); padding: 20px 22px; }
+.choices b { display: block; font-size: 17px; margin-bottom: 4px; }
+.choices span { color: var(--sub); font-size: 15px; line-height: 1.5; display: block; }
+.choices em { font-style: normal; color: var(--orange); font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px; }
+
+/* Shortcut list. */
+.keys { border-top: 1px solid var(--hair); margin: 14px 0 26px; }
+.keys > div { display: grid; grid-template-columns: 1fr 150px 170px; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--hair); font-size: 15px; align-items: baseline; }
+.keys > div.head { color: var(--faint); font-size: 13px; }
+
+figure { margin: 26px 0 32px; }
+figure img { border-radius: 14px; border: 1px solid var(--hair); }
+figcaption { color: var(--sub); font-size: 14px; margin-top: 10px; }
+
+details { border-bottom: 1px solid var(--hair); }
+details:first-of-type { border-top: 1px solid var(--hair); }
+summary { list-style: none; cursor: pointer; padding: 18px 30px 18px 0; font-weight: 600; position: relative; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; position: absolute; right: 4px; top: 14px; font-size: 24px; font-weight: 300; color: var(--sub); transition: transform 0.2s ease; }
+details[open] summary::after { transform: rotate(45deg); }
+details > div { padding: 0 0 18px; color: var(--sub); }
+details > div p { margin: 0 0 8px; }
+
+.foot { color: var(--faint); font-size: 13px; padding-top: 40px; }
+
+.hidden { display: none !important; }
+
+/* A reference table: what to fill in for each service, what each option does. */
+.table { border-top: 1px solid var(--hair); margin: 14px 0 26px; font-size: 15px; }
+.table > div { display: grid; grid-template-columns: 190px 1fr; gap: 18px; padding: 11px 0; border-bottom: 1px solid var(--hair); }
+.table > div.head { color: var(--faint); font-size: 13px; padding: 8px 0; }
+.table > div > :first-child { font-weight: 600; }
+.table span { color: var(--sub); }
+.table small { display: block; color: var(--faint); font-size: 13px; margin-top: 2px; }
+.note-top { font-size: 14px; color: var(--faint); margin: 26px 0 0; line-height: 1.6; }
+.group { font-size: 13px; font-weight: 600; color: var(--faint); margin: 30px 0 -6px; letter-spacing: 0.02em; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; gap: 0; }
+  .index { position: fixed; z-index: 45; top: var(--nav-h); left: 0; right: 0; max-height: 70vh; background: var(--bg); border-bottom: 1px solid var(--hair);
+    padding: 16px 22px 22px; transform: translateY(-110%); transition: transform 0.25s ease; }
+  body.index-open .index { transform: none; }
+  .bar nav { display: none; }
+  .menu-button { display: block; }
+  .hero { padding-top: 44px; }
+  .hero h1 { font-size: 40px; }
+  .hero p, .chapter > .lead { font-size: 19px; }
+  .chapter { padding-top: 52px; }
+  .chapter h2 { font-size: 32px; }
+  .choices { grid-template-columns: 1fr; }
+  .keys > div { grid-template-columns: 1fr 1fr; }
+  .keys > div > :first-child { grid-column: 1 / -1; }
+  .table > div { grid-template-columns: 1fr; gap: 2px; }
+  .table > div.head { display: none; }
+}

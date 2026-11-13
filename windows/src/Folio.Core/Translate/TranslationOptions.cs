@@ -26,6 +26,8 @@ public sealed class TranslationOptions
     [JsonPropertyName("glossaryFile")] public string? GlossaryFile { get; set; }
     [JsonPropertyName("translateTables")] public bool TranslateTables { get; set; } = true;
     [JsonPropertyName("translateReferences")] public bool TranslateReferences { get; set; }
+    /// <summary>Translate the words inside pictures too (read with OCR, set back over the picture in place).</summary>
+    [JsonPropertyName("translateImageText")] public bool TranslateImageText { get; set; }
     [JsonPropertyName("concurrency")] public int? Concurrency { get; set; }
     [JsonPropertyName("ignoreCache")] public bool IgnoreCache { get; set; }
     [JsonPropertyName("duplicates")] public DuplicateHandling Duplicates { get; set; } = DuplicateHandling.keepBoth;
@@ -85,6 +87,9 @@ public abstract record TranslationEvent
     public sealed record Preview(string Path) : TranslationEvent;
     /// <summary>Something the user should know once the translation is done.</summary>
     public sealed record Notice(string Text) : TranslationEvent;
+    /// <summary>Something going wrong now that the job works around (a request failed and is tried again): shown at once,
+    /// with what the service said, so that a translation never just seems to hang.</summary>
+    public sealed record Problem(string Text) : TranslationEvent;
     public sealed record Finished(string? Mono, string? Dual) : TranslationEvent;
     public sealed record Failed(string Message, string LogPath) : TranslationEvent;
     public sealed record Cancelled : TranslationEvent;

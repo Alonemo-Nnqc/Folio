@@ -25,6 +25,7 @@
     <EmbeddedResource Include="$(FolioMacRoot)Packages\FolioCore\Sources\FolioAgent\Resources\Localizable.xcstrings" LogicalName="strings.agent.xcstrings" />
     <EmbeddedResource Include="Resources\Windows.xcstrings" LogicalName="strings.windows.xcstrings" />
     <EmbeddedResource Include="Resources\latin.txt" LogicalName="latin.txt" />
+    <EmbeddedResource Include="Resources\hyph-en-us.txt" LogicalName="hyph-en-us.txt" />
     <EmbeddedResource Include="$(FolioMacRoot)Packages\FolioCore\Sources\FolioCitation\Resources\*.csl" LogicalName="csl.%(Filename)%(Extension)" />
     <EmbeddedResource Include="$(FolioMacRoot)Packages\FolioCore\Sources\FolioCitation\Resources\*.xml" LogicalName="csl.%(Filename)%(Extension)" />
     <EmbeddedResource Include="$(FolioMacRoot)Packages\FolioCore\Sources\FolioCitation\Resources\citeproc_commonjs.js" LogicalName="csl.citeproc_commonjs.js" />

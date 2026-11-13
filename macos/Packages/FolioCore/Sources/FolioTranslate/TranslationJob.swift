@@ -10,6 +10,8 @@ public final class TranslationJob: @unchecked Sendable {
     public let logURL: URL
     private let lock = NSLock()
     private let rateGate = RateGate()
+    /// What goes wrong while the job works (shown at once), and when a request last came back.
+    private let activity = JobActivity()
     private var task: Task<Void, Never>?
     private var cancelled = false
 
@@ -77,6 +79,7 @@ public final class TranslationJob: @unchecked Sendable {
     private func run(emit: @escaping @Sendable (TranslationEvent) -> Void, log: TranslationLog) async throws -> TranslationEvent {
         let options = request.options
         let reported = MonotonicProgress(emit: emit)
+        activity.attach(emit)
         func progress(_ value: Double) { reported.report(value) }
         log.write("translate \(request.input.lastPathComponent) with \(request.serviceID) \(options.langIn)→\(options.langOut)")
         let provider = try ProviderFactory.make(serviceID: request.serviceID, fields: request.fieldValues, secrets: request.secrets,
@@ -124,6 +127,7 @@ public final class TranslationJob: @unchecked Sendable {
                 } catch {
                     log.write("term extraction failed, continuing without: \(error)")
                 }
+                glossary.markComplete()
             }
         }
         progress(0.06)
@@ -176,19 +180,30 @@ public final class TranslationJob: @unchecked Sendable {
         let total = segments.count
         // Between finished batches the bar goes on moving, by what is running and how long that usually takes.
         let estimate = ProgressEstimate(done: state.characters.done, total: state.characters.total, limits: provider.limits)
+        let serviceName = TranslationServiceCatalog.service(id: request.serviceID)?.displayName ?? request.serviceID
+        activity.touch()
         let target = ProgressTarget { 0.08 + 0.86 * estimate.fraction() }
         let ticker = Task.detached(priority: .utility) {
             // One curve from here to the end: what finishes in a jump still arrives over a moment or two.
             var shown = target.value()
             var lastCount = -1
+            var lastWaiting = ""
             while !Task.isCancelled {
                 let goal = target.value()
                 shown = min(goal, shown + max(0.001, (goal - shown) * 0.2))
                 reported.report(shown)
                 if shown <= 0.94 {
                     let count = max(state.doneCount, min(total - 1, Int(Double(total) * (shown - 0.08) / 0.86)))
-                    if count != lastCount {
+                    let idle = self.activity.idleSeconds
+                    if idle >= 60 {
+                        // Nothing back for a minute: say what it waits for, rather than seem to hang.
+                        let minutes = Int(idle / 60)
+                        let waiting = String(localized: "正在等待\(serviceName)回复（已等 \(minutes) 分钟）", bundle: .module)
+                        if waiting != lastWaiting { lastWaiting = waiting; emit(.stage(waiting)) }
+                        lastCount = -1
+                    } else if count != lastCount {
                         lastCount = count
+                        lastWaiting = ""
                         emit(.stage(TranslationStageText.paragraphs(done: count, total: total)))
                     }
                 }
@@ -198,6 +213,26 @@ public final class TranslationJob: @unchecked Sendable {
         defer { ticker.cancel() }
         let batchContext = context
         defer { termTask?.cancel() }
+        // 3b. Words in pictures, when asked for: read while the text is being translated (not after it), then
+        // translated as soon as the paper's terms are known, side by side with the text's batches.
+        // (What the work uses is shared with the text's batches, which already use it from many tasks at once.)
+        struct ImageInputs: @unchecked Sendable {
+            let pages: [Int], layouts: [PageLayout], provider: TranslationProvider, context: TranslationContext, cache: TranslationCache
+            let log: TranslationLog, estimate: ProgressEstimate, refusals: RefusalCount, glossary: GlossaryBox, terms: Task<Void, Never>?
+        }
+        let inputs = ImageInputs(pages: selected, layouts: analysed, provider: provider, context: batchContext, cache: cache, log: log,
+                                 estimate: estimate, refusals: refusals, glossary: glossary, terms: termTask)
+        let imageWork: Task<[Int: [(line: ImageText.Line, translation: String)]], Error>? = options.translateImageText ? Task { [self, inputs] in
+            let lines = try await recognizeImageText(pages: inputs.pages, layouts: inputs.layouts, log: inputs.log)
+            // The paper's terms, if they come within a few seconds: labels are not held up long for them.
+            let deadline = Date().addingTimeInterval(8)
+            while inputs.terms != nil, !inputs.glossary.isComplete, Date() < deadline { try await Task.sleep(for: .milliseconds(200)) }
+            var imageContext = inputs.context
+            imageContext.glossary = inputs.glossary.entries
+            return try await translateImageText(lines: lines, layouts: inputs.layouts, provider: inputs.provider, context: imageContext,
+                                                cache: inputs.cache, log: inputs.log, estimate: inputs.estimate, refusals: inputs.refusals)
+        } : nil
+        defer { imageWork?.cancel() }
         try await withThrowingTaskGroup(of: Void.self) { group in
             var pending = batches[...]
             func startNext() {
@@ -247,6 +282,11 @@ public final class TranslationJob: @unchecked Sendable {
             emit(.notice(String(localized: "翻译服务拒绝翻译 \(refusals.count) 个段落（内容审核），这些段落保留了原文。", bundle: .module)))
         }
 
+        if let imageWork {
+            emit(.stage(String(localized: "翻译图片中的文字", bundle: .module)))
+            renderer.imageText = try await imageWork.value
+        }
+
         // 4. The translated PDFs. Setting the pages takes a moment too; about this long, going by their number.
         emit(.stage(TranslationStageText.layout))
         let renderSeconds = 0.5 + Double(layouts.count) * 0.08
@@ -293,13 +333,18 @@ public final class TranslationJob: @unchecked Sendable {
 
     // MARK: Batches
 
+    /// Batches of about one size. A short text is cut into as many batches as the service runs at once (down to a third
+    /// of its usual size), so that all of them run side by side: four batches where eight could run take twice as long.
     static func batches(_ segments: [TextSegment], limits: ProviderLimits) -> [[TextSegment]] {
+        let total = segments.reduce(0) { $0 + $1.source.count }
+        let even = Int((Double(total) / Double(max(limits.concurrency, 1))).rounded(.up))
+        let size = min(limits.batchCharacters, max(limits.batchCharacters / 3, 400, even))
         var result: [[TextSegment]] = []
         var current: [TextSegment] = []
         var characters = 0
         for segment in segments {
             let length = segment.source.count
-            if !current.isEmpty, characters + length > limits.batchCharacters || current.count >= limits.batchItems {
+            if !current.isEmpty, characters + length > size || current.count >= limits.batchItems {
                 result.append(current)
                 current = []
                 characters = 0
@@ -311,7 +356,94 @@ public final class TranslationJob: @unchecked Sendable {
         return result
     }
 
-    /// One batch, retried on passing failures; a batch that keeps failing is split in halves.
+    /// TRANS-40: the words in the pictures of `pages`, a few pages at a time, page by page in reading order.
+    private func recognizeImageText(pages: [Int], layouts: [PageLayout], log: TranslationLog) async throws -> [ImageText.Line] {
+        let languages = ImageText.recognitionLanguages(for: request.options.langIn)
+        let found = try await withThrowingTaskGroup(of: [ImageText.Line].self) { group in
+            var queue = pages[...]
+            var all: [[ImageText.Line]] = []
+            func next() {
+                guard let number = queue.popFirst() else { return }
+                // Each reads its own copy of the document (Core Graphics documents are not shared across threads).
+                let url = request.input
+                let layout = layouts.first { $0.number == number }
+                group.addTask { CGPDFDocument(url as CFURL).map { ImageText.recognize(document: $0, number: number, languages: languages, layout: layout) } ?? [] }
+            }
+            for _ in 0..<4 { next() }
+            while let lines = try await group.next() {
+                try Task.checkCancellation()
+                all.append(lines)
+                next()
+            }
+            return all
+        }
+        let lines = found.sorted { ($0.first?.page ?? 0) < ($1.first?.page ?? 0) }.flatMap { $0 }
+        log.write("image text: \(lines.count) lines")
+        return lines
+    }
+
+    /// TRANS-40: the words read from the pictures, with their translations, by page.
+    private func translateImageText(lines: [ImageText.Line], layouts: [PageLayout], provider: TranslationProvider, context: TranslationContext,
+                                    cache: TranslationCache, log: TranslationLog, estimate: ProgressEstimate,
+                                    refusals: RefusalCount) async throws -> [Int: [(line: ImageText.Line, translation: String)]] {
+        guard !lines.isEmpty else { return [:] }
+        // A label set over several lines is translated whole (word order differs between languages) and shared out
+        // across its lines again.
+        let units = ImageTextUnits.units(lines).filter { !ImageTextUnits.isName($0.text) }
+        var context = context
+        let pagesWithText = Set(lines.map(\.page))
+        context.figureCaptions = Array(layouts.filter { pagesWithText.contains($0.number) }
+            .flatMap { $0.blocks.filter { $0.kind == .caption }.map { String($0.text.prefix(400)) } }.prefix(12))
+        // One segment per distinct text (a label repeated in a figure is translated once), in reading order.
+        var translations: [String: String] = [:]
+        var pending: [TextSegment] = []
+        var seen: Set<String> = []
+        for unit in units where seen.insert(unit.text).inserted {
+            // A label a service kept as it was is asked again (another service may well translate it).
+            if let hit = cache.lookup(unit.text), hit != unit.text { translations[unit.text] = hit } else {
+                pending.append(TextSegment(page: 0, block: -1 - pending.count, kind: .figure, source: unit.text, formulas: []))
+            }
+        }
+        // The batches side by side, as the text's.
+        var limits = provider.limits
+        limits.batchItems = max(limits.batchItems, 120)
+        let batches = Self.batches(pending, limits: limits)
+        struct Shared: @unchecked Sendable {
+            let provider: TranslationProvider, context: TranslationContext, log: TranslationLog, estimate: ProgressEstimate, refusals: RefusalCount
+        }
+        let shared = Shared(provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
+        let results = try await withThrowingTaskGroup(of: (Int, [String?]).self) { group in
+            for (k, batch) in batches.enumerated() {
+                group.addTask { [self, shared] in
+                    (k, try await translate(batch, provider: shared.provider, context: shared.context, log: shared.log, estimate: shared.estimate,
+                                            refusals: shared.refusals))
+                }
+            }
+            var all: [Int: [String?]] = [:]
+            for try await (k, texts) in group { all[k] = texts }
+            return all
+        }
+        for (k, batch) in batches.enumerated() {
+            for (segment, text) in zip(batch, results[k] ?? []) {
+                guard let text, !text.isEmpty else { continue }
+                translations[segment.source] = text
+                if text != segment.source { cache.store(text, for: segment.source) }
+            }
+        }
+        let cjk = ImageText.isCJK(request.options.langOut)
+        var byPage: [Int: [(line: ImageText.Line, translation: String)]] = [:]
+        for unit in units {
+            guard let translation = translations[unit.text], translation != unit.text else { continue }
+            let pieces = ImageTextUnits.split(translation, weights: unit.members.map { lines[$0].vertical ? lines[$0].rect.height : lines[$0].rect.width },
+                                              cjk: cjk, language: request.options.langOut)
+            for (member, piece) in zip(unit.members, pieces) {
+                byPage[lines[member].page, default: []].append((lines[member], piece))
+            }
+        }
+        return byPage
+    }
+
+    /// One batch, retried on passing failures (each failure shown at once); a batch that keeps failing is split in halves.
     /// The batch's translations, in order; nil for a paragraph the service refused (content review), which keeps its
     /// original. A translation that lost or duplicated a formula's placeholder is asked for once more.
     private func translate(_ batch: [TextSegment], provider: TranslationProvider, context: TranslationContext,
@@ -324,7 +456,8 @@ public final class TranslationJob: @unchecked Sendable {
         }
         var lastError: Error?
         var refused = false
-        attempts: for attempt in 0..<6 {
+        let attemptCount = 5
+        attempts: for attempt in 0..<attemptCount {
             try Task.checkCancellation()
             try await rateGate.wait()
             let characters = batch.reduce(0) { $0 + $1.source.count }
@@ -334,6 +467,7 @@ public final class TranslationJob: @unchecked Sendable {
                 var texts = try await provider.translate(items, context: context).map(Self.clean)
                 log.write(String(format: "batch of %d (%d chars) in %.1f s", batch.count, characters, Date().timeIntervalSince(started)))
                 estimate.finish(request)
+                activity.touch()
                 // Formulas: each placeholder exactly once. A model that dropped one gets a second chance; failing that,
                 // the typesetter puts what is missing at the end.
                 let broken = batch.indices.filter { !Self.placeholdersIntact(texts[$0], source: batch[$0].source) }
@@ -356,7 +490,13 @@ public final class TranslationJob: @unchecked Sendable {
                     break attempts
                 }
                 guard error.isRetryable else { throw error }
-                let wait = error.retryAfter ?? min(30, pow(2, Double(attempt)) * 1.5)
+                activity.touch()
+                // Shown now, with what the service said: the job is not stuck, and the user may well fix the cause.
+                // The last attempt: the job ends with the error, no waiting first.
+                guard attempt + 1 < attemptCount else { break }
+                let said = Self.message(for: error)
+                activity.report(String(localized: "\(said)（正在第 \(attempt + 2) 次尝试）", bundle: .module), key: said)
+                let wait = error.retryAfter ?? min(20, pow(2, Double(attempt)) * 1.5)
                 if case .http(429) = error.kind {
                     // Rate limited: every batch of this job holds back, not just this one.
                     await rateGate.pause(for: wait)
@@ -367,8 +507,13 @@ public final class TranslationJob: @unchecked Sendable {
                 if case .invalidResponse = error.kind, batch.count > 1, attempt >= 1 { break }
             }
         }
-        if batch.count > 1 {
-            // Halves until the paragraph that is the problem is found.
+        // Halves until the paragraph that is the problem is found: a refusal or an unreadable reply. A failure of the
+        // service itself (it is down, a process error) is the same for half the text, and is not tried again and again.
+        let byContent: Bool = refused || {
+            if case .invalidResponse = (lastError as? ProviderError)?.kind { return true }
+            return false
+        }()
+        if batch.count > 1, byContent {
             let half = batch.count / 2
             let first = try await translate(Array(batch[..<half]), provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
             let second = try await translate(Array(batch[half...]), provider: provider, context: context, log: log, estimate: estimate, refusals: refusals)
@@ -486,9 +631,16 @@ final class GlossaryBox: @unchecked Sendable {
     private let lock = NSLock()
     private var stored: [GlossaryEntry]
 
+    private var complete = false
+
     init(_ entries: [GlossaryEntry]) { stored = entries }
 
     var entries: [GlossaryEntry] { lock.withLock { stored } }
+
+    /// The paper's terms are in (or could not be had).
+    var isComplete: Bool { lock.withLock { complete } }
+
+    func markComplete() { lock.withLock { complete = true } }
 
     /// Adds terms the user's glossary does not already have.
     func add(_ terms: [GlossaryEntry]) {
@@ -794,5 +946,31 @@ extension PageLayout {
         var crop = page.getBoxRect(.cropBox).intersection(media)
         if crop.isNull || crop.width < 1 { crop = media }
         return PageLayout(number: number, mediaBox: media, cropBox: crop, blocks: [], figures: [], tables: [], graphics: [], runs: [])
+    }
+}
+
+/// What goes wrong while a job works, shown at once (the same message not more than every 20 seconds), and when a
+/// request last came back (or failed): a minute without either, and the progress says what it waits for.
+final class JobActivity: @unchecked Sendable {
+    private let lock = NSLock()
+    private var emit: (@Sendable (TranslationEvent) -> Void)?
+    private var shown: [String: Date] = [:]
+    private var last = Date()
+
+    func attach(_ emit: @escaping @Sendable (TranslationEvent) -> Void) { lock.withLock { self.emit = emit; last = Date() } }
+
+    func touch() { lock.withLock { last = Date() } }
+
+    var idleSeconds: Double { lock.withLock { Date().timeIntervalSince(last) } }
+
+    /// Shows `message`, unless the same thing (`key`) was shown in the last 20 seconds.
+    func report(_ message: String, key: String? = nil) {
+        let key = key ?? message
+        let send: (@Sendable (TranslationEvent) -> Void)? = lock.withLock {
+            if let at = shown[key], Date().timeIntervalSince(at) < 20 { return nil }
+            shown[key] = Date()
+            return emit
+        }
+        send?(.problem(message))
     }
 }

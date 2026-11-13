@@ -2,7 +2,7 @@ import { Sparkles } from "lucide-react";
 
 /** Logos drawn in one colour (they follow the text colour); the others keep their brand colours. */
 const MONO = new Set(["apple", "clinecli", "copilotcli", "cursoragent", "gooseagent", "grok", "grokcli", "groq", "kimicli", "lmstudio", "ollama", "openai", "opencode"]);
-const KNOWN = new Set([...MONO, "google", "bing", "claudecode", "codex", "geminicli", "qwencode", "antigravitycli", "kirocli", "ampcli", "openclawagent", "deepseekharness", "hermesagent", "picli",
+const KNOWN = new Set([...MONO, "google", "bing", "claudecode", "codex", "geminicli", "qwencode", "antigravitycli", "kirocli", "ampcli", "openclawagent", "deepseekharness", "codebuddy", "hermesagent", "picli",
   "anthropic", "gemini", "deepseek", "aliyundashscope", "qwenmt", "zhipu", "siliconflow", "modelscope", "azureopenai", "deepl", "azure", "tencentmechinetranslation"]);
 
 /** A translation service's official logo; the AI sparkles for those without one. */

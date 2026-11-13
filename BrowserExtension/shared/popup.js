@@ -75,7 +75,7 @@ function render(folio) {
   const select = $("group");
   select.replaceChildren(new Option(t("noGroup"), ""));
   for (const group of folio.groups || []) {
-    select.add(new Option(`${group.depth ? " " : ""}${group.name}`, group.id));
+    select.add(new Option(`${" ".repeat(Math.max(0, group.depth || 0))}${group.name}`, group.id));
   }
   const remembered = localStorage.getItem("folio.lastGroup");
   const ids = new Set((folio.groups || []).map((g) => g.id));

@@ -15,12 +15,16 @@ namespace Folio.Core.Translate.Services;
 public sealed record GlossaryEntry(string Source, string Target);
 
 /// <summary>What every request knows about the paper being translated.</summary>
-public sealed record TranslationContext(string SourceLanguage, string TargetLanguage, string? Title, string? Summary, List<GlossaryEntry> Glossary);
+public sealed record TranslationContext(string SourceLanguage, string TargetLanguage, string? Title, string? Summary, List<GlossaryEntry> Glossary)
+{
+    /// <summary>For the words in the paper's figures: the captions of those figures.</summary>
+    public List<string> FigureCaptions { get; init; } = [];
+}
 
 /// <summary>One text to translate and what kind of text it is.</summary>
 public sealed record TranslationItem(string Text, BlockKind Kind)
 {
-    public bool IsShort => Kind is BlockKind.Heading or BlockKind.TableCell or BlockKind.Title;
+    public bool IsShort => Kind is BlockKind.Heading or BlockKind.TableCell or BlockKind.Title or BlockKind.Figure;
 }
 
 /// <summary>How a provider likes its work: how much text per request and how many requests at once.</summary>
@@ -34,6 +38,9 @@ public interface ITranslationProvider
     Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel);
     /// <summary>Terms of the field with their translations (large language models only).</summary>
     Task<List<GlossaryEntry>> ExtractTerms(string excerpt, TranslationContext context, CancellationToken cancel) => Task.FromResult(new List<GlossaryEntry>());
+    /// <summary>Gets the first request ready without sending any text: the connection opened (DNS, TCP, TLS) and any token
+    /// fetched. Failures are ignored; the request itself will say what went wrong (SEL-20).</summary>
+    Task Prewarm() => Task.CompletedTask;
 }
 
 /// <summary>Why a request failed. Detail is what the error classifier reads.</summary>
@@ -134,6 +141,9 @@ public static class LLMBatch
         if (!string.IsNullOrEmpty(context.Summary)) prompt.Append($"\nAbstract: {context.Summary[..Math.Min(1500, context.Summary.Length)]}");
         if (context.Glossary.Count > 0)
             prompt.Append($"\n\nGlossary ({source} → {target}):\n").Append(string.Join("\n", context.Glossary.Select(g => $"- {g.Source} → {g.Target}")));
+        if (context.FigureCaptions.Count > 0)
+            prompt.Append("\n\nThe figure labels to translate come from figures with these captions (for their meaning and terms; do not translate the captions):\n")
+                .Append(string.Join("\n", context.FigureCaptions.Select(c => "- " + c)));
         return prompt.ToString();
     }
 
@@ -144,8 +154,16 @@ public static class LLMBatch
     {
         string Json(string s) => JsonSerializer.Serialize(s, Unescaped);
         var message = "{" + string.Join(", ", items.Select((item, i) => $"{Json((i + 1).ToString())}: {Json(item.Text)}")) + "}";
-        var shortItems = items.Select((item, i) => (item, i)).Where(p => p.item.IsShort).Select(p => (p.i + 1).ToString()).ToList();
+        var shortItems = items.Select((item, i) => (item, i)).Where(p => p.item.IsShort && p.item.Kind != BlockKind.Figure).Select(p => (p.i + 1).ToString()).ToList();
         if (shortItems.Count > 0) message += "\n\nShort items (headings or table cells): " + string.Join(", ", shortItems);
+        // Words read from the paper's pictures: labels to translate, each one, not names to keep.
+        var labels = items.Select((item, i) => (item, i)).Where(p => p.item.Kind == BlockKind.Figure).Select(p => (p.i + 1).ToString()).ToList();
+        if (labels.Count > 0)
+            message += "\n\nItems " + string.Join(", ", labels) + " are labels inside the paper's figures (diagram boxes, legends, axis titles), "
+                + "read from the images in reading order. Translate every one of them completely, concisely and without final punctuation, "
+                + "even single words such as Encoder, Prompt or Output, using the terms the paper itself uses; keep only proper names and "
+                + "abbreviations (ResNet, SAM, GT) as they are. The labels were read by OCR and may have a misread letter: translate what "
+                + "the label evidently says. A label that is unreadable noise: give it back unchanged.";
         return message;
     }
 
@@ -234,13 +252,50 @@ public static class LLMBatch
 /// <summary>HTTP for the providers: non-2xx answers and transport failures become ProviderErrors.</summary>
 public static class Http
 {
+    /// <summary>One client for every service: its connections stay open between requests, so a token request, a warm-up
+    /// and the translations after them all go over the same connection.</summary>
     public static readonly HttpClient Client = new(new SocketsHttpHandler
     {
         MaxConnectionsPerServer = 16,
         AutomaticDecompression = DecompressionMethods.All,
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(90),
+        ConnectTimeout = TimeSpan.FromSeconds(15),
     })
     { Timeout = Timeout.InfiniteTimeSpan };
+
+    static readonly Dictionary<string, DateTime> WarmedAt = [];
+    public const double WarmInterval = 30;
+
+    /// <summary>True the first time in WarmInterval seconds for host (and notes the time).</summary>
+    public static bool ShouldWarm(string host)
+    {
+        lock (WarmedAt)
+        {
+            if (WarmedAt.TryGetValue(host, out var last) && (DateTime.UtcNow - last).TotalSeconds < WarmInterval) return false;
+            WarmedAt[host] = DateTime.UtcNow;
+            return true;
+        }
+    }
+
+    /// <summary>Opens a connection to url's host with a body-less request (HEAD) and leaves it in the pool for the
+    /// translation that follows. The answer does not matter; no text is sent.</summary>
+    public static async Task Warm(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return;
+        var host = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+        if (!ShouldWarm(host)) return;
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var response = await Client.SendAsync(new HttpRequestMessage(HttpMethod.Head, uri), HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        }
+        catch
+        {
+            // Unreachable for now: the next warm-up may try again at once.
+            lock (WarmedAt) WarmedAt.Remove(host);
+        }
+    }
 
     public static HttpRequestMessage Request(string url, HttpMethod? method = null, Dictionary<string, string>? headers = null, JsonNode? json = null)
     {
@@ -446,6 +501,7 @@ public sealed class ConcurrencyOverride(ITranslationProvider inner, int concurre
     public ProviderLimits Limits => inner.Limits with { Concurrency = concurrency };
     public Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel) => inner.Translate(items, context, cancel);
     public Task<List<GlossaryEntry>> ExtractTerms(string excerpt, TranslationContext context, CancellationToken cancel) => inner.ExtractTerms(excerpt, context, cancel);
+    public Task Prewarm() => inner.Prewarm();
 }
 
 /// <summary>OpenAI-style APIs live under /v1: an address given as a bare host means its /v1; one with a path is used as given.</summary>

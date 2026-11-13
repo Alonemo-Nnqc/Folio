@@ -21,6 +21,8 @@ final class StreamDataCache: @unchecked Sendable {
 final class PDFCopier {
     let writer: PDFWriter
     var streamCache: StreamDataCache?
+    /// Rewrites the decoded data of a stream before it is written (nil: written as it is). Not for images.
+    var transform: ((Data) -> Data?)?
     /// Object number of each copied dictionary / stream, by pointer.
     private var copied: [Int: Int] = [:]
     /// Output page object for each source page dictionary; page references elsewhere point at it.
@@ -123,7 +125,8 @@ final class PDFCopier {
             return .ref(number)
         }
         var format = CGPDFDataFormat.raw
-        let data = (CGPDFStreamCopyData(stream, &format) as Data?) ?? Data()
+        var data = (CGPDFStreamCopyData(stream, &format) as Data?) ?? Data()
+        if format == .raw, let transform, let changed = transform(data) { data = changed }
         defer {
             // Remember the encoded payload for the next document from this source.
             if let streamCache, let body = writer.raw(number), let payload = Self.payload(of: body) {

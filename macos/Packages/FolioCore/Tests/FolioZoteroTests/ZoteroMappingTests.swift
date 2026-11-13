@@ -112,21 +112,28 @@ import FolioTranslate
 }
 
 @Suite struct ZoteroCollectionFlatteningTests {
-    @Test func flattensThirdLevelIntoSecondLevelAncestor() {
+    @Test func keepsFourLevelsAndFoldsDeeperCollectionsIntoTheFourth() {
         let collections = [
-            RawCollection(id: 1, key: "TOP1", name: "Alpha", parentID: nil),
-            RawCollection(id: 2, key: "MID1", name: "Beta", parentID: 1),
-            RawCollection(id: 3, key: "DEEP1", name: "Gamma", parentID: 2),
+            RawCollection(id: 1, key: "L1", name: "Alpha", parentID: nil),
+            RawCollection(id: 2, key: "L2", name: "Beta", parentID: 1),
+            RawCollection(id: 3, key: "L3", name: "Gamma", parentID: 2),
+            RawCollection(id: 4, key: "L4", name: "Delta", parentID: 3),
+            RawCollection(id: 5, key: "L5", name: "Epsilon", parentID: 4),
+            RawCollection(id: 6, key: "L6", name: "Zeta", parentID: 5),
         ]
         let result = ZoteroCollectionFlattening.flatten(collections)
-        #expect(result.groups.count == 2)
-        #expect(result.groups.contains { $0.key == "TOP1" && $0.parentKey == nil })
-        #expect(result.groups.contains { $0.key == "MID1" && $0.parentKey == "TOP1" })
-        #expect(!result.groups.contains { $0.key == "DEEP1" })
-        // Items directly in the depth-3 collection are attributed to its depth-2 ancestor.
-        #expect(result.exportKeyByCollectionID[3] == "MID1")
-        #expect(result.exportKeyByCollectionID[2] == "MID1")
-        #expect(result.exportKeyByCollectionID[1] == "TOP1")
+        #expect(result.groups.count == 4)
+        #expect(result.groups.contains { $0.key == "L1" && $0.parentKey == nil })
+        #expect(result.groups.contains { $0.key == "L2" && $0.parentKey == "L1" })
+        #expect(result.groups.contains { $0.key == "L3" && $0.parentKey == "L2" })
+        #expect(result.groups.contains { $0.key == "L4" && $0.parentKey == "L3" })
+        #expect(!result.groups.contains { $0.key == "L5" || $0.key == "L6" })
+        // Items in the fifth level and below are attributed to their fourth-level ancestor.
+        #expect(result.exportKeyByCollectionID[6] == "L4")
+        #expect(result.exportKeyByCollectionID[5] == "L4")
+        #expect(result.exportKeyByCollectionID[4] == "L4")
+        #expect(result.exportKeyByCollectionID[3] == "L3")
+        #expect(result.exportKeyByCollectionID[1] == "L1")
     }
 
     @Test func ordersSiblingsByLocalizedName() {

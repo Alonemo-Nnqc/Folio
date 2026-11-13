@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
-import { getState, setSetting, useStore } from "../store";
+import { getState, setSetting, setState, useStore } from "../store";
 import { Field, Select, Slider, Switch } from "../ui/controls";
 import { confirm, dialog, openSheet } from "../ui/sheet";
 import { openMenu } from "../ui/menu";
@@ -98,6 +98,7 @@ function General() {
       </Card>
       <Header>{t("帮助")}</Header>
       <Card>
+        <Row title={t("Folio 使用文档")} detail={t("所有功能的图文说明：添加与整理文献、阅读批注、翻译、引用、AI 接入、常见问题")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/docs.html" })}>{t("打开")}</button></Row>
         <Row title={t("欢迎使用 Folio…")}><button className="btn" onClick={() => call("window.onboarding")}>{t("打开")}</button></Row>
         <Row title={t("Folio 主页")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/" })}>{t("打开")}</button><button className="btn" onClick={() => call("shell.open", { target: "https://github.com/Alonemo-Nnqc/Folio/issues" })}>{t("报告问题…")}</button></Row>
       </Card>
@@ -179,6 +180,52 @@ function Retrieval() {
         <Row title={t("联系邮箱（选填）")}><Field className="set-field" value={s.crossrefMailto ?? ""} placeholder="name@example.com" onCommit={(v) => setSetting("crossrefMailto", v.trim())} /></Row>
         <Row title={t("OpenAlex API Key（选填）")}><Field className="set-field" secret value={s.openAlexAPIKey ?? ""} onCommit={(v) => setSetting("openAlexAPIKey", v.trim())} /></Row>
       </Card>
+      <JournalMetricsSection />
+    </>
+  );
+}
+
+/** 期刊指标 (META-30): the easyScholar key, a test, and whether ranks are fetched by themselves. */
+function JournalMetricsSection() {
+  const state = useStore((x) => x.journalMetrics);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [test, setTest] = useState<{ busy: boolean; ok?: boolean; text?: string }>({ busy: false });
+  useEffect(() => { call("journalMetrics.state").then((journalMetrics) => setState({ journalMetrics })); }, []);
+  if (!state) return null;
+  const key = draft ?? state.key;
+  const save = (value: string) => { setDraft(null); setTest({ busy: false }); call("journalMetrics.setKey", { key: value }).then((journalMetrics) => setState({ journalMetrics })); };
+  const run = async () => {
+    setTest({ busy: true });
+    const r = await call<{ ok: boolean; text: string }>("journalMetrics.test", { key }).catch((e) => ({ ok: false, text: String(e.message ?? e) }));
+    setTest({ busy: false, ...r });
+    if (r.ok && key.trim() !== state.key) save(key);
+  };
+  const line = test.text ? { ok: !!test.ok, text: test.text } : state.hasKey && state.status ? { ok: !state.attention, text: state.status, progress: !state.attention } : null;
+  return (
+    <>
+      <Header>{t("期刊指标")}</Header>
+      <Card>
+        <Row title={t("自动获取期刊分区与影响因子")} detail={t("为有期刊名的条目获取中科院分区、JCR 分区和影响因子，同一期刊只查询一次并缓存 30 天")}>
+          <Switch on={state.autoFetch} onChange={(on) => call("journalMetrics.setAutoFetch", { on }).then((journalMetrics) => setState({ journalMetrics }))} />
+        </Row>
+        <Row title={t("easyScholar 密钥")} detail={<button className="link-button" onClick={() => call("shell.open", { target: state.keyPage })}>{t("如何获取密钥…")}</button>}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input className="field set-field" type="password" value={key} placeholder="SecretKey" spellCheck={false} autoComplete="off"
+              onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== null) save(draft); }}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+            <button className="btn" style={{ minWidth: 56 }} disabled={test.busy || !key.trim()} title={t("用该密钥查询一次 Nature 的指标")} onClick={run}>
+              {test.busy ? <span className="spinner" /> : t("测试")}
+            </button>
+          </div>
+        </Row>
+        {line && (
+          <div className="jm-status">
+            {"progress" in line && line.progress ? <span className="spinner" /> : line.ok ? <CheckCircle2 size={14} color="var(--green)" /> : <AlertTriangle size={14} color="var(--orange)" />}
+            <span className="selectable">{line.text}</span>
+          </div>
+        )}
+      </Card>
+      <Note>{t("数据由 easyScholar 开放接口免费提供：登录 easyScholar 后，在“开放接口”页面复制 SecretKey。密钥加密保存在本机。")}</Note>
     </>
   );
 }
@@ -193,10 +240,13 @@ function Browser() {
       <Card><Row title={t("允许浏览器插件保存到 Folio")}><Switch on={s.browserConnectorEnabled} onChange={(v) => setSetting("browserConnectorEnabled", v)} /></Row></Card>
       {data && <Note>{data.connector.message}</Note>}
       <Header>{t("安装浏览器插件")}</Header>
-      <Note>{t("点击“安装”后，在浏览器扩展页面开启“开发者模式”，选择“加载已解压的扩展程序”并选中 Folio 打开的文件夹")}</Note>
+      <Note>{t("点击“安装”会打开浏览器、拷贝扩展页面的地址，并在资源管理器中选中 Folio 插件文件夹。浏览器没有跳到扩展页面时，把地址粘贴到地址栏回车；在扩展页面打开“开发者模式”，把文件夹直接拖进去即可，也可以点“加载已解压的扩展程序”选择它。")}</Note>
       <div style={{ height: 10 }} />
       {data?.browsers.length === 0 && <Note>{t("没有找到支持的浏览器")}</Note>}
-      {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}><button className="btn" onClick={() => call("browser.install", { id: b.id })}>{b.installed ? t("更新") : t("安装…")}</button></Row>)}</Card>}
+      {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}>
+        <button className="btn" title={t("在资源管理器中选中插件文件夹，可直接拖到浏览器的扩展页面")} onClick={() => call("browser.revealExtension", { id: b.id })}>{t("显示插件文件夹")}</button>
+        <button className="btn" onClick={() => call("browser.install", { id: b.id })}>{b.installed ? t("更新") : t("安装…")}</button>
+      </Row>)}</Card>}
     </>
   );
 }

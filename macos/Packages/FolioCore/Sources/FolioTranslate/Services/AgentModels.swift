@@ -6,6 +6,11 @@ public enum AgentModels {
         let home = FileManager.default.homeDirectoryForCurrentUser
         var models: [String] = []
         switch agent {
+        case .codebuddy:
+            // What the signed-in account offers, else what this version's help names.
+            models = CodeBuddyAccount.models()
+            if models.isEmpty { models = CodeBuddyAccount.models(inHelp: await lines(executable, ["--help"]).joined(separator: "\n")) }
+            if let quick = CodeBuddyAccount.quickModel(among: models) { models.removeAll { $0 == quick }; models.insert(quick, at: 0) }
         case .claude:
             models = ["haiku", "sonnet", "opus"]
         case .codex:
@@ -92,13 +97,23 @@ public enum AgentModels {
     public static func codexLevels(model: String?) -> (levels: [String], usual: String?)? {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let config = (try? String(contentsOf: home.appending(path: ".codex/config.toml"), encoding: .utf8)) ?? ""
-        guard let name = model?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? value("model", in: config),
-              let data = try? Data(contentsOf: home.appending(path: ".codex/models_cache.json")),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let entry = (object["models"] as? [[String: Any]])?.first(where: { ($0["slug"] as? String) == name }),
-              let listed = entry["supported_reasoning_levels"] as? [Any] else { return nil }
-        let levels = listed.compactMap { ($0 as? [String: Any])?["effort"] as? String ?? $0 as? String }
-        return (levels, entry["default_reasoning_level"] as? String)
+        guard let name = model?.trimmingCharacters(in: .whitespaces).nilIfEmpty ?? value("model", in: config) else { return nil }
+        // The catalog the configuration names (a provider's own, as CC Switch writes) is what Codex goes by; its
+        // cache of OpenAI's list may say otherwise about the same name.
+        var files: [URL] = []
+        if let catalog = value("model_catalog_json", in: config) {
+            files.append(catalog.hasPrefix("/") ? URL(filePath: catalog) : home.appending(path: ".codex/\(catalog)"))
+        }
+        files.append(home.appending(path: ".codex/models_cache.json"))
+        for file in files {
+            guard let data = try? Data(contentsOf: file),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let entry = (object["models"] as? [[String: Any]])?.first(where: { ($0["slug"] as? String) == name }),
+                  let listed = entry["supported_reasoning_levels"] as? [Any] else { continue }
+            let levels = listed.compactMap { ($0 as? [String: Any])?["effort"] as? String ?? $0 as? String }
+            return (levels, entry["default_reasoning_level"] as? String)
+        }
+        return nil
     }
 
     /// Gemini CLI's model names, read from its installed code (`var DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"` and the like).

@@ -78,8 +78,15 @@ public sealed class TranslationRenderer(PdfSource source, string language)
         public byte[]? Mono, Dual, Base, Overlay;
     }
 
+    /// <summary>Text keeps the original's line spacing, closer only when it needs to fit (the PDF editor, as on the Mac):
+    /// a translation fills its paragraph's height instead.</summary>
+    public bool KeepLineSpacing { get; set; }
+
     /// <summary>Also produce <see cref="Output.Base"/> and <see cref="Output.Overlay"/>.</summary>
     public bool AuditLayers { get; set; }
+
+    /// <summary>Words in pictures and their translations, by page: set over the pictures (TRANS-40).</summary>
+    public Dictionary<int, List<(ImageText.Line Line, string Translation)>> ImageTexts { get; set; } = [];
 
     enum Layers { All, Base, Overlay }
 
@@ -114,7 +121,7 @@ public sealed class TranslationRenderer(PdfSource source, string language)
         }
         // 1. Translations, one overlay page per output page.
         var overlayStream = new MemoryStream();
-        using (var document = SKDocument.CreatePdf(overlayStream, new SKDocumentPdfMetadata { Producer = "Folio", Creator = "Folio" }))
+        using (var document = SKDocument.CreatePdf(overlayStream, new SKDocumentPdfMetadata { Producer = "Folio", Creator = "Folio", EncodingQuality = 101 }))
         {
             var typesetter = new Typesetter(Language);
             foreach (var layout in layouts)
@@ -212,7 +219,8 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     var entry = planned[k];
                     var block = layout.Blocks[entry.Segment.Block];
                     var placement = outcome.Placements.TryGetValue(k, out var p) ? p : (PageFlow.Placement?)null;
-                    var result = typesetter.Finish(entry.Plan, placement?.Pitch ?? pitches[k], entry.Segment.Formulas, placement?.FirstBaseline);
+                    var pitch = KeepLineSpacing ? Math.Min(entry.Plan.FillPitch, block.Pitch * entry.Plan.Scale) : placement?.Pitch ?? pitches[k];
+                    var result = typesetter.Finish(entry.Plan, pitch, entry.Segment.Formulas, KeepLineSpacing ? null : placement?.FirstBaseline);
                     typesetter.Draw(result, canvas, pageTop, usedGlyphs);
                     TransplantsOf(layout.Number).AddRange(result.Transplants);
                     removal.Add(block);
@@ -233,7 +241,15 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     }
                     Audit?.Record(layout.Number, entry.Segment.Block, placement?.Frame ?? entry.Frame, result, entry.Plan);
                 }
+                // Figure labels drawn as text: their glyphs leave the page for their translations.
+                var figureTexts = ImageTexts.GetValueOrDefault(layout.Number) ?? [];
+                foreach (var (line, _) in figureTexts)
+                {
+                    removal.Kept.ExceptWith(line.Glyphs);
+                    removal.Glyphs.UnionWith(line.Glyphs);
+                }
                 removals[layout.Number] = removal;
+                if (figureTexts.Count > 0) ImageText.Draw(figureTexts, Language, canvas, pageTop, usedGlyphs);
                 document.EndPage();
             }
             document.Close();

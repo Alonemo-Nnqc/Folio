@@ -44,12 +44,16 @@ public sealed record NewAnnotation(
     string? Contents = null,
     string? Author = null);
 
+/// <summary>What the eraser did to one ink annotation: its tracks over the page (x y x y …, page coordinates) and the
+/// eraser's radius in page points.</summary>
+public sealed record InkErasure(int Page, long ObjectNumber, IReadOnlyList<double[]> Paths, double Radius);
+
 /// <summary>
 /// Writes annotations into a PDF by incremental update: the original bytes stay untouched and new objects, a new
 /// version of the page dictionary and a cross-reference section are appended — what Preview and Acrobat do, so other
 /// readers (and the macOS app) see the annotations. Appearance streams are included for markup and ink.
 /// </summary>
-public static class AnnotationWriter
+public static partial class AnnotationWriter
 {
     sealed record PageInfo(long Number, int Generation, DictionaryToken Dictionary, List<IToken> Annots);
 
@@ -163,6 +167,95 @@ public static class AnnotationWriter
         return modified;
     }
 
+    /// <summary>The eraser (READER-30): cuts what the eraser's tracks (x y x y …, page coordinates) passed over out of ink
+    /// annotations, all in one update (one undo step). An annotation with nothing left goes from its page; the others keep
+    /// their colour, line width and opacity and get a new picture. Returns the object numbers changed and removed.</summary>
+    public static (List<long> Changed, List<long> Removed) EraseInk(string path, IReadOnlyList<InkErasure> erasures)
+    {
+        var changed = new List<long>();
+        var removed = new List<long>();
+        if (erasures.Count == 0) return (changed, removed);
+        Update(path, (document, pages, next, write) =>
+        {
+            IToken Resolve(IToken t) => t is IndirectReferenceToken r ? document.Structure.GetObject(r.Data).Data : t;
+            var kept = new Dictionary<int, List<IToken>>();
+            foreach (var erasure in erasures)
+            {
+                var info = pages(erasure.Page);
+                var reference = info.Annots.OfType<IndirectReferenceToken>().FirstOrDefault(r => r.Data.ObjectNumber == erasure.ObjectNumber);
+                if (reference == null || document.Structure.GetObject(reference.Data).Data is not DictionaryToken dict) continue;
+                var entries = dict.Data.ToDictionary(kv => kv.Key, kv => kv.Value);
+                double[] Numbers(IToken? token) => token != null && Resolve(token) is ArrayToken a ? a.Data.Select(Resolve).OfType<NumericToken>().Select(n => n.Double).ToArray() : [];
+                if (!entries.TryGetValue("Subtype", out var st) || Resolve(st) is not NameToken { Data: "Ink" }) continue;
+                if (!entries.TryGetValue("InkList", out var inkRaw) || Resolve(inkRaw) is not ArrayToken inkList) continue;
+                var strokes = inkList.Data.Select(Resolve).OfType<ArrayToken>().Select(s => Numbers(s)).ToList();
+                double width = InkWidth(entries, Resolve);
+                var left = InkEraser.Erase(strokes, erasure.Paths, erasure.Radius + width / 2);
+                if (left == null) continue;
+                if (left.Count == 0)
+                {
+                    // Nothing left: off the page, with its popup.
+                    var list = kept.TryGetValue(erasure.Page, out var current) ? current : [.. info.Annots];
+                    list.RemoveAll(token => token is IndirectReferenceToken r && (r.Data.ObjectNumber == erasure.ObjectNumber
+                        || document.Structure.GetObject(r.Data).Data is DictionaryToken d && d.TryGet(NameToken.Create("Parent"), out IndirectReferenceToken? parent)
+                            && parent.Data.ObjectNumber == erasure.ObjectNumber));
+                    kept[erasure.Page] = list;
+                    removed.Add(erasure.ObjectNumber);
+                    continue;
+                }
+                double pad = width / 2 + 1;
+                var rect = Bounds(left.SelectMany(s => Pairs(s)), pad);
+                double opacity = entries.TryGetValue("CA", out var ca) && Resolve(ca) is NumericToken n ? Math.Clamp(n.Double, 0, 1) : 1;
+                var stream = InkStream(left, Numbers(entries.GetValueOrDefault("C")), width, opacity);
+                long ap = next();
+                var gs = opacity < 1 ? $"/Resources << /ExtGState << /GS0 << /CA {N(opacity)} /ca {N(opacity)} >> >> >> " : "";
+                write(ap, $"<< /Type /XObject /Subtype /Form /BBox [{string.Join(' ', rect.Select(N))}] {gs}/Length {Encoding.ASCII.GetByteCount(stream)} >>\nstream\n{stream}\nendstream");
+                entries["InkList"] = new ArrayToken(left.Select(s => (IToken)Array(s.Select(v => Math.Round(v, 3)).ToArray())).ToList());
+                entries["Rect"] = Array(rect);
+                entries["AP"] = new DictionaryToken(new Dictionary<NameToken, IToken> { [NameToken.Create("N")] = new IndirectReferenceToken(new IndirectReference(ap, 0)) });
+                entries["M"] = new StringToken(PdfDate(DateTime.Now));
+                var body = new StringBuilder("<<");
+                foreach (var (key, value) in entries) body.Append('/').Append(EscapeName(key)).Append(' ').Append(Serialize(value)).Append(' ');
+                body.Append(">>");
+                write(erasure.ObjectNumber, body.ToString());
+                changed.Add(erasure.ObjectNumber);
+            }
+            return kept;
+        });
+        return (changed, removed);
+    }
+
+    /// <summary>An ink annotation's line width: /BS /W, else the third number of /Border, else 1 (the PDF default).</summary>
+    static double InkWidth(Dictionary<string, IToken> entries, Func<IToken, IToken> resolve)
+    {
+        if (entries.TryGetValue("BS", out var bs) && resolve(bs) is DictionaryToken style && style.TryGet(NameToken.Create("W"), out var w) && resolve(w) is NumericToken width)
+            return Math.Max(0, width.Double);
+        if (entries.TryGetValue("Border", out var border) && resolve(border) is ArrayToken array && array.Data.Count >= 3 && resolve(array.Data[2]) is NumericToken bw)
+            return Math.Max(0, bw.Double);
+        return 1;
+    }
+
+    /// <summary>The picture of erased ink: its strokes in its own colour (gray, RGB or CMYK), width and opacity.</summary>
+    static string InkStream(IReadOnlyList<double[]> strokes, double[] color, double width, double opacity)
+    {
+        var sb = new StringBuilder();
+        if (opacity < 1) sb.Append("/GS0 gs ");
+        sb.Append(color.Length switch
+        {
+            1 => $"{N(color[0])} G ",
+            3 => $"{N(color[0])} {N(color[1])} {N(color[2])} RG ",
+            4 => $"{N(color[0])} {N(color[1])} {N(color[2])} {N(color[3])} K ",
+            _ => "0 G ",
+        });
+        sb.Append(CultureInfo.InvariantCulture, $"{N(width)} w 1 J 1 j ");
+        foreach (var s in strokes)
+        {
+            for (int i = 0; i + 1 < s.Length; i += 2) sb.Append(CultureInfo.InvariantCulture, $"{N(s[i])} {N(s[i + 1])} {(i == 0 ? "m" : "l")} ");
+            sb.Append("S ");
+        }
+        return sb.ToString();
+    }
+
     static ArrayToken Array(params double[] values) => new(values.Select(v => (IToken)new NumericToken(v)).ToList());
 
     /// <summary>Takes the file back to its earlier length: every annotation change appends, so this undoes them.</summary>
@@ -242,23 +335,52 @@ public static class AnnotationWriter
         finally { document.Dispose(); }
         if (changed.Count == 0 && offsets.Count == 0) return;
 
-        // Cross-reference section and trailer for the update.
-        long xrefOffset = original.Length + body.Length;
-        var xref = new StringBuilder("xref\n");
-        foreach (var (number, generation, offset) in offsets.OrderBy(o => o.Number))
-            xref.Append(CultureInfo.InvariantCulture, $"{number} 1\n{offset:D10} {generation:D5} n\r\n");
-        xref.Append("trailer\n<<");
-        xref.Append(CultureInfo.InvariantCulture, $"/Size {Math.Max(size, next)} /Root {Serialize(new IndirectReferenceToken(trailer.Root))} /Prev {startXref}");
-        if (trailer.Info is { } info) xref.Append(" /Info ").Append(Serialize(info));
-        if (trailer.Identifier is { Count: > 0 } ids) xref.Append(" /ID [").Append(string.Join(' ', ids.Select(Serialize))).Append(']');
-        xref.Append(CultureInfo.InvariantCulture, $">>\nstartxref\n{xrefOffset}\n%%EOF\n");
+        // Cross-reference section and trailer for the update: a table, or a stream when the file's own is a stream (a
+        // table after a stream is more than some readers, Core Graphics among them, accept).
+        string trailerEntries()
+        {
+            var t = new StringBuilder();
+            t.Append(CultureInfo.InvariantCulture, $"/Root {Serialize(new IndirectReferenceToken(trailer.Root))} /Prev {startXref}");
+            if (trailer.Info is { } info) t.Append(" /Info ").Append(Serialize(info));
+            if (trailer.Identifier is { Count: > 0 } ids) t.Append(" /ID [").Append(string.Join(' ', ids.Select(Serialize))).Append(']');
+            return t.ToString();
+        }
+        byte[] xrefBytes;
+        long xrefOffset;
+        if (IsXrefStream(original, startXref))
+        {
+            long number = next++;
+            xrefOffset = original.Length + body.Length + 1;
+            var rows = offsets.Append((number, 0, xrefOffset)).OrderBy(o => o.Item1).ToList();
+            var data = new MemoryStream();
+            foreach (var (_, generation, offset) in rows)
+            {
+                data.WriteByte(1);
+                data.Write([(byte)(offset >> 24), (byte)(offset >> 16), (byte)(offset >> 8), (byte)offset]);
+                data.Write([(byte)(generation >> 8), (byte)generation]);
+            }
+            var index = string.Join(' ', rows.Select(r => $"{r.Item1} 1"));
+            var head = $"\n{number} 0 obj\n<</Type /XRef /Size {Math.Max(size, next)} {trailerEntries()} /Index [{index}] /W [1 4 2] /Length {data.Length}>>\nstream\n";
+            xrefBytes = [.. Encoding.Latin1.GetBytes(head), .. data.ToArray(), .. Encoding.ASCII.GetBytes($"\nendstream\nendobj\nstartxref\n{xrefOffset}\n%%EOF\n")];
+        }
+        else
+        {
+            xrefOffset = original.Length + body.Length;
+            var xref = new StringBuilder("xref\n");
+            foreach (var (number, generation, offset) in offsets.OrderBy(o => o.Number))
+                xref.Append(CultureInfo.InvariantCulture, $"{number} 1\n{offset:D10} {generation:D5} n\r\n");
+            xref.Append("trailer\n<<");
+            xref.Append(CultureInfo.InvariantCulture, $"/Size {Math.Max(size, next)} ").Append(trailerEntries());
+            xref.Append(CultureInfo.InvariantCulture, $">>\nstartxref\n{xrefOffset}\n%%EOF\n");
+            xrefBytes = Encoding.ASCII.GetBytes(xref.ToString());
+        }
 
         Swap(path, output =>
         {
             output.Write(original);
             body.Position = 0;
             body.CopyTo(output);
-            output.Write(Encoding.ASCII.GetBytes(xref.ToString()));
+            output.Write(xrefBytes);
         });
     }
 
@@ -284,6 +406,14 @@ public static class AnnotationWriter
         var bytes = Encoding.Latin1.GetBytes($"\n{number} {generation} obj\n{content}\nendobj\n");
         offsets.Add((number, generation, baseOffset + body.Length + 1));
         body.Write(bytes);
+    }
+
+    /// <summary>Whether the cross-reference section at offset is a stream ("12 0 obj <</Type /XRef …").</summary>
+    static bool IsXrefStream(byte[] data, long offset)
+    {
+        if (offset < 0 || offset >= data.Length) return false;
+        var head = Encoding.Latin1.GetString(data, (int)offset, (int)Math.Min(64, data.Length - offset)).TrimStart();
+        return !head.StartsWith("xref", StringComparison.Ordinal) && head.Contains(" obj", StringComparison.Ordinal);
     }
 
     static long FindStartXref(byte[] data)

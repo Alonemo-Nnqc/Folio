@@ -136,7 +136,40 @@ public sealed class TranslationCoordinator(AppModel model)
         var current = new Running(itemId);
         _running[itemId] = current;
         var source = model.Library.FilePath(file);
-        Task.Run(async () =>
+        _ = RecognizeThenTranslate();
+
+        // A scan has no text to translate: its text is recognised first (OCR-01), on the interface thread where OCR lives.
+        async Task RecognizeThenTranslate()
+        {
+            try
+            {
+                if (await model.Ocr.IsScanned(fileId) && !current.Cancelled)
+                {
+                    SetStage(Loc.S("正在识别扫描件文字"), null);
+                    await model.Ocr.RecognizeAndWait(fileId, p => SetStage(Loc.S("正在识别扫描件文字"), p.Total > 0 ? (double)p.Done / p.Total : null));
+                    SetStage(Loc.S("正在启动翻译"), null);
+                }
+            }
+            catch (Exception e)
+            {
+                if (!current.Cancelled) _ = Fail(itemId, fileId, e.Message, null);
+                if (current.Cancelled) Remove(itemId);
+                _running.Remove(itemId);
+                Pump();
+                return;
+            }
+            Translate();
+        }
+
+        void SetStage(string stage, double? fraction)
+        {
+            if (!_jobs.TryGetValue(itemId, out var job)) return;
+            job.Stage = stage;
+            job.Fraction = fraction;
+            ProgressChanged?.Invoke(itemId);
+        }
+
+        void Translate() => Task.Run(async () =>
         {
             try
             {
@@ -189,6 +222,13 @@ public sealed class TranslationCoordinator(AppModel model)
             case TranslationEvent.Notice notice when job != null:
                 job.Notices.Add(notice.Text);
                 break;
+            case TranslationEvent.Problem problem:
+            {
+                // At once, with what the service said: the translation is not stuck, and the cause may be the user's to fix.
+                var title = model.Snapshot.Items.TryGetValue(itemId, out var problemItem) ? problemItem.Title : "";
+                model.Toasts.Show(Loc.S("「%@」：%@", title, problem.Text), "warning");
+                break;
+            }
             case TranslationEvent.Finished finished:
             {
                 var notices = job?.Notices ?? [];

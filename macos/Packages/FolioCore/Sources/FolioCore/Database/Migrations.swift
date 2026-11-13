@@ -74,5 +74,13 @@ enum Migrations {
                 try db.execute(sql: "UPDATE file SET translatedBy = ? WHERE id = ?", arguments: [by, row["id"] as String])
             }
         }
+        // v1.3 (META-30): easyScholar journal ranks per normalised journal name; "{}" caches "not listed". Identified by
+        // name rather than number so it merges with other 1.3 migrations in any order.
+        migrator.registerMigration("v1.3-journalMetrics") { db in
+            try db.execute(sql: """
+            CREATE TABLE IF NOT EXISTS journalMetrics (
+              name TEXT PRIMARY KEY, json TEXT NOT NULL, fetchedAt DATETIME NOT NULL);
+            """)
+        }
     }
 }

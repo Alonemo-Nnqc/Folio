@@ -1,4 +1,5 @@
 import AppKit
+import FolioCore
 
 /// Menu-bar entries for the reader (READER-03/04): zoom and layout in 显示, plus 前往 and 批注 menus.
 enum ReaderMenus {
@@ -59,6 +60,17 @@ enum ReaderMenus {
             colors.addItem(entry)
         }
         annotate.addItem(MainMenu.submenu(String(localized: "颜色"), colors))
+        let sizes = NSMenu(title: String(localized: "橡皮擦大小"))
+        for (index, size) in InkEraser.Size.allCases.enumerated() {
+            let entry = item(size.title, #selector(ReaderWindowController.selectEraserSize(_:)), "", .command)
+            entry.tag = index
+            entry.image = size.image
+            sizes.addItem(entry)
+        }
+        annotate.addItem(MainMenu.submenu(String(localized: "橡皮擦大小"), sizes))
+        annotate.addItem(.separator())
+        annotate.addItem(item(String(localized: "编辑 PDF 文字"), #selector(ReaderWindowController.toggleTextEditing(_:)), "", .command))
+        annotate.addItem(item(String(localized: "识别文字（OCR）"), #selector(ReaderWindowController.recognizeText(_:)), "", .command))
         annotate.addItem(.separator())
         annotate.addItem(item(String(localized: "添加到笔记"), #selector(ReaderWindowController.addSelectionToNote(_:)), "m", [.command, .control]))
         annotate.addItem(item(String(localized: "删除所选批注"), #selector(ReaderWindowController.deleteSelectedAnnotation(_:)), "", .command))

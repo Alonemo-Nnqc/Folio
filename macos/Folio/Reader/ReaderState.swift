@@ -1,10 +1,11 @@
 import AppKit
+import FolioCore
 import Observation
 import PDFKit
 
 /// Annotation tools of the reader (READER-04).
 enum AnnotationTool: Int, CaseIterable {
-    case select, highlight, underline, strikeOut, note, text, ink
+    case select, highlight, underline, strikeOut, note, text, ink, eraser
 
     var title: String {
         switch self {
@@ -15,6 +16,7 @@ enum AnnotationTool: Int, CaseIterable {
         case .note: String(localized: "便签")
         case .text: String(localized: "文本框")
         case .ink: String(localized: "手绘")
+        case .eraser: String(localized: "橡皮擦")
         }
     }
 
@@ -27,6 +29,7 @@ enum AnnotationTool: Int, CaseIterable {
         case .note: "note.text"
         case .text: "character.textbox"
         case .ink: "scribble"
+        case .eraser: "eraser"
         }
     }
 
@@ -40,6 +43,7 @@ enum AnnotationTool: Int, CaseIterable {
         case .note: "n"
         case .text: "t"
         case .ink: "d"
+        case .eraser: "e"
         }
     }
 
@@ -51,6 +55,38 @@ enum AnnotationTool: Int, CaseIterable {
         case .strikeOut: .strikeOut
         default: nil
         }
+    }
+}
+
+extension InkEraser.Size {
+    var title: String {
+        switch self {
+        case .small: String(localized: "小")
+        case .medium: String(localized: "中")
+        case .large: String(localized: "大")
+        }
+    }
+
+    /// A ring as large as the eraser, relative to the others: the toolbar button and the menu items (template, so it
+    /// follows light and dark).
+    var image: NSImage {
+        let ring: CGFloat = switch self {
+        case .small: 6
+        case .medium: 10
+        case .large: 15
+        }
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            let circle = NSBezierPath(ovalIn: NSRect(x: rect.midX - ring / 2, y: rect.midY - ring / 2, width: ring, height: ring))
+            NSColor.black.withAlphaComponent(0.18).setFill()
+            circle.fill()
+            NSColor.black.setStroke()
+            circle.lineWidth = 1.4
+            circle.stroke()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = String(localized: "橡皮擦大小：\(title)")
+        return image
     }
 }
 
@@ -108,6 +144,7 @@ struct OutlineRow: Identifiable {
 final class ReaderState {
     var tool = AnnotationTool.select
     var color: AnnotationColor
+    var eraserSize: InkEraser.Size
     var sidebarTab = ReaderSidebarTab.thumbnails
     var pageIndex = 0
     var pageCount = 0
@@ -120,7 +157,8 @@ final class ReaderState {
     /// The mono/dual translation shown next to the original, when 对照阅读 is on (READER-10).
     var parallelFileId: String?
 
-    init(color: AnnotationColor) {
+    init(color: AnnotationColor, eraserSize: InkEraser.Size) {
         self.color = color
+        self.eraserSize = eraserSize
     }
 }

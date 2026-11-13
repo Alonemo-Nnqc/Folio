@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookText, ChevronDown, ChevronUp, Columns2, Highlighter, Languages, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
+import { BookText, ChevronDown, ChevronUp, Columns2, Eraser, ScanText, SquarePen, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
 import { CustomizeToolbarSheet, TOOLBAR_ITEMS, toolbarIds } from "./toolbar";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
+import { TranslateIcon } from "../ui/icons";
 import { filesOf, getState, setSetting, setState, useStore, veilFor, type FileRec, type Item } from "../store";
 import { translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
@@ -11,7 +12,8 @@ import { LEAD_ROOM, PanelToggle, SidebarButtons, Splitter, TabBar, TOGGLE_ROOM }
 import { isEntering, useMoving, usePanelPhase } from "../ui/slide";
 import { NoteEditor } from "../library/Inspector";
 import { TranslationProgress } from "../library/ItemList";
-import { TranslateBadge, TranslatePopover, type Anchor } from "./SelectionTranslate";
+import { useLayer, within } from "../ui/dismiss";
+import { TranslateBadge, TranslatePopover, type Anchor, type Pinned } from "./SelectionTranslate";
 
 /** "Alt+D": the modifiers and the key, as 设置 stores 划词翻译's shortcut. */
 export function shortcutOf(k: { code: string; ctrl: boolean; alt: boolean; shift: boolean }) {
@@ -43,7 +45,20 @@ const TOOLS: { key: string; icon: any; tip: string; shortcut: string; group: num
   { key: "select", icon: MousePointer2, tip: "选择", shortcut: "0", group: 0 }, { key: "highlight", icon: Highlighter, tip: "高亮", shortcut: "H", group: 0 },
   { key: "underline", icon: Underline, tip: "下划线", shortcut: "U", group: 0 }, { key: "strike", icon: Strikethrough, tip: "删除线", shortcut: "K", group: 0 },
   { key: "note", icon: StickyNote, tip: "便签", shortcut: "N", group: 1 }, { key: "textbox", icon: Type, tip: "文本框", shortcut: "T", group: 1 }, { key: "ink", icon: PenLine, tip: "手绘", shortcut: "D", group: 1 },
+  { key: "eraser", icon: Eraser, tip: "橡皮擦", shortcut: "E", group: 1 },
 ];
+
+/** The eraser's sizes (READER-30), as on the Mac: diameters 8, 16 and 32 pt; the ring is drawn in proportion. */
+const ERASER_SIZES = [{ key: "small", title: "小", ring: 6 }, { key: "medium", title: "中", ring: 10 }, { key: "large", title: "大", ring: 15 }];
+
+function EraserRing({ size }: { size: string }) {
+  const ring = ERASER_SIZES.find((s) => s.key === size)?.ring ?? 10;
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+      <circle cx="9" cy="9" r={ring / 2} fill="currentColor" fillOpacity=".18" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
 
 let labels: Record<string, string> | null = null;
 export async function readerLabels() { return (labels ??= await call("reader.labels")); }
@@ -89,6 +104,8 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const [color, setColor] = useState<string>(settings.highlightColor ?? "yellow");
   const toolRef = useRef(tool); toolRef.current = tool;
   const colorRef = useRef(color); colorRef.current = color;
+  const [eraserSize, setEraserSize] = useState<string>(ERASER_SIZES.some((s) => s.key === settings.readerEraserSize) ? settings.readerEraserSize : "medium");
+  const eraserSizeRef = useRef(eraserSize); eraserSizeRef.current = eraserSize;
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const sidebarRef = useRef(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(settings.readerSidebarWidth ?? 220);
@@ -105,6 +122,10 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const [editor, setEditor] = useState<{ x: number; y: number; text: string; done: (text: string) => void } | null>(null);
   const [badge, setBadge] = useState<{ x: number; y: number; anchor: Anchor; text: string; page: number } | null>(null);
   const [translation, setTranslation] = useState<{ anchor: Anchor; text: string; page: number } | null>(null);
+  // Dragged off its selection, the 划词翻译 window stays where it was put, and later selections are translated in it (SEL-21).
+  const [pinned, setPinned] = useState<Pinned | null>(null);
+  const pinnedRef = useRef(pinned);
+  pinnedRef.current = pinned;
   const autoTranslate = useRef(0);
   const [opened, setOpened] = useState(false);
 
@@ -114,7 +135,31 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const send = (command: unknown) => main.send(command);
   const sendBoth = (command: unknown) => { main.send(command); parallelRef.current?.send(command); };
 
-  const applyTool = (next: string, nextColor = colorRef.current) => { setTool(next); main.send({ cmd: "tool", tool: next, color: nextColor }); };
+  const applyTool = (next: string, nextColor = colorRef.current) => {
+    // A tool ends 编辑 PDF 文字: annotating and editing the text are not done at once.
+    if (editingRef.current) setEditing(false);
+    setTool(next);
+    main.send({ cmd: "tool", tool: next, color: nextColor, eraserSize: eraserSizeRef.current });
+  };
+  // 编辑 PDF 文字 (EDIT-01).
+  const [editing, setEditingState] = useState(false);
+  const editingRef = useRef(false);
+  const setEditing = (on: boolean) => {
+    editingRef.current = on;
+    setEditingState(on);
+    if (on) { setTool("select"); main.send({ cmd: "tool", tool: "select", color: colorRef.current }); }
+    main.send({ cmd: "editMode", on });
+  };
+  /** A size is chosen to erase with: the eraser becomes the tool, and the size is remembered. */
+  const chooseEraserSize = (size: string) => {
+    setEraserSize(size);
+    eraserSizeRef.current = size;
+    setSetting("readerEraserSize", size);
+    applyTool("eraser");
+  };
+  const eraserSizeEntries = (): MenuEntry[] => ERASER_SIZES.map((s) => ({
+    label: t(s.title), icon: <EraserRing size={s.key} />, checked: s.key === eraserSizeRef.current, action: () => chooseEraserSize(s.key),
+  }));
   const zoom = (value: string) => sendBoth({ cmd: "zoom", value });
   const layout = (value: "single" | "twoUp") => { sendBoth({ cmd: "layout", value }); setSetting("readerLayout", value); };
   const step = (value: string) => send({ cmd: "step", value });
@@ -285,6 +330,10 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     if (result.cmd === "reloadCurrent") {
       const url = pane.preview ? await call("reader.previewUrl", { path: pane.preview }) : await call("reader.url", { session: pane.session });
       pane.send({ cmd: "reload", url });
+    } else if (result.cmd === "pageChanged") {
+      // 编辑 PDF 文字: only that page is read again and drawn again.
+      const url = pane.preview ? await call("reader.previewUrl", { path: pane.preview }) : await call("reader.url", { session: pane.session });
+      pane.send({ cmd: "pageChanged", page: result.page, url });
     } else pane.send(result);
   };
 
@@ -310,6 +359,10 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     const rect = pane.frame?.getBoundingClientRect();
     const x = (rect?.left ?? 0) + m.clientX, y = (rect?.top ?? 0) + m.clientY;
     let entries: MenuEntry[] = [];
+    if (m.kind === "eraser") {
+      openMenu([{ kind: "title", label: t("橡皮擦大小") }, ...eraserSizeEntries()], x, y);
+      return;
+    }
     if (m.kind === "annotation") {
       const textual = m.subtype === "Text" || m.subtype === "FreeText";
       const contents = m.contents ?? "";
@@ -410,12 +463,49 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         if (!m.text) { setBadge(null); clearTimeout(autoTranslate.current); }
         else if (m.done) onSelectionDone(pane, m);
         break;
-      case "pointerDown": setBadge(null); setTranslation(null); clearTimeout(autoTranslate.current); break;
+      case "pointerDown":
+        setBadge(null);
+        if (!pinnedRef.current) setTranslation(null);
+        clearTimeout(autoTranslate.current);
+        // The service's connection is opened (and its token fetched) while the text is being chosen (SEL-20).
+        call("translation.prewarm").catch(() => {});
+        break;
       case "viewMoved": setBadge(null); break;
       case "translateSelection":
         if (m.rect) openTranslation(toWindow(pane, m.rect), m.text, m.page ?? 1);
         break;
       case "markup": call("reader.markup", { session: pane.session, subtype: m.subtype, color: m.color ?? colorRef.current, pages: m.pages }).then((r) => applyResult(pane, r)); break;
+      case "needBlocks":
+        call("reader.textBlocks", { session: pane.session, page: m.page })
+          .then((blocks) => pane.send({ cmd: "textBlocks", page: m.page, blocks }))
+          .catch((e) => {
+            pane.send({ cmd: "textBlocks", page: m.page, blocks: [] });
+            call("toast.show", { message: t("无法读取第 %lld 页的文字：%@", m.page, e?.message ?? String(e)), icon: "warning" });
+          });
+        break;
+      // A paragraph edited in place: its changes go to the app as they are typed, and it is written when it is left.
+      case "paragraph":
+        call(`reader.${m.op}`, { session: pane.session, ...m.args })
+          .then((result) => pane.send({ cmd: "paragraphResult", req: m.req, result }))
+          .catch((e) => pane.send({ cmd: "paragraphResult", req: m.req, error: e?.message ?? String(e) }));
+        break;
+      case "paragraphCommit":
+        call("reader.paragraphCommit", { session: pane.session, id: m.id })
+          .then((r) => (r ? applyResult(pane, r) : pane.send({ cmd: "paragraphSettled", page: m.page })))
+          .catch((e) => {
+            call("toast.show", { message: t("无法修改这段文字：%@", e?.message ?? String(e)), icon: "warning" });
+            pane.send({ cmd: "paragraphSettled", page: m.page });
+          });
+        break;
+      case "editRefused": call("toast.show", { message: t("这里不能编辑：%@", m.reason), icon: "warning" }); break;
+      case "leaveEditing": if (editingRef.current) setEditing(false); break;
+      case "erase": call("reader.erase", { session: pane.session, page: m.page, ids: m.ids, paths: m.paths, radius: m.radius }).then((r) => applyResult(pane, r)); break;
+      case "eraserStep": {
+        const index = ERASER_SIZES.findIndex((s) => s.key === eraserSizeRef.current);
+        const next = ERASER_SIZES[Math.min(Math.max(index + m.step, 0), ERASER_SIZES.length - 1)];
+        if (next.key !== eraserSizeRef.current) chooseEraserSize(next.key);
+        break;
+      }
       case "ink": call("reader.ink", { session: pane.session, page: m.page, color: m.color ?? colorRef.current, strokes: m.strokes, temp: m.temp }).then((r) => applyResult(pane, r)); break;
       case "note":
       case "textbox": {
@@ -492,6 +582,22 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   };
 
   useEffect(() => { if (visible) { checkForChanges(); requestAnimationFrame(() => main.frame?.contentWindow?.focus()); } }, [visible]);
+
+  // 扫描件 (OCR-01): a banner offers to recognise the text; the file is reloaded once that is done.
+  const [isScan, setIsScan] = useState(false);
+  const [scanDismissed, setScanDismissed] = useState(false);
+  const ocr = useStore((s) => (file ? s.ocr[file.id] : undefined));
+  useEffect(() => {
+    if (!opened || !file?.isPdf) return;
+    let live = true;
+    call<boolean>("ocr.isScanned", { file: file.id }).then((v) => { if (live) setIsScan(!!v); }).catch(() => {});
+    return () => { live = false; };
+  }, [opened, file?.id, file?.sha]);
+  useEffect(() => on("ocr.recognized", (id: string) => {
+    if (id !== file?.id) return;
+    setIsScan(false);
+    checkForChanges();
+  }), [file?.id]);
   useEffect(() => on("window.active", (active) => { if (active && visible) checkForChanges(); }), [visible]);
 
   // Keys of the reader. True when the key was used.
@@ -554,12 +660,16 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     const plain = (title: string, Icon: any, action: () => void, extra?: string) => <button className={`glass-button${extra ?? ""}`} title={title} onClick={action}>{icon(Icon)}</button>;
     switch (id) {
       case "view": return <button className="glass-button" style={{ width: 52 }} title={t("显示")} onClick={(e) => openMenuAt(e.currentTarget, viewMenu())}><ChevronDown size={14} /></button>;
-      case "color": return <button className="glass-button" title={t("批注颜色")} onClick={(e) => openMenuAt(e.currentTarget, colors.map((c) => ({
+      // While erasing, the colour button beside the tools picks the eraser's size instead.
+      case "color": return tool === "eraser"
+        ? <button className="glass-button" title={t("橡皮擦大小（[ 与 ] 调整）")} onClick={(e) => openMenuAt(e.currentTarget, eraserSizeEntries())}><EraserRing size={eraserSize} /></button>
+        : <button className="glass-button" title={t("批注颜色")} onClick={(e) => openMenuAt(e.currentTarget, colors.map((c) => ({
         label: c.title, dot: c.hex, checked: c.key === color,
         action: () => { setColor(c.key); setSetting("highlightColor", c.key); main.send({ cmd: "tool", tool: toolRef.current, color: c.key }); },
       })))}><span className="color-dot" style={{ background: colorHex }} /></button>;
+      case "editText": return plain(t("编辑 PDF 中的文字"), SquarePen, () => setEditing(!editingRef.current), editing ? " on" : "");
       case "translate": return <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><BookText size={17} strokeWidth={1.7} /></button>;
-      case "selectionTranslate": return plain(t("翻译所选文字"), Languages, () => main.send({ cmd: "translateSelection" }));
+      case "selectionTranslate": return plain(t("翻译所选文字"), TranslateIcon, () => main.send({ cmd: "translateSelection" }));
       case "search": return searchOpen || query ? (
         <label className="search-field" style={{ flex: "0 1 200px", minWidth: 130 }}>
           <Search size={14} />
@@ -655,10 +765,28 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       <PanelToggle onClick={toggleNotes} />
 
       {running && <div className="hud"><TranslationProgress itemId={file.itemId} /></div>}
+      {(ocr || (isScan && !scanDismissed)) && (
+        <div className="scan-banner" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>
+          <ScanText size={15} strokeWidth={1.8} />
+          {ocr ? (
+            <>
+              <span className="tabular">{ocr.total > 0 ? t("正在识别文字（%lld/%lld 页）", ocr.done, ocr.total) : t("正在识别文字…")}</span>
+              <span className="scan-bar"><i style={{ width: `${ocr.total ? (ocr.done / ocr.total) * 100 : 4}%` }} /></span>
+              <button className="btn small" onClick={() => call("ocr.cancel", { file: file.id })}>{t("取消")}</button>
+            </>
+          ) : (
+            <>
+              <span>{t("这是扫描件，识别文字后即可选中、搜索与翻译")}</span>
+              <button className="btn small primary" onClick={() => call("ocr.recognize", { files: [file.id] })}>{t("识别文字")}</button>
+              <button className="scan-close" title={t("关闭")} onClick={() => setScanDismissed(true)}><X size={11} strokeWidth={2.6} /></button>
+            </>
+          )}
+        </div>
+      )}
 
       {badge && visible && <TranslateBadge x={badge.x} y={badge.y} onClick={() => openTranslation(badge.anchor, badge.text, badge.page)} />}
-      {translation && visible && <TranslatePopover anchor={translation.anchor} text={translation.text} close={() => { setTranslation(null); main.frame?.contentWindow?.focus(); }}
-        addToNote={(source, translated) => addTranslationToNote(source, translated, translation.page)} />}
+      {translation && visible && <TranslatePopover anchor={translation.anchor} text={translation.text} close={() => { setTranslation(null); setPinned(null); main.frame?.contentWindow?.focus(); }}
+        pinned={pinned} onPin={setPinned} addToNote={(source, translated) => addTranslationToNote(source, translated, translation.page)} />}
       {editor && <NotePopover {...editor} close={() => { setEditor(null); main.frame?.contentWindow?.focus(); }} />}
     </div>
   );
@@ -669,17 +797,16 @@ function NotePopover({ x, y, text, done, close }: { x: number; y: number; text: 
   const ref = useRef<HTMLDivElement>(null);
   const latest = useRef(value);
   latest.current = value;
+  const finished = useRef(false);
   const finish = () => {
+    if (finished.current) return;
+    finished.current = true;
     const clean = latest.current.replace(/\r\n/g, "\n").trim();
     if (clean !== text.trim()) done(clean);
     close();
   };
-  useEffect(() => {
-    const away = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) finish(); };
-    window.addEventListener("mousedown", away, true);
-    window.addEventListener("blur", finish);
-    return () => { window.removeEventListener("mousedown", away, true); window.removeEventListener("blur", finish); };
-  }, []);
+  // Finished by a press anywhere else (the pages included), Esc, or the window going to the background (WIN-30).
+  useLayer(true, { contains: (target) => within(ref.current, target), onPress: finish, onEscape: finish, onDeactivate: finish });
   const left = Math.min(x, innerWidth - 316), top = Math.min(y + 6, innerHeight - 170);
   return (
     <div ref={ref} className="note-pop" style={{ left, top }}>

@@ -108,6 +108,9 @@ final class TranslationRenderer {
     /// Also produce `Output.base` and `Output.overlay`.
     var auditLayers = false
 
+    /// Words in pictures and their translations, by page: set over the pictures (TRANS-40).
+    var imageText: [Int: [(line: ImageText.Line, translation: String)]] = [:]
+
     private enum Layers { case all, base, overlay }
 
     /// Renders `pages` (layouts in page order). `translations` maps segment ids to translated text; segments
@@ -225,7 +228,15 @@ final class TranslationRenderer {
                     }
                     audit?.record(page: layout.number, block: entry.segment.block, frame: placement?.frame ?? entry.frame, result: result, plan: entry.plan)
                 }
+                // Figure labels drawn as text: their glyphs leave the page for their translations.
+                for entry in imageText[layout.number] ?? [] where !entry.line.glyphs.isEmpty {
+                    removal.kept.subtract(entry.line.glyphs)
+                    removal.glyphs.formUnion(entry.line.glyphs)
+                }
                 removals[layout.number] = removal
+                if let entries = imageText[layout.number], !entries.isEmpty {
+                    ImageText.draw(entries, language: language, in: context)
+                }
                 context.endPDFPage()
             }
             context.closePDF()
@@ -263,40 +274,13 @@ final class TranslationRenderer {
                     pendingRuleCheck = frames
                 }
                 audit?.conflicts += edits.values.filter { if case .replace = $0 { return true } else { return false } }.count
-                // Rules that are part of formulas (fraction bars, radicals) move with the formula.
-                var droppedRules: [Int] = []
-                // The formulas' own areas too: a fraction's bar may lie outside the line's box.
                 let pageFormulas = transplants[layout.number] ?? []
-                let formulaAreas = pageFormulas.map { $0.formula.rect.insetBy(dx: -0.5, dy: -$0.formula.size * 0.15) }
-                for (m, mark) in interpreter.marks.enumerated() where mark.kind != .image && !mark.isWhite
-                    && (mark.rect.height < 4 && rects.contains(where: { $0.insetBy(dx: -0.5, dy: -0.5).contains(mark.rect) })
-                        || Self.isRule(mark.rect, ofFormulaIn: formulaAreas)) {
-                    for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
-                    droppedRules.append(m)
-                }
+                let (droppedRules, chips) = Self.graphicEdits(interpreter: interpreter, rects: rects, transplants: pageFormulas, edits: &edits)
                 // A rule (fraction bar, radical) left in the middle of the text set again.
                 for (m, mark) in interpreter.marks.enumerated() where !pendingRuleCheck.isEmpty && mark.kind != .image && !mark.isWhite
                     && mark.rect.height < 2 && mark.rect.width < 60 && mark.rect.width > 1 && !droppedRules.contains(m)
                     && pendingRuleCheck.contains(where: { $0.insetBy(dx: 0.5, dy: 0.5).contains(CGPoint(x: mark.rect.midX, y: mark.rect.midY)) }) {
                     audit?.leftBehind.append(String(format: "p%d rule %.0f wide @%.0f,%.0f", layout.number, mark.rect.width, mark.rect.midX, mark.rect.midY))
-                }
-                // Pictures set among the words go with them.
-                for transplant in pageFormulas {
-                    for m in transplant.formula.icons where m < interpreter.marks.count {
-                        let mark = interpreter.marks[m]
-                        for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
-                    }
-                }
-                // A coloured chip tight around a formula moves with it.
-                var chips: [Int: Int] = [:]
-                for transplant in transplants[layout.number] ?? [] {
-                    let formula = transplant.formula
-                    for (m, mark) in interpreter.marks.enumerated() where mark.kind == .fill && !mark.isWhite && !mark.hasCurves && chips[m] == nil
-                        && mark.rect.height >= 4 && mark.rect.contains(CGPoint(x: formula.rect.midX, y: formula.baseline + formula.size * 0.25))
-                        && mark.rect.width < formula.rect.width + formula.size * 2 && mark.rect.height < formula.size * 2 {
-                        chips[m] = transplant.formula.glyphs.first ?? -1
-                        for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
-                    }
                 }
                 if layers != .overlay, let edited = composer.pageForm(layout.number, interpreter: interpreter, edits: edits) {
                     xobjects["E"] = edited
@@ -311,50 +295,12 @@ final class TranslationRenderer {
                 let pageTransplants = debugEdited ? [] : transplants[layout.number] ?? []
                 let claimed = removal.glyphs.union(pageTransplants.flatMap(\.formula.glyphs))
                 let orphans = removed.subtracting(claimed).filter { interpreter.glyphs[$0].isVisible }
-                var fontNames: [Int: String] = [:]
-                var drawnOrphans = Set<Int>()
-                defer {
-                    if !debugEdited {
-                        audit?.lostGlyphs += orphans.subtracting(drawnOrphans).filter { interpreter.glyphs[$0].text.map { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? true }.count
-                    }
-                }
-                for transplant in pageTransplants {
-                    let formula = transplant.formula
-                    let area = formula.rect.insetBy(dx: -0.5, dy: -formula.size * 0.15)
-                    var glyphs = formula.glyphs
-                    glyphs += orphans.filter { g in
-                        let box = interpreter.glyphs[g].box
-                        return area.contains(CGPoint(x: box.midX, y: box.midY))
-                    }
-                    drawnOrphans.formUnion(glyphs[formula.glyphs.count...])
-                    audit?.formulaGlyphs += glyphs.count
-                    let rules = droppedRules.filter { Self.isRule(interpreter.marks[$0].rect, ofFormulaIn: [area]) }
-                        + chips.filter { $0.value == (formula.glyphs.first ?? -1) }.map(\.key)
-                    let t = transplant.transform
-                    content += "q \(PDFValue.format(t.a)) 0 0 \(PDFValue.format(t.d)) \(PDFValue.format(t.tx)) \(PDFValue.format(t.ty)) cm\n"
-                    func matrix(_ m: CGAffineTransform) -> String {
-                        [m.a, m.b, m.c, m.d, m.tx, m.ty].map { PDFValue.format(Double($0)) }.joined(separator: " ")
-                    }
-                    for m in formula.icons {
-                        if let image = interpreter.images[m], case .ref(let number) = composer.copier.copy(stream: image.stream) {
-                            let name = "FolioI\(xobjects.count)"
-                            xobjects[name] = number
-                            content += "q " + matrix(image.matrix) + " cm /\(name) Do Q\n"
-                        } else if let ctm = interpreter.paths[m], let stream = interpreter.streams[interpreter.marks[m].location.stream] {
-                            // A shape: its own path, in its own colour.
-                            let mark = interpreter.marks[m]
-                            let ops = mark.opRange.map { String(decoding: stream.source[stream.ops[$0].range], as: UTF8.self) }.joined(separator: "\n")
-                            content += "q " + matrix(ctm) + " cm \(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg\n" + ops + "\nQ\n"
-                        }
-                    }
-                    content += Self.drawing(glyphs: glyphs.sorted(), rules: rules, interpreter: interpreter) { font in
-                        if let name = fontNames[font] { return name }
-                        let name = "FolioG\(fontNames.count)"
-                        fontNames[font] = name
-                        fonts[name] = composer.copier.copy(dictionary: interpreter.fonts[font].dict)
-                        return name
-                    }
-                    content += "Q\n"
+                let drawn = Self.formulaContent(pageTransplants, orphans: orphans, droppedRules: droppedRules, chips: chips,
+                                                interpreter: interpreter, copier: composer.copier, xobjects: &xobjects, fonts: &fonts)
+                content += drawn.content
+                audit?.formulaGlyphs += drawn.glyphCount
+                if !debugEdited {
+                    audit?.lostGlyphs += orphans.subtracting(drawn.orphans).filter { interpreter.glyphs[$0].text.map { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? true }.count
                 }
                 let outputPage = composer.reserveOutputPage(forSourcePage: layout.number)
                 let places = linkPlaces[layout.number] ?? [:]
@@ -394,6 +340,94 @@ final class TranslationRenderer {
         return Output(mono: wantMono ? compose(dual: false) : nil, dual: wantDual ? compose(dual: true) : nil,
                       base: auditLayers ? compose(dual: false, layers: .base) : nil,
                       overlay: auditLayers ? compose(dual: false, layers: .overlay) : nil)
+    }
+
+    /// What else goes from a page along with text taken out of `rects` and formulas moved to `transplants`: thin rules
+    /// in the removed lines and the rules of the formulas (fraction bars, radicals), pictures set among the words, and
+    /// coloured chips tight around a formula. Their operators are dropped in `edits`. Returns the rules dropped, and the
+    /// chips (mark → the first glyph of the formula each goes with), for `formulaContent` to draw again.
+    static func graphicEdits(interpreter: ContentInterpreter, rects: [CGRect], transplants: [Transplant],
+                             edits: inout [OpLocation: EditAction]) -> (rules: [Int], chips: [Int: Int]) {
+        // Rules that are part of formulas (fraction bars, radicals) move with the formula.
+        var droppedRules: [Int] = []
+        // The formulas' own areas too: a fraction's bar may lie outside the line's box.
+        let formulaAreas = transplants.map { $0.formula.rect.insetBy(dx: -0.5, dy: -$0.formula.size * 0.15) }
+        for (m, mark) in interpreter.marks.enumerated() where mark.kind != .image && !mark.isWhite
+            && (mark.rect.height < 4 && rects.contains(where: { $0.insetBy(dx: -0.5, dy: -0.5).contains(mark.rect) })
+                || isRule(mark.rect, ofFormulaIn: formulaAreas)) {
+            for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+            droppedRules.append(m)
+        }
+        // Pictures set among the words go with them.
+        for transplant in transplants {
+            for m in transplant.formula.icons where m < interpreter.marks.count {
+                let mark = interpreter.marks[m]
+                for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+            }
+        }
+        // A coloured chip tight around a formula moves with it.
+        var chips: [Int: Int] = [:]
+        for transplant in transplants {
+            let formula = transplant.formula
+            for (m, mark) in interpreter.marks.enumerated() where mark.kind == .fill && !mark.isWhite && !mark.hasCurves && chips[m] == nil
+                && mark.rect.height >= 4 && mark.rect.contains(CGPoint(x: formula.rect.midX, y: formula.baseline + formula.size * 0.25))
+                && mark.rect.width < formula.rect.width + formula.size * 2 && mark.rect.height < formula.size * 2 {
+                chips[m] = transplant.formula.glyphs.first ?? -1
+                for index in mark.opRange { edits[OpLocation(stream: mark.location.stream, index: index)] = .drop }
+            }
+        }
+        return (droppedRules, chips)
+    }
+
+    /// Content drawing each formula of `transplants` where the new text put it: its own glyphs, the glyphs taken out
+    /// that no character stands for inside its box (`orphans`), its pictures, rules and chips. Fonts and images are
+    /// copied with `copier` and named (`prefix` + G / I + a number) in `fonts` and `xobjects`.
+    static func formulaContent(_ transplants: [Transplant], orphans: Set<Int>, droppedRules: [Int], chips: [Int: Int],
+                               interpreter: ContentInterpreter, copier: PDFCopier, prefix: String = "Folio",
+                               xobjects: inout [String: Int], fonts: inout [String: PDFValue]) -> (content: String, orphans: Set<Int>, glyphCount: Int) {
+        var content = ""
+        var fontNames: [Int: String] = [:]
+        var drawnOrphans = Set<Int>()
+        var count = 0
+        for transplant in transplants {
+            let formula = transplant.formula
+            let area = formula.rect.insetBy(dx: -0.5, dy: -formula.size * 0.15)
+            var glyphs = formula.glyphs
+            glyphs += orphans.filter { g in
+                let box = interpreter.glyphs[g].box
+                return area.contains(CGPoint(x: box.midX, y: box.midY))
+            }
+            drawnOrphans.formUnion(glyphs[formula.glyphs.count...])
+            count += glyphs.count
+            let rules = droppedRules.filter { isRule(interpreter.marks[$0].rect, ofFormulaIn: [area]) }
+                + chips.filter { $0.value == (formula.glyphs.first ?? -1) }.map(\.key)
+            let t = transplant.transform
+            content += "q \(PDFValue.format(t.a)) 0 0 \(PDFValue.format(t.d)) \(PDFValue.format(t.tx)) \(PDFValue.format(t.ty)) cm\n"
+            func matrix(_ m: CGAffineTransform) -> String {
+                [m.a, m.b, m.c, m.d, m.tx, m.ty].map { PDFValue.format(Double($0)) }.joined(separator: " ")
+            }
+            for m in formula.icons {
+                if let image = interpreter.images[m], case .ref(let number) = copier.copy(stream: image.stream) {
+                    let name = "\(prefix)I\(xobjects.count)"
+                    xobjects[name] = number
+                    content += "q " + matrix(image.matrix) + " cm /\(name) Do Q\n"
+                } else if let ctm = interpreter.paths[m], let stream = interpreter.streams[interpreter.marks[m].location.stream] {
+                    // A shape: its own path, in its own colour.
+                    let mark = interpreter.marks[m]
+                    let ops = mark.opRange.map { String(decoding: stream.source[stream.ops[$0].range], as: UTF8.self) }.joined(separator: "\n")
+                    content += "q " + matrix(ctm) + " cm \(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg\n" + ops + "\nQ\n"
+                }
+            }
+            content += drawing(glyphs: glyphs.sorted(), rules: rules, interpreter: interpreter) { font in
+                if let name = fontNames[font] { return name }
+                let name = "\(prefix)G\(fontNames.count)"
+                fontNames[font] = name
+                fonts[name] = copier.copy(dictionary: interpreter.fonts[font].dict)
+                return name
+            }
+            content += "Q\n"
+        }
+        return (content, drawnOrphans, count)
     }
 
     /// Whether a thin mark belongs to a formula in one of `areas`: a fraction's bar (a little wider than what is over and

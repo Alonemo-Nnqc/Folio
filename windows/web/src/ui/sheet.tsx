@@ -24,14 +24,14 @@ export function SheetHost() {
   );
 }
 
-export function Sheet({ title, width, children, actions, onEscape }: { title?: ReactNode; width?: number; children?: ReactNode; actions?: ReactNode; onEscape?: () => void }) {
+export function Sheet({ title, width, children, actions, onEscape, className }: { title?: ReactNode; width?: number; children?: ReactNode; actions?: ReactNode; onEscape?: () => void; className?: string }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === "Escape" && onEscape) { e.preventDefault(); e.stopPropagation(); onEscape(); } };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [onEscape]);
   return (
-    <div className="sheet" style={width ? { width } : undefined} role="dialog">
+    <div className={className ? `sheet ${className}` : "sheet"} style={width ? { width } : undefined} role="dialog">
       {title && <h2>{title}</h2>}
       {children}
       {actions && <div className="actions">{actions}</div>}

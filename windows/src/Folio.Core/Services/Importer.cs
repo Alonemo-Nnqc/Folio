@@ -10,6 +10,8 @@ public interface IImportUi
     Task<bool> AskRestore(string title);
     /// <summary>A retrieved PDF is a paper already in the library: attach it there (true) or discard it (false).</summary>
     Task<bool> AskAttachDuplicate(string title);
+    /// <summary>A PDF was imported (a scan gets its text recognised, OCR-01).</summary>
+    void PdfImported(string itemId) { }
 }
 
 /// <summary>
@@ -115,6 +117,7 @@ public sealed class Importer
                     if (_settings.AutoRetrieveOnImport) Enqueue(imported.ItemId);
                     else Library.SetMetadataState(MetadataState.None, imported.ItemId);
                     IndexFulltext();
+                    _ui.PdfImported(imported.ItemId);
                     break;
                 case ImportOutcome.DuplicateFile d:
                     var title = Library.Item(d.ExistingItemId)?.Title ?? "";

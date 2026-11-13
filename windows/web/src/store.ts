@@ -12,7 +12,15 @@ export interface Item {
   year?: number; source?: string; volume?: string; issue?: string; pages?: string; publisher?: string; doi?: string; arxivId?: string; isbn?: string; url?: string;
   abstract?: string; citationKey?: string; rating: number; readStatus: number; readStatusName: string; defaultFileId?: string; metadataState: string;
   dateAdded: number; dateModified: number; trashed: boolean; retrieving: boolean;
+  /** The item has a journal worth asking easyScholar about (META-30). */
+  hasJournal: boolean;
+  /** Its journal's ranks: null until looked up; no badges when easyScholar does not list it. */
+  journalMetrics: JournalMetrics | null;
 }
+export interface JournalBadge { kind: string; text: string; detail: string; emphasized: boolean }
+export interface JournalMetrics { badges: JournalBadge[]; rank?: string; impactFactor?: string; summary: string }
+/** 期刊指标's queue and key, for the inspector's hints and 设置. */
+export interface JournalMetricsState { key: string; hasKey: boolean; autoFetch: boolean; pending: number; status?: string; attention: boolean; keyPage: string }
 export interface FileRec {
   id: string; itemId: string; fileName: string; path: string; isPdf: boolean; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
   sha: string; dateAdded: number; title: string; tabTitle: string; tabTip: string;
@@ -53,6 +61,9 @@ export interface State {
 
   settings: Record<string, any>;
   jobs: Record<string, Job>;
+  journalMetrics: JournalMetricsState | null;
+  /** 扫描件识别 under way, by file: pages done of pages to do (OCR-01). */
+  ocr: Record<string, { done: number; total: number }>;
   toast: Toast | null;
   tabs: ReaderTabState[];
   activeTab: string; // "library" or a reader tab's key
@@ -81,7 +92,7 @@ export interface Statics {
 let state: State = {
   items: new Map(), files: new Map(), filesByItem: {}, groups: new Map(), topGroups: [], childGroups: {}, tags: [], itemTags: {}, itemGroups: {}, noted: new Set(), counts: {}, root: "", libraryVersion: 0,
   rows: [], scope: "all", searchText: "", searchWholeLibrary: false, includeFulltext: false, sortAscending: true,
-  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false,
+  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false,
   captionWidth: 138, readerNotes: {}, windowState: "normal", active: true, dark: false,
   statics: { version: "", channel: "", translucency: false, annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
 };
@@ -187,6 +198,10 @@ export async function boot(route: string) {
   on("rows", applyRows);
   on("settings", (s) => { setState({ settings: s }); applyTheme(s); });
   on("translation.jobs", (jobs) => setState({ jobs }));
+  on("journalMetrics", (journalMetrics) => setState({ journalMetrics }));
+  on("ocr", (ocr) => setState({ ocr }));
+  call("ocr.state").then((ocr) => setState({ ocr: ocr ?? {} })).catch(() => {});
+  call("journalMetrics.state").then((journalMetrics) => setState({ journalMetrics })).catch(() => {});
   on("toast", (toast) => setState({ toast }));
   on("window.state", (windowState) => setState({ windowState }));
   on("window.active", (active) => setState({ active }));
@@ -218,18 +233,52 @@ export function defaultFile(s: State, item: Item): FileRec | undefined {
   return files.find((f) => f.id === item.defaultFileId) ?? files[0];
 }
 
+/** Groups nest at most four levels deep (SIDE-17); a top-level group is level 1. */
+export const MAX_GROUP_DEPTH = 4;
+
+/** Every group in sidebar order, each followed by its subgroups; depth 0 at the top level. */
 export function groupsForMenus(s: State): { group: Group; depth: number }[] {
   const out: { group: Group; depth: number }[] = [];
-  for (const id of s.topGroups) {
-    const g = s.groups.get(id);
-    if (!g) continue;
-    out.push({ group: g, depth: 0 });
-    for (const c of s.childGroups[id] ?? []) {
-      const child = s.groups.get(c);
-      if (child) out.push({ group: child, depth: 1 });
+  const seen = new Set<string>();
+  const visit = (ids: string[], depth: number) => {
+    for (const id of ids) {
+      const g = s.groups.get(id);
+      if (!g || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ group: g, depth });
+      visit(s.childGroups[id] ?? [], depth + 1);
     }
-  }
+  };
+  visit(s.topGroups, 0);
   return out;
+}
+
+/** Ancestor ids from the top level down, without the group itself. */
+export function groupAncestors(s: State, id: string): string[] {
+  const chain: string[] = [];
+  const seen = new Set([id]);
+  for (let parent = s.groups.get(id)?.parentId; parent && !seen.has(parent) && s.groups.has(parent); parent = s.groups.get(parent)?.parentId) {
+    seen.add(parent);
+    chain.unshift(parent);
+  }
+  return chain;
+}
+
+/** The group's level: 1 at the top level. */
+export function groupDepth(s: State, id: string): number {
+  return groupAncestors(s, id).length + 1;
+}
+
+/** Levels the group and its subgroups span: 1 without subgroups. */
+export function groupSubtreeHeight(s: State, id: string): number {
+  const seen = new Set([id]);
+  const height = (g: string): number => 1 + Math.max(0, ...(s.childGroups[g] ?? []).filter((c) => !seen.has(c) && seen.add(c)).map(height));
+  return height(id);
+}
+
+/** Whether a subgroup can be created inside the group. */
+export function canAddSubgroup(s: State, id: string): boolean {
+  return s.groups.has(id) && groupDepth(s, id) < MAX_GROUP_DEPTH;
 }
 
 export function scopeGroupId(scope: string) { return scope.startsWith("group:") ? scope.slice(6) : null; }

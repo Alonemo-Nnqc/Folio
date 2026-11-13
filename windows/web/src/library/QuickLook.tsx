@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import { defaultFile, getState, setState, useStore, type FileRec } from "../store";
 import { openReader } from "../commands";
 import { readerLabels } from "../reader/ReaderTab";
+import { useLayer } from "../ui/dismiss";
 
 /**
  * 快速预览, like Quick Look on the Mac: Space (or a middle click — a three-finger tap on most touchpads) shows the selected
@@ -34,11 +35,14 @@ export function QuickLook() {
   useEffect(() => {
     if (!open) return;
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape" || (e.key === " " && !(e.target as Element).closest?.("input, textarea"))) { e.preventDefault(); e.stopPropagation(); close(); }
+      if (e.key === " " && !(e.target as Element).closest?.("input, textarea")) { e.preventDefault(); e.stopPropagation(); close(); }
     };
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);
   }, [open]);
+
+  // Esc closes it, from its page too (the page forwards Esc while a layer is open).
+  useLayer(open, { contains: () => true, onEscape: close });
 
   // Nothing (or several items) selected: nothing to show.
   useEffect(() => { if (open && !target.item) setState({ quickLook: false }); }, [open, target.item]);

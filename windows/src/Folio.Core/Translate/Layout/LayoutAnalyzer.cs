@@ -25,6 +25,9 @@ public sealed partial class LayoutAnalyzer
     public Options Opts { get; }
     bool _inReferences;
     public double BodySize { get; private set; } = 10;
+    /// <summary>The document's body size when it is known already (the PDF editor reads it from the first pages once):
+    /// only the pages asked for are analysed then.</summary>
+    public double? KnownBodySize { get; set; }
     Func<double, (double Lo, double Hi)>? _columnOf;
     double _typicalWidth = double.PositiveInfinity;
     List<Rect> _pageRules = [];
@@ -43,6 +46,7 @@ public sealed partial class LayoutAnalyzer
         int through = Math.Min(pages.Count == 0 ? 0 : pages.Max(), source.Pages.Count);
         for (int number = 1; number <= through; number++)
         {
+            if (KnownBodySize != null && !selected.Contains(number)) continue;
             var interpreter = new ContentInterpreter();
             interpreter.Run(source.Pages[number - 1]);
             var chars = PageText.Characters(source, number, interpreter);
@@ -54,7 +58,7 @@ public sealed partial class LayoutAnalyzer
             }
             prepared.Add((number, interpreter, chars));
         }
-        BodySize = sizeCounts.Count == 0 ? 10 : sizeCounts.MaxBy(kv => kv.Value).Key;
+        BodySize = KnownBodySize ?? (sizeCounts.Count == 0 ? 10 : sizeCounts.MaxBy(kv => kv.Value).Key);
         _inReferences = false;
         var result = new List<PageLayout>();
         foreach (var (number, interpreter, chars) in prepared)

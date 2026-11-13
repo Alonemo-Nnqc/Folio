@@ -128,6 +128,37 @@ final class AnnotationEditor: NSObject, NSPopoverDelegate {
         if let page = annotation.page { changed(page) }
     }
 
+    /// Records an erase the view already performed (READER-30): one undo step for the whole drag.
+    func didErase(_ changes: [InkEraseSession.Change]) {
+        guard !changes.isEmpty else { return }
+        undoManager?.registerUndo(withTarget: self) { $0.exchange(changes, forward: false) }
+        undoManager?.setActionName(String(localized: "擦除"))
+        var pages: [PDFPage] = []
+        for change in changes where !pages.contains(where: { $0 === change.page }) { pages.append(change.page) }
+        pages.forEach(changed)
+    }
+
+    /// Puts the originals back (undo) or their erased replacements again (redo).
+    private func exchange(_ changes: [InkEraseSession.Change], forward: Bool) {
+        var pages: [PDFPage] = []
+        for change in forward ? changes : changes.reversed() {
+            let (out, back) = forward ? (change.original, change.replacement) : (change.replacement, change.original)
+            if let out {
+                if pdfView?.selectedAnnotation === out { pdfView?.selectAnnotation(nil) }
+                change.page.removeAnnotation(out)
+            }
+            if let back { change.page.addAnnotation(back) }
+            // A popup leaves and comes back with an annotation erased completely.
+            if change.replacement == nil, let popup = change.original.popup {
+                if forward { change.page.removeAnnotation(popup) } else { change.page.addAnnotation(popup) }
+            }
+            if !pages.contains(where: { $0 === change.page }) { pages.append(change.page) }
+        }
+        undoManager?.registerUndo(withTarget: self) { $0.exchange(changes, forward: !forward) }
+        undoManager?.setActionName(String(localized: "擦除"))
+        pages.forEach(changed)
+    }
+
     private func setBounds(_ annotation: PDFAnnotation, _ bounds: NSRect, redo: NSRect) {
         annotation.bounds = bounds
         undoManager?.registerUndo(withTarget: self) { $0.setBounds(annotation, redo, redo: bounds) }

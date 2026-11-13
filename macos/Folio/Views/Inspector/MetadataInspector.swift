@@ -80,6 +80,7 @@ struct MetadataInspector: View {
                 update { $0.year = Int(value) }
             }
             EditableField(label: String(localized: "来源"), value: item.source) { value in update { $0.source = value.nilIfEmpty } }
+            JournalMetricsRow(model: model, item: item)
             EditableField(label: String(localized: "卷"), value: item.volume) { value in update { $0.volume = value.nilIfEmpty } }
             EditableField(label: String(localized: "期"), value: item.issue) { value in update { $0.issue = value.nilIfEmpty } }
             EditableField(label: String(localized: "页码"), value: item.pages) { value in update { $0.pages = value.nilIfEmpty } }
@@ -128,7 +129,7 @@ struct MetadataInspector: View {
                     }
                     Menu {
                         ForEach(model.groupsForMenus, id: \.group.id) { entry in
-                            Button((entry.depth > 0 ? "    " : "") + entry.group.name) {
+                            Button(String(repeating: "    ", count: entry.depth) + entry.group.name) {
                                 model.addItems([item.id], toGroup: entry.group.id)
                             }
                         }

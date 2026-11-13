@@ -1,9 +1,9 @@
 import Foundation
 import FolioCore
 
-/// Flattens a Zotero collection tree to two levels (spec Task 2C, ZOT-02): first- and
-/// second-level collections become groups; a third-level-or-deeper collection is not
-/// exported, and its items are attributed to its nearest exported (depth <= 2) ancestor.
+/// Flattens a Zotero collection tree to Folio's group depth (ZOT-02, SIDE-17): collections on
+/// levels 1–4 become groups; a collection deeper than that is not exported, and its items are
+/// attributed to its nearest exported (fourth-level) ancestor.
 enum ZoteroCollectionFlattening {
     struct Result {
         var groups: [PreparedGroup]
@@ -12,7 +12,7 @@ enum ZoteroCollectionFlattening {
         var exportKeyByCollectionID: [Int64: String]
     }
 
-    static func flatten(_ collections: [RawCollection]) -> Result {
+    static func flatten(_ collections: [RawCollection], maximumDepth: Int = LibraryGroup.maximumDepth) -> Result {
         var byID: [Int64: RawCollection] = [:]
         for c in collections { byID[c.id] = c }
 
@@ -30,13 +30,13 @@ enum ZoteroCollectionFlattening {
         func exportAncestor(of id: Int64) -> Int64 {
             var current = id
             var seen = Set<Int64>()
-            while depth(of: current) > 2, let parent = byID[current]?.parentID, seen.insert(current).inserted {
+            while depth(of: current) > maximumDepth, let parent = byID[current]?.parentID, seen.insert(current).inserted {
                 current = parent
             }
             return current
         }
 
-        let exportable = collections.filter { depth(of: $0.id) <= 2 }
+        let exportable = collections.filter { depth(of: $0.id) <= maximumDepth }
 
         // position = index within siblings, ordered by localized (Finder-style) name compare.
         var positionByID: [Int64: Double] = [:]
@@ -45,8 +45,8 @@ enum ZoteroCollectionFlattening {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         for (index, c) in topLevel.enumerated() { positionByID[c.id] = Double(index) }
 
-        let secondLevelByParent = Dictionary(grouping: exportable.filter { $0.parentID != nil }, by: { $0.parentID! })
-        for (_, siblings) in secondLevelByParent {
+        let childrenByParent = Dictionary(grouping: exportable.filter { $0.parentID != nil }, by: { $0.parentID! })
+        for (_, siblings) in childrenByParent {
             let ordered = siblings.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             for (index, c) in ordered.enumerated() { positionByID[c.id] = Double(index) }
         }

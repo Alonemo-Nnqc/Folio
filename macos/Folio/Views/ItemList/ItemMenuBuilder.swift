@@ -11,6 +11,9 @@ enum ItemMenuCommand: Hashable {
     case setReadStatus(ReadStatus), setRating(Int)
     case copyCitation(CitationStyleOption)
     case addFiles, retrieve, manualMatch
+    case refreshJournalMetrics
+    /// 识别文字（OCR）: the selected PDFs' text is recognised (OCR-01).
+    case recognizeText
     case removeFromGroup, trash
     case restore, purge
     case setDefaultFile(String), trashFile
@@ -109,6 +112,7 @@ enum ItemMenuBuilder {
             }
             if let file = defaultFile(of: single, snapshot), file.isPDF {
                 entries.append(translateEntry(translating: context.translatingItemIds.contains(single.id)))
+                entries.append(.action(title: String(localized: "识别文字（OCR）"), symbol: "text.viewfinder", command: .recognizeText))
             }
             entries.append(.separator)
             if single.kind == .regular {
@@ -119,6 +123,9 @@ enum ItemMenuBuilder {
                                        enabled: single.metadataState != .pending && isPDF(single, snapshot)))
                 entries.append(.action(title: String(localized: "手动匹配…"), symbol: "magnifyingglass", command: .manualMatch))
             }
+        }
+        if items.contains(where: { JournalMetrics.journalName(of: $0) != nil }) {
+            entries.append(.action(title: String(localized: "刷新期刊指标"), symbol: "chart.bar.xaxis", command: .refreshJournalMetrics))
         }
         entries.append(.action(title: String(localized: "在 Finder 中显示"), symbol: "folder", command: .revealInFinder))
         entries.append(.separator)

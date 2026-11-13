@@ -469,6 +469,7 @@ struct RetrievalSettings: View {
                 SecureField("OpenAlex API Key（选填）", text: $settings.openAlexAPIKey)
                     .help("可在 openalex.org 免费申请，用于提高 OpenAlex 的访问额度")
             }
+            JournalMetricsSettingsSection(settings: settings, coordinator: model.journalMetrics)
         }
         .formStyle(.grouped)
         .onChange(of: settings.crossrefMailto) { model.refreshResolver() }

@@ -83,7 +83,7 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .reader-notes.entering { animation: slide-from-right .2s cubic-bezier(.2, 0, 0, 1); }
 @keyframes slide-from-left { from { transform: translateX(-100%); } }
 @keyframes slide-from-right { from { transform: translateX(100%); } }
-@media (prefers-reduced-motion: reduce) { .slide.moving, .window.moving .titlebar-row, .window.moving .sidebar-toggle, .reader.moving * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .slide.moving, .window.moving .titlebar-row, .window.moving .sidebar-toggle, .reader.moving * { transition: none !important; animation: none !important; } .side-children, .side-children-inner, .side-row .disclosure svg { transition: none !important; } }
 
 /* Round glass buttons of the toolbars. */
 .glass-button { width: 34px; height: 34px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 17px; background: var(--glass);
@@ -127,10 +127,18 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .side-row.current { background: var(--selected-sidebar); font-weight: 500; }
 .side-row.drop-on { background: var(--accent); color: #fff; }
 .side-row.drop-on .count, .side-row.drop-on svg { color: #fff !important; }
-.side-row.drop-before::before, .side-row.drop-after::after { content: ""; position: absolute; left: 6px; right: 6px; height: 2px; background: var(--accent); border-radius: 1px; }
+.side-row.drop-before::before, .side-row.drop-after::after { content: ""; position: absolute; left: var(--drop-left, 6px); right: 6px; height: 2px; background: var(--accent); border-radius: 1px; }
 .side-row.drop-before::before { top: -1px; }
 .side-row.drop-after::after { bottom: -1px; }
 .side-row .disclosure { width: 14px; height: 18px; flex: none; border: 0; padding: 0; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; margin-left: -4px; margin-right: -3px; }
+.side-row .disclosure svg { transition: transform .18s ease; }
+.side-row .disclosure.open svg { transform: rotate(90deg); }
+/* Subgroups at every level slide open and closed (SIDE-17). */
+.side-children { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .2s ease; }
+.side-children.open { grid-template-rows: 1fr; }
+.side-children-inner { min-height: 0; overflow: clip; overflow-clip-margin: 2px; opacity: 0; transition: opacity .15s ease; }
+.side-children.open > .side-children-inner { opacity: 1; }
+.side-children:not(.open) > .side-children-inner { visibility: hidden; transition: opacity .15s ease, visibility 0s linear .2s; }
 .side-row .icon { flex: none; width: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); }
 .side-row .dot { width: 14px; height: 14px; border-radius: 7px; flex: none; margin: 0 3px; }
 .side-row .name { flex: 1; min-width: 0; }
@@ -163,6 +171,10 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .empty { position: absolute; inset: 40px 0 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--secondary); text-align: center; pointer-events: none; padding: 20px; }
 .empty .big { color: var(--text); font-size: 16px; font-weight: 600; }
 .insertion { position: absolute; left: 10px; right: 10px; height: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; z-index: 4; }
+/* "已翻译" after a title, in the shape of the macOS badge: a soft green capsule that never shrinks. */
+.translated-badge { flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 11px; font-weight: 600;
+  color: #248a3d; background: color-mix(in srgb, #34c759 16%, transparent); }
+:root[data-theme="dark"] .translated-badge { color: #4cd964; background: color-mix(in srgb, #30d158 22%, transparent); }
 .progress { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--secondary); font-size: 12px; }
 .progress .stage { max-width: 130px; }
 .progress .track { width: 64px; height: 4px; border-radius: 2px; background: var(--separator-strong); overflow: hidden; }
@@ -365,12 +377,22 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .dots i.on { background: var(--accent); }
 
 /* The toolbar's 更新 button */
-.update-button { flex: none; height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 13px 0 10px; border: 0; border-radius: 15px; background: var(--accent); color: #fff; font-size: 12.5px; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.18), inset 0 .5px 0 rgba(255,255,255,.25); animation: update-in .35s cubic-bezier(.2,.9,.3,1.2); app-region: no-drag; transition: filter .12s, transform .12s; }
-.update-button:hover { filter: brightness(1.08); }
-.update-button:active { transform: scale(.97); }
-.update-button:disabled { opacity: .8; }
-.update-button .spinner.small { width: 12px; height: 12px; border-color: rgba(255,255,255,.4); border-top-color: #fff; }
-@keyframes update-in { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+/* The update card at the foot of the sidebar. */
+.update-card { flex: none; margin: 4px 10px 10px; display: flex; align-items: center; gap: 9px; padding: 7px 9px; border: 0; border-radius: 12px; text-align: left; color: var(--text);
+  background: var(--popup); backdrop-filter: blur(24px) saturate(1.6); box-shadow: 0 0 0 .5px var(--separator-strong), 0 2px 8px rgba(0, 0, 0, .08);
+  animation: update-in .35s cubic-bezier(.2, .9, .3, 1.2); transition: transform .15s, box-shadow .15s; }
+.update-card:hover { transform: translateY(-1px); box-shadow: 0 0 0 .5px var(--separator-strong), 0 4px 14px rgba(0, 0, 0, .12); }
+.update-card:active { transform: scale(.98); }
+.update-card:disabled { opacity: .85; }
+.update-card .badge { width: 22px; height: 22px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, white), var(--accent)); }
+.update-card .badge .spinner.small { width: 11px; height: 11px; border-color: rgba(255, 255, 255, .4); border-top-color: #fff; }
+.update-card .text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.update-card .title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.update-card .version { font-size: 11px; color: var(--secondary); }
+.update-card .chev { flex: none; color: var(--tertiary, var(--secondary)); opacity: .6; transition: opacity .15s, transform .15s; }
+.update-card:hover .chev { opacity: 1; transform: translateX(1px); }
+@keyframes update-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* Sliders (设置 ▸ 背景透明度) */
 .slider { -webkit-appearance: none; appearance: none; width: 180px; height: 18px; background: transparent; margin: 0; }
@@ -382,14 +404,23 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .slider-end.clear { border: 1.5px dotted var(--secondary); }
 
 /* 划词翻译 */
-.translate-badge { position: fixed; z-index: 700; width: 28px; height: 28px; border-radius: 14px; border: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); background: var(--popup); backdrop-filter: blur(20px) saturate(1.6); box-shadow: 0 2px 8px rgba(0,0,0,.18), 0 0 0 .5px var(--separator-strong); animation: badge-in .22s cubic-bezier(.2,1.4,.4,1); transition: transform .1s; app-region: no-drag; }
-.translate-badge:hover { transform: scale(1.08); }
-.translate-badge:active { transform: scale(.94); }
+.translate-badge { position: fixed; z-index: 700; width: 30px; height: 30px; border-radius: 15px; border: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  color: var(--accent); --glyph-knockout: var(--popup-solid, #fff); background: var(--popup); backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: 0 3px 10px rgba(0,0,0,.16), 0 1px 2px rgba(0,0,0,.1), 0 0 0 .5px var(--separator-strong), inset 0 .5px 0 rgba(255,255,255,.5);
+  animation: badge-in .22s cubic-bezier(.2,1.4,.4,1); transition: transform .14s cubic-bezier(.2,.9,.3,1.3), box-shadow .14s; cursor: pointer; app-region: no-drag; }
+.translate-badge:hover { transform: translateY(-1px) scale(1.06); box-shadow: 0 6px 16px rgba(0,0,0,.18), 0 1px 3px rgba(0,0,0,.1), 0 0 0 .5px var(--separator-strong), inset 0 .5px 0 rgba(255,255,255,.5); }
+.translate-badge:active { transform: scale(.94); transition-duration: .06s; }
+.translate-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:root[data-theme="dark"] .translate-badge { --glyph-knockout: #1f1f22; box-shadow: 0 3px 12px rgba(0,0,0,.45), 0 0 0 .5px rgba(255,255,255,.14), inset 0 .5px 0 rgba(255,255,255,.08); }
 @keyframes badge-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 .translate-pop { position: fixed; z-index: 720; width: 380px; border-radius: 12px; background: var(--popup); backdrop-filter: blur(28px) saturate(1.6); box-shadow: var(--popup-shadow); padding: 12px 0 6px; animation: pop-in .16s cubic-bezier(.2,.9,.3,1); transform-origin: top center; app-region: no-drag; }
 .translate-pop.above { transform-origin: bottom center; }
 @keyframes pop-in { from { opacity: 0; transform: scale(.96) translateY(-4px); } to { opacity: 1; transform: none; } }
 .tp-head { display: flex; align-items: center; gap: 8px; padding: 0 10px 8px 14px; }
+.tp-head { cursor: grab; touch-action: none; user-select: none; }
+.translate-pop.dragging { transition: none; box-shadow: var(--popup-shadow), 0 18px 40px rgba(0,0,0,.18); }
+.translate-pop.dragging .tp-head { cursor: grabbing; }
+.tp-head .tp-close { width: 22px; height: 22px; margin-left: -2px; }
 .tp-langs { font-size: 11.5px; font-weight: 500; color: var(--secondary); flex: 1; }
 .tp-service { display: inline-flex; align-items: center; gap: 3px; border: 0; background: transparent; font-size: 11.5px; font-weight: 600; color: var(--text); padding: 3px 6px; border-radius: 6px; }
 .tp-service:hover { background: var(--hover); }
@@ -491,3 +522,40 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .settings .appearance button.on .preview { box-shadow: 0 0 0 2.5px var(--accent), 0 1px 3px rgba(0, 0, 0, .1); }
 .settings .service-picker { height: 30px; }
 .settings ::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, .3); }
+/* A sheet that holds settings (翻译全文) wears the settings page: its calm surface and raised panels. */
+.sheet.settings, .translucent .sheet.settings { background: var(--settings-bg); display: flex; flex-direction: column; height: auto; }
+.sheet.settings .set-header:first-child { margin-top: 4px; }
+.sheet.settings .set-note { margin-top: 10px; }
+
+/* 期刊指标 (META-30): rank capsules under 来源 in the inspector. Tints as on the Mac: 中科院 1 区 red … 4 区 grey-green,
+   JCR quartiles blue, IF violet, CCF teal; the text is the tint darkened (light) or lightened (dark). */
+.jm-row { margin: 0 0 4px 64px; min-height: 18px; display: flex; align-items: center; }
+.jm-badges { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.jm-badge { --tint: 128, 128, 140; font-size: 11px; font-weight: 500; line-height: 18px; padding: 0 7px; border-radius: 9px; white-space: nowrap; cursor: default;
+  background: rgba(var(--tint), .14); color: color-mix(in srgb, rgb(var(--tint)) 72%, black); box-shadow: inset 0 0 0 .5px rgba(var(--tint), .28); }
+:root[data-theme="dark"] .jm-badge { background: rgba(var(--tint), .22); color: color-mix(in srgb, rgb(var(--tint)) 62%, white); }
+.jm-badge.strong { font-weight: 700; }
+.jm-cas1 { --tint: 235, 66, 61; } .jm-cas2 { --tint: 245, 140, 26; } .jm-cas3 { --tint: 140, 179, 26; } .jm-cas4 { --tint: 102, 153, 133; }
+.jm-q1 { --tint: 26, 115, 242; } .jm-q2 { --tint: 46, 158, 219; } .jm-q3 { --tint: 77, 168, 179; } .jm-q4 { --tint: 128, 143, 158; }
+.jm-if { --tint: 158, 92, 219; } .jm-if5 { --tint: 115, 107, 214; } .jm-ccf { --tint: 13, 166, 153; } .jm-index { --tint: 133, 133, 143; } .jm-warning { --tint: 224, 56, 51; }
+.jm-refresh { width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
+.jm-row:hover .jm-refresh, .jm-refresh:focus-visible { opacity: 1; }
+.jm-refresh:hover { background: var(--hover); color: var(--text); }
+.jm-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--tertiary, var(--secondary)); border: 0; background: none; padding: 0; }
+.jm-hint.link { cursor: pointer; }
+.jm-hint.link:hover { color: var(--secondary); text-decoration: underline; }
+.jm-hint .spinner { width: 10px; height: 10px; }
+.jm-status { display: flex; align-items: center; gap: 6px; padding: 8px 14px 10px; font-size: 12.5px; color: var(--secondary); }
+.link-button { border: 0; background: none; padding: 0; color: var(--accent); font-size: 11.5px; cursor: pointer; }
+.link-button:hover { text-decoration: underline; }
+
+/* 扫描件识别 (OCR-01): a glass capsule under the reader's toolbar. */
+.scan-banner { position: absolute; top: 96px; transform: translateX(-50%); z-index: 15; display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px;
+  border-radius: 18px; background: var(--popup); backdrop-filter: blur(24px) saturate(1.6); box-shadow: var(--popup-shadow); font-size: 12.5px; white-space: nowrap;
+  color: var(--text); animation: scan-in .28s cubic-bezier(.2, .9, .3, 1); }
+.scan-banner > svg { color: var(--secondary); flex: none; }
+.scan-bar { width: 120px; height: 4px; border-radius: 2px; background: var(--separator); overflow: hidden; }
+.scan-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s ease; }
+.scan-close { width: 20px; height: 20px; border: 0; border-radius: 10px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; }
+.scan-close:hover { background: var(--hover); color: var(--text); }
+@keyframes scan-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }

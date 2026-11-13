@@ -76,13 +76,74 @@ public enum SelectionTranslator {
         }
     }
 
-    /// The translation of `text`. A rate-limited request is tried again shortly; still refused, and with `fallback`,
-    /// another free service translates it (and the limited one rests for a minute). Errors come back in plain words.
+    // MARK: Getting ready (SEL-20)
+
+    /// When each service was last got ready: a mouse-down every second need not start a task every time.
+    nonisolated(unsafe) private static var preparedAt: [String: Date] = [:]
+
+    /// Gets `serviceID` ready for a translation without sending any text: its connection opened (DNS, TCP, TLS) and any
+    /// token fetched, so the request made when the mouse comes up starts on a warm connection. With `fallback`, the first
+    /// free service standing in for it too. Returns at once; cheap enough for every mouse-down (each host is warmed at
+    /// most every 30 seconds, tokens are kept until shortly before they run out).
+    public static func prewarm(serviceID: String, fields: [String: String] = [:], secrets: [String: String] = [:], fallback: Bool = false) {
+        var ids = [TranslationServiceCatalog.resolve(serviceID).id]
+        if fallback, let standIn = standIns.first(where: { $0 != ids[0] }) { ids.append(standIn) }
+        for id in ids {
+            let due = lock.withLock {
+                guard Date().timeIntervalSince(preparedAt[id] ?? .distantPast) > 5 else { return false }
+                preparedAt[id] = Date()
+                return true
+            }
+            guard due, let provider = try? ProviderFactory.make(serviceID: id, fields: id == serviceID ? fields : [:],
+                                                                secrets: id == serviceID ? secrets : [:], concurrency: nil) else { continue }
+            Task.detached(priority: .utility) { await provider.prewarm() }
+        }
+    }
+
+    /// Waits for `prewarm` to finish (measurements and tests).
+    public static func prewarmed(serviceID: String, fields: [String: String] = [:], secrets: [String: String] = [:]) async {
+        guard let provider = try? ProviderFactory.make(serviceID: serviceID, fields: fields, secrets: secrets, concurrency: nil) else { return }
+        await provider.prewarm()
+    }
+
+    // MARK: Translations made lately
+
+    /// Every passage translated lately, shared by every reader of the app: the same passage again (in another document,
+    /// in a popover closed and opened again) comes back at once.
+    static let cache = LRUCache<String, Result>(capacity: 500)
+
+    static func cacheKey(_ passage: String, serviceID: String, fields: [String: String], from source: String, to target: String) -> String {
+        let options = fields.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "\u{1}")
+        return [serviceID, source.lowercased(), target.lowercased(), options, passage].joined(separator: "\u{2}")
+    }
+
+    /// The translation of `text` made lately by `serviceID`, if there is one: no request, no waiting.
+    public static func cached(_ text: String, serviceID: String, fields: [String: String], from source: String, to target: String) -> Result? {
+        let passage = normalized(text)
+        guard !passage.isEmpty else { return nil }
+        return cache[cacheKey(passage, serviceID: TranslationServiceCatalog.resolve(serviceID).id, fields: fields, from: source, to: target)]
+    }
+
+    /// The translation of `text`, from the translations made lately when it is one of them (unless `useCache` is false:
+    /// translating again). A rate-limited request is tried again shortly; still refused, and with `fallback`, another free
+    /// service translates it (and the limited one rests for a minute). Errors come back in plain words.
     public static func translate(_ text: String, serviceID: String, fields: [String: String], secrets: [String: String],
-                                 from source: String, to target: String, fallback: Bool = true,
+                                 from source: String, to target: String, fallback: Bool = true, useCache: Bool = true,
                                  standInFields: @Sendable (String) -> [String: String] = { _ in [:] }) async throws -> Result {
         let passage = normalized(text)
         guard !passage.isEmpty else { throw Failure.empty }
+        if useCache, let hit = cache[cacheKey(passage, serviceID: serviceID, fields: fields, from: source, to: target)] { return hit }
+        let result = try await translateNow(passage, serviceID: serviceID, fields: fields, secrets: secrets, from: source, to: target,
+                                            fallback: fallback, standInFields: standInFields)
+        // Under the service that made it: a stand-in's translation does not stand for the service asked first.
+        let usedFields = result.serviceID == serviceID ? fields : standInFields(result.serviceID)
+        cache[cacheKey(passage, serviceID: result.serviceID, fields: usedFields, from: source, to: target)] = Result(text: result.text, serviceID: result.serviceID)
+        return result
+    }
+
+    private static func translateNow(_ passage: String, serviceID: String, fields: [String: String], secrets: [String: String],
+                                     from source: String, to target: String, fallback: Bool,
+                                     standInFields: @Sendable (String) -> [String: String]) async throws -> Result {
         var order = [serviceID]
         if fallback { order += standIns.filter { $0 != serviceID } }
         // A service that was just rate-limited is not asked again right away while a stand-in can answer.

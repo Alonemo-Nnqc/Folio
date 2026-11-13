@@ -24,6 +24,8 @@ final class SelectionTranslationState {
     var notice: String?
     var copied = false
     var addedToNote = false
+    /// Dragged off the selection (SEL-21): stays where it was put, and later selections are translated in it.
+    var detached = false
 
     var translation: String? {
         if case .done(let text) = phase { return text }
@@ -32,7 +34,9 @@ final class SelectionTranslationState {
 }
 
 /// 划词翻译 in one reader (TRANS-10): a small button beside a text selection, and a popover with its translation by
-/// the service chosen in 设置 ▸ 翻译. Every passage is translated once per service and language.
+/// the service chosen in 设置 ▸ 翻译. Translations are shared by every reader (`SelectionTranslator`'s cache); the
+/// service's connection is opened as the mouse goes down, so the request made when it comes up starts warm (SEL-20).
+/// Dragged by its background, the popover leaves the selection and stays where it is put (SEL-21).
 final class SelectionTranslationController: NSObject, NSPopoverDelegate {
     private let model: AppModel
     private weak var pdfView: ReaderPDFView?
@@ -42,7 +46,6 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
     private var task: Task<Void, Never>?
     private var autoTask: Task<Void, Never>?
     private var badgeSelection: PDFSelection?
-    private var cache: [String: String] = [:]
     var onAddToNote: (String, String, Int) -> Void = { _, _, _ in }
 
     init(model: AppModel, pdfView: ReaderPDFView) {
@@ -55,7 +58,19 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(selectionChanged), name: .PDFViewSelectionChanged, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(viewMoved), name: .PDFViewScaleChanged, object: pdfView)
         NotificationCenter.default.addObserver(self, selector: #selector(viewMoved), name: .PDFViewDisplayModeChanged, object: pdfView)
-        DispatchQueue.main.async { [weak self] in self?.followScrolling() }
+        DispatchQueue.main.async { [weak self] in
+            self?.followScrolling()
+            self?.prewarm()
+        }
+    }
+
+    /// Opens the connection to the 划词 service (and fetches its token) before any text is chosen.
+    func prewarm() {
+        guard settings.selectionTranslationEnabled else { return }
+        let service = TranslationServiceCatalog.resolve(settings.effectiveSelectionService)
+        let secrets = (try? model.translations.secrets.secrets(for: service)) ?? [:]
+        SelectionTranslator.prewarm(serviceID: service.id, fields: settings.translationFields[service.id] ?? [:], secrets: secrets,
+                                    fallback: settings.selectionTranslationFallback)
     }
 
     private var settings: AppSettings { model.settings }
@@ -85,6 +100,7 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
     func mouseWentDown() {
         autoTask?.cancel()
         hideBadge(animated: true)
+        prewarm()
     }
 
     /// The shortcut: translates the selection, or closes the popover showing it. False when there is nothing to translate.
@@ -216,28 +232,26 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
         }
     }
 
-    private func run() {
+    private func run(useCache: Bool = true) {
         task?.cancel()
         let source = state.source, serviceID = state.serviceID
         let from = state.sourceLanguage, to = state.targetLanguage
-        let key = "\(serviceID)|\(from)|\(to)|\(source)"
         state.notice = nil
-        if let cached = cache[key] {
-            state.phase = .done(cached)
+        let service = TranslationServiceCatalog.resolve(serviceID)
+        let fields = settings.translationFields[service.id] ?? [:]
+        if useCache, let cached = SelectionTranslator.cached(source, serviceID: service.id, fields: fields, from: from, to: to) {
+            state.phase = .done(cached.text)
             return
         }
         state.phase = .translating
-        let service = TranslationServiceCatalog.resolve(serviceID)
-        let fields = settings.translationFields[service.id] ?? [:]
         let secrets = (try? model.translations.secrets.secrets(for: service)) ?? [:]
         let fallback = settings.selectionTranslationFallback
         let allFields = settings.translationFields
         task = Task { [weak self] in
             do {
                 let result = try await SelectionTranslator.translate(source, serviceID: service.id, fields: fields, secrets: secrets, from: from, to: to,
-                                                                     fallback: fallback, standInFields: { allFields[$0] ?? [:] })
+                                                                     fallback: fallback, useCache: useCache, standInFields: { allFields[$0] ?? [:] })
                 guard !Task.isCancelled, let self else { return }
-                self.cache[key] = result.text
                 withAnimation(.easeOut(duration: 0.2)) {
                     if let from = result.fellBackFrom {
                         let limited = TranslationServiceCatalog.service(id: from)?.displayName ?? from
@@ -259,7 +273,8 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
         let popover = self.popover ?? makePopover()
         let anchor = rect.intersection(pdfView.bounds).isEmpty ? rect : rect.intersection(pdfView.bounds)
         if popover.isShown {
-            popover.positioningRect = anchor
+            // Dragged away: it stays where the reader put it.
+            if !popover.isDetached { popover.positioningRect = anchor }
         } else {
             popover.show(relativeTo: anchor, of: pdfView, preferredEdge: .minY)
         }
@@ -273,12 +288,7 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
                 self.state.serviceID = id
                 self.run()
             },
-            retry: { [weak self] in
-                guard let self else { return }
-                let key = "\(self.state.serviceID)|\(self.state.sourceLanguage)|\(self.state.targetLanguage)|\(self.state.source)"
-                self.cache[key] = nil
-                self.run()
-            },
+            retry: { [weak self] in self?.run(useCache: false) },
             copy: { [weak self] in
                 guard let self, let text = self.state.translation else { return }
                 NSPasteboard.general.clearContents()
@@ -294,7 +304,8 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
                 self?.popover?.performClose(nil)
                 AppDelegate.shared.showSettings(nil)
                 AppDelegate.shared.settingsWindow?.select(pane: "selectionTranslation")
-            })
+            },
+            close: { [weak self] in self?.popover?.performClose(nil) })
         let popover = NSPopover()
         popover.behavior = .transient
         popover.animates = true
@@ -306,7 +317,14 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
         return popover
     }
 
+    func popoverShouldDetach(_ popover: NSPopover) -> Bool { true }
+
+    func popoverDidDetach(_ popover: NSPopover) {
+        withAnimation(.snappy(duration: 0.2)) { state.detached = true }
+    }
+
     func popoverDidClose(_ notification: Notification) {
+        state.detached = false
         task?.cancel()
         pdfView?.window?.makeFirstResponder(pdfView)
     }
@@ -396,6 +414,7 @@ struct SelectionTranslationActions {
     var copy: () -> Void
     var addToNote: () -> Void
     var openSettings: () -> Void
+    var close: () -> Void
 }
 
 /// The popover: the passage, its translation, and what to do with it.
@@ -480,7 +499,14 @@ struct SelectionTranslationView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help(String(localized: "选择翻译服务"))
+            if state.detached {
+                FooterButton(symbol: "xmark", help: String(localized: "关闭"), compact: true, action: actions.close)
+                    .keyboardShortcut(.cancelAction)
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
         }
+        .contentShape(Rectangle())
+        .help(state.detached ? "" : String(localized: "拖动可移开小窗"))
     }
 
     @ViewBuilder
@@ -542,6 +568,7 @@ struct SelectionTranslationView: View {
 private struct FooterButton: View {
     let symbol: String
     let help: String
+    var compact = false
     let action: () -> Void
     @State private var hovering = false
     @Environment(\.isEnabled) private var isEnabled
@@ -549,9 +576,9 @@ private struct FooterButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: compact ? 10 : 13, weight: compact ? .bold : .medium))
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 28, height: 24)
+                .frame(width: compact ? 20 : 28, height: compact ? 20 : 24)
                 .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(hovering && isEnabled ? Color.primary.opacity(0.08) : .clear))
                 .contentShape(Rectangle())
         }

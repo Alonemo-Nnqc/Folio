@@ -3,7 +3,7 @@ import Foundation
 /// Coding agents that can translate from the command line with the user's own login, no key needed in Folio.
 /// Each has a documented way to answer one prompt and exit; the arguments follow its own `--help` and documentation.
 public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
-    case claude, codex, gemini, grok, antigravity, copilot, cursor, qwen, opencode, kiro, cline, kimi, droid, amp, goose, pi, hermes, openclaw, deepseek
+    case claude, codex, gemini, grok, antigravity, copilot, cursor, qwen, opencode, kiro, cline, kimi, droid, amp, goose, pi, hermes, openclaw, deepseek, codebuddy
 
     /// The command, under its usual name.
     public var command: String { commands[0] }
@@ -30,6 +30,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .hermes: ["hermes"]
         case .openclaw: ["openclaw"]
         case .deepseek: ["dsh"]
+        // CodeBuddy Code, the command line of WorkBuddy's account (WorkBuddy's own copy cannot use the app's login).
+        case .codebuddy: ["codebuddy", "cbc"]
         }
     }
 
@@ -55,6 +57,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .hermes: "hermesagent"
         case .openclaw: "openclawagent"
         case .deepseek: "deepseekharness"
+        case .codebuddy: "codebuddy"
         }
     }
 
@@ -66,6 +69,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case .grok: ["low", "medium", "high"]
         case .pi: ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
         case .hermes: ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+        case .codebuddy: ["minimal", "low", "medium", "high", "xhigh", "max"]
         default: []
         }
     }
@@ -75,6 +79,8 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
     public var defaultEffort: String? {
         switch self {
         case .claude, .antigravity, .codex, .grok, .hermes: "low"
+        // CodeBuddy's free model thinks at length even at "low" (4000 characters: over four minutes).
+        case .codebuddy: "minimal"
         case .pi: "off"
         default: nil
         }
@@ -98,7 +104,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         guard Self.effort(inModelName: model) == nil, !(modelDecidesEffort && named),
               let level = effort ?? defaultEffort, !level.isEmpty else { return [] }
         switch self {
-        case .claude, .antigravity: return ["--effort", level]
+        case .claude, .antigravity, .codebuddy: return ["--effort", level]
         case .codex: return ["-c", "model_reasoning_effort=\"\(level)\""]
         case .grok: return ["--reasoning-effort", level]
         case .pi: return ["--thinking", level]
@@ -119,6 +125,7 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         case (.hermes, _): (#"(?i)hermes agent"#, 8000)
         case (.kimi, _): (#"(?i)kimi"#, 2000)
         case (.deepseek, _): (#"(?i)deepseek"#, 2000)
+        case (.codebuddy, _): (#"(?i)codebuddy"#, 2000)
         default: nil
         }
     }
@@ -175,6 +182,39 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
         return allCases.indices.filter { found.flags[$0] }.map { allCases[$0] }
     }
 
+    /// WorkBuddy's desktop app, when it is installed: its account works with CodeBuddy Code once that is installed and
+    /// signed in (the app's own login is not shared with other programs).
+    public static func workBuddyApp() -> URL? {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return [URL(filePath: "/Applications/WorkBuddy.app"), home.appending(path: "Applications/WorkBuddy.app")]
+            .first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    /// What the command needs in its environment: CodeBuddy without its long-term memory and session summaries (a
+    /// translation needs neither, and they cost time).
+    var environment: [String: String] {
+        guard self == .codebuddy else { return [:] }
+        return ["CODEBUDDY_DISABLE_AUTO_MEMORY": "1", "CODEBUDDY_CODE_DISABLE_SESSION_SUMMARY": "1", "CODEBUDDY_PROMPT_SUGGESTION_DISABLED": "1"]
+    }
+
+    /// Installs CodeBuddy Code with npm (the shell's, else the one WorkBuddy brings). The output of npm.
+    public static func installCodeBuddy() async throws -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        var npm = ShellEnvironment.loginPATH().map { ($0 as NSString).appendingPathComponent("npm") }.first { FileManager.default.isExecutableFile(atPath: $0) }
+        var extra: [String: String] = [:]
+        if npm == nil {
+            let versions = home.appending(path: ".workbuddy/binaries/node/versions")
+            let found = ((try? FileManager.default.contentsOfDirectory(atPath: versions.path)) ?? []).sorted().reversed()
+                .map { versions.appending(path: "\($0)/bin") }.first { FileManager.default.isExecutableFile(atPath: $0.appending(path: "npm").path) }
+            if let found {
+                npm = found.appending(path: "npm").path
+                extra["PATH"] = found.path + ":" + (LocalProcess.environment()["PATH"] ?? "/usr/bin:/bin")
+            }
+        }
+        guard let npm else { throw ProviderError(kind: .agentSetup, detail: "agent-setup codebuddy: npm not found") }
+        return try await LocalProcess.run([npm, "install", "-g", "@tencent-ai/codebuddy-code"], input: "", timeout: 600, environment: extra)
+    }
+
     /// The version the command reports, if it answers.
     public func version(at url: URL) -> String? {
         // Some check for updates first (Hermes): a slow network must not make them look broken.
@@ -196,8 +236,11 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
             return (args, false, false)
         case .codex:
             // Without the user's MCP servers, which each take time to start.
+            // Nothing it does not need for a translation: no MCP servers, no notification program after each turn, no web
+            // search, no project instructions, no reasoning summary (each costs time on every call).
             var args = ["exec", "--skip-git-repo-check", "--ephemeral", "--sandbox", "read-only", "--color", "never",
-                        "-c", "mcp_servers={}", "-o", outputFile.path] + thinking
+                        "-c", "mcp_servers={}", "-c", "notify=[]", "-c", "tools.web_search=false", "-c", "project_doc_max_bytes=0",
+                        "-c", "model_reasoning_summary=\"none\"", "-o", outputFile.path] + thinking
             if let model { args += ["-m", model] }
             return (args + ["-"], false, true)
         case .gemini:
@@ -267,12 +310,26 @@ public enum LocalAgent: String, Sendable, Hashable, CaseIterable {
             return (args + ["--prompt"], true, true)
         case .deepseek:
             return (["--profile", "headless"], true, true)
+        case .codebuddy:
+            // As Claude Code: one answer, no tools, nothing saved.
+            var args = ["-p", "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
+                        "--max-turns", "1", "--system-prompt", system] + thinking
+            if let model { args += ["--model", model] }
+            return (args, false, false)
         }
     }
 
     /// The model's answer in what the command printed.
     func answer(stdout: String, outputFile: URL) throws -> String {
         switch self {
+        case .codebuddy:
+            // A JSON array of the run's messages; the last, of type "result", holds the answer.
+            if let list = try? JSONSerialization.jsonObject(with: Data(stdout.trimmingCharacters(in: .whitespacesAndNewlines).utf8)) as? [[String: Any]],
+               let result = list.last(where: { $0["type"] as? String == "result" }) {
+                if result["is_error"] as? Bool == true { throw ProviderError(kind: .process, detail: (result["result"] as? String) ?? stdout) }
+                return result["result"] as? String ?? stdout
+            }
+            return stdout
         case .claude:
             // The whole output is one JSON object; its `result` may itself contain code fences.
             let trimmed = stdout.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -315,7 +372,7 @@ enum AgentFailure {
 
     /// The command would not take the thinking level with this model.
     static func refusesTheLevel(_ text: String) -> Bool {
-        text.range(of: #"(--effort|--reasoning(-effort)?|--thinking|reasoning[_ ]effort)[^\n]{0,60}(not supported|unsupported|conflicts?|invalid|unknown)|(not supported|unsupported|conflicts? with|invalid|unknown)[^\n]{0,60}(--effort|--reasoning|--thinking|reasoning[_ ]effort)"#,
+        text.range(of: #"(--effort|--reasoning(-effort)?|--thinking|reasoning[_ ]effort)[^\n]{0,60}(not supported|unsupported|conflicts?|invalid|unknown)|(not supported|unsupported|conflicts? with|invalid|unknown)[^\n]{0,60}(--effort|--reasoning|--thinking|reasoning[_ ]effort)|has no (effort|reasoning|thinking) levels|ignoring --(effort|reasoning-effort|thinking)"#,
                    options: [.regularExpression, .caseInsensitive]) != nil
     }
 
@@ -332,6 +389,8 @@ enum AgentFailure {
             return ProviderError(kind: .http(402), detail: detail)
         }
         if refusesTheLevel(clean) { return setup(agent, clean) }
+        // Not available where the user is: no retry changes that.
+        if has(#"location is not supported|not (available|supported) in your (country|region|location)|unsupported (country|region|location)|FAILED_PRECONDITION"#) { return setup(agent, clean) }
         if has(#"(model|deployment)[^\n]{0,80}(not found|does not exist|not available|not supported|unavailable|invalid)|unknown model|invalid model|no such model"#) {
             return ProviderError(kind: .http(404), detail: detail + " model_not_found")
         }
@@ -381,7 +440,8 @@ struct AgentProvider: ChatModel {
     var effort: String?
     /// Set once a model has refused the usual level, so later batches do not ask again.
     let usualLevelRefused = RefusalMemory()
-    var limits = ProviderLimits(batchCharacters: 5000, batchItems: 60, concurrency: 4, usesContext: true, startupSeconds: 8, secondsPerCharacter: 0.006)
+    /// Each call starts the agent (seconds before it answers): large batches, eight side by side.
+    var limits = ProviderLimits(batchCharacters: 5000, batchItems: 60, concurrency: 8, usesContext: true, startupSeconds: 8, secondsPerCharacter: 0.006)
 
     func complete(system: String, user: String) async throws -> String {
         do {
@@ -401,7 +461,7 @@ struct AgentProvider: ChatModel {
         let prompt = combine ? system + "\n\n---\n\nTranslate this JSON object:\n" + user : user
         do {
             let stdout = try await LocalProcess.run([executable.path] + arguments + (promptArgument ? [prompt] : []),
-                                                    input: promptArgument ? "" : prompt, timeout: 600)
+                                                    input: promptArgument ? "" : prompt, timeout: 600, environment: agent.environment)
             let reply = AgentFailure.stripANSI(try agent.answer(stdout: stdout, outputFile: outputFile))
             if let failure = AgentFailure.inReply(reply, agent: agent) { throw failure }
             return reply
@@ -425,14 +485,14 @@ final class RefusalMemory: @unchecked Sendable {
 /// Runs a command with text on stdin and returns its stdout. The environment has the login shell's PATH (agents
 /// built on Node need it), the real HOME and proxy settings; the working directory is an empty folder.
 enum LocalProcess {
-    static func run(_ command: [String], input: String, timeout: TimeInterval) async throws -> String {
+    static func run(_ command: [String], input: String, timeout: TimeInterval, environment extra: [String: String] = [:]) async throws -> String {
         // When the job ends (another batch failed, the user cancelled) the command stops at once, instead of running
         // on for minutes with nobody waiting for it.
         let handle = Handle()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 DispatchQueue.global(qos: .userInitiated).async {
-                    continuation.resume(with: Result { try runBlocking(command, input: input, timeout: timeout, handle: handle) })
+                    continuation.resume(with: Result { try runBlocking(command, input: input, timeout: timeout, handle: handle, environment: extra) })
                 }
             }
         } onCancel: {
@@ -465,13 +525,13 @@ enum LocalProcess {
     }
 
     /// Runs the command on this thread until it ends.
-    static func runBlocking(_ command: [String], input: String, timeout: TimeInterval, handle: Handle? = nil) throws -> String {
+    static func runBlocking(_ command: [String], input: String, timeout: TimeInterval, handle: Handle? = nil, environment extra: [String: String] = [:]) throws -> String {
         let workDirectory = FileManager.default.temporaryDirectory.appending(path: "folio-translate-work", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
         let process = Process()
         process.executableURL = URL(filePath: command[0])
         process.arguments = Array(command.dropFirst())
-        process.environment = environment()
+        process.environment = environment().merging(extra) { _, new in new }
         process.currentDirectoryURL = workDirectory
         let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
         process.standardInput = stdin
@@ -601,4 +661,56 @@ enum LocalProcess {
 
 extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+/// What CodeBuddy Code keeps of its signed-in account: whether it is signed in, and the models the account may use.
+public enum CodeBuddyAccount {
+    /// Its sign-in, where CodeBuddy keeps it (the file only: what is in it is not Folio's to read).
+    static var authFiles: [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let name = "CodeBuddyExtension/Data/Public/auth/Tencent-Cloud.coding-copilot.info"
+        return [home.appending(path: "Library/Application Support/\(name)"), home.appending(path: ".config/\(name)")]
+    }
+
+    /// Signed in with the command line (or given a key in the environment).
+    public static var isSignedIn: Bool {
+        if let key = ProcessInfo.processInfo.environment["CODEBUDDY_API_KEY"], !key.isEmpty { return true }
+        return authFiles.contains { url in
+            ((try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0) > 64
+        }
+    }
+
+    /// The models the signed-in account offers the command line, from the account settings CodeBuddy keeps.
+    public static func models() -> [String] {
+        let folder = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codebuddy/local_storage")
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let newest = files.sorted {
+            ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+                > ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+        }
+        for file in newest where ((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) < 2_000_000 {
+            guard let data = try? Data(contentsOf: file), data.first == UInt8(ascii: "["),
+                  let list = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { continue }
+            for account in list where account["userId"] != nil {
+                guard let agents = (account["data"] as? [String: Any])?["agents"] as? [[String: Any]] else { continue }
+                let agent = agents.first { ($0["description"] as? String)?.localizedCaseInsensitiveContains("cli") == true } ?? agents.first
+                if let models = agent?["models"] as? [String], !models.isEmpty { return models }
+            }
+        }
+        return []
+    }
+
+    /// The models named in `codebuddy --help` ("Currently supported: (hy3, glm-5.3, …)").
+    static func models(inHelp help: String) -> [String] {
+        guard let match = help.firstMatch(of: /Currently supported:\s*\(([^)]*)\)/) else { return [] }
+        return match.output.1.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+
+    /// For translating, when no model is chosen: a quick one the account has (CodeBuddy's own default reasons at length,
+    /// minutes a page). Measured on four labels: these answer in about 4 s, the free models in 8 to 10 s.
+    static let quickModels = ["deepseek-v4.1-flash", "space-bunny", "glm-5.3-flash", "minimax-m3.1-flash", "deepseek-v3-2-volc"]
+
+    static func quickModel(among models: [String]) -> String? {
+        quickModels.first { models.contains($0) }
+    }
 }

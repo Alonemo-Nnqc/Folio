@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Info } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, setSetting, useStore, type FileRec } from "../store";
@@ -60,31 +60,62 @@ function ModelRow({ service, field, onDetail }: { service: string; field: FieldD
 }
 
 function StatusRow({ detail, canTest }: { detail: Detail; canTest: boolean }) {
-  const [state, setState] = useState<{ message: string; icon?: "ok" | "warn"; busy?: boolean }>({ message: t("测试服务是否可用") });
+  const [state, setState] = useState<{ message: string; icon?: "ok" | "warn" | "info"; busy?: boolean; action?: string }>({ message: t("测试服务是否可用") });
   const [testing, setTesting] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState("");
+  const [search, setSearch] = useState(0);
   useEffect(() => {
     let live = true;
     if (detail.isAgent) {
       setState({ message: "", busy: true });
-      call("translation.status", { service: detail.id }).then((r) => { if (live && r) setState({ message: r.message, icon: r.ok ? "ok" : "warn" }); });
+      call("translation.status", { service: detail.id }).then((r) => { if (live && r) setState({ message: r.message, icon: r.ok ? "ok" : r.info ? "info" : "warn", action: r.action ?? undefined }); });
     } else setState({ message: t("测试服务是否可用") });
     return () => { live = false; };
-  }, [detail.id]);
+  }, [detail.id, search]);
+  // Signing in happens in a console window: looked at again when Folio comes back to the front.
+  useEffect(() => {
+    if (state.action !== "loginCodeBuddy") return;
+    const again = () => setSearch((n) => n + 1);
+    window.addEventListener("focus", again);
+    return () => window.removeEventListener("focus", again);
+  }, [state.action]);
+  // CodeBuddy: WorkBuddy is here, its command line is not. npm installs it, then a sign-in in a console window.
+  const install = async () => {
+    setInstalling(true);
+    setInstallError("");
+    const r = await call("translation.installCodeBuddy").catch((e: any) => ({ ok: false, message: e.message }));
+    setInstalling(false);
+    if (r?.ok) setSearch((n) => n + 1); else setInstallError(r?.message ?? "");
+  };
   return (
-    <div className="set-row">
+    <div className={`set-row${state.action === "installCodeBuddy" ? " stack" : ""}`}>
       <div className="main selectable" style={{ display: "flex", gap: 8, alignItems: "center", overflowWrap: "anywhere" }}>
         {state.busy && <span className="spinner" />}
         {state.icon === "ok" && <CheckCircle2 size={14} color="var(--green)" style={{ flex: "none" }} />}
         {state.icon === "warn" && <AlertTriangle size={14} color="var(--orange)" style={{ flex: "none" }} />}
+        {state.icon === "info" && <Info size={14} color="var(--accent)" style={{ flex: "none", alignSelf: "flex-start", marginTop: 2 }} />}
         <span>{state.message}</span>
       </div>
-      {canTest && <div className="ctl"><button className="btn" disabled={testing} onClick={async () => {
+      {state.action === "installCodeBuddy" && (
+        <div className="ctl" style={{ justifyContent: "flex-start", flexDirection: "column", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="btn primary" disabled={installing} onClick={install}>{installing ? t("正在安装…") : t("安装 CodeBuddy 命令行")}</button>
+            {installing && <span className="spinner" />}
+          </div>
+          {installError && <div className="detail selectable" style={{ color: "var(--red)" }}>{installError}</div>}
+        </div>
+      )}
+      {(state.action === "loginCodeBuddy" || canTest) && <div className="ctl">
+        {state.action === "loginCodeBuddy" && <button className="btn" title={t("在终端打开 codebuddy，选择中国站并用 WorkBuddy 的腾讯账号登录")} onClick={() => call("translation.loginCodeBuddy")}>{t("在终端登录")}</button>}
+        {canTest && <button className="btn" disabled={testing} onClick={async () => {
         setTesting(true);
         setState({ message: t("正在翻译一句话…"), busy: true });
         try { const r = await call("translation.test", { service: detail.id }); setState({ message: r.message, icon: r.ok ? "ok" : "warn" }); }
         catch (e: any) { setState({ message: e.message, icon: "warn" }); }
         setTesting(false);
-      }}>{testing ? t("测试中…") : t("测试")}</button></div>}
+      }}>{testing ? t("测试中…") : t("测试")}</button>}
+      </div>}
     </div>
   );
 }
@@ -167,13 +198,16 @@ export function OptionsSection({ compact }: { compact: boolean }) {
         <Row title={t("译文语言")}><Select value={o.langOut} options={languages} onChange={(v) => update({ langOut: v })} /></Row>
         {compact && <OutputRows o={o} update={update} compact />}
       </Card>
+      {compact && <>
+        <Header>{t("翻译内容")}</Header>
+        <Card><ContentRows o={o} update={update} /></Card>
+      </>}
       {!compact && <>
         <Header>{t("输出")}</Header>
         <Card><OutputRows o={o} update={update} compact={false} /></Card>
         <Header>{t("翻译内容")}</Header>
         <Card>
-          <Row title={t("翻译表格")}><Switch on={o.translateTables} onChange={(v) => update({ translateTables: v })} /></Row>
-          <Row title={t("翻译参考文献")}><Switch on={o.translateReferences} onChange={(v) => update({ translateReferences: v })} /></Row>
+          <ContentRows o={o} update={update} />
           <Row title={t("术语表（选填）")} detail={t("CSV：原文, 译文")}>
             <span className="secondary ellipsis" style={{ maxWidth: 160 }}>{o.glossaryFile ? o.glossaryFile.split(/[\\/]/).pop() : t("未选择")}</span>
             {o.glossaryFile && <button className="btn" onClick={() => update({ glossaryFile: null })}>{t("清除")}</button>}
@@ -198,7 +232,36 @@ function OutputRows({ o, update, compact }: { o: any; update: (p: Record<string,
       {o.outputs !== "mono" && <Row title={t("双语排版")}><Select value={o.dualLayout} options={[{ value: "sideBySide", label: t("原文与译文左右并排") }, { value: "alternatingPages", label: t("原文页与译文页交替") }]} onChange={(v) => update({ dualLayout: v })} /></Row>}
       {!compact && <Row title={t("再次翻译")} detail={t("同一服务与模型重复翻译时")}><Select value={o.duplicates} options={[{ value: "keepBoth", label: t("保留两者") }, { value: "replace", label: t("替换旧的译文") }]} onChange={(v) => update({ duplicates: v })} /></Row>}
       <Row title={t("页码范围（选填）")}><Field className="set-field" value={o.pages ?? ""} placeholder={t("全部，例如 1-3,5")} onCommit={(v) => update({ pages: v.trim() || null })} /></Row>
-      {compact && <Row title={t("翻译表格")}><Switch on={o.translateTables} onChange={(v) => update({ translateTables: v })} /></Row>}
+    </>
+  );
+}
+
+/** What gets translated besides the body text: the same switches in 设置 and in the 翻译全文 sheet. */
+function ContentRows({ o, update }: { o: any; update: (p: Record<string, unknown>) => void }) {
+  // Words in pictures are read by Windows' own OCR, which may lack the paper's language.
+  const [ocr, setOcr] = useState<{ missing: boolean; language: string } | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState("");
+  useEffect(() => { if (o.translateImageText) call("translation.ocrStatus").then(setOcr).catch(() => setOcr(null)); }, [o.translateImageText, o.langIn]);
+  return (
+    <>
+      <Row title={t("翻译表格")}><Switch on={o.translateTables} onChange={(v) => update({ translateTables: v })} /></Row>
+      <Row title={t("翻译图片中的文字")} detail={t("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")}>
+        <Switch on={!!o.translateImageText} onChange={(v) => update({ translateImageText: v })} />
+      </Row>
+      {o.translateImageText && ocr?.missing && (
+        <Row title={<span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><AlertTriangle size={14} color="var(--orange)" />{t("Windows 没有安装%@的文字识别", ocr.language)}</span>}
+          detail={ocrMessage || t("图片里的%@文字会用其他语言的识别读取，小字和斜体容易读错。安装后重新启动 Folio 生效。", ocr.language)}>
+          <button className="btn" disabled={installing} onClick={async () => {
+            setInstalling(true);
+            const r = await call("translation.installOcr").catch((e: any) => ({ ok: false, message: e.message }));
+            setInstalling(false);
+            setOcrMessage(r?.message ?? "");
+            if (r?.ok) call("translation.ocrStatus").then(setOcr);
+          }}>{installing ? t("正在安装…") : t("安装…")}</button>
+        </Row>
+      )}
+      <Row title={t("翻译参考文献")}><Switch on={o.translateReferences} onChange={(v) => update({ translateReferences: v })} /></Row>
     </>
   );
 }
@@ -250,13 +313,13 @@ export function TranslateSheet({ files, close }: { files: FileRec[]; close: () =
   const s = getState();
   const title = files.length > 1 ? t("%lld 篇文献", files.length) : s.items.get(files[0].itemId)?.title ?? files[0].fileName;
   return (
-    <Sheet title={t("翻译全文")} width={540} onEscape={close} actions={
+    <Sheet className="settings" title={t("翻译全文")} width={560} onEscape={close} actions={
       <>
         <button className="btn" onClick={close}>{t("取消")}</button>
         <button className="btn primary" onClick={() => { close(); call("translation.start", { files: files.map((f) => f.id) }); }}>{t("开始翻译")}</button>
       </>}>
       <div className="secondary ellipsis" title={title} style={{ marginBottom: 8 }}>{title}</div>
-      <div className="body" style={{ maxHeight: "60vh" }}>
+      <div className="body" style={{ maxHeight: "72vh" }}>
         <ServiceSection compact />
         <OptionsSection compact />
         <Note>{t("保留版面、公式与图表，译文将作为附件加入该条目")}</Note>

@@ -488,6 +488,6 @@ public sealed class LibraryException(string message) : Exception(message)
     public static LibraryException EmptyName() => new(Loc.S("名称不能为空"));
     public static LibraryException DuplicateGroupName(string name) => new(Loc.S("已存在名为「%@」的分组", name));
     public static LibraryException DuplicateTagName(string name) => new(Loc.S("已存在名为「%@」的标签", name));
-    public static LibraryException GroupDepthExceeded() => new(Loc.S("分组最多支持两级"));
+    public static LibraryException GroupDepthExceeded() => new(Loc.S("分组最多支持四级"));
     public static LibraryException NotFound() => new(Loc.S("找不到该项目"));
 }

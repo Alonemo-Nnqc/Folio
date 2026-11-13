@@ -18,6 +18,8 @@ struct TranslationContext: Sendable {
     var title: String?
     var summary: String?
     var glossary: [GlossaryEntry]
+    /// For the words in the paper's figures: the captions of those figures.
+    var figureCaptions: [String] = []
 }
 
 /// One text to translate and what kind of text it is.
@@ -25,7 +27,7 @@ struct TranslationItem: Sendable, Hashable {
     var text: String
     var kind: BlockKind
 
-    var isShort: Bool { kind == .heading || kind == .tableCell || kind == .title }
+    var isShort: Bool { kind == .heading || kind == .tableCell || kind == .title || kind == .figure }
 }
 
 /// How a provider likes its work: how much text per request and how many requests at once.
@@ -47,10 +49,14 @@ protocol TranslationProvider: Sendable {
     func translate(_ items: [TranslationItem], context: TranslationContext) async throws -> [String]
     /// Terms of the field with their translations, from an excerpt of the paper (large language models only).
     func extractTerms(from excerpt: String, context: TranslationContext) async throws -> [GlossaryEntry]
+    /// Gets the first request ready without sending any text: the connection to the service opened (DNS, TCP, TLS) and
+    /// any token fetched. Failures are ignored; the request itself will say what went wrong.
+    func prewarm() async
 }
 
 extension TranslationProvider {
     func extractTerms(from excerpt: String, context: TranslationContext) async throws -> [GlossaryEntry] { [] }
+    func prewarm() async {}
 }
 
 /// Why a request failed. `description` is what the error classifier reads.
@@ -139,6 +145,10 @@ enum LLMBatch {
         if !context.glossary.isEmpty {
             prompt += "\n\nGlossary (\(source) → \(target)):\n" + context.glossary.map { "- \($0.source) → \($0.target)" }.joined(separator: "\n")
         }
+        if !context.figureCaptions.isEmpty {
+            prompt += "\n\nThe figure labels to translate come from figures with these captions (for their meaning and terms; do not translate the captions):\n"
+                + context.figureCaptions.map { "- \($0)" }.joined(separator: "\n")
+        }
         return prompt
     }
 
@@ -150,8 +160,17 @@ enum LLMBatch {
             return String(decoding: data, as: UTF8.self)
         }
         var message = "{" + items.enumerated().map { "\(json(String($0.offset + 1))): \(json($0.element.text))" }.joined(separator: ", ") + "}"
-        let short = items.enumerated().filter { $0.element.isShort }.map { String($0.offset + 1) }
+        let short = items.enumerated().filter { $0.element.isShort && $0.element.kind != .figure }.map { String($0.offset + 1) }
         if !short.isEmpty { message += "\n\nShort items (headings or table cells): " + short.joined(separator: ", ") }
+        // Words read from the paper's pictures: labels to translate, each one, not names to keep.
+        let labels = items.enumerated().filter { $0.element.kind == .figure }.map { String($0.offset + 1) }
+        if !labels.isEmpty {
+            message += "\n\nItems " + labels.joined(separator: ", ") + " are labels inside the paper's figures (diagram boxes, legends, axis titles), "
+                + "read from the images in reading order. Translate every one of them completely, concisely and without final punctuation, "
+                + "even single words such as Encoder, Prompt or Output, using the terms the paper itself uses; keep only proper names and "
+                + "abbreviations (ResNet, SAM, GT) as they are. The labels were read by OCR and may have a misread letter: translate what "
+                + "the label evidently says. A label that is unreadable noise: give it back unchanged."
+        }
         return message
     }
 
@@ -224,6 +243,8 @@ enum LLMBatch {
 // MARK: - HTTP
 
 enum HTTP {
+    /// One session for every service: its connections stay open between requests (HTTP/2 or keep-alive), so a token
+    /// request, a warm-up and the translations after them all go over the same connection.
     static let session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 180
@@ -231,6 +252,34 @@ enum HTTP {
         configuration.httpMaximumConnectionsPerHost = 16
         return URLSession(configuration: configuration)
     }()
+
+    /// Hosts warmed lately, and when: one warm-up per host every `warmInterval` seconds is enough to keep it open.
+    nonisolated(unsafe) private static var warmedAt: [String: Date] = [:]
+    private static let warmLock = NSLock()
+    static let warmInterval: TimeInterval = 30
+
+    /// True the first time in `warmInterval` for `host` (and notes the time).
+    static func shouldWarm(_ host: String) -> Bool {
+        warmLock.withLock {
+            if let last = warmedAt[host], Date().timeIntervalSince(last) < warmInterval { return false }
+            warmedAt[host] = Date()
+            return true
+        }
+    }
+
+    /// Opens a connection to `url`'s host with a body-less request (HEAD) and leaves it in the session's pool for the
+    /// translation that follows. The answer does not matter; no text is sent.
+    static func warm(_ url: URL) async {
+        guard let name = url.host() else { return }
+        let host = url.port.map { "\(name):\($0)" } ?? name
+        guard shouldWarm(host) else { return }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.httpMethod = "HEAD"
+        if (try? await session.data(for: request)) == nil {
+            // Unreachable for now: the next warm-up may try again at once.
+            warmLock.withLock { warmedAt[host] = nil }
+        }
+    }
 
     /// Sends `request`; non-2xx answers and transport failures become `ProviderError`s.
     static func send(_ request: URLRequest) async throws -> Data {

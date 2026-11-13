@@ -19,7 +19,9 @@ public enum ShellEnvironment {
         // A global npm install lives in the folder of each Node version a version manager keeps.
         for (root, suffix) in [(".nvm/versions/node", "bin"), (".fnm/node-versions", "installation/bin"),
                                (".local/share/fnm/node-versions", "installation/bin"), ("Library/Application Support/fnm/node-versions", "installation/bin"),
-                               (".local/share/mise/installs/node", "bin"), (".asdf/installs/nodejs", "bin")] {
+                               (".local/share/mise/installs/node", "bin"), (".asdf/installs/nodejs", "bin"),
+                               // WorkBuddy's own Node: CodeBuddy installed with it (no other npm here) lands there.
+                               (".workbuddy/binaries/node/versions", "bin")] {
             let parent = home.appending(path: root)
             let versions = (try? FileManager.default.contentsOfDirectory(atPath: parent.path)) ?? []
             folders += versions.sorted().reversed().map { parent.appending(path: "\($0)/\(suffix)").path }

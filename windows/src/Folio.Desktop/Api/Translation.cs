@@ -74,7 +74,8 @@ public static partial class Api
             (Loc.S("我的服务"), all.Where(s => configured.Contains(s.Id)).ToList()),
             (Loc.S("免费"), rest.Where(s => s.Category == ServiceCategory.Free).ToList()),
             // Agents not found on this computer are left out; the one in use stays so the menu can show it.
-            (Loc.S("本机"), rest.Where(s => s.Category == ServiceCategory.Local || (s.Category == ServiceCategory.Agent && s.Id == M.Settings.TranslationService)).ToList()),
+            (Loc.S("本机"), rest.Where(s => s.Category == ServiceCategory.Local || (s.Category == ServiceCategory.Agent && s.Id == M.Settings.TranslationService)
+                || (s.Id == LocalAgent.Codebuddy.ServiceId() && LocalAgents.WorkBuddyApp() != null)).ToList()),
             (Loc.S("大模型 API"), rest.Where(s => s.Category == ServiceCategory.Llm).ToList()),
             (Loc.S("机器翻译 API"), rest.Where(s => s.Category == ServiceCategory.Machine).ToList()),
         }.Where(g => g.Services.Count > 0).Select(g => new { title = g.Title, services = g.Services.Select(Entry) });
@@ -163,13 +164,23 @@ public static partial class Api
             var service = TranslationServiceCatalog.Resolve(chosen);
             var options = M.Settings.TranslationOptions;
             var outcome = await SelectionTranslator.Translate(a.Str("text"), service.Id, M.Settings.FieldsOf(service.Id), M.Translations.Secrets.Secrets(service),
-                                                              options.LangIn, options.LangOut, M.Settings.SelectionTranslationFallback, id => M.Settings.FieldsOf(id));
+                                                              options.LangIn, options.LangOut, M.Settings.SelectionTranslationFallback, id => M.Settings.FieldsOf(id),
+                                                              useCache: !a.Bool("fresh"));
             string Name(string id) => TranslationServiceCatalog.Service(id)?.DisplayName ?? id;
             return (object?)new
             {
                 ok = outcome.Succeeded, text = outcome.Text, service = outcome.ServiceId, serviceName = Name(outcome.ServiceId),
                 notice = outcome.FellBackFrom is { } limited ? Loc.S("%@ 暂时限流，已改用 %@", Name(limited), Name(outcome.ServiceId)) : null,
             };
+        });
+        // The reader's mouse went down (or it opened): the 划词 service's connection is opened and its token fetched (SEL-20).
+        Bridge.On("translation.prewarm", _ =>
+        {
+            if (!M.Settings.SelectionTranslationEnabled) return null;
+            var service = TranslationServiceCatalog.Resolve(M.Settings.SelectionTranslationService is { Length: > 0 } stored ? stored : M.Settings.TranslationService);
+            try { SelectionTranslator.Prewarm(service.Id, M.Settings.FieldsOf(service.Id), M.Translations.Secrets.Secrets(service), M.Settings.SelectionTranslationFallback); }
+            catch { }
+            return null;
         });
         Bridge.On("translation.setSelectionService", a =>
         {
@@ -220,11 +231,59 @@ public static partial class Api
             {
                 var found = which.Locate(path);
                 var version = found != null ? which.Version(found) : null;
+                // CodeBuddy: WorkBuddy is here, its command line is not (offered to be installed), or it is (one sign-in in a terminal).
+                bool codeBuddy = which == LocalAgent.Codebuddy;
+                if (found == null && codeBuddy && LocalAgents.WorkBuddyApp() != null)
+                    return new { ok = false, info = true, action = "installCodeBuddy",
+                                 message = Loc.S("检测到 WorkBuddy 桌面版，但它的登录只能在应用内使用。安装 CodeBuddy 命令行后，用同一个腾讯账号登录一次即可用于翻译。") };
                 return found == null
-                    ? new { ok = false, message = Loc.S("没有在这台电脑上找到 %@，请先安装并登录", which.Command()) }
-                    : new { ok = true, message = version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found) };
+                    ? new { ok = false, info = false, action = (string?)null, message = Loc.S("没有在这台电脑上找到 %@，请先安装并登录", which.Command()) }
+                    : codeBuddy && !CodeBuddyAccount.IsSignedIn
+                        // Installed, not signed in yet: one sign-in in a console window, with WorkBuddy's account.
+                        ? new { ok = false, info = false, action = (string?)"loginCodeBuddy", message = Loc.S("已找到 CodeBuddy 命令行，但还没有登录：点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次") }
+                        : new { ok = true, info = false, action = (string?)null,
+                                message = version != null ? Loc.S("已找到 %@（%@）", found, version) : Loc.S("已找到 %@", found) };
             });
         });
+        // Words in pictures are read by Windows' own OCR: the paper's language may need installing.
+        Bridge.On("translation.ocrStatus", _ =>
+        {
+            var language = M.Settings.TranslationOptions.LangIn;
+            var name = TranslationOptions.CommonLanguages.FirstOrDefault(l => l.Code == language).Name ?? language;
+            return new { missing = ImageTextServices.MissingOcr(language) != null, language = name };
+        });
+        Bridge.OnAsync("translation.installOcr", async _ =>
+        {
+            if (ImageTextServices.MissingOcr(M.Settings.TranslationOptions.LangIn) is not { } capability) return (object?)new { ok = true };
+            try
+            {
+                bool done = await ImageTextServices.InstallOcr(capability);
+                return new { ok = done && ImageTextServices.MissingOcr(M.Settings.TranslationOptions.LangIn) == null,
+                             message = done ? Loc.S("已安装，重新启动 Folio 后生效") : Loc.S("没有安装成功，可以在 Windows 设置 ▸ 时间和语言 ▸ 语言 中添加该语言并勾选“光学字符识别”") };
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Approval declined.
+                return new { ok = false, message = "" };
+            }
+        });
+        Bridge.OnAsync("translation.installCodeBuddy", async _ =>
+        {
+            try
+            {
+                await LocalAgents.InstallCodeBuddy();
+                if (!CodeBuddyAccount.IsSignedIn) OpenAgentLogin(LocalAgent.Codebuddy);
+                _agentsCheckedAt = default;
+                RefreshAgents();
+                return (object?)new { ok = true };
+            }
+            catch (Exception e)
+            {
+                var detail = e is ProviderError p ? p.Detail : e.Message;
+                return new { ok = false, message = Loc.S("安装没有完成：%@。也可以在终端运行 npm install -g @tencent-ai/codebuddy-code", detail.Length > 300 ? detail[..300] : detail) };
+            }
+        });
+        Bridge.On("translation.loginCodeBuddy", _ => { OpenAgentLogin(LocalAgent.Codebuddy); return null; });
         Bridge.OnAsync("translation.test", async a =>
         {
             var service = TranslationServiceCatalog.Resolve(a.Str("service"));
@@ -303,5 +362,21 @@ public static partial class Api
             foreach (var id in a.Strs("files")) await M.Translations.Start(id);
         });
         Bridge.On("translation.cancel", a => { M.Translations.Cancel(a.Str("item")); return null; });
+    }
+
+    /// <summary>A console window running the agent, to sign in (CodeBuddy: the China site, WorkBuddy's Tencent account).</summary>
+    static void OpenAgentLogin(LocalAgent agent)
+    {
+        var path = agent.Locate() ?? agent.Command();
+        var info = new System.Diagnostics.ProcessStartInfo(LocalProcess.CommandShell)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = false,
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        };
+        // Raw, not ArgumentList: cmd reads the rest of its command line as it is, quotes and all (no \" escapes).
+        info.Arguments = $"/k chcp 65001 >nul & title Folio & echo {Loc.S("Folio：在下面选择中国站，用 WorkBuddy 的腾讯账号登录；登录完成后可关闭这个窗口。")} & echo. & \"{path}\"";
+        foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
+        try { System.Diagnostics.Process.Start(info)?.Dispose(); } catch { }
     }
 }

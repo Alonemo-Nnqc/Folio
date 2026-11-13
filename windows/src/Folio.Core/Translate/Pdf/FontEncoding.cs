@@ -84,6 +84,15 @@ public sealed partial class FontEncoding
 
     // MARK: Text
 
+    /// <summary>The code the font gives text by its own tables (ToUnicode, encoding), when it says so plainly: for drawing
+    /// a character the page does not show yet in a font that has all its glyphs (EDIT-01).</summary>
+    public int? Code(string text)
+    {
+        foreach (var (code, known) in _known) if (known == text) return code;
+        if (_codeIsUnicode && text.EnumerateRunes().Count() == 1) return text.EnumerateRunes().First().Value;
+        return null;
+    }
+
     public (string Text, bool Reliable)? Text(int code)
     {
         if (_known.TryGetValue(code, out var known)) return (known, true);

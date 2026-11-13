@@ -64,7 +64,7 @@ export function ZoteroSheet({ close }: { close: () => void }) {
       {report && !importing && !summary && (
         <>
           <div>{t("将导入 %lld 个条目、%lld 个独立文件、%lld 个分组、%lld 个标签。", report.regularItems, report.standaloneFiles, report.collections, report.tags)}</div>
-          <div className="secondary" style={{ fontSize: 12, margin: "4px 0 10px" }}>{t("跳过：%lld 条笔记、%lld 条 Zotero 批注、%lld 个网页快照、%lld 个回收站条目。超过两级的分组会并入第二级。", report.skippedNotes, report.skippedAnnotations, report.skippedSnapshots, report.skippedTrashed)}</div>
+          <div className="secondary" style={{ fontSize: 12, margin: "4px 0 10px" }}>{t("跳过：%lld 条笔记、%lld 条 Zotero 批注、%lld 个网页快照、%lld 个回收站条目。超过四级的分组会并入第四级。", report.skippedNotes, report.skippedAnnotations, report.skippedSnapshots, report.skippedTrashed)}</div>
           <label className="checkbox"><input type="checkbox" disabled={report.automaticTags === 0} checked={automatic} onChange={(e) => setAutomatic(e.target.checked)} />{t("同时导入自动标签（%lld 个，来自出版商关键词和 arXiv 分类）", report.automaticTags)}</label>
           <div className="secondary" style={{ fontSize: 11, marginTop: 8 }}>{t("只读取 Zotero 数据库的副本，不会修改 Zotero；PDF 会复制进 Folio 文献库，与已有文献重复的会跳过。")}</div>
         </>

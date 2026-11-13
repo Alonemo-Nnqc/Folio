@@ -197,9 +197,14 @@ public sealed class LibraryToolbox
         var r = reference.Trim();
         if (s.GroupsById.TryGetValue(r, out var g)) return g;
         var parts = r.Split('/').Select(p => p.Trim()).ToArray();
-        if (parts.Length == 2)
-            return s.GroupsById.Values.FirstOrDefault(x => string.Equals(x.Name, parts[1], StringComparison.OrdinalIgnoreCase)
-                && x.ParentId != null && s.GroupsById.TryGetValue(x.ParentId, out var p) && string.Equals(p.Name, parts[0], StringComparison.OrdinalIgnoreCase));
+        if (parts.Length >= 2)
+        {
+            // "Parent/Child" or a longer path; it may start below the top level. A full path wins.
+            bool Matches(List<string> path) => path.Count >= parts.Length
+                && path.Skip(path.Count - parts.Length).Zip(parts).All(x => string.Equals(x.First, x.Second, StringComparison.OrdinalIgnoreCase));
+            var candidates = s.GroupsForMenus().Select(x => x.Group).Where(x => Matches(s.GroupPath(x.Id))).ToList();
+            return candidates.FirstOrDefault(x => s.GroupDepth(x.Id) == parts.Length) ?? candidates.FirstOrDefault();
+        }
         var matches = s.GroupsById.Values.Where(x => string.Equals(x.Name, r, StringComparison.OrdinalIgnoreCase)).ToList();
         return matches.FirstOrDefault(x => x.ParentId == null) ?? matches.FirstOrDefault();
     }
@@ -279,7 +284,7 @@ public sealed class LibraryToolbox
 
     static List<string> GroupNames(string itemId, LibrarySnapshot s) =>
         (s.ItemGroups.GetValueOrDefault(itemId) ?? []).Select(id => s.GroupsById.GetValueOrDefault(id)).OfType<LibraryGroup>()
-            .Select(g => g.ParentId != null && s.GroupsById.TryGetValue(g.ParentId, out var p) ? $"{p.Name}/{g.Name}" : g.Name)
+            .Select(g => string.Join('/', s.GroupPath(g.Id)))
             .OrderBy(n => n, StringComparer.Ordinal).ToList();
 
     static JsonObject Summary(Item item, LibrarySnapshot s)
@@ -325,7 +330,25 @@ public sealed class LibraryToolbox
         }));
         var note = Lib.Note(item.Id);
         if (note.Length > 0) o["note"] = note;
+        if (s.JournalMetricsOf(item) is { IsIndexed: true } metrics) o["journal_metrics"] = JournalMetricsJson(metrics);
         o["folio_link"] = $"folio://open?item={item.Id}";
+        return o;
+    }
+
+    /// <summary>The venue's ranks cached from easyScholar (META-30), in the same shape on both platforms.</summary>
+    static JsonObject JournalMetricsJson(JournalMetrics m)
+    {
+        var o = new JsonObject { ["summary"] = m.Summary };
+        if (m.CasZone is { } zone) { o["cas_zone"] = zone; o["cas_top"] = m.CasTop; }
+        if (m.CasCategory is { } category) o["cas_category"] = category;
+        if (m.CasBaseZone is { } baseZone) o["cas_base_zone"] = baseZone;
+        if (m.JcrQuartile is { } q) o["jcr_quartile"] = $"Q{q}";
+        if (m.ImpactFactor is { } f) o["impact_factor"] = f;
+        if (m.ImpactFactor5Year is { } f5) o["impact_factor_5_year"] = f5;
+        if (m.Ccf is { } ccf) o["ccf"] = ccf;
+        if (m.Warning is { } warning) o["cas_warning"] = warning;
+        o["source"] = "easyScholar";
+        o["fetched"] = Iso(m.FetchedAt);
         return o;
     }
 
@@ -917,9 +940,18 @@ public sealed class LibraryToolbox
         if (!create) throw new ToolError($"No group \"{reference}\".");
         var parts = reference.Split('/').Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
         if (parts.Count == 0) throw new ToolError("Empty group name.");
-        string? parentId = null;
-        if (parts.Count >= 2) parentId = FindGroup(parts[0], s)?.Id ?? Lib.CreateGroup(parts[0]).Id;
-        return Lib.CreateGroup(parts[^1], parentId).Id;
+        // Walk the path, creating what is missing (four levels at most).
+        string parentId = (parts.Count >= 2 ? FindGroup(parts[0], s)?.Id : null) ?? Lib.CreateGroup(parts[0]).Id;
+        foreach (var name in parts.Skip(1))
+        {
+            var current = Snap();
+            var existing = (current.ChildGroups.GetValueOrDefault(parentId) ?? [])
+                .FirstOrDefault(id => string.Equals(current.GroupsById[id].Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing == null && !current.CanAddSubgroup(parentId))
+                throw new ToolError($"Groups are at most {LibraryGroup.MaximumDepth} levels deep; \"{reference}\" would go deeper.");
+            parentId = existing ?? Lib.CreateGroup(name, parentId).Id;
+        }
+        return parentId;
     }
 
     JsonNode ItemsResult(List<string> ids)
@@ -957,8 +989,10 @@ public sealed class LibraryToolbox
         string? parentId = null;
         if (args["parent"].Str() is { Length: > 0 } parent)
         {
-            var group = FindGroup(parent, Snap()) ?? throw new ToolError($"No parent group \"{parent}\".");
-            if (group.ParentId != null) throw new ToolError($"Groups are at most two levels deep; \"{parent}\" is already a subgroup.");
+            var snap = Snap();
+            var group = FindGroup(parent, snap) ?? throw new ToolError($"No parent group \"{parent}\".");
+            if (!snap.CanAddSubgroup(group.Id))
+                throw new ToolError($"Groups are at most {LibraryGroup.MaximumDepth} levels deep; \"{parent}\" is already on the last level.");
             parentId = group.Id;
         }
         try
@@ -1048,7 +1082,7 @@ public sealed class LibraryToolbox
         {
             string? parentId = parent.Trim().Length == 0 ? null : (FindGroup(parent, s) ?? throw new ToolError($"No group \"{parent}\".")).Id;
             if (!Lib.CanMoveGroup(group.Id, parentId))
-                throw new ToolError($"Cannot move \"{group.Name}\" there: groups are at most two levels deep, and a group with subgroups cannot become a subgroup.");
+                throw new ToolError($"Cannot move \"{group.Name}\" there: groups are at most {LibraryGroup.MaximumDepth} levels deep (its subgroups included), and a group cannot go inside itself or its own subgroups.");
             var siblings = parentId != null ? s.ChildGroups.GetValueOrDefault(parentId) ?? [] : s.TopLevelGroups;
             Lib.MoveGroup(group.Id, parentId, siblings.Count);
         }
@@ -1072,7 +1106,7 @@ public sealed class LibraryToolbox
         Lib.DeleteGroup(group.Id, trashItems);
         return new JsonObject
         {
-            ["deleted_group"] = group.Name, ["subgroups_deleted"] = s.ChildGroups.GetValueOrDefault(group.Id)?.Count ?? 0,
+            ["deleted_group"] = group.Name, ["subgroups_deleted"] = s.GroupDescendants(group.Id).Count,
             [trashItems ? "items_moved_to_trash" : "items_kept_in_library"] = members.Count,
         };
     }

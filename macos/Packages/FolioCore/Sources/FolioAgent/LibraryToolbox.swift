@@ -181,11 +181,14 @@ public actor LibraryToolbox {
         let ref = reference.trimmingCharacters(in: .whitespaces)
         if let group = s.groupsById[ref] { return group }
         let parts = ref.split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
-        if parts.count == 2 {
-            return s.groupsById.values.first { group in
-                group.name.caseInsensitiveCompare(parts[1]) == .orderedSame
-                    && group.parentId.flatMap { s.groupsById[$0]?.name.caseInsensitiveCompare(parts[0]) == .orderedSame } == true
+        if parts.count >= 2 {
+            // "Parent/Child" or a longer path; it may start below the top level. A full path wins.
+            func matches(_ path: [String]) -> Bool {
+                path.count >= parts.count
+                    && zip(path.suffix(parts.count), parts).allSatisfy { $0.caseInsensitiveCompare($1) == .orderedSame }
             }
+            let candidates = s.groupsInOrder.map(\.group).filter { matches(s.groupPath($0.id)) }
+            return candidates.first { s.groupDepth($0.id) == parts.count } ?? candidates.first
         }
         let matches = s.groupsById.values.filter { $0.name.caseInsensitiveCompare(ref) == .orderedSame }
         return matches.first { $0.parentId == nil } ?? matches.first
@@ -300,7 +303,7 @@ public actor LibraryToolbox {
     private func groupNames(of itemId: String, in s: LibrarySnapshot) -> [String] {
         (s.itemGroups[itemId] ?? []).compactMap { id in
             guard let group = s.groupsById[id] else { return nil }
-            return group.parentId.flatMap { s.groupsById[$0]?.name }.map { "\($0)/\(group.name)" } ?? group.name
+            return s.groupPath(group.id).joined(separator: "/")
         }.sorted()
     }
 
@@ -327,7 +330,25 @@ public actor LibraryToolbox {
         })
         let note = try library.note(for: item.id)
         if !note.isEmpty { object["note"] = .string(note) }
+        if let metrics = s.journalMetrics(for: item), metrics.isIndexed { object["journal_metrics"] = Self.journalMetrics(metrics) }
         object["folio_link"] = .string("folio://open?item=\(item.id)")
+        return .object(object)
+    }
+
+    /// The venue's ranks cached from easyScholar (META-30), in the same shape on both platforms.
+    static func journalMetrics(_ m: JournalMetrics) -> JSONValue {
+        var object: [String: JSONValue] = ["summary": .string(m.summary)]
+        if let zone = m.casZone { object["cas_zone"] = .number(Double(zone)) }
+        if let category = m.casCategory { object["cas_category"] = .string(category) }
+        if m.casZone != nil { object["cas_top"] = .bool(m.casTop) }
+        if let zone = m.casBaseZone { object["cas_base_zone"] = .number(Double(zone)) }
+        if let quartile = m.jcrQuartile { object["jcr_quartile"] = .string("Q\(quartile)") }
+        if let value = m.impactFactor { object["impact_factor"] = .number(value) }
+        if let value = m.impactFactor5Year { object["impact_factor_5_year"] = .number(value) }
+        if let ccf = m.ccf { object["ccf"] = .string(ccf) }
+        if let warning = m.warning { object["cas_warning"] = .string(warning) }
+        object["source"] = .string("easyScholar")
+        object["fetched"] = .string(ISO8601DateFormatter().string(from: m.fetchedAt))
         return .object(object)
     }
 
@@ -884,18 +905,28 @@ public actor LibraryToolbox {
         }
     }
 
-    /// Groups by name, id or "Parent/Child"; missing ones are created (two levels at most).
+    /// Groups by name, id or a "Parent/Child" path; missing ones are created (four levels at most).
     private func ensureGroup(_ reference: String, create: Bool = true) throws -> String {
         let s = try snapshot()
         if let group = findGroup(reference, in: s) { return group.id }
         guard create else { throw ToolError("No group \"\(reference)\".") }
         let parts = reference.split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        guard let leaf = parts.last else { throw ToolError("Empty group name.") }
-        var parentId: String?
-        if parts.count >= 2 {
-            parentId = try findGroup(parts[0], in: s)?.id ?? library.createGroup(name: parts[0]).id
+        guard let first = parts.first else { throw ToolError("Empty group name.") }
+        let library = try library
+        do {
+            var parentId = parts.count >= 2 ? findGroup(first, in: s)?.id : nil
+            if parentId == nil { parentId = try library.createGroup(name: first).id }
+            for name in parts.dropFirst() {
+                let current = try snapshot()
+                let existing = (parentId.flatMap { current.childGroups[$0] } ?? []).first {
+                    current.groupsById[$0]?.name.caseInsensitiveCompare(name) == .orderedSame
+                }
+                parentId = try existing ?? library.createGroup(name: name, parentId: parentId).id
+            }
+            return parentId!
+        } catch LibraryError.groupDepthExceeded {
+            throw ToolError("Groups are at most \(LibraryGroup.maximumDepth) levels deep; \"\(reference)\" would go deeper.")
         }
-        return try library.createGroup(name: leaf, parentId: parentId).id
     }
 
     private func setTags(_ args: JSONValue) throws -> JSONValue {
@@ -930,7 +961,9 @@ public actor LibraryToolbox {
         var parentId: String?
         if let parent = args["parent"]?.stringValue, !parent.isEmpty {
             guard let group = findGroup(parent, in: s) else { throw ToolError("No parent group \"\(parent)\".") }
-            guard group.parentId == nil else { throw ToolError("Groups are at most two levels deep; \"\(parent)\" is already a subgroup.") }
+            guard s.canAddSubgroup(to: group.id) else {
+                throw ToolError("Groups are at most \(LibraryGroup.maximumDepth) levels deep; \"\(parent)\" is already on the last level.")
+            }
             parentId = group.id
         }
         do {
@@ -1034,7 +1067,7 @@ public actor LibraryToolbox {
                 return target.id
             }()
             guard try library.canMoveGroup(group.id, toParent: parentId) else {
-                throw ToolError("Cannot move \"\(group.name)\" there: groups are at most two levels deep, and a group with subgroups cannot become a subgroup.")
+                throw ToolError("Cannot move \"\(group.name)\" there: groups are at most \(LibraryGroup.maximumDepth) levels deep (its subgroups included), and a group cannot go inside itself or its own subgroups.")
             }
             let siblings = parentId.map { s.childGroups[$0] ?? [] } ?? s.topLevelGroups
             try library.moveGroup(group.id, toParent: parentId, index: siblings.count)
@@ -1054,7 +1087,7 @@ public actor LibraryToolbox {
         let members = ViewResolver.members(of: .group(group.id), in: s, includeSubgroupItems: true)
         try library.deleteGroup(group.id, trashItems: trashItems)
         return ["deleted_group": .string(group.name),
-                "subgroups_deleted": .from(s.childGroups[group.id]?.count ?? 0),
+                "subgroups_deleted": .from(s.groupDescendants(group.id).count),
                 trashItems ? "items_moved_to_trash" : "items_kept_in_library": .from(members.count)]
     }
 

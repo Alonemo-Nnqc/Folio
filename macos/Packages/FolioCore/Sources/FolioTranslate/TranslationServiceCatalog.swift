@@ -163,6 +163,12 @@ public enum TranslationServiceCatalog {
             .init(option: "--claude-code-model", title: TranslationServiceCatalog.modelFieldTitle, defaultValue: "haiku", placeholder: "haiku / sonnet / opus"),
             agentPath("--claude-code-path", command: "claude"),
         ]),
+        .init(id: "codebuddy", displayName: "CodeBuddy（WorkBuddy）", backend: .agent(.codebuddy), category: .agent, fields: [
+            // Left empty: a quick model of the account's (its own default reasons at length, minutes a page).
+            .init(option: "--codebuddy-model", title: TranslationServiceCatalog.modelFieldTitle,
+                  placeholder: String(localized: "自动（选用快速模型）", bundle: .module)),
+            agentPath("--codebuddy-path", command: "codebuddy"),
+        ], note: String(localized: "使用 CodeBuddy 命令行，与 WorkBuddy 同一个腾讯账号。WorkBuddy 桌面版的登录只能在应用内使用，需另装命令行并登录一次。", bundle: .module)),
         .init(id: "codex", displayName: "Codex", backend: .agent(.codex), category: .agent, fields: [
             .init(option: "--codex-model", title: TranslationServiceCatalog.modelFieldTitle, placeholder: String(localized: "默认", bundle: .module)),
             agentPath("--codex-path", command: "codex"),

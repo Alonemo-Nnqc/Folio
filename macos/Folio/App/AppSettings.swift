@@ -95,6 +95,7 @@ final class AppSettings {
         static let readerLayout = "readerLayout"
         static let reopenReaderTabs = "reopenReaderTabs"
         static let highlightColor = "highlightColor"
+        static let readerEraserSize = "readerEraserSize"
         static let useZoteroRecognizer = "useZoteroRecognizer"
         static let translationService = "translationService"
         static let translationFields = "translationFields"
@@ -115,6 +116,7 @@ final class AppSettings {
         static let backgroundTranslucency = "backgroundTranslucency"
         static let translationParallelJobs = "translationParallelJobs"
         static let selectionTranslationFallback = "selectionTranslationFallback"
+        static let journalMetricsAutoFetch = "journalMetricsAutoFetch"
     }
 
     private let defaults: UserDefaults
@@ -139,6 +141,8 @@ final class AppSettings {
     var reopenReaderTabs: Bool { didSet { save(reopenReaderTabs, Key.reopenReaderTabs) } }
     /// Name of the default highlight colour (see AnnotationColor).
     var highlightColor: String { didSet { save(highlightColor, Key.highlightColor) } }
+    /// The reader's eraser size (READER-30): small, medium or large (see InkEraser.Size).
+    var readerEraserSize: String { didSet { save(readerEraserSize, Key.readerEraserSize) } }
     var useZoteroRecognizer: Bool { didSet { save(useZoteroRecognizer, Key.useZoteroRecognizer) } }
     /// Translation service id from `TranslationServiceCatalog` (TRANS-03).
     var translationService: String { didSet { save(translationService, Key.translationService) } }
@@ -203,6 +207,8 @@ final class AppSettings {
     var backgroundTranslucency: Double { didSet { save(backgroundTranslucency, Key.backgroundTranslucency) } }
     /// Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.
     var translationParallelJobs: Int { didSet { save(translationParallelJobs, Key.translationParallelJobs) } }
+    /// 设置 ▸ 检索 ▸ 期刊指标: look up the ranks of new and changed items' journals by itself (META-30).
+    var journalMetricsAutoFetch: Bool { didSet { save(journalMetricsAutoFetch, Key.journalMetricsAutoFetch) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -228,6 +234,7 @@ final class AppSettings {
             Key.backgroundTranslucency: 0.0,
             Key.translationParallelJobs: 2,
             Key.selectionTranslationFallback: true,
+            Key.journalMetricsAutoFetch: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -240,6 +247,7 @@ final class AppSettings {
         readerLayout = ReaderLayout(rawValue: defaults.string(forKey: Key.readerLayout) ?? "") ?? .single
         reopenReaderTabs = defaults.bool(forKey: Key.reopenReaderTabs)
         highlightColor = defaults.string(forKey: Key.highlightColor) ?? "yellow"
+        readerEraserSize = defaults.string(forKey: Key.readerEraserSize) ?? "medium"
         useZoteroRecognizer = defaults.bool(forKey: Key.useZoteroRecognizer)
         // Services of the old pdf2zh_next engine that are gone map to their replacement.
         translationService = TranslationServiceCatalog.resolve(defaults.string(forKey: Key.translationService) ?? TranslationServiceCatalog.defaultServiceID).id
@@ -261,6 +269,7 @@ final class AppSettings {
         selectionTranslationShortcut = KeyShortcut(storage: defaults.dictionary(forKey: Key.selectionTranslationShortcut)) ?? .defaultSelectionTranslation
         selectionTranslationFallback = defaults.bool(forKey: Key.selectionTranslationFallback)
         translationParallelJobs = defaults.integer(forKey: Key.translationParallelJobs)
+        journalMetricsAutoFetch = defaults.bool(forKey: Key.journalMetricsAutoFetch)
         backgroundTranslucency = min(1, max(0, defaults.double(forKey: Key.backgroundTranslucency)))
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.

@@ -5,6 +5,8 @@ import FolioCore
 enum ItemColumn: String, CaseIterable {
     case title, source, authors, year, tags, dateAdded, type, dateModified, doi, publisher
     case volume, issue, pages, readStatus, rating, fileCount, citationKey
+    /// 分区 and 影响因子 from easyScholar (META-30).
+    case journalRank, impactFactor
 
     var header: String {
         switch self {
@@ -25,6 +27,8 @@ enum ItemColumn: String, CaseIterable {
         case .rating: String(localized: "评分")
         case .fileCount: String(localized: "文件数")
         case .citationKey: String(localized: "引用键")
+        case .journalRank: String(localized: "分区")
+        case .impactFactor: String(localized: "影响因子")
         }
     }
 
@@ -40,6 +44,8 @@ enum ItemColumn: String, CaseIterable {
         case .dateAdded, .dateModified: 96
         case .doi, .citationKey, .publisher: 140
         case .type, .pages: 80
+        case .journalRank: 76
+        case .impactFactor: 70
         }
     }
 
@@ -79,6 +85,8 @@ enum ItemColumn: String, CaseIterable {
         case .rating: .rating
         case .fileCount: .fileCount
         case .citationKey: .citationKey
+        case .journalRank: .journalRank
+        case .impactFactor: .impactFactor
         }
     }
 
@@ -107,6 +115,8 @@ enum ItemColumn: String, CaseIterable {
         case .pages: item.pages
         case .fileCount: String(snapshot.filesByItem[item.id]?.count ?? 0)
         case .citationKey: item.citationKey
+        case .impactFactor: snapshot.journalMetrics(for: item)?.impactFactor.map(JournalMetrics.format)
+        case .journalRank: snapshot.journalMetrics(for: item)?.rankText
         case .readStatus, .rating, .tags: nil
         }
         guard let value, !value.trimmingCharacters(in: .whitespaces).isEmpty else { return "—" }

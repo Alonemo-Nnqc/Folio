@@ -19,6 +19,7 @@
     "nav.film": "Film",
     "nav.features": "Features",
     "nav.ai": "AI",
+    "nav.docs": "Guide",
     "nav.download": "Download",
     "nav.cta": "Download",
     "hero.eyebrow": "For Mac and Windows",

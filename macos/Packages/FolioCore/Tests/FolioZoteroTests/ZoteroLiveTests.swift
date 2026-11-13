@@ -24,14 +24,20 @@ import FolioCore
         #expect(report.regularItems >= 60)
         #expect(library.entries.count == report.regularItems + report.standaloneFiles)
 
-        // 10 real collections flatten to 9 (one 3rd-level collection merges into its parent).
-        #expect(report.collections == 9)
+        // The 10 real collections are at most three levels deep, so all of them become groups.
+        #expect(report.collections == 10)
         #expect(library.groups.count == report.collections)
-        // No group's parent itself has a parent — i.e. flattened to at most two levels.
-        for group in library.groups where group.parentKey != nil {
-            let parent = library.groups.first { $0.key == group.parentKey }
-            #expect(parent != nil)
-            #expect(parent?.parentKey == nil)
+        // Every group's parent was exported, and no chain is deeper than four levels.
+        for group in library.groups {
+            var level = 1
+            var parentKey = group.parentKey
+            while let key = parentKey {
+                let parent = library.groups.first { $0.key == key }
+                #expect(parent != nil)
+                level += 1
+                parentKey = parent?.parentKey
+            }
+            #expect(level <= LibraryGroup.maximumDepth)
         }
 
         // Every prepared file either exists on disk, or is at least accounted for (never a

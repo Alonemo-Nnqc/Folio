@@ -45,7 +45,7 @@ final class SidebarNode: NSObject {
 /// Builds the sidebar tree from a snapshot, reusing node objects:
 ///
 ///     文献库    所有文献 · 未分组 · 回收站
-///     分组      top-level groups ▸ subgroups
+///     分组      top-level groups ▸ subgroups, up to four levels
 ///     标签      tags
 final class SidebarTree {
     private var cache: [SidebarNode.Kind: SidebarNode] = [:]
@@ -60,11 +60,13 @@ final class SidebarTree {
         let library = node(.libraryHeader)
         library.children = Self.builtins.map { node(.builtin($0)) }
         let groups = node(.groupsHeader)
-        groups.children = snapshot.topLevelGroups.map { id in
+        var visited: Set<String> = []
+        func groupNode(_ id: String) -> SidebarNode {
             let group = node(.group(id))
-            group.children = (snapshot.childGroups[id] ?? []).map { node(.group($0)) }
+            group.children = (snapshot.childGroups[id] ?? []).filter { visited.insert($0).inserted }.map(groupNode)
             return group
         }
+        groups.children = snapshot.topLevelGroups.filter { visited.insert($0).inserted }.map(groupNode)
         let tags = node(.tagsHeader)
         tags.children = snapshot.tags.map { node(.tag($0.id)) }
         roots = [library, groups, tags]
@@ -80,7 +82,11 @@ final class SidebarTree {
         return created
     }
 
+    /// Every node with its children, at any depth.
     private var signature: [[SidebarNode.Kind]] {
-        roots.flatMap { root in [[root.kind]] + root.children.map { [$0.kind] + $0.children.map(\.kind) } }
+        func rows(_ node: SidebarNode) -> [[SidebarNode.Kind]] {
+            [[node.kind] + node.children.map(\.kind)] + node.children.flatMap(rows)
+        }
+        return roots.flatMap(rows)
     }
 }

@@ -3,7 +3,7 @@
 //
 // Commands from the app: open, reload, tool, zoom, layout, find, findStep, goto, step, history, theme, shadows, sidebar,
 // sidebarTab, scrollTo, selectAnnotation, print, clearSelection.
-// Messages to the app: ready, error, loaded, page, position, scale, scroll, selection, markup, note, textbox, ink, link,
+// Messages to the app: ready, error, loaded, page, position, scale, scroll, selection, markup, note, textbox, ink, erase, eraserStep, link,
 // contextMenu, annotationEdit, annotationDelete, annotationMoved, key, findCount, toolReset.
 
 // The page runs in an iframe of the interface (reader/ReaderTab.tsx), which holds the app's end of the conversation.
@@ -96,6 +96,9 @@ async function open({ url, page, scale, top, left, layout, zoom, keepPanes, auth
   if (id !== loadId) { task.destroy(); return; }
   const old = pdf;
   pdf = doc;
+  swappedPages.clear();
+  settling.clear();
+  for (const d of swappedDocs.splice(0)) d.destroy();
   showMessage("");
   pageAnnotations = new Map();
   originals = new Map();
@@ -119,6 +122,7 @@ async function open({ url, page, scale, top, left, layout, zoom, keepPanes, auth
     viewer.scrollPageIntoView({ pageNumber: Math.min(page, pdf.numPages), destArray: top != null ? [null, { name: "XYZ" }, left ?? 0, top, null] : undefined });
   }
   post({ type: "loaded", pages: pdf.numPages });
+  if (editMode) { textBlocks.clear(); asked.clear(); para = null; setTimeout(askForVisibleBlocks, 300); }
   post({ type: "page", page: viewer.currentPageNumber, pages: pdf.numPages });
   // The first page matters most: thumbnails, outline and the annotation scan wait until it is on screen.
   const panes = keepPanes ? scrollTops() : null;
@@ -481,6 +485,12 @@ function selectionGeometry() {
   return { rect: union, end: { x: last.right, y: last.top, bottom: last.bottom } };
 }
 document.addEventListener("pointerdown", (e) => { if (e.button === 0) post({ type: "pointerDown" }); }, true);
+// The app's floating layers (menus, popovers, 划词翻译) close on a press here as on one in the app's window, which never sees
+// presses inside this page (WIN-30, ui/dismiss.ts): every button, before any tool acts on it.
+document.addEventListener("pointerdown", (e) => post({ type: "press", button: e.button }), true);
+window.addEventListener("blur", () => post({ type: "blur" }));
+// While a layer of the app is open, Esc is the app's: it closes the layer instead of leaving a tool or a selection.
+let overlayOpen = false;
 container.addEventListener("scroll", () => post({ type: "viewMoved" }), { passive: true });
 
 // MARK: Annotations added or changed since the file was loaded
@@ -666,7 +676,7 @@ async function repaintThumbnail(page) {
   const canvas = document.querySelector(`.thumb[data-page="${page}"]`);
   if (!canvas?.dataset.done || !pdf) return;
   const doc = pdf;
-  const pdfPage = await doc.getPage(page);
+  const pdfPage = await pageOf(doc, page);
   if (doc !== pdf) return;
   const scale = (parseFloat(canvas.style.width) * devicePixelRatio) / pdfPage.getViewport({ scale: 1 }).width;
   const viewport = pdfPage.getViewport({ scale });
@@ -747,6 +757,77 @@ function drawSelection(pageNumber, source) {
 
 let drag = null;
 let stroke = null;
+
+// MARK: Eraser (READER-30)
+//
+// Dragging erases what the ring passes over from ink annotations (pdf.js's and Folio's), drawn as it goes; on release the
+// app cuts the same tracks out of the file (Folio.Core InkEraser), one undo step for the whole drag. Ink still being
+// written (a moment after it was drawn) is left alone.
+
+const { eraseStrokes } = await import("./eraser.js");
+const ERASER_DIAMETERS = { small: 8, medium: 16, large: 32 };
+let eraserSize = "medium";
+let erasing = null;
+
+const eraserRadius = () => (ERASER_DIAMETERS[eraserSize] ?? 16) / 2;
+
+/** The ring under the pointer, as large on screen as the eraser at this zoom. */
+function updateEraserCursor() {
+  const scale = viewer.getPageView(Math.max(0, viewer.currentPageNumber - 1))?.viewport?.scale ?? viewer.currentScale * 4 / 3;
+  const size = Math.round(Math.max(6, Math.min(120, (ERASER_DIAMETERS[eraserSize] ?? 16) * scale)));
+  const half = size / 2, r = Math.max(1.5, half - 1.5);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${r}" fill="rgba(255,255,255,.28)" stroke="rgba(0,0,0,.7)" stroke-width="1.2"/><circle cx="${half}" cy="${half}" r="${Math.max(0.5, r - 1.2)}" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1"/></svg>`;
+  document.body.style.setProperty("--eraser-cursor", `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${Math.floor(half)} ${Math.floor(half)}, crosshair`);
+}
+eventBus.on("scalechanging", () => { if (tool === "eraser") requestAnimationFrame(updateEraserCursor); });
+
+function startErasing(hit) {
+  erasing = { page: hit.number, view: hit.view, div: hit.div, path: [], before: new Map(), current: new Map(), frame: 0 };
+  continueErasing(hit.x, hit.y);
+}
+
+/** One more point of the track: the ink under the newest stretch is cut, and the page redrawn on the next frame. */
+function continueErasing(x, y) {
+  const e = erasing;
+  const last = e.path.length ? e.path.slice(-2) : null;
+  e.path.push(x, y);
+  const segment = last ? [...last, x, y] : [x, y];
+  let changed = false;
+  for (const entry of pageAnnotations.get(e.page) ?? []) {
+    if (entry.subtype !== "Ink" || isPending(entry.id) || !entry.strokes?.length) continue;
+    const left = eraseStrokes(entry.strokes, segment, eraserRadius() + (entry.width ?? 1) / 2);
+    if (!left) continue;
+    if (!e.before.has(entry.id)) e.before.set(entry.id, entry);
+    e.current.set(entry.id, left.length ? changedCopy(entry, { strokes: left, rect: boundsOf(left.flat()) }) : null);
+    changed = true;
+  }
+  if (changed && !e.frame) e.frame = requestAnimationFrame(() => { e.frame = 0; showErasing(e); });
+}
+
+/** What the drag has erased so far, on screen (not in the undo history yet). */
+function showErasing(e) {
+  const list = (pageAnnotations.get(e.page) ?? []).filter((a) => !e.current.has(a.id) || e.current.get(a.id));
+  const ids = new Map(list.map((a, i) => [a.id, i]));
+  for (const [id, entry] of e.current) if (entry && ids.has(id)) list[ids.get(id)] = entry;
+  pageAnnotations.set(e.page, list);
+  syncCanvas(e.page);
+  drawMarks(e.page);
+}
+
+function finishErasing() {
+  const e = erasing;
+  erasing = null;
+  cancelAnimationFrame(e.frame);
+  if (!e.before.size) return;
+  // Back to how it was, then the whole drag as one change: one undo step, and the thumbnails and list follow.
+  const list = pageAnnotations.get(e.page) ?? [];
+  for (const [id, original] of e.before) {
+    const index = list.findIndex((a) => a.id === id);
+    if (index >= 0) list[index] = original; else list.push(original);
+  }
+  commit([...e.before].map(([id, before]) => ({ page: e.page, before, after: e.current.get(id) ?? null })));
+  post({ type: "erase", page: e.page, ids: [...e.before.keys()], paths: [e.path], radius: eraserRadius() });
+}
 
 // MARK: Moving the page with the mouse
 //
@@ -849,6 +930,9 @@ for (const type of ["pointerup", "pointercancel"]) {
 }
 
 container.addEventListener("pointerdown", (e) => {
+  // The edit layer's paragraphs, editor and buttons are its own: no selecting, no panning (which would capture the
+  // pointer and take the click from 完成).
+  if (editMode && e.target.closest?.(".folio-edit-layer")) return;
   if (e.button === 1 && e.pointerType === "mouse") {
     e.preventDefault();
     startPan(e);
@@ -865,6 +949,13 @@ container.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     clearSelection();
     post({ type: tool, page: hit.number, x: hit.x, y: hit.y, clientX: e.clientX, clientY: e.clientY, color });
+    return;
+  }
+  if (tool === "eraser") {
+    e.preventDefault();
+    clearSelection();
+    container.setPointerCapture(e.pointerId);
+    startErasing(hit);
     return;
   }
   if (tool === "ink") {
@@ -899,6 +990,16 @@ container.addEventListener("pointerdown", (e) => {
 }, true);
 
 container.addEventListener("pointermove", (e) => {
+  if (erasing) {
+    // Over the page it started on, even past its edge (the track just goes on outside).
+    const origin = erasing.div.getBoundingClientRect();
+    const events = e.getCoalescedEvents?.() ?? [];
+    for (const event of events.length ? events : [e]) {
+      const [x, y] = erasing.view.viewport.convertToPdfPoint(event.clientX - origin.left, event.clientY - origin.top);
+      continueErasing(x, y);
+    }
+    return;
+  }
   if (stroke) {
     const origin = stroke.hit.div.getBoundingClientRect();
     const p = [e.clientX - origin.left, e.clientY - origin.top];
@@ -937,6 +1038,7 @@ container.addEventListener("pointerleave", () => { clearTimeout(tipTimer); tip.h
 
 function finishPointer(e) {
   if (endPan()) return;
+  if (erasing) { finishErasing(); return; }
   if (stroke) {
     const { canvas, hit, points } = stroke;
     stroke = null;
@@ -976,6 +1078,8 @@ document.addEventListener("contextmenu", (e) => {
   if (e.target.closest?.("input, textarea")) return;
   const hit = e.target.closest?.("#viewerContainer") ? pageAt(e) : null;
   const message = { type: "contextMenu", clientX: e.clientX, clientY: e.clientY, kind: "none" };
+  // While erasing, the menu picks the eraser's size.
+  if (hit && tool === "eraser") { post({ ...message, kind: "eraser" }); return; }
   if (hit) {
     const annotation = annotationAt(hit);
     const info = selectionInfo();
@@ -1052,10 +1156,27 @@ container.addEventListener("touchend", (e) => { if (e.touches.length < 2) touchG
 
 document.addEventListener("keydown", (e) => {
   const typing = e.target.closest?.("input, textarea");
+  // Esc in 编辑 PDF 文字 with no paragraph open leaves it.
+  if (e.key === "Escape" && editMode && !para && !overlayOpen) {
+    e.preventDefault();
+    post({ type: "leaveEditing" });
+    return;
+  }
+  if (e.key === "Escape" && overlayOpen && !e.isComposing) {
+    e.preventDefault();
+    post({ type: "escape" });
+    return;
+  }
   if (e.key === "Escape") {
     if (selected) select(null);
     else if (tool !== "select") post({ type: "toolReset" });
     else if (lastQuery && !typing) { /* the search stays until it is cleared in its box */ }
+    e.preventDefault();
+    return;
+  }
+  // [ and ] make the eraser smaller and larger, as in drawing apps.
+  if (!typing && tool === "eraser" && (e.key === "[" || e.key === "]") && !e.ctrlKey && !e.altKey) {
+    post({ type: "eraserStep", step: e.key === "[" ? -1 : 1 });
     e.preventDefault();
     return;
   }
@@ -1118,7 +1239,7 @@ async function buildThumbnails() {
     for (const entry of entries) {
       if (!entry.isIntersecting || entry.target.dataset.done) continue;
       entry.target.dataset.done = "1";
-      const page = await doc.getPage(+entry.target.dataset.page);
+      const page = await pageOf(doc, +entry.target.dataset.page);
       if (doc !== pdf) return;
       const scale = width / page.getViewport({ scale: 1 }).width;
       const viewport = page.getViewport({ scale });
@@ -1253,7 +1374,7 @@ async function refreshAnnotations() {
   const doc = pdf;
   for (let i = 1; i <= doc.numPages; i++) {
     if (i % 6 === 0) await new Promise((r) => setTimeout(r));
-    const page = await doc.getPage(i);
+    const page = await pageOf(doc, i);
     if (doc !== pdf) return;
     const annotations = (await page.getAnnotations()).filter((a) => editableTypes.has(a.subtype));
     if (doc !== pdf) return;
@@ -1262,7 +1383,7 @@ async function refreshAnnotations() {
     const list = annotations.map((a) => {
       const entry = {
         id: a.id, page: i, subtype: a.subtype, rect: Array.from(a.rect), quads: a.quadPoints ? Array.from(a.quadPoints) : null,
-        strokes: a.inkLists ? a.inkLists.map((l) => Array.from(l)) : null,
+        strokes: a.inkLists ? a.inkLists.map((l) => Array.from(l)) : null, width: a.borderStyle?.width || 1,
         colorRgb: a.color ? Array.from(a.color) : rgbOfKey("yellow"), colorKey: nearestColorKey(a.color),
         contents: a.contentsObj?.str ?? a.contents ?? "", quoted: quotedText(content, a), author: a.titleObj?.str ?? "", live: false,
       };
@@ -1479,7 +1600,7 @@ async function print() {
   document.body.classList.add("preparing-print");
   try {
     for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
+      const page = await pageOf(pdf, i);
       const viewport = page.getViewport({ scale: 150 / 72 });
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width; canvas.height = viewport.height;
@@ -1496,6 +1617,627 @@ async function print() {
     box.textContent = "";
   }
 }
+
+// MARK: 编辑 PDF 文字 (EDIT-01)
+//
+// The page's own text, edited where it stands (as on the Mac: PDFTextEditMode.swift). While on, the paragraph under the
+// pointer is outlined faintly; a click puts the caret there and typing changes the text in place: the app (Folio.Core's
+// PdfParagraph) sets again only the lines the change reaches, with the page's own glyphs, fonts and spacing, and answers
+// with them as a one-page PDF that is drawn here over the page. Nothing to open or confirm: a click elsewhere, Esc or
+// Enter keeps the change — the app writes it into the file as an update of that page alone, and only that page is drawn
+// again. Ctrl+Z undoes the typing while the paragraph is open, and the whole edit afterwards. The input method's text
+// is set inline, underlined.
+
+let editMode = false;
+const textBlocks = new Map(); // page → blocks
+const asked = new Set();
+/** The paragraph being edited: { page, block, id, state, sel: [start, end], anchor, marked, goalX, queue, … }. */
+let para = null;
+/** Paragraphs written and still drawn over their page until it is drawn again, by page. */
+const settling = new Map();
+/** Pages drawn again from the file after an edit (the rest of the document stays as it was loaded). */
+const swappedPages = new Map();
+const swappedDocs = [];
+const requests = new Map();
+let requestId = 0;
+
+function pageOf(doc, number) {
+  return doc === pdf && swappedPages.has(number) ? Promise.resolve(swappedPages.get(number)) : doc.getPage(number);
+}
+
+/** Asks the app (through the reader tab) and waits for its answer. */
+function request(op, args) {
+  const req = ++requestId;
+  return new Promise((resolve, reject) => {
+    requests.set(req, { resolve, reject });
+    post({ type: "paragraph", op, args, req });
+  });
+}
+
+function answered(m) {
+  const pending = requests.get(m.req);
+  requests.delete(m.req);
+  if (!pending) return;
+  if (m.error) pending.reject(new Error(m.error)); else pending.resolve(m.result);
+}
+
+function setEditMode(on) {
+  editMode = on;
+  document.body.classList.toggle("edit-mode", on);
+  if (!on) {
+    finishParagraph();
+    document.querySelectorAll(".folio-edit-layer").forEach((l) => l.remove());
+    return;
+  }
+  select(null);
+  clearSelection();
+  textBlocks.clear(); asked.clear();
+  askForVisibleBlocks();
+}
+
+function askForVisibleBlocks() {
+  if (!editMode || !pdf) return;
+  const first = Math.max(1, viewer.currentPageNumber - 1), last = Math.min(pdf.numPages, viewer.currentPageNumber + 2);
+  for (let page = first; page <= last; page++) {
+    if (textBlocks.has(page)) drawEditLayer(page);
+    else if (!asked.has(page)) { asked.add(page); post({ type: "needBlocks", page }); }
+  }
+}
+
+/** Page space → the page view (CSS pixels from its top left). */
+function toView(view, x, y) { return view.viewport.convertToViewportPoint(x, y); }
+
+function rectInView(view, r) {
+  const [x1, y1] = toView(view, r[0], r[1]);
+  const [x2, y2] = toView(view, r[2], r[3]);
+  return { left: Math.min(x1, x2), top: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) };
+}
+
+/** How many presses in a row (a double press selects a word, a triple one the paragraph): pointer events do not always
+ * say. */
+let lastPress = { t: 0, x: 0, y: 0, n: 0 };
+function pressCount(e) {
+  const now = performance.now();
+  const near = Math.abs(e.clientX - lastPress.x) < 5 && Math.abs(e.clientY - lastPress.y) < 5;
+  const n = now - lastPress.t < 500 && near ? lastPress.n + 1 : 1;
+  lastPress = { t: now, x: e.clientX, y: e.clientY, n };
+  return Math.max(n, e.detail || 0);
+}
+
+function pagePoint(view, e) {
+  const box = view.div.getBoundingClientRect();
+  return view.viewport.convertToPdfPoint(e.clientX - box.left, e.clientY - box.top);
+}
+
+function drawEditLayer(page) {
+  const view = viewer.getPageView(page - 1);
+  if (!view?.div || !view.viewport) return;
+  let layer = view.div.querySelector(".folio-edit-layer");
+  if (!editMode && !settling.has(page)) { layer?.remove(); return; }
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.className = "folio-edit-layer";
+    view.div.appendChild(layer);
+  }
+  layer.textContent = "";
+  if (editMode) {
+    const pad = Math.max(2, 2.5 * view.viewport.scale);
+    for (const block of textBlocks.get(page) ?? []) {
+      if (para && para.page === page && para.block === block.index) continue;
+      const r = rectInView(view, block.rect);
+      const box = document.createElement("div");
+      box.className = `edit-block${block.editable ? "" : " locked"}`;
+      box.style.cssText = `left:${r.left - pad}px;top:${r.top - pad * 0.6}px;width:${r.width + pad * 2}px;height:${r.height + pad * 1.2}px`;
+      box.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault(); e.stopPropagation();
+        if (!block.editable) { finishParagraph(); post({ type: "editRefused", reason: block.reason ?? "" }); return; }
+        openParagraph(page, block, e);
+      });
+      layer.appendChild(box);
+    }
+  }
+  const written = settling.get(page);
+  if (written) drawPreview(written, layer, view);
+  if (para?.page === page && para.id) drawParagraph(layer, view);
+}
+
+// Opening, editing, keeping
+
+async function openParagraph(page, block, e) {
+  const view = viewer.getPageView(page - 1);
+  const clicks = pressCount(e);
+  // A second press while it is being opened: where the caret goes once it is open.
+  if (para && !para.id && para.page === page && para.block === block.index) {
+    para.clicks = clicks;
+    para.point = pagePoint(view, e);
+    return;
+  }
+  if (para) await finishParagraph();
+  const opening = { page, block: block.index, clicks, point: pagePoint(view, e) };
+  para = opening;
+  let state;
+  try { state = await request("paragraphOpen", { page, block: block.index }); }
+  catch (error) { if (para === opening) para = null; post({ type: "editRefused", reason: error.message }); return; }
+  if (para !== opening) { if (state?.id) request("paragraphClose", { id: state.id }).catch(() => {}); return; }
+  if (!state || state.refused) { para = null; post({ type: "editRefused", reason: state?.refused ?? "" }); return; }
+  para = { page, block: block.index, id: state.id, state, sel: [0, 0], anchor: 0, marked: null, goalX: null, queue: Promise.resolve(), pending: 0 };
+  const caret = indexAt(para, opening.point) ?? state.count;
+  if (opening.clicks === 2) selectRange(wordAround(para, caret));
+  else if (opening.clicks >= 3) selectRange([0, state.count]);
+  else place(caret);
+  focusInput();
+  drawEditLayer(page);
+}
+
+/** The paragraph kept as it is now: written into the file when it changed, and drawn over the page until the page,
+ * read again, shows it. */
+async function finishParagraph() {
+  const p = para;
+  if (!p) return;
+  para = null;
+  if (document.activeElement === input) input.blur();
+  input.value = "";
+  if (!p.id) return;
+  await p.queue.catch(() => {});
+  if (!p.state?.modified) {
+    request("paragraphClose", { id: p.id }).catch(() => {});
+    drawEditLayer(p.page);
+    return;
+  }
+  settling.set(p.page, p);
+  drawEditLayer(p.page);
+  post({ type: "paragraphCommit", id: p.id, page: p.page });
+}
+
+/** Replaces start..end with text (the caret after it); kind groups typing (and deleting) into one undo step. */
+function edit(start, end, text, kind, record = true) {
+  const p = para;
+  if (!p?.id) return;
+  const typed = [...text].filter((c) => c !== "\n" && c !== "\r");
+  // At once here (the caret, the words to step over), and in the app, in order.
+  p.state.texts.splice(start, end - start, ...typed);
+  p.state.count = p.state.texts.length;
+  const caret = start + typed.length;
+  p.sel = [caret, caret];
+  p.anchor = caret;
+  p.goalX = null;
+  p.pending++;
+  p.queue = p.queue
+    .then(() => request("paragraphEdit", { id: p.id, start, end, text: typed.join(""), kind, record }))
+    .then((state) => { if (state) answer(p, state); })
+    .catch((error) => post({ type: "error", message: String(error?.message ?? error) }))
+    .finally(() => { p.pending--; });
+  drawEditLayer(p.page);
+}
+
+function answer(p, state) {
+  // Typing ahead of the app keeps what is typed here; the lines come with the answer to the last change.
+  if (p.pending > 1) { p.state = { ...state, texts: p.state.texts, count: p.state.count }; return; }
+  p.state = state;
+  renderPreview(p);
+  if (para === p || settling.get(p.page) === p) drawEditLayer(p.page);
+}
+
+async function undoTyping(redo) {
+  const p = para;
+  if (!p?.id) return;
+  await p.queue.catch(() => {});
+  if (!redo && !p.state.canUndo) {
+    // Nothing typed to take back: the paragraph is left, and the app's undo takes back the edits written before.
+    await finishParagraph();
+    post({ type: "key", key: "z", code: "KeyZ", ctrl: true, alt: false, shift: false });
+    return;
+  }
+  const state = await request("paragraphUndo", { id: p.id, redo });
+  if (!state || para !== p) return;
+  p.state = state;
+  place(Math.min(p.sel[0], state.count));
+  renderPreview(p);
+  drawEditLayer(p.page);
+}
+
+// The preview: the lines set again, drawn by pdf.js from the app's one-page PDF.
+
+async function renderPreview(p) {
+  if (p.rendering) { p.rerender = true; return; }
+  p.rendering = true;
+  try {
+    do {
+      p.rerender = false;
+      const state = p.state;
+      const view = viewer.getPageView(p.page - 1);
+      if (!state.preview || !view?.viewport) { p.picture = null; continue; }
+      const data = Uint8Array.from(atob(state.preview), (c) => c.charCodeAt(0));
+      const task = pdfjsLib.getDocument({ data, cMapUrl: "../pdfjs/cmaps/", cMapPacked: true, standardFontDataUrl: "../pdfjs/standard_fonts/", wasmUrl: "../pdfjs/wasm/", isEvalSupported: false });
+      try {
+        const doc = await task.promise;
+        const page = await doc.getPage(1);
+        const viewport = page.getViewport({ scale: view.viewport.scale, rotation: view.viewport.rotation });
+        const ratio = window.devicePixelRatio || 1;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width * ratio);
+        canvas.height = Math.ceil(viewport.height * ratio);
+        await page.render({ canvas, canvasContext: canvas.getContext("2d"), viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] }).promise;
+        if (p.state === state || !p.rerender) p.picture = { canvas, paint: state.paint, scale: view.viewport.scale, rotation: view.viewport.rotation };
+      } finally { task.destroy(); }
+    } while (p.rerender);
+  } catch (error) {
+    post({ type: "error", message: String(error?.message ?? error) });
+  } finally {
+    p.rendering = false;
+  }
+  if (para === p || settling.get(p.page) === p) drawEditLayer(p.page);
+}
+
+/** The lines as they are now over the page: the preview, where it paints (white where lines went). */
+function drawPreview(p, layer, view) {
+  const picture = p.picture;
+  if (!picture || !p.state.paint) return;
+  if (picture.scale !== view.viewport.scale || picture.rotation !== view.viewport.rotation) renderPreview(p);
+  const width = view.viewport.width, height = view.viewport.height;
+  const canvas = document.createElement("canvas");
+  const ratio = picture.canvas.width / (width * (picture.scale / view.viewport.scale));
+  canvas.width = picture.canvas.width;
+  canvas.height = picture.canvas.height;
+  canvas.className = "edit-preview";
+  canvas.style.cssText = `width:${width}px;height:${height}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.save();
+  ctx.beginPath();
+  for (const r of picture.paint) {
+    const v = rectInView(view, r);
+    ctx.rect(v.left * ratio, v.top * ratio, v.width * ratio, v.height * ratio);
+  }
+  ctx.clip();
+  ctx.drawImage(picture.canvas, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  layer.appendChild(canvas);
+}
+
+/** The paragraph being edited: its text (the preview), a quiet frame, the selection, the marked text and the caret. */
+function drawParagraph(layer, view) {
+  const p = para;
+  const state = p.state;
+  drawPreview(p, layer, view);
+  const scale = view.viewport.scale;
+  const pad = Math.max(2, 2.5 * scale);
+  const bounds = rectInView(view, state.bounds);
+  const frame = document.createElement("div");
+  frame.className = `edit-paragraph${state.overflows ? " overflows" : ""}`;
+  frame.style.cssText = `left:${bounds.left - pad}px;top:${bounds.top - pad * 0.6}px;width:${bounds.width + pad * 2}px;height:${bounds.height + pad * 1.2}px`;
+  frame.addEventListener("pointerdown", (e) => pressInParagraph(e, view));
+  layer.appendChild(frame);
+  const spans = (range, cls) => {
+    for (const line of state.lines) {
+      const first = line.s[0]?.[0], last = line.s.at(-1)?.[0];
+      if (first == null) continue;
+      const lower = Math.max(range[0], first), upper = Math.min(range[1], last);
+      if (lower >= upper) continue;
+      const x0 = (line.s.find((s) => s[0] >= lower) ?? line.s[0])[1];
+      const x1 = (line.s.find((s) => s[0] >= upper) ?? line.s.at(-1))[1];
+      const r = rectInView(view, [x0, line.d, x1, line.t]);
+      const box = document.createElement("div");
+      box.className = cls;
+      box.style.cssText = `left:${r.left}px;top:${r.top}px;width:${Math.max(r.width, 1)}px;height:${r.height}px`;
+      layer.appendChild(box);
+    }
+  };
+  if (p.sel[0] !== p.sel[1]) spans(p.sel, "edit-selection");
+  if (p.marked) spans(p.marked, "edit-marked");
+  const place = caretPlace(p, head(p));
+  if (place) {
+    const line = state.lines[place.line];
+    const r = rectInView(view, [place.x, line.d, place.x, line.t]);
+    if (p.sel[0] === p.sel[1]) {
+      const caret = document.createElement("div");
+      caret.className = "edit-caret";
+      caret.style.cssText = `left:${r.left - 0.75}px;top:${r.top}px;height:${r.height}px`;
+      layer.appendChild(caret);
+    }
+    // The input method's window opens at the caret.
+    const box = view.div.getBoundingClientRect();
+    input.style.left = `${box.left + r.left}px`;
+    input.style.top = `${box.top + r.top}px`;
+    input.style.height = `${r.height}px`;
+    input.style.fontSize = `${Math.max(8, r.height * 0.8)}px`;
+  }
+}
+
+// Caret and selection (atom indices; the lines come from the app in page space)
+
+function isStop(p, index) { return !p.state.noStops.includes(index); }
+function head(p) { return p.sel[0] === p.anchor ? p.sel[1] : p.sel[0]; }
+
+function indexAt(p, point) {
+  const [x, y] = point;
+  let best = null, bestDistance = Infinity;
+  for (const line of p.state.lines) {
+    const d = y > line.t ? y - line.t : y < line.d ? line.d - y : 0;
+    if (d < bestDistance) { bestDistance = d; best = line; }
+  }
+  return best ? nearestStop(p, best, x) : null;
+}
+
+function nearestStop(p, line, x) {
+  let best = null, bestDistance = Infinity;
+  for (const [index, sx] of line.s) {
+    if (!isStop(p, index)) continue;
+    const d = Math.abs(sx - x);
+    if (d < bestDistance) { bestDistance = d; best = index; }
+  }
+  return best;
+}
+
+/** The line showing caret position index and its x there (a position at a line break goes with the next line). */
+function caretPlace(p, index) {
+  const lines = p.state.lines;
+  let found = null;
+  for (let li = 0; li < lines.length; li++) {
+    const stop = lines[li].s.find((s) => s[0] === index);
+    if (!stop) continue;
+    found = { line: li, x: stop[1] };
+    if (lines[li].s.at(-1)[0] !== index || li === lines.length - 1) return found;
+  }
+  if (found) return found;
+  for (let li = 0; li < lines.length; li++) {
+    const stop = lines[li].s.find((s) => s[0] >= index);
+    if (stop) return { line: li, x: stop[1] };
+  }
+  const last = lines.at(-1);
+  return last?.s.length ? { line: lines.length - 1, x: last.s.at(-1)[1] } : null;
+}
+
+function place(index, keepGoal = false) {
+  const p = para;
+  index = Math.min(Math.max(index, 0), p.state.count);
+  p.sel = [index, index];
+  p.anchor = index;
+  if (!keepGoal) p.goalX = null;
+  drawEditLayer(p.page);
+}
+
+function selectRange([start, end]) {
+  const p = para;
+  p.sel = [Math.max(0, start), Math.min(end, p.state.count)];
+  p.anchor = p.sel[0];
+  p.goalX = null;
+  drawEditLayer(p.page);
+}
+
+function extendTo(index, keepGoal = false) {
+  const p = para;
+  index = Math.min(Math.max(index, 0), p.state.count);
+  p.sel = [Math.min(index, p.anchor), Math.max(index, p.anchor)];
+  if (!keepGoal) p.goalX = null;
+  drawEditLayer(p.page);
+}
+
+const isWordChar = (p, i) => {
+  const t = p.state.texts[i];
+  return t != null && t.length > 0 && (/[\p{L}\p{N}]/u.test(t) || [...t].length > 1);
+};
+
+function wordAround(p, index) {
+  let lower = index;
+  if (!isWordChar(p, index) && index > 0 && isWordChar(p, index - 1)) lower = index - 1;
+  if (!isWordChar(p, lower)) return [index, Math.min(index + 1, p.state.count)];
+  let upper = lower;
+  while (lower > 0 && isWordChar(p, lower - 1)) lower--;
+  while (upper < p.state.count && isWordChar(p, upper)) upper++;
+  return [lower, upper];
+}
+
+function wordStep(p, index, forward) {
+  let i = index;
+  if (forward) {
+    while (i < p.state.count && !isWordChar(p, i)) i++;
+    while (i < p.state.count && isWordChar(p, i)) i++;
+  } else {
+    while (i > 0 && !isWordChar(p, i - 1)) i--;
+    while (i > 0 && isWordChar(p, i - 1)) i--;
+  }
+  return i;
+}
+
+function charStep(p, index, forward) {
+  let i = index;
+  do { i += forward ? 1 : -1; } while (i > 0 && i < p.state.count && !isStop(p, i));
+  return Math.min(Math.max(i, 0), p.state.count);
+}
+
+function lineStep(p, index, step) {
+  const lines = p.state.lines;
+  const at = caretPlace(p, index);
+  if (!at) return index;
+  const goal = p.goalX ?? at.x;
+  p.goalX = goal;
+  const target = at.line + step;
+  if (target < 0) return 0;
+  if (target >= lines.length) return p.state.count;
+  return nearestStop(p, lines[target], goal) ?? index;
+}
+
+function lineEdge(p, index, end) {
+  const lines = p.state.lines;
+  const at = caretPlace(p, index);
+  if (!at) return index;
+  const stops = lines[at.line].s.filter((s) => isStop(p, s[0]));
+  const stop = end ? stops.at(-1) : stops[0];
+  if (!stop) return index;
+  // The end of a line that goes on: before the space it breaks at.
+  if (end && at.line < lines.length - 1 && stops.length > 1 && /^\s*$/.test(p.state.texts[stop[0] - 1] ?? "")) return stops.at(-2)[0];
+  return stop[0];
+}
+
+function pressInParagraph(e, view) {
+  if (e.button !== 0 || !para) return;
+  e.preventDefault(); e.stopPropagation();
+  const p = para;
+  const index = indexAt(p, pagePoint(view, e));
+  if (index == null) return;
+  const clicks = pressCount(e);
+  if (clicks === 2) selectRange(wordAround(p, index));
+  else if (clicks >= 3) selectRange([0, p.state.count]);
+  else if (e.shiftKey) extendTo(index);
+  else place(index);
+  focusInput();
+  const target = e.currentTarget;
+  target.setPointerCapture?.(e.pointerId);
+  const move = (m) => {
+    if (para !== p) return;
+    const i = indexAt(p, pagePoint(view, m));
+    if (i != null && i !== head(p)) extendTo(i);
+  };
+  const up = () => { target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", up); };
+  if (clicks === 1) { target.addEventListener("pointermove", move); target.addEventListener("pointerup", up); }
+}
+
+// Typing: a hidden text field takes the keys and the input method (its window opens at the caret).
+
+const input = document.createElement("textarea");
+input.className = "edit-input";
+input.setAttribute("autocomplete", "off");
+input.spellcheck = false;
+input.setAttribute("aria-label", "PDF text");
+document.body.appendChild(input);
+
+function focusInput() {
+  input.value = "";
+  input.focus({ preventScroll: true });
+}
+
+input.addEventListener("input", (e) => {
+  if (!para || e.isComposing || e.inputType === "insertCompositionText") return;
+  const text = input.value;
+  input.value = "";
+  if (text) edit(para.marked?.[0] ?? para.sel[0], para.marked?.[1] ?? para.sel[1], text, 0);
+  para && (para.marked = null);
+});
+input.addEventListener("compositionstart", () => { if (para) para.marked = null; });
+input.addEventListener("compositionupdate", (e) => compose(e.data ?? "", false));
+input.addEventListener("compositionend", (e) => { compose(e.data ?? "", true); input.value = ""; });
+
+function compose(text, done) {
+  const p = para;
+  if (!p?.id) return;
+  const [start, end] = p.marked ?? p.sel;
+  const first = !p.marked;
+  edit(start, end, text, 0, first);
+  const n = [...text].length;
+  p.marked = done || n === 0 ? null : [start, start + n];
+  drawEditLayer(p.page);
+}
+
+input.addEventListener("copy", (e) => {
+  if (!para || para.sel[0] === para.sel[1]) return;
+  e.clipboardData.setData("text/plain", para.state.texts.slice(para.sel[0], para.sel[1]).join(""));
+  e.preventDefault();
+});
+input.addEventListener("cut", (e) => {
+  if (!para || para.sel[0] === para.sel[1]) return;
+  e.clipboardData.setData("text/plain", para.state.texts.slice(para.sel[0], para.sel[1]).join(""));
+  e.preventDefault();
+  edit(para.sel[0], para.sel[1], "", 4);
+});
+input.addEventListener("paste", (e) => {
+  if (!para) return;
+  e.preventDefault();
+  // One paragraph: line breaks become spaces.
+  const text = (e.clipboardData.getData("text/plain") ?? "").replace(/\s*[\r\n]+\s*/g, " ");
+  if (text) edit(para.sel[0], para.sel[1], text, 5);
+});
+
+input.addEventListener("keydown", (e) => {
+  const p = para;
+  if (!p || e.isComposing || e.keyCode === 229) return;
+  const key = e.key, shift = e.shiftKey, ctrl = e.ctrlKey;
+  const h = head(p);
+  const collapsed = p.sel[0] === p.sel[1];
+  const move = (index, keepGoal = false) => (shift ? extendTo(index, keepGoal) : place(index, keepGoal));
+  let handled = true;
+  if (key === "Escape" || (key === "Enter" && !shift)) finishParagraph();
+  else if (key === "ArrowLeft") move(!shift && !collapsed ? p.sel[0] : ctrl ? wordStep(p, h, false) : charStep(p, h, false));
+  else if (key === "ArrowRight") move(!shift && !collapsed ? p.sel[1] : ctrl ? wordStep(p, h, true) : charStep(p, h, true));
+  else if (key === "ArrowUp") move(lineStep(p, h, -1), true);
+  else if (key === "ArrowDown") move(lineStep(p, h, 1), true);
+  else if (key === "Home") move(ctrl ? 0 : lineEdge(p, h, false));
+  else if (key === "End") move(ctrl ? p.state.count : lineEdge(p, h, true));
+  else if (key === "Backspace") {
+    if (!collapsed) edit(p.sel[0], p.sel[1], "", 1);
+    else if (h > 0) edit(ctrl ? wordStep(p, h, false) : charStep(p, h, false), h, "", 1);
+  } else if (key === "Delete") {
+    if (!collapsed) edit(p.sel[0], p.sel[1], "", 2);
+    else if (h < p.state.count) edit(h, ctrl ? wordStep(p, h, true) : charStep(p, h, true), "", 2);
+  } else if (ctrl && !e.altKey && key.toLowerCase() === "a") selectRange([0, p.state.count]);
+  else if (ctrl && !e.altKey && key.toLowerCase() === "z") undoTyping(shift);
+  else if (ctrl && !e.altKey && key.toLowerCase() === "y") undoTyping(true);
+  else if (ctrl && !e.altKey && ["c", "x", "v"].includes(key.toLowerCase())) { e.stopPropagation(); return; } // the copy, cut and paste events
+  else if (key === "Tab") edit(p.sel[0], p.sel[1], " ", 0);
+  else handled = false;
+  if (handled) { e.preventDefault(); e.stopPropagation(); }
+  else if (!ctrl && !e.altKey) e.stopPropagation(); // letters go to the input event
+});
+
+// After the edit is written: only its page is read again from the file and drawn again, the picture on screen kept up
+// until the new one is there.
+async function swapPage(number, url) {
+  const view = viewer.getPageView(number - 1);
+  let doc;
+  try {
+    doc = await pdfjsLib.getDocument({ url, cMapUrl: "../pdfjs/cmaps/", cMapPacked: true, standardFontDataUrl: "../pdfjs/standard_fonts/", wasmUrl: "../pdfjs/wasm/", enableXfa: false, isEvalSupported: false }).promise;
+  } catch { settled(number); return reload(url); }
+  if (!view || doc.numPages !== pdf?.numPages) { settled(number); return reload(url); }
+  const page = await doc.getPage(number);
+  swappedDocs.push(doc);
+  swappedPages.set(number, page);
+  // The page as it shows now (with the edit drawn over it), until the new drawing is there.
+  let frozen = null;
+  const source = view.div.querySelector(".canvasWrapper canvas");
+  if (source?.width) {
+    frozen = document.createElement("canvas");
+    frozen.width = source.width; frozen.height = source.height;
+    frozen.className = "edit-frozen";
+    const ctx = frozen.getContext("2d");
+    ctx.drawImage(source, 0, 0);
+    const preview = view.div.querySelector(".folio-edit-layer .edit-preview");
+    if (preview) ctx.drawImage(preview, 0, 0, frozen.width, frozen.height);
+  }
+  const done = new Promise((resolve) => {
+    const finish = ({ pageNumber }) => { if (pageNumber === number) { eventBus.off("pagerendered", finish); resolve(); } };
+    eventBus.on("pagerendered", finish);
+    setTimeout(resolve, 2500);
+  });
+  view.setPdfPage(page);
+  if (frozen) view.div.appendChild(frozen);
+  viewer.update();
+  await done;
+  // A moment for the drawing to be on screen.
+  requestAnimationFrame(() => frozen?.remove());
+  settled(number);
+  repaintThumbnail(number);
+  refreshAnnotations?.();
+}
+
+/** The written paragraph is no longer drawn over its page; the page's paragraphs are read again. */
+function settled(number) {
+  settling.delete(number);
+  textBlocks.delete(number);
+  asked.delete(number);
+  if (editMode) askForVisibleBlocks();
+  drawEditLayer(number);
+}
+
+// A press on the page outside the paragraph being edited keeps it.
+container.addEventListener("pointerdown", (e) => {
+  if (para && !e.target.closest?.(".edit-paragraph") && !e.target.closest?.(".edit-block")) finishParagraph();
+}, true);
+eventBus.on("pagerendered", ({ pageNumber }) => { if ((editMode && textBlocks.has(pageNumber)) || settling.has(pageNumber)) drawEditLayer(pageNumber); });
+eventBus.on("pagechanging", () => askForVisibleBlocks());
+container.addEventListener("scroll", () => {
+  if (editMode) askForVisibleBlocks();
+  if (para?.id) drawEditLayer(para.page);
+}, { passive: true });
 
 // MARK: Commands from the app
 
@@ -1577,6 +2319,8 @@ host.addEventListener("message", async (e) => {
     case "tool": {
       const changed = m.tool !== tool;
       tool = m.tool; color = m.color ?? color;
+      if (m.eraserSize) eraserSize = m.eraserSize;
+      if (tool === "eraser") updateEraserCursor();
       document.body.className = document.body.className.replace(/\btool-\S+/g, "").trim() + ` tool-${tool}`;
       if (tool !== "select") select(null);
       // Choosing a markup tool with text already selected marks that text right away, as in the macOS reader.
@@ -1634,6 +2378,12 @@ host.addEventListener("message", async (e) => {
     case "selectAnnotation": select(null); break;
     case "flushPosition": if (pdf) post({ type: "position", ...currentPosition() }); break;
     case "clearSelection": clearSelection(); break;
+    case "overlay": overlayOpen = !!m.open; break;
+    case "editMode": setEditMode(!!m.on); break;
+    case "textBlocks": textBlocks.set(m.page, m.blocks ?? []); drawEditLayer(m.page); break;
+    case "paragraphResult": answered(m); break;
+    case "pageChanged": await swapPage(m.page, m.url); break;
+    case "paragraphSettled": settled(m.page); break;
     case "print": await print(); break;
   }
 });

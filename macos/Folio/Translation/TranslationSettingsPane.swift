@@ -225,7 +225,9 @@ struct ServiceSection: View {
         let current = model.settings.translationService
         return [(String(localized: "我的服务"), mine),
                 (String(localized: "免费"), all.filter { $0.category == .free }),
-                (String(localized: "本机"), all.filter { $0.category == .local || ($0.category == .agent && $0.id == current) }),
+                // CodeBuddy too when WorkBuddy is here: its row offers to install the command line.
+                (String(localized: "本机"), all.filter { $0.category == .local || ($0.category == .agent && $0.id == current)
+                    || ($0.id == LocalAgent.codebuddy.serviceID && LocalAgent.workBuddyApp() != nil) }),
                 (String(localized: "大模型 API"), all.filter { $0.category == .llm }),
                 (String(localized: "机器翻译 API"), all.filter { $0.category == .machine })].filter { !$0.services.isEmpty }
     }
@@ -264,6 +266,12 @@ private struct ServiceStatusRow: View {
     @State private var outcome: TranslationServiceTest.Outcome?
     @State private var location: URL??
     @State private var version: String?
+    @State private var installing = false
+    @State private var installError: String?
+    /// Looked for again after installing.
+    @State private var search = 0
+    /// CodeBuddy: whether its command line is signed in (looked at again when the window comes back to the front).
+    @State private var signedIn: Bool?
 
     private var agent: LocalAgent? {
         if case .agent(let agent) = service.backend { return agent }
@@ -272,21 +280,32 @@ private struct ServiceStatusRow: View {
 
     var body: some View {
         LabeledContent {
-            if canTest {
-                Button(testing ? String(localized: "测试中…") : String(localized: "测试")) { test() }
-                    .disabled(testing || (agent != nil && location == .some(nil)))
-                    .accessibilityIdentifier("translationServiceTest")
+            HStack {
+                if agent == .codebuddy, case .some(.some) = location, signedIn == false {
+                    // Signed in in WorkBuddy is not signed in here: one sign-in in Terminal, with the same account.
+                    Button(String(localized: "在终端登录")) { Self.openTerminal("codebuddy") }
+                        .help(String(localized: "在终端打开 codebuddy，选择中国站并用 WorkBuddy 的腾讯账号登录"))
+                }
+                if canTest {
+                    Button(testing ? String(localized: "测试中…") : String(localized: "测试")) { test() }
+                        .disabled(testing || (agent != nil && location == .some(nil)))
+                        .accessibilityIdentifier("translationServiceTest")
+                }
             }
         } label: {
             status
         }
-        .task(id: pathValue) {
+        .task(id: "\(pathValue)#\(search)") {
             guard let agent else { return }
             let path = pathValue
             version = nil
             let found = await Task.detached { agent.locate(customPath: path) }.value
+            if agent == .codebuddy { signedIn = CodeBuddyAccount.isSignedIn }
             location = .some(found)
             if let found { version = await Task.detached { agent.version(at: found) }.value }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if agent == .codebuddy { signedIn = CodeBuddyAccount.isSignedIn }
         }
     }
 
@@ -308,6 +327,13 @@ private struct ServiceStatusRow: View {
             }
         } else if agent != nil {
             switch location {
+            case .some(.some) where agent == .codebuddy && signedIn == false:
+                // Installed, not signed in yet: one sign-in in Terminal, with WorkBuddy's account.
+                Label {
+                    Text("已找到 CodeBuddy 命令行，但还没有登录：点“在终端登录”，用 WorkBuddy 的腾讯账号登录一次")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                }
             case .some(.some(let url)):
                 Label {
                     Text(found(url))
@@ -315,6 +341,23 @@ private struct ServiceStatusRow: View {
                     Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 }
                 .foregroundStyle(.secondary)
+            case .some(.none) where agent == .codebuddy && LocalAgent.workBuddyApp() != nil:
+                // WorkBuddy is here, its command line is not: offered to be installed.
+                VStack(alignment: .leading, spacing: 6) {
+                    Label {
+                        Text("检测到 WorkBuddy 桌面版，但它的登录只能在应用内使用。安装 CodeBuddy 命令行后，用同一个腾讯账号登录一次即可用于翻译。")
+                    } icon: {
+                        Image(systemName: "info.circle.fill").foregroundStyle(.blue)
+                    }
+                    HStack {
+                        Button(installing ? String(localized: "正在安装…") : String(localized: "安装 CodeBuddy 命令行")) { install() }
+                            .disabled(installing)
+                        if installing { ProgressView().controlSize(.small) }
+                    }
+                    if let installError {
+                        Text(installError).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                    }
+                }
             case .some(.none):
                 Label {
                     Text("没有在这台 Mac 上找到 \(agent?.command ?? "")，请先安装并登录")
@@ -327,6 +370,32 @@ private struct ServiceStatusRow: View {
         } else {
             Text("测试服务是否可用").foregroundStyle(.secondary)
         }
+    }
+
+    /// npm installs it; then a sign-in in Terminal.
+    private func install() {
+        installing = true
+        installError = nil
+        Task {
+            do {
+                _ = try await LocalAgent.installCodeBuddy()
+                installing = false
+                search += 1
+                if !CodeBuddyAccount.isSignedIn { Self.openTerminal("codebuddy") }
+            } catch {
+                installing = false
+                installError = String(localized: "安装没有完成：\(String(describing: error).prefix(300))。也可以在终端运行 npm install -g @tencent-ai/codebuddy-code")
+            }
+        }
+    }
+
+    /// Terminal, running `command` in the login shell (to sign in): a .command file opens there, no automation asked for.
+    static func openTerminal(_ command: String) {
+        let url = FileManager.default.temporaryDirectory.appending(path: "Folio-\(command)-login.command")
+        let script = "#!/bin/zsh -l\nclear\necho 'Folio：在下面选择中国站，用 WorkBuddy 的腾讯账号登录；登录完成后可关闭这个窗口。'\n\(command)\n"
+        try? script.write(to: url, atomically: true, encoding: .utf8)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        NSWorkspace.shared.open(url)
     }
 
     private func found(_ url: URL) -> String {
@@ -430,16 +499,13 @@ private struct OptionsSection: View {
             Section("选项") {
                 languageRows
                 outputRows
-                tablesToggle
             }
+            Section("翻译内容") { contentToggles }
         } else {
             Section("语言") { languageRows }
             Section("输出") { outputRows }
             Section("翻译内容") {
-                tablesToggle
-                Toggle(isOn: $settings.translationOptions.translateReferences) {
-                    Text("翻译参考文献")
-                }
+                contentToggles
                 LabeledContent {
                     HStack {
                         Text(settings.translationOptions.glossaryFile?.lastPathComponent ?? String(localized: "未选择"))
@@ -514,9 +580,17 @@ private struct OptionsSection: View {
                   prompt: Text("全部，例如 1-3,5"))
     }
 
-    private var tablesToggle: some View {
+    @ViewBuilder
+    private var contentToggles: some View {
         Toggle(isOn: $settings.translationOptions.translateTables) {
             Text("翻译表格")
+        }
+        Toggle(isOn: $settings.translationOptions.translateImageText) {
+            Text("翻译图片中的文字")
+            Text("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")
+        }
+        Toggle(isOn: $settings.translationOptions.translateReferences) {
+            Text("翻译参考文献")
         }
     }
 
@@ -800,20 +874,18 @@ struct ReasoningPicker: View {
                 Text("思考程度")
                 Text("由所选模型决定")
             }
-        case let .choices(choices, _):
-            if choices.count > 5 {
-                Picker(selection: selection) {
-                    ForEach(choices) { Text($0.title).tag($0.value) }
-                } label: {
-                    Text("思考程度")
+        case let .choices(choices, recommended):
+            // The level Folio uses until one is chosen is marked: translating needs little thinking, and less is faster.
+            let usual = choices.first { $0.value == recommended }?.title
+            Picker(selection: selection) {
+                ForEach(choices) { choice in
+                    Text(choice.value == recommended && !choice.value.isEmpty ? String(localized: "\(choice.title)（推荐）") : choice.title).tag(choice.value)
                 }
-            } else {
-                Picker(selection: selection) {
-                    ForEach(choices) { Text($0.title).tag($0.value) }
-                } label: {
-                    Text("思考程度")
+            } label: {
+                Text("思考程度")
+                if let usual, !recommended.isEmpty {
+                    Text("推荐“\(usual)”：翻译不需要深度思考，越低越快")
                 }
-                .pickerStyle(.segmented)
             }
         }
     }

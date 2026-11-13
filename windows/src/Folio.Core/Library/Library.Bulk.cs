@@ -27,7 +27,18 @@ public sealed partial class Library
     Dictionary<string, string> ImportGroups(List<PreparedGroup> groups, BulkImportSummary summary)
     {
         var ids = new Dictionary<string, string>();
-        var ordered = groups.Where(g => g.ParentKey == null).OrderBy(g => g.Position).Concat(groups.Where(g => g.ParentKey != null).OrderBy(g => g.Position));
+        // Parents before children: by level, then position. Groups deeper than the limit are skipped.
+        var byKey = new Dictionary<string, PreparedGroup>();
+        foreach (var g in groups) byKey.TryAdd(g.Key, g);
+        int Level(PreparedGroup group)
+        {
+            int level = 1;
+            var seen = new HashSet<string> { group.Key };
+            for (var key = group.ParentKey; key != null && seen.Add(key); key = byKey.GetValueOrDefault(key)?.ParentKey) level++;
+            return level;
+        }
+        var ordered = groups.Select(g => (Group: g, Level: Level(g))).Where(x => x.Level <= LibraryGroup.MaximumDepth)
+            .OrderBy(x => x.Level).ThenBy(x => x.Group.Position).Select(x => x.Group).ToList();
         Database.Write((c, tx) =>
         {
             foreach (var group in ordered)

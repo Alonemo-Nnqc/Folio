@@ -14,6 +14,7 @@ public abstract class SingleTextProvider : ITranslationProvider
 {
     public abstract ProviderLimits Limits { get; }
     public abstract Task<string> TranslateOne(string text, TranslationContext context, CancellationToken cancel);
+    public virtual Task Prewarm() => Task.CompletedTask;
 
     public virtual Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel) =>
         TranslateEach(items, context, cancel);
@@ -115,6 +116,8 @@ public sealed class GoogleWebProvider : SingleTextProvider
 {
     public override ProviderLimits Limits { get; } = new(4500, 25, 4, false, 1.5, 0.001);
 
+    public override Task Prewarm() => Http.Warm("https://translate.googleapis.com/");
+
     string Query(TranslationContext context) =>
         $"client=gtx&sl={LanguageCodes.Google(context.SourceLanguage)}&tl={LanguageCodes.Google(context.TargetLanguage)}&dt=t";
 
@@ -158,10 +161,20 @@ public sealed class BingWebProvider : SingleTextProvider
 {
     public override ProviderLimits Limits { get; } = new(950, 20, 8, false, 1.8, 0.0035);
 
-    sealed record Session(string Ig, string Iid, string Key, string Token, string Host);
-    static Session? _session;
-    static DateTime _expiry = DateTime.MinValue;
-    static readonly object Lock = new();
+    sealed record Session(string Ig, string Iid, string Key, string Token, string Host, double Lifetime);
+    /// <summary>The translator page's session: fetched once (it is a 300 KB page, the slow part of a first translation),
+    /// renewed in the background a minute before it runs out.</summary>
+    static readonly TokenStore<Session> Sessions = new(async cancel => { var s = await FetchSession(cancel); return (s, s.Lifetime); });
+
+    /// <summary>The session fetched ahead (which opens the connection to Bing too); with one at hand, just the connection.</summary>
+    public override async Task Prewarm()
+    {
+        if (Sessions.Cached != null) await Http.Warm("https://www.bing.com/translator");
+        else
+        {
+            try { await Sessions.Get(CancellationToken.None); Http.ShouldWarm("www.bing.com"); } catch { }
+        }
+    }
     const string Agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0";
 
     /// <summary>Several short texts in one request, a line each; if the lines do not come back one for one, each goes alone.</summary>
@@ -182,18 +195,16 @@ public sealed class BingWebProvider : SingleTextProvider
         var helper = Regex.Match(page, @"params_AbusePreventionHelper\s*=\s*\[\s*(\d+)\s*,\s*""([^""]+)""");
         if (!ig.Success || !helper.Success) throw new ProviderError(ProviderError.Kinds.InvalidResponse, "Bing translator page changed", "www.bing.com");
         var iid = Regex.Match(page, @"data-iid=""(translator\.\d+)""");
-        return new Session(ig.Groups[1].Value, iid.Success ? iid.Groups[1].Value : "translator.5028", helper.Groups[1].Value, helper.Groups[2].Value, "www.bing.com");
+        // [key, token, lifetime in milliseconds]: what the page says (an hour), less a margin.
+        var lifetime = 20 * 60.0;
+        var life = Regex.Match(page, @"params_AbusePreventionHelper\s*=\s*\[\s*\d+\s*,\s*""[^""]+""\s*,\s*(\d+)");
+        if (life.Success && double.TryParse(life.Groups[1].Value, out var ms) && ms > 120_000) lifetime = Math.Min(ms / 1000, 3600) - 60;
+        return new Session(ig.Groups[1].Value, iid.Success ? iid.Groups[1].Value : "translator.5028", helper.Groups[1].Value, helper.Groups[2].Value, "www.bing.com", lifetime);
     }
 
     public override async Task<string> TranslateOne(string text, TranslationContext context, CancellationToken cancel)
     {
-        Session? session;
-        lock (Lock) session = DateTime.UtcNow < _expiry ? _session : null;
-        if (session == null)
-        {
-            session = await FetchSession(cancel);
-            lock (Lock) { _session = session; _expiry = DateTime.UtcNow.AddMinutes(20); }
-        }
+        var session = await Sessions.Get(cancel);
         var form = new Dictionary<string, string>
         {
             ["fromLang"] = LanguageCodes.Microsoft(context.SourceLanguage), ["to"] = LanguageCodes.Microsoft(context.TargetLanguage),
@@ -213,7 +224,7 @@ public sealed class BingWebProvider : SingleTextProvider
         }
         catch (JsonException) { }
         // An expired token answers with an error object: fetch a new one next time.
-        lock (Lock) _session = null;
+        Sessions.Invalidate();
         throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply from Bing: " + Http.Prefix(data, 200));
     }
 }
@@ -222,6 +233,7 @@ public sealed class BingWebProvider : SingleTextProvider
 public sealed class MicrosoftTranslatorProvider(string key, string? region, string endpoint) : ITranslationProvider
 {
     public ProviderLimits Limits { get; } = new(9000, 50, 4, false);
+    public Task Prewarm() => Http.Warm(string.IsNullOrEmpty(endpoint) ? "https://api.cognitive.microsofttranslator.com/" : endpoint);
 
     public async Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel)
     {
@@ -255,6 +267,7 @@ public sealed class MicrosoftTranslatorProvider(string key, string? region, stri
 public sealed class DeepLProvider(string key) : ITranslationProvider
 {
     public ProviderLimits Limits { get; } = new(25000, 50, 3, false);
+    public Task Prewarm() => Http.Warm(key.EndsWith(":fx") ? "https://api-free.deepl.com/" : "https://api.deepl.com/");
 
     public async Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel)
     {
@@ -285,6 +298,7 @@ public sealed class DeepLProvider(string key) : ITranslationProvider
 public sealed class TencentProvider(string secretId, string secretKey, string region) : ITranslationProvider
 {
     public ProviderLimits Limits { get; } = new(5000, 20, 3, false);
+    public Task Prewarm() => Http.Warm("https://tmt.tencentcloudapi.com/");
 
     public async Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel)
     {

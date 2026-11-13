@@ -18,6 +18,8 @@ import Foundation
 ///   -FolioTranslateSelfTest <log>               with Select: translate page 1 via the real coordinator
 ///   -FolioPreviewParallel YES                   with OpenReader: turn on 对照阅读
 ///   -FolioReaderSelfTest <log>                  with OpenReader: scripted annotation/save/position checks
+///   -FolioFeatureSelfTest <log>                 with FeatureSample <pdf>, in an empty library: 1.3's eraser, text
+///                                               editing, OCR on import and 划词 cache
 ///   -FolioPreviewExpandGroups YES               expands every group in the sidebar
 ///   -FolioPreviewCollapseSidebar YES            hides the sidebar
 ///   -FolioPreviewOnboarding <step>              opens the first-run guide on that step (welcome … done)
@@ -132,6 +134,9 @@ enum PreviewHooks {
                     }
                 }
             }
+        }
+        if let log = defaults.string(forKey: "FolioFeatureSelfTest"), let sample = defaults.string(forKey: "FolioFeatureSample") {
+            FeatureSelfTest.run(model: model, log: log, sample: URL(fileURLWithPath: sample))
         }
         if let appearance = defaults.string(forKey: "FolioPreviewAppearance") {
             NSApp.appearance = NSAppearance(named: appearance == "light" ? .aqua : .darkAqua)

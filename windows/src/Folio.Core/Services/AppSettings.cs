@@ -136,6 +136,12 @@ public sealed class AppSettings
     public int MetadataEngineRevision { get => Get("metadataEngineRevision", 0); set => Set("metadataEngineRevision", value); }
     public bool OnboardingDone { get => Get("onboardingDone", false); set => Set("onboardingDone", value); }
     public List<string> OpenReaderTabs { get => Get<List<string>>("openReaderTabs", []); set => Set("openReaderTabs", value); }
+    /// <summary>The reader's eraser size (READER-30): small, medium or large (InkEraser.Diameters).</summary>
+    /// <summary>设置 ▸ 检索 ▸ 期刊指标: look up the ranks of new and changed items' journals by itself (META-30).</summary>
+    public bool JournalMetricsAutoFetch { get => Get("journalMetricsAutoFetch", true); set => Set("journalMetricsAutoFetch", value); }
+    public string ReaderEraserSize { get => Get("readerEraserSize", "medium"); set => Set("readerEraserSize", value); }
+    /// <summary>Sidebar groups the user collapsed, at any level (SIDE-05/17).</summary>
+    public List<string> SidebarCollapsedGroups { get => Get<List<string>>("sidebarCollapsedGroups", []); set => Set("sidebarCollapsedGroups", value); }
     public Dictionary<string, double> ColumnWidths { get => Get<Dictionary<string, double>>("columnWidths", []); set => Set("columnWidths", value); }
     public List<string> VisibleColumns { get => Get<List<string>>("visibleColumns", ["title", "source", "authors", "year", "tags", "dateAdded"]); set => Set("visibleColumns", value); }
     public double SidebarWidth { get => Get("sidebarWidth", 240.0); set => Set("sidebarWidth", value); }

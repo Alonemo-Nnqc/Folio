@@ -9,9 +9,12 @@ public struct SecretStore: Sendable {
     public static let defaultService = "com.nnqc.Folio.translation"
 
     public let service: String
+    /// What Keychain Access shows for new items; nil: "Folio 翻译：<account>".
+    public let label: String?
 
-    public init(service: String = SecretStore.defaultService) {
+    public init(service: String = SecretStore.defaultService, label: String? = nil) {
         self.service = service
+        self.label = label
     }
 
     public struct KeychainError: Error, LocalizedError, Sendable, Equatable {
@@ -62,7 +65,7 @@ public struct SecretStore: Sendable {
         if status == errSecItemNotFound {
             var add = query(account)
             add[kSecValueData as String] = data
-            add[kSecAttrLabel as String] = String(localized: "Folio 翻译：\(account)", bundle: .module)
+            add[kSecAttrLabel as String] = label ?? String(localized: "Folio 翻译：\(account)", bundle: .module)
             add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
             status = SecItemAdd(add as CFDictionary, nil)
         }
