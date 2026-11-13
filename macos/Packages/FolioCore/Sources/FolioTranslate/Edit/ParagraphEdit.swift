@@ -332,8 +332,8 @@ public final class PDFParagraph: @unchecked Sendable {
     /// An original atom's place on the page: its left edge, width and line.
     private func geometry(of atom: Atom) -> (x: Double, width: Double)? {
         switch atom.kind {
-        case .char(let c), .space(let c), .softHyphen(let c): return (chars[c].rect.minX, chars[c].rect.width)
-        case .formula(let p): return (formulas[p].rect.minX, formulas[p].rect.width)
+        case .char(let c), .space(let c), .softHyphen(let c): return (Double(chars[c].rect.minX), Double(chars[c].rect.width))
+        case .formula(let p): return (Double(formulas[p].rect.minX), Double(formulas[p].rect.width))
         case .lineEnd:
             let li = atom.line
             return (lines[li].maxX, 0)
