@@ -240,7 +240,7 @@ function Browser() {
       <Card><Row title={t("允许浏览器插件保存到 Folio")}><Switch on={s.browserConnectorEnabled} onChange={(v) => setSetting("browserConnectorEnabled", v)} /></Row></Card>
       {data && <Note>{data.connector.message}</Note>}
       <Header>{t("安装浏览器插件")}</Header>
-      <Note>{t("点击“安装”会打开浏览器的扩展页面，并在资源管理器中选中 Folio 插件文件夹。在扩展页面打开“开发者模式”，把这个文件夹直接拖进扩展页面即可；也可以点“加载已解压的扩展程序”选择它。")}</Note>
+      <Note>{t("点击“安装”会打开浏览器、拷贝扩展页面的地址，并在资源管理器中选中 Folio 插件文件夹。浏览器没有跳到扩展页面时，把地址粘贴到地址栏回车；在扩展页面打开“开发者模式”，把文件夹直接拖进去即可，也可以点“加载已解压的扩展程序”选择它。")}</Note>
       <div style={{ height: 10 }} />
       {data?.browsers.length === 0 && <Note>{t("没有找到支持的浏览器")}</Note>}
       {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}>

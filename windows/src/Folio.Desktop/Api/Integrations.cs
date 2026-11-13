@@ -72,11 +72,13 @@ public static partial class Api
             try
             {
                 var folder = BrowserExtensions.PrepareCopy(browser.Family);
-                Shell.CopyText(folder);
+                // Recent Chromium browsers (Edge 157, for one) open a new tab instead of an internal page passed on the
+                // command line, so the page's address is copied for the address bar.
+                Shell.CopyText(browser.ExtensionsPage);
                 BrowserExtensions.OpenExtensionsPage(browser);
                 // The folder selected in Explorer: dragged onto the extensions page (developer mode on), it is installed.
                 Shell.Reveal(folder);
-                M.Toasts.Show(Loc.S("已在资源管理器中选中 Folio 插件文件夹：打开扩展页面的“开发者模式”后，把它拖进扩展页面即可"), "copy");
+                M.Toasts.Show(Loc.S("已拷贝扩展页面的地址 %@，并在资源管理器中选中了 Folio 插件文件夹：浏览器没有打开扩展页面时，把地址粘贴到地址栏回车；打开“开发者模式”后，把文件夹拖进扩展页面即可", browser.ExtensionsPage), "copy");
             }
             catch (Exception e) { M.Toasts.Show(e.Message, "warning"); }
             return null;
