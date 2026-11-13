@@ -23,6 +23,8 @@ final class TitleCell: NSTableCellView {
     let spinner = NSProgressIndicator()
     let label = NSTextField(labelWithString: "")
     let badge = CapsuleBadge()
+    /// "已翻译" after the title of a paper that has a translation (issue #15).
+    let translatedBadge = CapsuleBadge()
     private let badges = NSStackView()
     /// Translation progress of the item (TRANS-04), at the right edge of the cell.
     let progress = TranslationBar()
@@ -56,6 +58,12 @@ final class TitleCell: NSTableCellView {
         badges.spacing = 4
         badges.detachesHiddenViews = true
         badges.addArrangedSubview(badge)
+        translatedBadge.configure(String(localized: "已翻译"), tint: .systemGreen)
+        translatedBadge.setContentHuggingPriority(.required, for: .horizontal)
+        translatedBadge.setContentCompressionResistancePriority(.required, for: .horizontal)
+        translatedBadge.setAccessibilityIdentifier("translatedBadge")
+        translatedBadge.isHidden = true
+        badges.addArrangedSubview(translatedBadge)
 
         progress.isHidden = true
         progress.setAccessibilityIdentifier("translationProgressBar")
@@ -124,9 +132,10 @@ final class TitleCell: NSTableCellView {
     }
 
     /// `origin` is the title of the item a trashed file was deleted from (TRASH-03); `translation` is the
-    /// stage and progress of a running translation (TRANS-04), shown as text and a progress bar.
+    /// stage and progress of a running translation (TRANS-04), shown as text and a progress bar; `translations`
+    /// names the translated files the paper already has (双语对照 · Google …), shown as an "已翻译" badge.
     func configureItem(_ item: Item, fileURL: URL?, origin: String? = nil, hasNote: Bool = false,
-                       translation: (stage: String, fraction: Double?)? = nil) {
+                       translation: (stage: String, fraction: Double?)? = nil, translations: [String] = []) {
         progress.isHidden = translation == nil
         stageLabel.isHidden = translation == nil
         progressLabel.isHidden = translation == nil
@@ -161,7 +170,12 @@ final class TitleCell: NSTableCellView {
             }
         }
         badge.isHidden = true
+        // While a translation runs its bar takes the room; the badge comes back when it is done.
+        let translated = !translations.isEmpty && translation == nil && !retrieving
+        translatedBadge.isHidden = !translated
+        translatedBadge.toolTip = translated ? String(localized: "已翻译：\(translations.joined(separator: "、"))") : nil
         setAccessibilityLabel(item.title + (hasNote ? String(localized: "（有笔记）") : "")
+                              + (translated ? String(localized: "（已翻译）") : "")
                               + (translation.map { job in
                                   let percent = job.fraction.map { " \(Int($0 * 100))%" } ?? ""
                                   return String(localized: "（\(job.stage)\(percent)）")
@@ -184,6 +198,7 @@ final class TitleCell: NSTableCellView {
         toolTip = file.fileName
         badge.configure(String(localized: "默认"), tint: .controlAccentColor)
         badge.isHidden = !isDefault
+        translatedBadge.isHidden = true
         badge.setAccessibilityIdentifier("defaultFileBadge")
         setAccessibilityLabel(text + (isDefault ? String(localized: "（默认）") : ""))
     }

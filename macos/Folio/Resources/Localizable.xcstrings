@@ -3863,6 +3863,26 @@
         }
       }
     },
+    "已翻译" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translated"
+          }
+        }
+      }
+    },
+    "已翻译：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translated: %@"
+          }
+        }
+      }
+    },
     "已选择 %lld 项" : {
       "localizations" : {
         "en" : {
@@ -9397,6 +9417,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : " (%@)"
+          }
+        }
+      }
+    },
+    "（已翻译）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (translated)"
           }
         }
       }

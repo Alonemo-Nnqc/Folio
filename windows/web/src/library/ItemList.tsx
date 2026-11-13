@@ -65,6 +65,15 @@ export function TranslationProgress({ itemId }: { itemId: string }) {
   );
 }
 
+/** "已翻译" after the title of a paper that already has a translation (issue #15); the tooltip names each one
+ *  (双语对照 · Google …). Hidden while a translation runs, when the progress takes the room. */
+export function TranslatedBadge({ itemId }: { itemId: string }) {
+  const running = useStore((s) => !!s.jobs[itemId]);
+  const names = useStore((s) => filesOf(s, itemId).filter((f) => f.translationKind).map((f) => f.title).join("、"));
+  if (running || !names) return null;
+  return <span className="translated-badge" title={t("已翻译：%@", names)}>{t("已翻译")}</span>;
+}
+
 interface FlatRow { itemId: string; fileId?: string }
 
 let anchor: string | null = null;
@@ -422,7 +431,9 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                           : <span className="disc-space" />}
                         <FileText size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />
                         {standalone && item.retrieving && <span className="spinner" />}
-                        <span className="ellipsis" style={{ flex: 1 }} title={item.title}>{item.title}</span>
+                        <span className="ellipsis" style={{ flex: "0 1 auto" }} title={item.title}>{item.title}</span>
+                        <TranslatedBadge itemId={item.id} />
+                        <span style={{ flex: 1 }} />
                         <TranslationProgress itemId={item.id} />
                       </div>
                     );

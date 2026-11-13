@@ -312,8 +312,10 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             let origin = entry.originItemId.flatMap { snapshot.items[$0]?.title }
             let job = model.translations.currentJob(of: entry.id)
             let translation = job.map { (stage: $0.stage, fraction: $0.fraction) }
+            let translations = snapshot.files(of: entry.id).filter { $0.translationKind != nil }.map(model.label(of:))
             cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin,
-                               hasNote: snapshot.notedItems.contains(entry.id), translation: translation)
+                               hasNote: snapshot.notedItems.contains(entry.id), translation: translation,
+                               translations: translations)
             return cell
         case .tags:
             let cell = make(TagsCell.self, TagsCell.identifier)

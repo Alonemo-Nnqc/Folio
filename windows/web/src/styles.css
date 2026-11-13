@@ -171,6 +171,10 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .empty { position: absolute; inset: 40px 0 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--secondary); text-align: center; pointer-events: none; padding: 20px; }
 .empty .big { color: var(--text); font-size: 16px; font-weight: 600; }
 .insertion { position: absolute; left: 10px; right: 10px; height: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; z-index: 4; }
+/* "已翻译" after a title, in the shape of the macOS badge: a soft green capsule that never shrinks. */
+.translated-badge { flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 11px; font-weight: 600;
+  color: #248a3d; background: color-mix(in srgb, #34c759 16%, transparent); }
+:root[data-theme="dark"] .translated-badge { color: #4cd964; background: color-mix(in srgb, #30d158 22%, transparent); }
 .progress { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--secondary); font-size: 12px; }
 .progress .stage { max-width: 130px; }
 .progress .track { width: 64px; height: 4px; border-radius: 2px; background: var(--separator-strong); overflow: hidden; }
