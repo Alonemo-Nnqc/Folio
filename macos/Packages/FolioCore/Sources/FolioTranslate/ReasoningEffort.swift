@@ -115,11 +115,13 @@ public enum ReasoningEffort {
             // Strip a provider prefix such as "openai/gpt-5" used by gateways.
             let bare = name.split(separator: "/").last.map(String.init) ?? name
             // GPT-5 and later (gpt-5.x, gpt-6…): the full range, up to xhigh.
+            // The usual level is low, as for the local agents: translating needs little deliberation, and a paper
+            // comes back several times sooner (the level stays the user's to raise).
             if bare.range(of: #"^gpt-([5-9]|\d{2})"#, options: .regularExpression) != nil {
-                return .choices(fullRange, default: "medium")
+                return .choices(fullRange, default: "low")
             }
             if bare.range(of: #"^o[1-9]"#, options: .regularExpression) != nil {
-                return .choices([choice("low", String(localized: "低", bundle: .module)), choice("medium", String(localized: "中", bundle: .module)), choice("high", String(localized: "高", bundle: .module))], default: "medium")
+                return .choices([choice("low", String(localized: "低", bundle: .module)), choice("medium", String(localized: "中", bundle: .module)), choice("high", String(localized: "高", bundle: .module))], default: "low")
             }
             if bare.hasPrefix("gpt-4") || bare.hasPrefix("gpt-3") || bare.hasPrefix("chatgpt") {
                 return .unsupportedModel

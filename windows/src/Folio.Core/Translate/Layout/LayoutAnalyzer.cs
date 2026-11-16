@@ -71,6 +71,20 @@ public sealed partial class LayoutAnalyzer
 
     // MARK: Page
 
+    /// <summary>Text that reads as white with nothing coloured behind it: a colour the page gives in a way the engine
+    /// does not follow, not white words on a dark ground. Its translation is set in black, never invisible on the paper.</summary>
+    public static void InkOnPaper(List<PageChar> chars, ContentInterpreter interpreter)
+    {
+        if (!chars.Any(c => c.Color.IsPale)) return;
+        var grounds = interpreter.Grounds;
+        foreach (var c in chars)
+        {
+            if (!c.Color.IsPale || c.IsSpace || c.IsNewline) continue;
+            var center = new Pt(c.Rect.MidX, c.Baseline + c.Size * 0.3);
+            if (!grounds.Any(r => r.InsetBy(-0.5, -0.5).Contains(center))) c.Color = RGBColor.Black;
+        }
+    }
+
     public PageLayout AnalyzePage(int number, PDict page, ContentInterpreter interpreter, List<PageChar> rawChars)
     {
         var geometry = PdfComposer.Geometry(page);
@@ -78,6 +92,7 @@ public sealed partial class LayoutAnalyzer
         var crop = geometry.CropBox;
         _currentPage = number;
         var chars = rawChars.Select(c => c.Clone()).ToList();
+        InkOnPaper(chars, interpreter);
         MathDetector.Mark(chars);
         var links = PageLinks.Links(page);
         PageLinks.Assign(links, chars, crop);
@@ -100,7 +115,12 @@ public sealed partial class LayoutAnalyzer
         var figures = FigureRegions(marks, lines, tables, crop);
         tables.RemoveAll(table => figures.Any(f => f.Intersection(table).Area > table.Area * 0.4));
         var gutters = tables.Select(t => ColumnGutters(t, lines)).ToList();
-        lines = BuildLines(chars, tables, gutters, crop.W).Select(MarkScripts).ToList();
+        // The upright rules of a table drawn with a grid: two cells with a rule between them are two cells, however
+        // close their words come to it.
+        var uprights = marks.Where(m => m.Kind is GraphicMark.MarkKind.Fill or GraphicMark.MarkKind.Stroke && !m.IsWhite && m.Rect.W < 2.5 && m.Rect.H > BodySize * 0.8)
+            .Select(m => m.Rect).ToList();
+        var dividers = tables.Select(t => uprights.Where(u => t.InsetBy(-1, -2).Intersects(u)).ToList()).ToList();
+        lines = BuildLines(chars, tables, gutters, crop.W, dividers).Select(MarkScripts).ToList();
         JoinWordFractions(lines, marks);
         MarkChips(lines, marks);
         lines = ReadingOrder(lines);
@@ -245,14 +265,26 @@ public sealed partial class LayoutAnalyzer
         var result = new List<Icon>();
         var flat = lines.Where(l => !l.IsRotated && l.WordCount >= 5).ToList();
         var shapes = new List<(int Result, double Line)>();
+        var strokes = new List<(int Result, double Line)>();
         for (int index = 0; index < interpreter.Marks.Count; index++)
         {
             var mark = interpreter.Marks[index];
             bool isImage = mark.Kind == GraphicMark.MarkKind.Image && interpreter.Images.ContainsKey(index);
             bool isShape = mark.Kind == GraphicMark.MarkKind.Fill && !mark.IsWhite && mark.HasCurves && mark.SegmentCount >= 6 && interpreter.Paths.ContainsKey(index);
-            if (!isImage && !isShape) continue;
+            // A bracket of a formula drawn as lines (⟨ … ⟩ in equations set by a word processor): a short slanting stroke
+            // right beside one of the formula's characters. It goes where the formula goes; left where it was, it would
+            // stand in the middle of the translation. (Upright and level strokes are rules: of a table, under a word,
+            // between the columns of a header; they stay.)
+            bool isStroke = mark.Kind == GraphicMark.MarkKind.Stroke && !mark.IsWhite && !mark.HasCurves && mark.SegmentCount <= 3 && interpreter.Paths.ContainsKey(index)
+                && mark.Rect.W >= 1.2 && mark.Rect.H >= mark.Rect.W * 1.5 && mark.Rect.H <= mark.Rect.W * 6;
+            if (!isImage && !isShape && !isStroke) continue;
             var r = mark.Rect;
-            var candidates = flat.Where(line => r.W <= line.Size * 2.6 && r.H <= line.Size * 1.9 && r.H >= line.Size * 0.5
+            var candidates = flat.Where(line => isStroke
+                ? r.W <= line.Size * 0.7 && r.W >= line.Size * 0.12 && r.H >= line.Size * 0.3 && r.H <= line.Size * 1.9
+                  && r.MidY > line.Baseline - line.Size * 0.35 && r.MidY < line.Baseline + line.Size * 0.85
+                  && line.Chars.Any(c => !c.IsSpace && c.IsMath && Math.Max(c.Rect.MinX - r.MaxX, r.MinX - c.Rect.MaxX) < line.Size * 0.45
+                                         && c.Rect.MinY < r.MaxY && c.Rect.MaxY > r.MinY)
+                : r.W <= line.Size * 2.6 && r.H <= line.Size * 1.9 && r.H >= line.Size * 0.5
                 && r.MidY > line.Baseline - line.Size * 0.35 && r.MidY < line.Baseline + line.Size * 0.85
                 && line.Chars.Any(c => !c.IsSpace && ((c.Rect.MaxX <= r.MidX && r.MinX - c.Rect.MaxX < line.Size * 1.5) || (c.Rect.MinX >= r.MidX && c.Rect.MinX - r.MaxX < line.Size * 1.5)))).ToList();
             var best = candidates.MinBy(l => Math.Abs(l.Baseline + l.Size * 0.3 - r.MidY));
@@ -271,11 +303,17 @@ public sealed partial class LayoutAnalyzer
             ch.LinkTarget = null;
             ch.Icon = index;
             if (isShape) shapes.Add((result.Count, best.Baseline));
+            if (isStroke) strokes.Add((result.Count, best.Baseline));
             result.Add(new Icon(index, best.Chars.LastOrDefault(c => !c.IsSpace && c.Rect.MaxX <= r.MidX), ch));
         }
         var perLine = new Dictionary<double, int>();
         foreach (var s in shapes) perLine[s.Line] = perLine.GetValueOrDefault(s.Line) + 1;
         var tooMany = shapes.Count > 12 ? shapes.Select(s => s.Result).ToHashSet() : shapes.Where(s => perLine[s.Line] > 3).Select(s => s.Result).ToHashSet();
+        // Strokes come in pairs and halves (a bracket is two lines, a formula has two brackets), so a line may have a
+        // few more of them; a page full of them is a drawing.
+        var strokesPerLine = new Dictionary<double, int>();
+        foreach (var s in strokes) strokesPerLine[s.Line] = strokesPerLine.GetValueOrDefault(s.Line) + 1;
+        tooMany.UnionWith(strokes.Count > 48 ? strokes.Select(s => s.Result) : strokes.Where(s => strokesPerLine[s.Line] > 8).Select(s => s.Result));
         return result.Where((_, i) => !tooMany.Contains(i)).ToList();
     }
 

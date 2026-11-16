@@ -95,8 +95,6 @@ public static class App
     static HostWindow? _settings, _onboarding;
     static readonly List<HostWindow> Windows = [];
 
-    public static IEnumerable<HostWindow> AllWindows => Windows;
-
     /// <summary>The window the user is in: dialogs and file pickers belong to it.</summary>
     public static HostWindow Active => Windows.FirstOrDefault(w => w.ContainsFocus || Form.ActiveForm == w) ?? Main;
 

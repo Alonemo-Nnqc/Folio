@@ -22,7 +22,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private var selectionTranslation: SelectionTranslationController!
     private var keyMonitor: Any?
     private weak var toolGroup: NSToolbarItemGroup?
-    private weak var colorItem: NSMenuToolbarItem?
+    /// The colour panel, while it picks a tool's or an annotation's colour.
+    private let colorPanel = ColorPanelBridge()
     private weak var searchItem: NSSearchToolbarItem?
     private weak var textEditItem: NSToolbarItem?
     /// 编辑 PDF 文字 (EDIT-01), while it is on.
@@ -44,7 +45,11 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         self.fileId = fileId
         itemId = file.itemId
         fileURL = model.fileURL(file)
-        state = ReaderState(color: AnnotationColor(rawValue: model.settings.highlightColor) ?? .yellow,
+        var colors: [AnnotationTool: String] = [:]
+        for tool in AnnotationTool.allCases {
+            if let key = model.settings.annotationToolColors[tool.key] { colors[tool] = key }
+        }
+        state = ReaderState(colors: colors, customColors: model.settings.annotationCustomColors,
                             eraserSize: InkEraser.Size(rawValue: model.settings.readerEraserSize) ?? .medium)
         editor = AnnotationEditor(state: state)
         content = ReaderContentViewController(pdfView: pdfView)
@@ -219,6 +224,22 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         editor.onChange = { [weak self] in self?.documentChanged() }
         editor.onAddToNote = { [weak self] text, page in self?.addToNote(text, pageIndex: page) }
         editor.onCopyAsCitation = { [weak self] text, page in self?.copyAsCitation(text, pageIndex: page) }
+        editor.onMixColor = { [weak self] annotation in
+            guard let self else { return }
+            self.colorPanel.show(initial: AnnotationEditor.color(of: annotation).withAlphaComponent(1)) { [weak self] color in
+                self?.editor.mixed(color, for: annotation)
+            }
+        }
+        editor.onRememberColor = { [weak self] color in self?.remember(custom: color) }
+        // The text box's bar: the next box is written the same way.
+        editor.onTextStyle = { [weak self] color, size in
+            guard let self else { return }
+            if let color {
+                self.state.colors[.text] = color.key
+                self.model.settings.annotationToolColors[AnnotationTool.text.key] = color.key
+            }
+            if let size { self.model.settings.textBoxFontSize = Double(size) }
+        }
         editor.onTranslateSelection = { [weak self] in self?.selectionTranslation.translateCurrentSelection() }
         selectionTranslation = SelectionTranslationController(model: model, pdfView: pdfView)
         selectionTranslation.onAddToNote = { [weak self] source, translation, page in
@@ -273,6 +294,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                 self.pdfView.go(to: page)
             },
             showAnnotation: { [weak self] id in self?.showAnnotation(id) },
+            deleteAnnotation: { [weak self] id in self?.deleteAnnotation(id) },
             showHit: { [weak self] index in self?.showHit(index) })
     }
 
@@ -302,18 +324,15 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             guard let self else { return }
             let tool = self.state.tool
             self.pdfView.tool = tool
-            self.toolGroup?.selectedIndex = tool.rawValue
-            let color = self.state.color
-            self.pdfView.inkColor = color.nsColor
-            let eraserSize = self.state.eraserSize
-            self.pdfView.eraserSize = eraserSize
-            // While erasing, the colour button beside the tools picks the eraser's size instead (READER-30).
-            if let item = self.colorItem {
-                let erasing = tool == .eraser
-                item.image = erasing ? eraserSize.image : Self.colorSwatch(color)
-                item.label = erasing ? String(localized: "大小") : String(localized: "颜色")
-                item.toolTip = erasing ? String(localized: "橡皮擦大小（[ 与 ] 调整）") : String(localized: "批注颜色")
-            }
+            _ = self.state.colors
+            self.pdfView.inkColor = self.state.color(for: .ink).nsColor
+            self.pdfView.noteColor = self.state.color(for: .note).nsColor
+            self.pdfView.inkWidth = CGFloat(self.model.settings.inkLineWidth)
+            self.editor.textSize = CGFloat(self.model.settings.textBoxFontSize)
+            self.editor.returnsToSelect = self.model.settings.returnToSelectAfterPlacing
+            self.pdfView.showsTooltips = self.model.settings.showAnnotationTooltips
+            self.pdfView.eraserSize = self.state.eraserSize
+            self.updateToolImages()
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -339,6 +358,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         state.outline = Self.outlineRows(document.outlineRoot)
         if state.outline.isEmpty == false && state.sidebarTab == .thumbnails { state.sidebarTab = .outline }
         refreshAnnotationRows()
+        // Notes, text boxes and ink an earlier build saved with an empty picture: drawn anew into the file at once.
+        if AppearanceRepair.repair(document) > 0 { documentChanged() }
         return true
     }
 
@@ -353,7 +374,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
         if document.isLocked { unlockDocument() }
         let settings = model.settings
-        if let saved = try? model.library.readingState(fileId: fileId), let page = document.page(at: min(saved.pageIndex, document.pageCount - 1)) {
+        // 设置 ▸ 阅读 ▸ 记住每篇论文的阅读位置 off: every paper opens at its top, at the usual zoom.
+        if model.settings.rememberReadingPosition, let saved = try? model.library.readingState(fileId: fileId),
+           let page = document.page(at: min(saved.pageIndex, document.pageCount - 1)) {
             pdfView.displayMode = PDFDisplayMode(rawValue: saved.displayMode) ?? .singlePageContinuous
             if saved.autoScale {
                 pdfView.autoScales = true
@@ -541,7 +564,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
                 rows.append(AnnotationRow(id: ObjectIdentifier(annotation), pageIndex: index,
                                           kind: Self.kindName(type), color: annotation.color,
                                           text: isMarkup ? AnnotationEditor.text(of: annotation) ?? "" : annotation.contents ?? "",
-                                          comment: isMarkup ? annotation.contents ?? "" : ""))
+                                          comment: isMarkup ? annotation.contents ?? "" : "",
+                                          isOffPage: !annotation.bounds.insetBy(dx: 1, dy: 1).intersects(page.bounds(for: .cropBox))))
             }
         }
         state.annotations = rows
@@ -557,6 +581,17 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         case "FreeText": String(localized: "文本框")
         case "Ink": String(localized: "手绘")
         default: String(localized: "图形")
+        }
+    }
+
+    /// Deleted from the list (one undo step, as with ⌫ on the page): also what can't be reached on the page.
+    private func deleteAnnotation(_ id: ObjectIdentifier) {
+        guard let document = pdfView.document else { return }
+        for index in 0..<document.pageCount {
+            guard let annotation = document.page(at: index)?.annotations.first(where: { ObjectIdentifier($0) == id }) else { continue }
+            if pdfView.selectedAnnotation === annotation { pdfView.selectAnnotation(nil) }
+            editor.remove(annotation)
+            return
         }
     }
 
@@ -596,6 +631,272 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     /// Preview hook: selects `text` and shows 划词翻译 for it.
+    /// -FolioPreviewAnnotations: the reader's annotations as they look, on the cloned library's paper — markup in
+    /// several colours over `phrases` (page 1), a written note and a text box, then `open` (note / text) being written.
+    /// Preview hook (-FolioPreviewClickTools <log>): clicks the 高亮 tool on the toolbar twice with events sent to this
+    /// window only (the pointer does not move), and logs the tool chosen after each click and whether its menu opened.
+    func previewClickTools(log: String) {
+        guard let window, let bar = Self.toolbarView(in: window) else { return }
+        func controls(_ view: NSView) -> [NSSegmentedControl] { ((view as? NSSegmentedControl).map { [$0] } ?? []) + view.subviews.flatMap(controls) }
+        guard let control = controls(bar).first(where: { $0.segmentCount == AnnotationTool.allCases.count }) else {
+            try? "no tools control".write(toFile: log, atomically: true, encoding: .utf8); return
+        }
+        var lines: [String] = []
+        let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: .main) { note in
+            guard let menu = note.object as? NSMenu, menu.supermenu == nil else { return }
+            lines.append("menu opened: " + menu.items.prefix(4).map(\.title).joined(separator: " | "))
+            menu.perform(#selector(NSMenu.cancelTracking), with: nil, afterDelay: 0.3)
+        }
+        let segment = control.bounds.width / CGFloat(control.segmentCount)
+        let point = control.convert(NSPoint(x: segment * 1.5, y: control.bounds.midY), to: nil)
+        func click() {
+            let time = ProcessInfo.processInfo.systemUptime
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: time, windowNumber: window.windowNumber,
+                                                     context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) else { continue }
+                NSApp.postEvent(event, atStart: false)
+            }
+        }
+        lines.append("before: \(state.tool)")
+        click()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            lines.append("after first click: \(state.tool)")
+            click()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                lines.append("after second click: \(state.tool)")
+                NotificationCenter.default.removeObserver(observer)
+                try? lines.joined(separator: "\n").write(toFile: log, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    func previewAnnotations(open: String) {
+        guard let document = pdfView.document, let page = document.page(at: 0) else { return }
+        let marks: [(String, AnnotationTool, AnnotationColor)] = [
+            ("Curvilinear structure segmentation is essential", .highlight, .yellow),
+            ("prompt-free", .highlight, .green),
+            ("few-shot training", .underline, .red),
+            ("cross-domain generalization", .highlight, .blue),
+        ]
+        for (phrase, tool, color) in marks {
+            guard let selection = document.findString(phrase, withOptions: .caseInsensitive).first, let type = tool.markupType else { continue }
+            state.colors[tool] = color.rawValue
+            editor.addMarkup(type, for: selection)
+        }
+        let box = page.bounds(for: .cropBox)
+        state.colors[.note] = AnnotationColor.yellow.rawValue
+        editor.place(.note, at: NSPoint(x: box.midX + 4, y: box.midY + 96), on: page)
+        editor.previewType(String(localized: "和 SAM-Med2D 的适配器对比一下"))
+        editor.finishCard()
+        state.colors[.text] = AnnotationColor.red.rawValue
+        editor.place(.text, at: NSPoint(x: box.minX + 52, y: box.maxY - 78), on: page)
+        editor.previewType(String(localized: "重点：无需提示的曲线结构分割"))
+        editor.finishTextBox()
+        if open == "ink" || open.hasPrefix("erase") {
+            let start = NSPoint(x: box.midX - 20, y: box.midY + 120)
+            editor.addInk(points: (0...40).map { NSPoint(x: start.x + CGFloat($0) * 3, y: start.y + 8 * sin(CGFloat($0) / 4)) }, on: page)
+        }
+        pdfView.go(to: page)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [self] in
+            if open == "noteshrink" || open == "notegrow" {
+                state.colors[.note] = AnnotationColor.blue.rawValue
+                editor.place(.note, at: NSPoint(x: box.maxX - 46, y: box.midY + 40), on: page)
+                editor.previewType(String(localized: "Adapter-E 插在 Transformer 块之间，回头看实现细节。\n第二行：对比 SAM-Med2D。\n第三行：消融实验在表 3。\n第四行：代码在 GitHub。"))
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
+                    // Smaller, then (notegrow) larger again, in small steps as a hand drags.
+                    editor.previewDragCard(by: NSSize(width: -60, height: 60), steps: 12)
+                    if open == "notegrow" { editor.previewDragCard(by: NSSize(width: 160, height: -220), steps: 20) }
+                }
+            } else if open == "note" {
+                state.colors[.note] = AnnotationColor.blue.rawValue
+                editor.place(.note, at: NSPoint(x: box.maxX - 46, y: box.midY + 40), on: page)
+                editor.previewType(String(localized: "Adapter-E 插在 Transformer 块之间，回头看实现细节。"))
+            } else if open.hasPrefix("erase") {
+                // Scribbled over with the small eraser, back and forth along the stroke, as one does: what is left,
+                // on the page, in the list and in the saved file.
+                let start = NSPoint(x: box.midX - 20, y: box.midY + 120)
+                state.eraserSize = .small
+                state.tool = .eraser
+                // "erasehalf": only the middle of the stroke, so a cut stroke is saved.
+                let steps = open == "erasehalf" ? 80 : 240
+                let first = open == "erasehalf" ? 80 : 0
+                let track = (first...(first + steps)).map { k -> NSPoint in
+                    let x = start.x - 6 + CGFloat(k) * 0.55
+                    return NSPoint(x: x, y: start.y + 8 * sin((x - start.x) / 12) + (k % 2 == 0 ? 5 : -5))
+                }
+                pdfView.beginErasing(at: track[0], on: page)
+                for point in track.dropFirst() { pdfView.continueErasing(to: point, on: page) }
+                pdfView.endErasing()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                    let inks = page.annotations.filter { $0.type == "Ink" }
+                    var lines = ["inks on page: \(inks.count) \(inks.map { "\(type(of: $0)) paths=\(($0.paths ?? []).map { "\($0.elementCount)@\($0.bounds)" })" })"]
+                    lines.append("rows: \(state.annotations.map(\.kind))")
+                    _ = save()
+                    let saved = PDFDocument(url: fileURL)?.page(at: 0)?.annotations.map { $0.type ?? "?" } ?? []
+                    lines.append("saved: \(saved)")
+                    if let log = UserDefaults.standard.string(forKey: "FolioPreviewSnapshotLog") {
+                        try? lines.joined(separator: "\n").write(toFile: log, atomically: true, encoding: .utf8)
+                    }
+                }
+            } else if open == "text" {
+                state.colors[.text] = AnnotationColor.blue.rawValue
+                editor.place(.text, at: NSPoint(x: box.minX + 40, y: box.midY + 120), on: page)
+                editor.previewType(String(localized: "这里的结论值得引用"))
+            }
+        }
+    }
+
+    /// Preview hook (-FolioPreviewMenuRender <dir>): the rows of the tools' menus, drawn to <dir>/<tool>-<n>.png.
+    func previewRenderMenus(into directory: String) {
+        for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+            let look = NSAppearance(named: appearance)!
+            let suffix = appearance == .aqua ? "light" : "dark"
+            // Each tool's menu as it opens: its headers and rows, every row as wide as the menu.
+            for tool in [AnnotationTool.highlight, .strikeOut, .ink, .text, .eraser] {
+                guard let menu = toolMenu(for: tool) else { continue }
+                let headerFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+                let width = menu.items.map { item in
+                    item.view?.frame.width ?? (item.title as NSString).size(withAttributes: [.font: headerFont]).width + 28
+                }.max() ?? 150
+                let heights = menu.items.map { $0.isSeparatorItem ? 11 : ($0.view?.frame.height ?? 22) }
+                let size = NSSize(width: width, height: heights.reduce(0, +) + 10)
+                let image = NSImage(size: size, flipped: true) { _ in
+                    look.performAsCurrentDrawingAppearance {
+                        (appearance == .aqua ? NSColor(white: 0.97, alpha: 1) : NSColor(white: 0.17, alpha: 1)).setFill()
+                        NSRect(origin: .zero, size: size).fill()
+                        var y: CGFloat = 5
+                        for (item, height) in zip(menu.items, heights) {
+                            if item.isSeparatorItem {
+                                NSColor.separatorColor.setFill()
+                                NSRect(x: 14, y: y + 5, width: width - 28, height: 1).fill()
+                            } else if let view = item.view {
+                                view.appearance = look
+                                view.setFrameSize(NSSize(width: width, height: view.frame.height))
+                                if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                                    view.cacheDisplay(in: view.bounds, to: rep)
+                                    rep.draw(in: NSRect(x: 0, y: y, width: width, height: height), from: .zero, operation: .sourceOver,
+                                             fraction: 1, respectFlipped: true, hints: nil)
+                                }
+                            } else {
+                                (item.title as NSString).draw(at: NSPoint(x: 14, y: y + 4), withAttributes: [.font: headerFont, .foregroundColor: NSColor.secondaryLabelColor])
+                            }
+                            y += height
+                        }
+                    }
+                    return true
+                }
+                Self.writePNG(image, scale: 2, to: "\(directory)/menu-\(tool.key)-\(suffix).png")
+            }
+            // The toolbar's tools, as the toolbar draws them.
+            let tools = AnnotationTool.allCases
+            let strip = NSImage(size: NSSize(width: CGFloat(tools.count) * 34 + 8, height: 34), flipped: false) { rect in
+                look.performAsCurrentDrawingAppearance {
+                    (appearance == .aqua ? NSColor(white: 0.95, alpha: 1) : NSColor(white: 0.2, alpha: 1)).setFill()
+                    rect.fill()
+                    for (index, tool) in tools.enumerated() {
+                        let image = AnnotationToolImage.make(tool, color: tool.showsColorOnToolbar ? self.state.color(for: tool).nsColor : nil)
+                        image.draw(in: NSRect(x: 8 + CGFloat(index) * 34 + (30 - image.size.width) / 2, y: (34 - image.size.height) / 2,
+                                              width: image.size.width, height: image.size.height))
+                    }
+                }
+                return true
+            }
+            Self.writePNG(strip, scale: 3, to: "\(directory)/toolbar-\(suffix).png")
+        }
+    }
+
+    private static func writePNG(_ image: NSImage, scale: CGFloat, to path: String) {
+        let width = Int(image.size.width * scale), height = Int(image.size.height * scale)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return }
+        rep.size = image.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        NSGraphicsContext.restoreGraphicsState()
+        try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+    }
+
+    /// Preview hook (-FolioPreviewLayerDump <path>): zooms in on the first note, then writes the PDF view's layer tree
+    /// (class, size, contents scale) to <path>.txt and the layers as they are rendered to <path>.png.
+    func previewLayerDump(path: String) {
+        guard let page = pdfView.document?.page(at: 0),
+              let note = page.annotations.first(where: { $0 is NoteAnnotation }) ?? page.annotations.first(where: { $0 is InkAnnotation })
+        else { try? "no note".write(toFile: path + ".txt", atomically: true, encoding: .utf8); return }
+        pdfView.autoScales = false
+        pdfView.scaleFactor = note is InkAnnotation ? 1.5 : 4
+        pdfView.go(to: note.bounds.insetBy(dx: -40, dy: -40), on: page)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [self] in
+            var lines: [String] = []
+            func walk(_ layer: CALayer, _ depth: Int) {
+                guard depth < 14, lines.count < 400 else { return }
+                let t = layer.affineTransform()
+                lines.append(String(repeating: "  ", count: depth) + "\(type(of: layer)) \(layer.name ?? "") bounds=\(Int(layer.bounds.width))x\(Int(layer.bounds.height)) scale=\(layer.contentsScale) t=\(String(format: "%.2f", t.a)) contents=\(Self.describeContents(of: layer)) delegate=\(layer.delegate.map { String(describing: type(of: $0)) } ?? "-")")
+                for sub in layer.sublayers ?? [] { walk(sub, depth + 1) }
+            }
+            if let layer = pdfView.layer { walk(layer, 0) }
+            func views(_ view: NSView, _ depth: Int) {
+                lines.append("VIEW " + String(repeating: "  ", count: depth) + "\(type(of: view)) \(Int(view.frame.width))x\(Int(view.frame.height)) bounds=\(Int(view.bounds.width))x\(Int(view.bounds.height))")
+                for sub in view.subviews where depth < 10 { views(sub, depth + 1) }
+            }
+            views(pdfView, 0)
+            for index in 0..<min(pdfView.document?.pageCount ?? 0, 4) {
+                for annotation in pdfView.document?.page(at: index)?.annotations ?? [] where annotation.type == "Ink" {
+                    lines.append("INK page \(index) \(type(of: annotation)) bounds=\(annotation.bounds) width=\(annotation.border?.lineWidth ?? -1) color=\(annotation.color) paths=\((annotation.paths ?? []).map { "\($0.elementCount)@\($0.bounds)" })")
+                }
+            }
+            try? lines.joined(separator: "\n").write(toFile: path + ".txt", atomically: true, encoding: .utf8)
+            // The reader's own pictures, each at its own resolution.
+            func pictures(_ layer: CALayer) -> [AnnotationPictureLayer] { ((layer as? AnnotationPictureLayer).map { [$0] } ?? []) + (layer.sublayers ?? []).flatMap(pictures) }
+            for picture in pdfView.layer.map(pictures) ?? [] { lines.append("PICTURE frame=\(picture.frame) superlayer=\(picture.superlayer?.bounds ?? .zero) flipped=\(picture.superlayer?.isGeometryFlipped ?? false)") }
+            for annotation in page.annotations { lines.append("ANNOTATION \(annotation.type ?? "") bounds=\(annotation.bounds)") }
+            lines.append("PAGE media=\(page.bounds(for: .mediaBox)) crop=\(page.bounds(for: .cropBox))")
+            try? lines.joined(separator: "\n").write(toFile: path + ".txt", atomically: true, encoding: .utf8)
+            for (index, picture) in (pdfView.layer.map(pictures) ?? []).enumerated() {
+                let scale = picture.contentsScale
+                guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(picture.bounds.width * scale), pixelsHigh: Int(picture.bounds.height * scale),
+                                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+                      let context = NSGraphicsContext(bitmapImageRep: rep)?.cgContext else { continue }
+                context.setFillColor(.white)
+                context.fill(CGRect(x: 0, y: 0, width: rep.pixelsWide, height: rep.pixelsHigh))
+                context.scaleBy(x: scale, y: scale)
+                picture.render(in: context)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path + "-picture\(index).png"))
+            }
+            if let layer = pdfView.layer, let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(layer.bounds.width * 2), pixelsHigh: Int(layer.bounds.height * 2),
+                                                                  bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+               let context = NSGraphicsContext(bitmapImageRep: rep)?.cgContext {
+                context.scaleBy(x: 2, y: 2)
+                layer.render(in: context)
+                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path + ".png"))
+            }
+        }
+    }
+
+    /// Preview hook: what a layer holds (an image: its size and how many of its pixels show).
+    nonisolated private static func describeContents(of layer: CALayer) -> String {
+        guard let contents = layer.contents else { return "none" }
+        guard CFGetTypeID(contents as CFTypeRef) == CGImage.typeID else {
+            // A backing store: rendered, how many of its pixels show.
+            let width = max(Int(layer.bounds.width), 1), height = max(Int(layer.bounds.height), 1)
+            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return "store" }
+            layer.render(in: context)
+            guard let data = context.data else { return "store" }
+            let bytes = data.bindMemory(to: UInt8.self, capacity: width * height * 4)
+            var shown = 0
+            for index in 0..<(width * height) where bytes[index * 4 + 3] != 0 { shown += 1 }
+            return "store shown=\(shown)/\(width * height)"
+        }
+        let image = contents as! CGImage
+        guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return "image \(image.width)x\(image.height)" }
+        var shown = 0
+        let length = CFDataGetLength(data), step = max(image.bitsPerPixel / 8, 1)
+        var index = 0
+        while index + step <= length { if bytes[index + (image.alphaInfo == .premultipliedFirst || image.alphaInfo == .first ? 0 : step - 1)] != 0 { shown += 1 }; index += step }
+        return "image \(image.width)x\(image.height) shown=\(shown)"
+    }
+
     func previewSelectionTranslation(_ text: String, badgeOnly: Bool) {
         guard let selection = pdfView.document?.findString(text, withOptions: .caseInsensitive).first else { return }
         pdfView.setCurrentSelection(selection, animate: false)
@@ -652,6 +953,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        finishWriting()
         guard !save() else { return true }
         let alert = NSAlert()
         alert.messageText = String(localized: "无法保存批注")
@@ -668,7 +970,11 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         return false
     }
 
+    /// A text box being written, finished (quitting, closing).
+    func finishWriting() { editor.finishTextBox() }
+
     func windowWillClose(_ notification: Notification) {
+        finishWriting()
         savePosition()
         selectionTranslation.close()
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
@@ -717,6 +1023,16 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     nonisolated func classForPage() -> AnyClass { ReaderPage.self }
+    /// Sticky notes, text boxes and ink are drawn by the reader (NoteAnnotation, TextBoxAnnotation, InkAnnotation, sharp
+    /// on screen through CrispAnnotations); the rest is PDFKit's.
+    nonisolated func `class`(forAnnotationType annotationType: String) -> AnyClass {
+        switch annotationType {
+        case "Text": NoteAnnotation.self
+        case "FreeText": TextBoxAnnotation.self
+        case "Ink": InkAnnotation.self
+        default: PDFAnnotation.self
+        }
+    }
 
     nonisolated func didMatchString(_ instance: PDFSelection) {
         nonisolated(unsafe) let selection = instance
@@ -883,8 +1199,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     @objc func selectTool(_ sender: Any?) {
         let index = (sender as? NSMenuItem)?.tag ?? (sender as? NSToolbarItemGroup)?.selectedIndex ?? 0
         guard let tool = AnnotationTool(rawValue: index) else { return }
-        // A tool ends 编辑 PDF 文字: annotating and editing the text are not done at once.
+        // The tool already chosen, clicked again on the toolbar: its menu (colours, width, size).
+        if sender is NSToolbarItemGroup, tool == state.tool, tool.hasToolbarMenu {
+            showToolMenu(for: tool)
+            return
+        }
+        // A tool ends 编辑 PDF 文字 and a text box being written: one thing at a time.
         if isEditingPDFText { toggleTextEditing(nil) }
+        editor.finishTextBox()
         // Choosing a markup tool with text already selected marks that text right away.
         if let type = tool.markupType, let selection = pdfView.currentSelection, !(selection.string ?? "").isEmpty {
             editor.addMarkup(type, for: selection)
@@ -893,35 +1215,113 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         state.tool = state.tool == tool && sender is NSMenuItem ? .select : tool
     }
 
-    @objc func selectColor(_ sender: Any?) {
-        guard let item = sender as? NSMenuItem, AnnotationColor.allCases.indices.contains(item.tag) else { return }
-        choose(AnnotationColor.allCases[item.tag])
+    /// Shows a tool's menu under the toolbar, where the click was.
+    private func showToolMenu(for tool: AnnotationTool) {
+        guard let window, let menu = toolMenu(for: tool) else { return }
+        let click = NSApp.currentEvent.map { $0.window === window ? $0.locationInWindow : nil } ?? nil
+        // Just under the toolbar: the bottom of the window's title bar area.
+        let toolbarBottom = Self.toolbarView(in: window).map { $0.convert($0.bounds, to: nil).minY } ?? window.contentLayoutRect.maxY
+        let x = (click?.x ?? window.frame.width / 2) - 14
+        let onScreen = window.convertPoint(toScreen: NSPoint(x: x, y: toolbarBottom - 4))
+        menu.popUp(positioning: nil, at: onScreen, in: nil)
     }
 
-    private func choose(_ color: AnnotationColor) {
-        state.color = color
-        if let annotation = pdfView.selectedAnnotation { editor.setColor(annotation, color) }
-    }
-
-    static let colorMenuIdentifier = NSUserInterfaceItemIdentifier("readerColorMenu")
-
-    /// The toolbar's colour menu: the annotation colours as circles, the current one checked.
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        guard menu.identifier == Self.colorMenuIdentifier else { return }
-        menu.removeAllItems()
-        if state.tool == .eraser {
-            menu.addItem(.sectionHeader(title: String(localized: "橡皮擦大小")))
-            menu.addItem(.eraserSizes(selected: state.eraserSize) { [weak self] size in self?.choose(size) })
-            menu.addItem(.separator())
-            let hint = NSMenuItem(title: String(localized: "按 [ 或 ] 调整大小"), action: nil, keyEquivalent: "")
-            hint.isEnabled = false
-            menu.addItem(hint)
-            return
+    private static func toolbarView(in window: NSWindow) -> NSView? {
+        func find(_ view: NSView) -> NSView? {
+            if String(describing: type(of: view)) == "NSToolbarView" { return view }
+            for child in view.subviews { if let hit = find(child) { return hit } }
+            return nil
         }
-        let colors = AnnotationColor.allCases
-        menu.addItem(.colorSwatches(colors.map { .init(name: $0.title, color: $0.nsColor) }, selected: colors.firstIndex(of: state.color)) {
-            [weak self] index in self?.choose(colors[index])
+        return window.contentView?.superview.flatMap(find)
+    }
+
+    /// The toolbar's tool images, each tool that shows its colour in its current one.
+    private func updateToolImages() {
+        guard let group = toolGroup else { return }
+        group.selectedIndex = state.tool.rawValue
+        for (index, tool) in AnnotationTool.allCases.enumerated() where group.subitems.indices.contains(index) {
+            group.subitems[index].image = AnnotationToolImage.make(tool, color: tool.showsColorOnToolbar ? state.color(for: tool).nsColor : nil)
+        }
+    }
+
+    /// A colour chosen in a tool's menu: the tool takes it (and is chosen), and the selected annotation, when that tool
+    /// made it, is recoloured.
+    private func choose(_ color: ToolColor, for tool: AnnotationTool) {
+        state.colors[tool] = color.key
+        model.settings.annotationToolColors[tool.key] = color.key
+        if color.preset == nil { remember(custom: color) }
+        if let annotation = pdfView.selectedAnnotation, AnnotationTool.forAnnotationType(annotation.type) == tool {
+            editor.setColor(annotation, color.nsColor)
+        } else if let type = tool.markupType, let selection = pdfView.currentSelection, !(selection.string ?? "").isEmpty {
+            editor.addMarkup(type, for: selection)
+            pdfView.clearSelection()
+        }
+        if isEditingPDFText { toggleTextEditing(nil) }
+        state.tool = tool
+    }
+
+    /// A colour mixed in the colour panel joins the ones every tool offers (the newest five).
+    func remember(custom color: ToolColor) {
+        var list = state.customColors.filter { $0 != color.key }
+        list.insert(color.key, at: 0)
+        state.customColors = Array(list.prefix(5))
+        model.settings.annotationCustomColors = state.customColors
+    }
+
+    /// The colour panel, for a tool's own colour.
+    private func mixColor(for tool: AnnotationTool) {
+        colorPanel.show(initial: state.color(for: tool).nsColor) { [weak self] color in
+            self?.choose(ToolColor(color), for: tool)
+        }
+    }
+
+    /// A tool's menu: its colours (the last circle mixes one's own), and the pen's width, the text size or the eraser's
+    /// size, each shown as what it looks like.
+    func toolMenu(for tool: AnnotationTool) -> NSMenu? {
+        let menu = NSMenu()
+        if tool == .eraser {
+            menu.addItem(.sectionHeader(title: String(localized: "橡皮擦大小")))
+            let sizes = InkEraser.Size.allCases
+            // Rings in even steps (the sizes double, which would make the small one a speck beside the large one).
+            let rings: [CGFloat] = [9, 14, 20]
+            menu.addItem(.sizeRow(sizes.enumerated().map { .init(name: $1.title, kind: .ring(rings[min($0, rings.count - 1)])) },
+                                  selected: sizes.firstIndex(of: state.eraserSize), label: String(localized: "橡皮擦大小")) {
+                [weak self] index in self?.choose(sizes[index])
+            })
+            return menu
+        }
+        guard tool.hasColor else { return nil }
+        let choices = state.choices(for: tool)
+        let current = state.color(for: tool)
+        menu.addItem(.sectionHeader(title: tool == .text ? String(localized: "文字颜色") : String(localized: "\(tool.title)颜色")))
+        menu.addItem(.colorSwatches(choices.map { .init(name: $0.title, color: $0.nsColor) } + [.custom], selected: choices.firstIndex(of: current)) {
+            [weak self] index in
+            if index < choices.count { self?.choose(choices[index], for: tool) } else { self?.mixColor(for: tool) }
         })
+        if tool == .ink {
+            menu.addItem(.separator())
+            menu.addItem(.sectionHeader(title: String(localized: "粗细")))
+            let widths = AnnotationToolOptions.inkWidths
+            let dots: [CGFloat] = [4, 7, 10, 14]
+            menu.addItem(.sizeRow(widths.enumerated().map { .init(name: $1.title, kind: .dot(dots[min($0, dots.count - 1)], current.nsColor)) },
+                                  selected: widths.firstIndex { $0.width == model.settings.inkLineWidth }, label: String(localized: "粗细")) {
+                [weak self] index in
+                self?.model.settings.inkLineWidth = widths[index].width
+                self?.state.tool = .ink
+            })
+        }
+        if tool == .text {
+            menu.addItem(.separator())
+            menu.addItem(.sectionHeader(title: String(localized: "字号")))
+            let sizes = AnnotationToolOptions.textSizes
+            menu.addItem(.sizeRow(sizes.map { .init(name: "\($0.title)（\(Int($0.size)) pt）", kind: .letter(CGFloat($0.size) - 1)) },
+                                  selected: sizes.firstIndex { $0.size == model.settings.textBoxFontSize }, label: String(localized: "字号")) {
+                [weak self] index in
+                self?.model.settings.textBoxFontSize = sizes[index].size
+                self?.state.tool = .text
+            })
+        }
+        return menu
     }
 
     // MARK: Actions: eraser size (READER-30)
@@ -944,12 +1344,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         choose(sizes[min(max(index + step, 0), sizes.count - 1)])
     }
 
-    private func eraserSizeMenu() -> NSMenu {
-        let menu = NSMenu()
-        menu.addItem(.sectionHeader(title: String(localized: "橡皮擦大小")))
-        menu.addItem(.eraserSizes(selected: state.eraserSize) { [weak self] size in self?.choose(size) })
-        return menu
-    }
+    /// The eraser's sizes (right-click while erasing): the same plain list as its toolbar menu.
+    private func eraserSizeMenu() -> NSMenu { toolMenu(for: .eraser) ?? NSMenu() }
 
     @objc func addSelectionToNote(_ sender: Any?) {
         if let selection = pdfView.currentSelection, let text = selection.string, !text.isEmpty {
@@ -975,9 +1371,6 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         switch menuItem.action {
         case #selector(selectTool(_:)):
             menuItem.state = state.tool.rawValue == menuItem.tag ? .on : .off
-            return true
-        case #selector(selectColor(_:)):
-            menuItem.state = AnnotationColor.allCases.firstIndex(of: state.color) == menuItem.tag ? .on : .off
             return true
         case #selector(toggleTextEditing(_:)):
             menuItem.state = isEditingPDFText ? .on : .off
@@ -1047,7 +1440,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .readerZoom, .space, .readerTools, .readerColor,
+        [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .readerZoom, .space, .readerTools,
          .space, .readerTranslate, .readerEditText, .readerSearch, .inspectorTrackingSeparator, .flexibleSpace, .toggleInspector]
     }
 
@@ -1075,31 +1468,20 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         case .readerTools:
             let tools = AnnotationTool.allCases
             let group = NSToolbarItemGroup(itemIdentifier: id,
-                                           images: tools.map { NSImage(systemSymbolName: $0.symbol, accessibilityDescription: $0.title)! },
+                                           images: tools.map { AnnotationToolImage.make($0, color: $0.showsColorOnToolbar ? state.color(for: $0).nsColor : nil) },
                                            selectionMode: .selectOne, labels: tools.map(\.title),
                                            target: nil, action: #selector(selectTool(_:)))
             group.label = String(localized: "批注工具")
             group.paletteLabel = String(localized: "批注工具")
             group.selectedIndex = state.tool.rawValue
             for (index, tool) in tools.enumerated() {
-                group.subitems[index].toolTip = String(localized: "\(tool.title)（⌃⌘\(tool.keyEquivalent.uppercased())）")
+                group.subitems[index].toolTip = tool.hasToolbarMenu
+                    ? String(localized: "\(tool.title)（⌃⌘\(tool.keyEquivalent.uppercased())）：再点一次选择颜色和样式")
+                    : String(localized: "\(tool.title)（⌃⌘\(tool.keyEquivalent.uppercased())）")
             }
             group.controlRepresentation = .expanded
             toolGroup = group
             return group
-        case .readerColor:
-            let menu = NSMenu()
-            menu.delegate = self
-            menu.identifier = Self.colorMenuIdentifier
-            let item = NSMenuToolbarItem(itemIdentifier: id)
-            item.menu = menu
-            item.showsIndicator = false
-            item.label = String(localized: "颜色")
-            item.paletteLabel = String(localized: "批注颜色")
-            item.toolTip = String(localized: "批注颜色")
-            item.image = Self.colorSwatch(state.color)
-            colorItem = item
-            return item
         case .readerTranslate:
             let menu = NSMenu()
             menu.addItem(withTitle: String(localized: "翻译全文…"), action: #selector(translateDocument(_:)), keyEquivalent: "")
@@ -1111,7 +1493,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             item.label = String(localized: "翻译")
             item.paletteLabel = String(localized: "翻译")
             item.toolTip = String(localized: "保留排版翻译全文、对照阅读")
-            item.image = NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: String(localized: "翻译"))
+            item.image = TranslationIcon.fullText(accessibilityDescription: String(localized: "翻译"))
             return item
         case .readerSearch:
             let item = NSSearchToolbarItem(itemIdentifier: id)
@@ -1153,9 +1535,6 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
     }
 
-    static func colorSwatch(_ color: AnnotationColor) -> NSImage {
-        .colorDot(color.nsColor, diameter: 14)
-    }
 }
 
 extension NSToolbarItem.Identifier {

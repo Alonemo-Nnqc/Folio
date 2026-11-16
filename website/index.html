@@ -41,8 +41,8 @@
       <span>Folio</span>
     </a>
     <nav class="nav-links" aria-label="页面导航">
-      <a href="#film" data-i18n="nav.film">宣传片</a>
       <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="#translate" data-i18n="nav.translate">翻译</a>
       <a href="#ai" data-i18n="nav.ai">AI 接入</a>
       <a href="docs.html" data-i18n="nav.docs">使用文档</a>
       <a href="#download" data-i18n="nav.download">下载</a>
@@ -86,28 +86,9 @@
     <div class="hero-stage intro" style="--i:6">
       <div class="hero-window" id="heroWindow">
         <div class="win">
-          <img src="assets/img/library_light.webp" alt="Folio 文献库窗口" width="2200" height="1323" fetchpriority="high">
+          <img src="assets/img/library_light.webp" alt="Folio 文献库窗口" width="2200" height="1327" fetchpriority="high">
         </div>
       </div>
-    </div>
-  </section>
-
-  <!-- Film -->
-  <section class="film" id="film">
-    <div class="section-head">
-      <p class="eyebrow reveal" data-i18n="film.eyebrow">宣传片</p>
-      <h2 class="headline reveal" style="--d:1" data-i18n="film.title">两分钟，认识 Folio。</h2>
-    </div>
-    <div class="film-frame" id="filmFrame">
-      <video id="filmVideo" preload="none" playsinline poster="assets/img/poster.webp" width="1920" height="1080">
-        <source src="assets/video/folio-promo.mp4" type="video/mp4">
-      </video>
-      <button class="film-play" id="filmPlay" type="button">
-        <span class="film-play-disc">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
-        </span>
-        <span class="film-play-label"><span data-i18n="film.play">播放宣传片</span><small>1:53</small></span>
-      </button>
     </div>
   </section>
 
@@ -120,7 +101,7 @@
     </div>
     <div class="duo">
       <figure class="duo-item reveal" style="--d:1">
-        <div class="win"><img src="assets/img/library_light.webp" alt="macOS 版 Folio" width="2200" height="1323" loading="lazy"></div>
+        <div class="win"><img src="assets/img/library_light.webp" alt="macOS 版 Folio" width="2200" height="1327" loading="lazy"></div>
         <figcaption><b>macOS</b><span data-i18n="plat.c1d">macOS 14 及以上，Apple 芯片与 Intel。</span></figcaption>
       </figure>
       <figure class="duo-item reveal" style="--d:3">
@@ -178,7 +159,7 @@
     <div class="section-head">
       <p class="eyebrow reveal" data-i18n="org.eyebrow">整理</p>
       <h2 class="headline reveal" style="--d:1" data-i18n="org.title">井井有条，一搜即得。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="org.lede">两级分组、可自定义颜色的标签、回收站、阅读状态与星级评分。搜索可以覆盖 PDF 全文，一个条目也能挂多个文件。</p>
+      <p class="lede reveal" style="--d:2" data-i18n="org.lede">最多四级的分组、可自定义颜色的标签、回收站、阅读状态与星级评分。搜索可以覆盖 PDF 全文，一个条目也能挂多个文件；有译文的论文标题后带“已翻译”标签，一眼就能看出来。</p>
     </div>
     <div class="duo">
       <figure class="duo-item reveal" style="--d:1">
@@ -209,17 +190,78 @@
   </section>
 
   <!-- Translate -->
-  <section class="translate">
+  <section class="translate" id="translate">
     <div class="section-head">
       <p class="eyebrow reveal" data-i18n="tr.eyebrow">整篇翻译</p>
       <h2 class="headline reveal" style="--d:1" data-i18n="tr.title">整篇翻译，<br>排版原封不动。</h2>
-      <p class="lede reveal" style="--d:2" data-i18n="tr.lede">引擎内置，无需下载。公式逐字形保留，表格逐格翻译，译文里的引用依然能点，翻译途中就能对照阅读，多篇论文可以一次译完。服务任你选：免费接口、本地模型、17 种大模型与机器翻译 API，或直接用电脑上已登录的 Claude Code、Codex 等 19 种智能体，不用另配 Key。</p>
+      <p class="lede reveal" style="--d:2" data-i18n="tr.lede">引擎内置，无需下载。公式逐字形保留，表格逐格翻译，插图里的文字也能换成译文，居中、对齐和对称都照原样；译文里的引用依然能点，翻译途中就能对照阅读，多篇论文可以一次译完。服务任你选：免费接口、本地模型、17 种大模型与机器翻译 API，或直接用电脑上已登录的 Claude Code、Codex 等 20 种智能体，不用另配 Key。</p>
     </div>
     <div class="translate-stage">
-      <div class="win win-parallel reveal-scale"><img src="assets/img/parallel.webp" alt="原文与译文对照阅读" width="1264" height="760" loading="lazy"></div>
+      <div class="win reveal-scale"><img src="assets/img/parallel.webp" alt="对照阅读：左边原文，右边保留排版的译文" width="2200" height="1327" loading="lazy"></div>
       <div class="translate-chip reveal" style="--d:4" role="img" aria-label="翻译进度 42%">
         <span class="translate-chip-img"></span>
       </div>
+    </div>
+  </section>
+
+  <!-- Translation, done well: glossary, cost, streaming -->
+  <section class="organize tr-more">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="trm.eyebrow">翻译得更好</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="trm.title">术语前后一致，<br>花多少心里有数。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="trm.lede">大模型先读标题、摘要和图注，定好每个术语的译法，再翻译全文。这些术语记进术语表，下一篇论文接着用；你改过的译法，模型不会再改回去。用付费服务前，Folio 会先估算这次大概要多少 tokens、多少钱。</p>
+    </div>
+    <div class="duo duo-sheets">
+      <figure class="duo-item reveal" style="--d:1">
+        <div class="win win-sheet"><img src="assets/img/glossary.webp" alt="术语表：查看、修改、停用自动提取的术语" width="1280" height="1040" loading="lazy"></div>
+        <figcaption><b data-i18n="trm.c1t">术语表，跨论文复用</b><span data-i18n="trm.c1d">自动提取的术语可以查看、修改、停用，也能手动添加，或用 CSV 导入导出。</span></figcaption>
+      </figure>
+      <figure class="duo-item reveal" style="--d:3">
+        <div class="win win-sheet"><img src="assets/img/translate_sheet.webp" alt="翻译全文面板底部的用量与费用估算" width="1040" height="1564" loading="lazy"></div>
+        <figcaption><b data-i18n="trm.c2t">开始前先估算费用</b><span data-i18n="trm.c2d">按模型的公开价格估出 tokens 与费用；已经翻过的段落从缓存取，不再花钱。</span></figcaption>
+      </figure>
+    </div>
+    <div class="points">
+      <div class="reveal" style="--d:1"><b data-i18n="trm.p1t">进度是真的</b><span data-i18n="trm.p1d">大模型的回复边生成边接收，进度条跟着实际收到的内容走，长段落也不会等到超时。</span></div>
+      <div class="reveal" style="--d:2"><b data-i18n="trm.p2t">漏了自动补</b><span data-i18n="trm.p2d">模型漏译、原样返回英文或丢了公式时，只补问那几段；重复出现的表头和图注只翻译一次。</span></div>
+      <div class="reveal" style="--d:3"><b data-i18n="trm.p3t">各家模型都适配</b><span data-i18n="trm.p3d">模型或中转站不接受某个参数时自动去掉重发；推理模型默认少思考，翻得更快。</span></div>
+    </div>
+  </section>
+
+  <!-- Selection translation -->
+  <section class="feature" id="selection">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="sel.eyebrow">划词翻译</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="sel.title">卡在一句话上？<br>选中它。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="sel.lede">在阅读器里选中文字，点旁边的按钮或按 ⌥D / Alt D，译文就出现在原文下面。可以临时换一个翻译服务，拷贝译文，或连同原文一起加进这篇论文的笔记。划词翻译可以和全文翻译用不同的服务。</p>
+    </div>
+    <div class="stage reveal-scale">
+      <div class="win"><img src="assets/img/selection.webp" alt="在阅读器中划词翻译" width="2200" height="1327" loading="lazy"></div>
+    </div>
+  </section>
+
+  <!-- Edit PDF text -->
+  <section class="feature" id="edit">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="edit.eyebrow">编辑 PDF 文字</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="edit.title">哪个词译得不对，<br>就在页面上改掉。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="edit.lede">打开编辑模式，点一下文字就出现光标，直接原位修改。改动用原文的字体、字号和词距，只重排受影响的几行，英文按词典断词、中文遵守标点禁则，公式和引用跟着文字走。改完点别处就存进 PDF，随时可以撤销。</p>
+    </div>
+    <div class="stage stage-narrow reveal-scale">
+      <div class="win win-page"><img src="assets/img/edit.webp" alt="在译文里补上英文术语后，段落自动重新排行" width="1540" height="1354" loading="lazy"></div>
+      <span class="callout" style="--x:33%;--y:57.5%;--k:0" data-i18n="edit.p1">补上的术语，段落自动重排</span>
+    </div>
+  </section>
+
+  <!-- Quick Look -->
+  <section class="feature" id="quicklook">
+    <div class="section-head">
+      <p class="eyebrow reveal" data-i18n="ql.eyebrow">快速预览</p>
+      <h2 class="headline reveal" style="--d:1" data-i18n="ql.title">按一下空格，<br>先看一眼。</h2>
+      <p class="lede reveal" style="--d:2" data-i18n="ql.lede">在文献列表里选中论文按空格，不用打开阅读器就能翻看全文，方向键切到下一篇，预览跟着走。Mac 上用的是系统的“快速查看”，Windows 上是带缩略图的磨砂面板（下图），也可以用鼠标中键打开。</p>
+    </div>
+    <div class="stage reveal-scale">
+      <div class="win win-flat"><img src="assets/img/quicklook_windows.webp" alt="Windows 版的快速预览" width="2200" height="1323" loading="lazy"></div>
     </div>
   </section>
 
@@ -247,8 +289,8 @@
       </div>
       <div class="theme-window">
         <div class="win win-stack">
-          <img src="assets/img/library_light.webp" alt="浅色外观" width="2200" height="1323" loading="lazy">
-          <img class="theme-dark" id="themeDark" src="assets/img/library_dark.webp" alt="深色外观" width="2200" height="1323" loading="lazy">
+          <img src="assets/img/library_light.webp" alt="浅色外观" width="2200" height="1327" loading="lazy">
+          <img class="theme-dark" id="themeDark" src="assets/img/library_dark.webp" alt="深色外观" width="2200" height="1327" loading="lazy">
           <span class="theme-line" id="themeLine" aria-hidden="true"></span>
         </div>
       </div>
@@ -284,7 +326,7 @@
     </div>
     <div class="stats-grid">
       <div class="stat reveal" style="--d:1"><b><span class="count" data-to="6" data-dec="0">6</span></b><span data-i18n="stats.s1">个元数据来源</span></div>
-      <div class="stat reveal" style="--d:2"><b><span class="count" data-to="40" data-dec="0">40</span></b><span data-i18n="stats.s2">种翻译服务</span></div>
+      <div class="stat reveal" style="--d:2"><b><span class="count" data-to="41" data-dec="0">41</span></b><span data-i18n="stats.s2">种翻译服务</span></div>
       <div class="stat reveal" style="--d:3"><b><span class="count" data-to="9" data-dec="0">9</span></b><span data-i18n="stats.s3">种引用格式</span></div>
       <div class="stat reveal" style="--d:4"><b><span class="count" data-to="0" data-dec="0">0</span></b><span data-i18n="stats.s4">账号、订阅与使用数据收集</span></div>
     </div>
@@ -297,9 +339,9 @@
     </div>
     <div class="bento">
       <article class="card reveal" style="--d:0">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 7h22M5 14h13M5 21h9"/><path d="M19 27l4-10 4 10M20.5 24h5"/></svg>
-        <h3 data-i18n="more.c7t">划词翻译</h3>
-        <p data-i18n="more.c7d">读到一半卡住了？选中文字，按快捷键或点按钮，译文就在旁边，可以直接加入笔记。</p>
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 10V5h5M23 5h5v5M28 22v5h-5M9 27H4v-5"/><path d="M10 12h12M10 16h12M10 20h7"/></svg>
+        <h3 data-i18n="more.c7t">扫描件识别文字</h3>
+        <p data-i18n="more.c7d">导入扫描版 PDF 时用系统自带的文字识别读出文字，之后就能像普通论文一样选中、搜索、翻译和编辑。</p>
       </article>
       <article class="card reveal" style="--d:1">
         <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="12"/><path d="M4 16h24M16 4c3.5 3.4 5 7.4 5 12s-1.5 8.6-5 12M16 4c-3.5 3.4-5 7.4-5 12s1.5 8.6 5 12"/></svg>
@@ -317,9 +359,9 @@
         <p data-i18n="more.c3d">每个条目一篇笔记。阅读时选中文字，一键加入笔记。</p>
       </article>
       <article class="card reveal" style="--d:1">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9S3 16 3 16z"/><circle cx="16" cy="16" r="4"/></svg>
-        <h3 data-i18n="more.c8t">快速预览</h3>
-        <p data-i18n="more.c8d">在列表中按空格就能看一眼论文，方向键切换，不用打开阅读器。</p>
+        <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 26V16M13 26V10M20 26V14M27 26V6"/><path d="M3 26h26"/></svg>
+        <h3 data-i18n="more.c8t">期刊分区与影响因子</h3>
+        <p data-i18n="more.c8d">填写 easyScholar 密钥后，列表和检查器显示中科院分区、JCR 分区、影响因子和 CCF 等级，还能按它们排序。</p>
       </article>
       <article class="card reveal" style="--d:2">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 8h12M10 5v3M7 8c0 5 3 9 7 11M14 8c-1 5-4 9-9 12"/><path d="M17 27l5-13 5 13M19 23h6"/></svg>

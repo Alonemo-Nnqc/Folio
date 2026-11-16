@@ -55,6 +55,10 @@ public final class PDFParagraph: @unchecked Sendable {
     let originalAtoms: [Atom]
     private(set) var state: State
     let interpreter: ContentInterpreter
+    /// The file the paragraph was read from. The interpreter's fonts point into it, and nothing else may be holding it
+    /// by the time a character is typed: the editor that opened the paragraph is let go when another page of the
+    /// file changes, while this paragraph is still being edited.
+    private let document: CGPDFDocument?
     let mediaBox: CGRect
     let size: Double
     let pitch: Double
@@ -75,7 +79,8 @@ public final class PDFParagraph: @unchecked Sendable {
     let floor: Double
 
     init(page: Int, block index: Int, layoutBlock block: LayoutBlock, formulas spans: [FormulaSpan], interpreter: ContentInterpreter, mediaBox: CGRect,
-         floor: Double) {
+         floor: Double, document: CGPDFDocument? = nil) {
+        self.document = document
         self.floor = floor
         self.page = page
         self.block = index
@@ -305,6 +310,19 @@ public final class PDFParagraph: @unchecked Sendable {
                 let tighter = max(pitch * 0.88, room / Double(count - 1 - first))
                 if tighter < pitch { result = makeLayout(shrink: min(0.66, pageShrink * 0.95), pitch: tighter) }
             }
+            // Still no room (the change is near the paragraph's end, with few lines after it to bring closer): all
+            // the paragraph's lines a little closer together, from its first line down, when that makes it fit. A
+            // line more in ten lines is a tenth less between them, which does not show; the lines of text under the
+            // paragraph stay where they are.
+            if reachesBelowFloor(result), first > 0, lines.count >= 3 {
+                let count = result.lines.count
+                let room = lines[0].baseline - (floor + size * 0.3)
+                let tighter = max(pitch * 0.88, room / Double(max(count - 1, 1)))
+                if tighter < pitch {
+                    let whole = makeLayout(shrink: min(0.66, pageShrink * 0.95), pitch: tighter, from: 0)
+                    if !reachesBelowFloor(whole) { result = whole }
+                }
+            }
             result.overflows = reachesBelowFloor(result)
         }
         laidOut = result
@@ -346,11 +364,11 @@ public final class PDFParagraph: @unchecked Sendable {
     /// further it goes, a hyphen added costs, a line more than the page had costs a lot. The cheapest way usually keeps
     /// the edit in its own line (its spaces a little wider or narrower) and comes back to the page's own line breaks as
     /// soon as it can; from there the lines stay exactly as they are.
-    private func makeLayout(shrink: Double, pitch: Double) -> Result {
+    private func makeLayout(shrink: Double, pitch: Double, from: Int? = nil) -> Result {
         let atoms = state.atoms
         let tight = pitch < self.pitch - 0.001
-        // Untouched: every line, at its place.
-        guard let firstDirty = state.dirty.min(), atoms != originalAtoms else {
+        // Untouched: every line, at its place. (`from`: the line to set again from, when it is before the first changed one.)
+        guard let firstChanged = state.dirty.min(), case let firstDirty = min(firstChanged, from ?? firstChanged), atoms != originalAtoms else {
             return Result(lines: lines.indices.map { li in
                 Line(baseline: lines[li].baseline, items: originalPlaced(li), untouched: true, original: li)
             }, rewritten: [])
@@ -564,7 +582,9 @@ public final class PDFParagraph: @unchecked Sendable {
     /// The atom's own width.
     func width(_ atoms: [Atom], _ i: Int) -> Double {
         switch atoms[i].kind {
-        case .typed(let s): return style(for: i, in: atoms).advance(s)
+        case .typed(let s):
+            let style = style(for: i, in: atoms)
+            return standsIn(i, in: atoms) ? style.standInAdvance(s) : style.advance(s)
         case .typedSpace, .space, .lineEnd: return 0
         default: return geometry(of: atoms[i])?.width ?? 0
         }
@@ -580,6 +600,10 @@ public final class PDFParagraph: @unchecked Sendable {
         var glueBefore: Int?
         /// The gap's natural width.
         var natural: Double
+        /// The gap as the page drew it (a space of the page still between the two words it stood between), and the
+        /// line it was on: a sentence's end is wider than a word space, and stays so when its line is set again.
+        var drawn: Double?
+        var drawnLine = 0
         /// A soft hyphen of the page ending it: drawn when the line breaks here.
         var hyphen: Int?
         /// A place the dictionary allows: a hyphen is drawn when the line breaks here.
@@ -593,6 +617,7 @@ public final class PDFParagraph: @unchecked Sendable {
         var i = start
         var pendingGlue: Int?
         var pendingNatural = 0.0
+        var pendingDrawn: Double?
         var afterSoftHyphen = false
         while i < atoms.count {
             let atom = atoms[i]
@@ -600,6 +625,7 @@ public final class PDFParagraph: @unchecked Sendable {
                 if pendingGlue == nil || pendingNatural == 0 {
                     pendingGlue = i
                     if case .lineEnd(let spaced) = atom.kind { pendingNatural = spaced ? naturalSpace : 0 } else { pendingNatural = naturalSpace }
+                    pendingDrawn = drawnGap(atoms, i)
                 }
                 afterSoftHyphen = false
                 i += 1
@@ -641,6 +667,10 @@ public final class PDFParagraph: @unchecked Sendable {
                 let isLast = b == word.count
                 var piece = Piece(atoms: part, width: w, glueBefore: m == 0 ? pendingGlue : nil, natural: m == 0 ? natural : 0,
                                   hyphen: isLast ? hyphen : nil, kind: m == 0 ? kind : .part)
+                if m == 0, natural > 0, let glue = pendingGlue, let drawn = pendingDrawn {
+                    piece.drawn = drawn
+                    piece.drawnLine = atoms[glue].line
+                }
                 // A break after a hyphen of the word adds none.
                 if !isLast, let lastAtom = part.last, !["-", "\u{2010}"].contains(text(of: atoms[lastAtom])) { piece.addsHyphen = true }
                 pieces.append(piece)
@@ -651,9 +681,22 @@ public final class PDFParagraph: @unchecked Sendable {
             afterSoftHyphen = hyphen != nil
             pendingGlue = nil
             pendingNatural = 0
+            pendingDrawn = nil
             i = k
         }
         return pieces
+    }
+
+    /// How wide the page drew the space `i`: from the end of the character before it to the start of the one after,
+    /// when both are still the page's own and still its neighbours. Nil for a typed space, a line's end, or a space
+    /// that has lost a neighbour.
+    private func drawnGap(_ atoms: [Atom], _ i: Int) -> Double? {
+        guard case .space = atoms[i].kind, let o = atoms[i].original, i > 0, i + 1 < atoms.count,
+              atoms[i - 1].original == o - 1, atoms[i + 1].original == o + 1, !isGlue(atoms[i - 1]), !isGlue(atoms[i + 1]),
+              originalAtoms[o - 1].line == originalAtoms[o].line, originalAtoms[o + 1].line == originalAtoms[o].line,
+              let before = geometry(of: atoms[i - 1]), let after = geometry(of: atoms[i + 1]) else { return nil }
+        let gap = after.x - (before.x + before.width)
+        return gap > 0 ? gap : nil
     }
 
     /// Punctuation a line never starts with, and punctuation it never ends with.
@@ -732,21 +775,40 @@ public final class PDFParagraph: @unchecked Sendable {
             + (breaksAtHyphen ? hyphenWidth(end.hyphen!, atoms) : 0) + hyphenAdvance
         // Spaces take the slack (CJK characters when there are none; never the inside of a word).
         let gaps = line.dropFirst()
+        // Each space starts from what the page gave it: on a line the page justifies, as wide as it was drawn (the
+        // space after a sentence wider than the others); on the paragraph's last line and in ragged text, as it stood
+        // there. A line whose words did not change comes out exactly as it was; one that changed shares only the
+        // difference among its spaces, and still looks like the lines around it.
+        let lastLine = lines.count - 1
+        let drawn: [Double?] = gaps.map { gap in
+            guard gap.natural > 0, let drawn = gap.drawn, justified && !last || !justified || gap.drawnLine == lastLine else { return nil }
+            return min(max(drawn, gap.natural * 0.5), gap.natural * 3)
+        }
+        // A space beside what was typed has no width of its own from the page: on a justified line it is as wide as
+        // the line's other spaces usually are (not the narrow natural space, which would pinch the typed word).
+        let known = drawn.compactMap { $0 }.sorted()
+        let usual = justified && !last && !known.isEmpty ? known[known.count / 2] : nil
+        let base: [Double] = zip(gaps, drawn).map { gap, drawn in gap.natural > 0 ? drawn ?? usual ?? gap.natural : gap.natural }
+        let set = natural + zip(gaps, base).reduce(0.0) { $0 + $1.1 - $1.0.natural }
         var extra = 0.0
-        if justified && !last || natural > available + 0.01 { extra = available - natural }
+        if justified && !last || set > available + 0.01 { extra = available - set }
         // Stretching, spaces and the joints between CJK characters share it as they can; squeezing, spaces alone.
-        var weight: [Double] = gaps.map { $0.natural > 0 ? $0.natural * 0.6 : ($0.kind == .cjk && extra > 0 ? size * 0.1 : 0) }
+        // Among the words of a line with spaces, a few Chinese characters stay together: a joint that took a space's
+        // share would read as a space ("测 试"). A line of Chinese spreads over its joints.
+        let spaces = gaps.filter { $0.natural > 0 }.count, joints = gaps.filter { $0.natural == 0 && $0.kind == .cjk }.count
+        let joint = spaces >= 2 && joints <= spaces * 2 ? size * 0.012 : size * 0.1
+        var weight: [Double] = gaps.map { $0.natural > 0 ? $0.natural * 0.6 : ($0.kind == .cjk && extra > 0 ? joint : 0) }
         if weight.allSatisfy({ $0 == 0 }) { weight = gaps.map { $0.kind == .cjk ? 1 : 0 } }
         let weightSum = weight.reduce(0, +)
         if weightSum == 0 { extra = 0 }
         var x = left
-        if centered { x = columnLeft + (right - columnLeft - natural) / 2 }
+        if centered { x = columnLeft + (right - columnLeft - set) / 2 }
         var items: [Placed] = []
         var previousEnd: Int?
         for (n, piece) in line.enumerated() {
             let first = piece.atoms.first ?? piece.hyphen ?? 0
             if n > 0 {
-                let gap = piece.natural + (weightSum > 0 ? extra * weight[n - 1] / weightSum : 0)
+                let gap = base[n - 1] + (weightSum > 0 ? extra * weight[n - 1] / weightSum : 0)
                 // The glue between the pieces: the one taking the gap, the others with none.
                 if let p = previousEnd, p + 1 < first {
                     for g in (p + 1)..<first {
@@ -799,11 +861,44 @@ public final class PDFParagraph: @unchecked Sendable {
 
         func advance(_ text: String) -> Double {
             if let g = glyph(text) { return g.width * hypot(context.matrix.a, context.matrix.b) }
-            return paragraph.fallbackFont(like: context).map { font in
+            return standInAdvance(text)
+        }
+
+        /// The character's width in the system font standing in.
+        func standInAdvance(_ text: String) -> Double {
+            paragraph.fallbackFont(like: context).map { font in
                 let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [kCTFontAttributeName as NSAttributedString.Key: font]))
                 return CTLineGetTypographicBounds(line, nil, nil, nil)
             } ?? context.size * 0.5
         }
+    }
+
+    /// Whether the typed character `i` is drawn in the system font standing in: no font of the page has it, or none has
+    /// another character of the word it was typed in. A word is set in one font: a single stand-in letter among the
+    /// page's own would show as a different face, and would cut the word in two for searching and copying (the page's
+    /// text would read "carefull y").
+    func standsIn(_ i: Int, in atoms: [Atom]) -> Bool {
+        func lacks(_ k: Int) -> Bool {
+            guard case .typed(let s) = atoms[k].kind else { return false }
+            return style(for: k, in: atoms).glyph(s) == nil
+        }
+        func isTyped(_ k: Int) -> Bool {
+            if case .typed = atoms[k].kind { return true }
+            return false
+        }
+        guard isTyped(i) else { return false }
+        if lacks(i) { return true }
+        var k = i - 1
+        while k >= 0, isTyped(k) {
+            if lacks(k) { return true }
+            k -= 1
+        }
+        k = i + 1
+        while k < atoms.count, isTyped(k) {
+            if lacks(k) { return true }
+            k += 1
+        }
+        return false
     }
 
     /// The style of the typed atom `i`: from the nearest drawn character before it, else after it.
@@ -929,12 +1024,18 @@ public final class PDFParagraph: @unchecked Sendable {
                 case .typed(let s):
                     let style = style(for: item.atom, in: atoms)
                     let origin = CGPoint(x: item.x, y: line.baseline + style.rise)
-                    if var glyph = style.glyph(s) {
+                    if !standsIn(item.atom, in: atoms), var glyph = style.glyph(s) {
                         glyph.matrix.tx = origin.x
                         glyph.matrix.ty = origin.y
                         drawing.glyphs.append(glyph)
                     } else if let font = fallbackFont(like: style.context) {
-                        drawing.fallback.append((s, origin, font, style.context.color))
+                        // Characters following one another are one piece of text (a word reads as a word).
+                        if let last = drawing.fallback.last, last.font == font, last.color == style.context.color, abs(last.origin.y - origin.y) < 0.01,
+                           abs(last.origin.x + style.standInAdvance(last.text) - origin.x) < max(0.5, style.context.size * 0.08) {
+                            drawing.fallback[drawing.fallback.count - 1].text += s
+                        } else {
+                            drawing.fallback.append((s, origin, font, style.context.color))
+                        }
                     }
                     if item.hyphenAfter { appendHyphen(after: item, baseline: line.baseline, atoms: atoms, to: &drawing) }
                 default: break

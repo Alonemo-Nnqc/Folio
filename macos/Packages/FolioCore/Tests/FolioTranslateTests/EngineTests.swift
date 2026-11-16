@@ -147,17 +147,19 @@ import Testing
 @Suite(.serialized) struct JobTests {
     @Test func translatesWithACommandAndFilesBothOutputs() async throws {
         let folder = TemporaryDirectory()
-        TranslationJob.supportDirectory = folder.url.appending(path: "support")
+        let support = folder.url.appending(path: "support")
         let input = folder.url.appending(path: "paper.pdf")
         var page: [TestPDF.Element] = [.text("A Paper About Layout Analysis", x: 120, y: 730, size: 18, bold: true)]
         page += TestPDF.paragraph(["Domain generalization aims to train models that work well on unseen",
                                    "target domains. This paper studies how layout analysis keeps figures."], top: 680)
         try TestPDF.make([page, page]).write(to: input)
-        // The "translator" upper-cases its input.
+        // The "translator" upper-cases its input (taken as French: into Chinese, a text that comes back without a
+        // single Chinese character counts as untranslated, and is not kept for the next run).
         let command = try folder.script("upper.sh", "tr '[:lower:]' '[:upper:]'")
         let request = TranslationRequest(input: input, outputDirectory: folder.url.appending(path: "out"), serviceID: "clitranslator",
-                                         fieldValues: ["--clitranslator-command": command.path], options: TranslationOptions(outputs: .both))
-        let events = await collect(TranslationJob(request: request).start())
+                                         fieldValues: ["--clitranslator-command": command.path],
+                                         options: TranslationOptions(langOut: "fr", outputs: .both))
+        let events = await collect(TranslationJob(request: request, supportDirectory: support).start())
         guard case .finished(let mono?, let dual?) = events.last else {
             Issue.record("did not finish: \(events)")
             return
@@ -172,8 +174,9 @@ import Testing
 
         // A second run comes from the cache: no command needed.
         let cached = TranslationRequest(input: input, outputDirectory: folder.url.appending(path: "out2"), serviceID: "clitranslator",
-                                        fieldValues: ["--clitranslator-command": "/usr/bin/false"], options: TranslationOptions(outputs: .mono))
-        let again = await collect(TranslationJob(request: cached).start())
+                                        fieldValues: ["--clitranslator-command": "/usr/bin/false"],
+                                        options: TranslationOptions(langOut: "fr", outputs: .mono))
+        let again = await collect(TranslationJob(request: cached, supportDirectory: support).start())
         if case .finished(let mono?, nil) = again.last {
             #expect(PDFDocument(url: mono)?.string?.contains("DOMAIN GENERALIZATION AIMS") == true)
         } else {
@@ -183,12 +186,12 @@ import Testing
 
     @Test func failuresAreExplained() async throws {
         let folder = TemporaryDirectory()
-        TranslationJob.supportDirectory = folder.url.appending(path: "support")
+        let support = folder.url.appending(path: "support")
         let input = folder.url.appending(path: "paper.pdf")
         try TestPDF.make([TestPDF.paragraph(["Some text to translate here and there."], top: 700)]).write(to: input)
         let request = TranslationRequest(input: input, outputDirectory: folder.url.appending(path: "out"), serviceID: "openai",
                                          options: TranslationOptions(ignoreCache: true))
-        let events = await collect(TranslationJob(request: request).start())
+        let events = await collect(TranslationJob(request: request, supportDirectory: support).start())
         guard case .failed(let message, _) = events.last else {
             Issue.record("expected a failure: \(events)")
             return

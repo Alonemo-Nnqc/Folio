@@ -95,6 +95,8 @@ public sealed class AppSettings
     public OpenWith OpenWith { get => Enum.TryParse<OpenWith>(Get("openWithMode", "folio"), true, out var v) ? v : OpenWith.Folio; set => Set("openWithMode", value.ToString().ToLowerInvariant()); }
     public string OpenWithAppPath { get => Get("openWithAppPath", ""); set => Set("openWithAppPath", value); }
     public bool IncludeSubgroupItems { get => Get("includeSubgroupItems", true); set => Set("includeSubgroupItems", value); }
+    /// <summary>设置 ▸ 通用 ▸ 列表: the green "已翻译" badge after the title of papers that have a translation.</summary>
+    public bool ShowTranslatedBadge { get => Get("showTranslatedBadge", true); set => Set("showTranslatedBadge", value); }
     public bool AutoRenameFiles { get => Get("autoRenameFiles", true); set => Set("autoRenameFiles", value); }
     public bool AutoPurgeTrash { get => Get("autoPurgeTrash", true); set => Set("autoPurgeTrash", value); }
     public string CrossrefMailto { get => Get("crossrefMailto", ""); set => Set("crossrefMailto", value); }
@@ -104,7 +106,18 @@ public sealed class AppSettings
     public bool ReopenReaderTabs { get => Get("reopenReaderTabs", true); set => Set("reopenReaderTabs", value); }
     /// <summary>设置 ▸ 通用 ▸ 背景透明度: how much of the desktop shows through the panels, 0 (opaque) to 1 (as the macOS app).</summary>
     public double BackgroundTranslucency { get => Math.Clamp(Get("backgroundTranslucency", 0.0), 0, 1); set => Set("backgroundTranslucency", Math.Clamp(value, 0, 1)); }
+    /// <summary>The highlighter's colour before 1.4 (设置 ▸ 阅读 ▸ 默认高亮颜色): the reader takes it as the highlighter's
+    /// until a colour is chosen on the toolbar.</summary>
     public string HighlightColor { get => Get("highlightColor", "yellow"); set => Set("highlightColor", value); }
+    /// <summary>Each annotation tool's colour, chosen in its own menu on the reader's toolbar: tool → colour key.</summary>
+    public Dictionary<string, string> AnnotationToolColors { get => Get<Dictionary<string, string>>("annotationToolColors", []); set => Set("annotationToolColors", value); }
+    /// <summary>Colours mixed for the annotation tools (自定义颜色…), newest first, at most five: "#RRGGBB".</summary>
+    public List<string> AnnotationCustomColors { get => Get<List<string>>("annotationCustomColors", []); set => Set("annotationCustomColors", value); }
+    public double InkLineWidth { get => Get("inkLineWidth", 2.0); set => Set("inkLineWidth", value); }
+    public double TextBoxFontSize { get => Get("textBoxFontSize", 13.0); set => Set("textBoxFontSize", value); }
+    public bool ReturnToSelectAfterPlacing { get => Get("returnToSelectAfterPlacing", true); set => Set("returnToSelectAfterPlacing", value); }
+    public bool RememberReadingPosition { get => Get("rememberReadingPosition", true); set => Set("rememberReadingPosition", value); }
+    public bool ShowAnnotationTooltips { get => Get("showAnnotationTooltips", true); set => Set("showAnnotationTooltips", value); }
     public bool UseZoteroRecognizer { get => Get("useZoteroRecognizer", true); set => Set("useZoteroRecognizer", value); }
     public bool MarkReadingOnOpen { get => Get("markReadingOnOpen", true); set => Set("markReadingOnOpen", value); }
     public bool ReaderPageShadows { get => Get("readerPageShadows", true); set => Set("readerPageShadows", value); }
@@ -144,8 +157,6 @@ public sealed class AppSettings
     public List<string> SidebarCollapsedGroups { get => Get<List<string>>("sidebarCollapsedGroups", []); set => Set("sidebarCollapsedGroups", value); }
     public Dictionary<string, double> ColumnWidths { get => Get<Dictionary<string, double>>("columnWidths", []); set => Set("columnWidths", value); }
     public List<string> VisibleColumns { get => Get<List<string>>("visibleColumns", ["title", "source", "authors", "year", "tags", "dateAdded"]); set => Set("visibleColumns", value); }
-    public double SidebarWidth { get => Get("sidebarWidth", 240.0); set => Set("sidebarWidth", value); }
-    public double InspectorWidth { get => Get("inspectorWidth", 320.0); set => Set("inspectorWidth", value); }
     public bool InspectorVisible { get => Get("inspectorVisible", true); set => Set("inspectorVisible", value); }
     public bool SidebarVisible { get => Get("sidebarVisible", true); set => Set("sidebarVisible", value); }
 

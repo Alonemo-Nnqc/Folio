@@ -37,7 +37,6 @@ struct TextRun: Sendable {
         let minX = min(origin.x, end.x), maxX = max(origin.x, end.x)
         return CGRect(x: minX, y: min(origin.y, end.y) - fontSize * 0.25, width: max(maxX - minX, 0.1), height: fontSize * 1.1)
     }
-    var midpoint: CGPoint { CGPoint(x: (origin.x + end.x) / 2, y: (origin.y + end.y) / 2 + fontSize * 0.3) }
 }
 
 /// One glyph drawn by a text operator: its code, font and the exact matrix it was drawn with, so it can be
@@ -144,6 +143,8 @@ final class ContentInterpreter {
         var fontSize = 0.0
         var fillColor = RGBColor.black
         var strokeColor = RGBColor.black
+        var fillSpace = PDFColorSpace.gray
+        var strokeSpace = PDFColorSpace.gray
         var lineWidth = 1.0
         var rise = 0.0
         var render = 0
@@ -202,7 +203,7 @@ final class ContentInterpreter {
                 rect = clipped
             }
             let scale = sqrt(abs(gs.ctm.a * gs.ctm.d - gs.ctm.b * gs.ctm.c))
-            if kind == .fill, rect.width < 40, rect.height < 40 { paths[marks.count] = gs.ctm }
+            if kind == .fill || kind == .stroke, rect.width < 40, rect.height < 40 { paths[marks.count] = gs.ctm }
             marks.append(GraphicMark(kind: kind, rect: rect, isWhite: kind == .fill && gs.fillWhite,
                                      location: OpLocation(stream: path, index: index),
                                      hasCurves: pathCurves, segmentCount: pathSegments, opRange: start...index,
@@ -210,20 +211,10 @@ final class ContentInterpreter {
                                      lineWidth: kind == .stroke ? max(gs.lineWidth, 0) * scale : 0))
         }
 
-        func color(_ operands: [ContentOperand]) -> RGBColor {
-            let n = operands.compactMap(\.number)
-            switch n.count {
-            case 1: return RGBColor(r: n[0], g: n[0], b: n[0])
-            case 3: return RGBColor(r: n[0], g: n[1], b: n[2])
-            case 4: return RGBColor(r: (1 - n[0]) * (1 - n[3]), g: (1 - n[1]) * (1 - n[3]), b: (1 - n[2]) * (1 - n[3]))
-            default: return .black
-            }
-        }
-
-        func setFillColor(_ operands: [ContentOperand]) {
-            gs.fillColor = color(operands)
-            let n = operands.compactMap(\.number)
-            gs.fillWhite = n.count > 0 && gs.fillColor.r >= 0.99 && gs.fillColor.g >= 0.99 && gs.fillColor.b >= 0.99
+        func setFillColor(_ n: [Double], in space: PDFColorSpace) {
+            gs.fillSpace = space
+            gs.fillColor = space.rgb(n)
+            gs.fillWhite = !n.isEmpty && gs.fillColor.r >= 0.99 && gs.fillColor.g >= 0.99 && gs.fillColor.b >= 0.99
         }
 
         func show(_ index: Int, _ elements: [ContentOperand]) {
@@ -293,12 +284,23 @@ final class ContentInterpreter {
             case "cm":
                 let m = CGAffineTransform(a: num(0), b: num(1), c: num(2), d: num(3), tx: num(4), ty: num(5))
                 gs.ctm = m.concatenating(gs.ctm)
-            case "g", "rg", "k", "sc", "scn": setFillColor(o)
-            case "G", "RG", "K", "SC", "SCN": gs.strokeColor = color(o)
+            // Colours, read in the space they are given in (`1 scn` is full ink in a Separation space, not white).
+            case "g": setFillColor(o.compactMap(\.number), in: .gray)
+            case "rg": setFillColor(o.compactMap(\.number), in: .rgb)
+            case "k": setFillColor(o.compactMap(\.number), in: .cmyk)
+            case "sc", "scn": setFillColor(o.compactMap(\.number), in: gs.fillSpace)
+            case "G": gs.strokeSpace = .gray; gs.strokeColor = PDFColorSpace.gray.rgb(o.compactMap(\.number))
+            case "RG": gs.strokeSpace = .rgb; gs.strokeColor = PDFColorSpace.rgb.rgb(o.compactMap(\.number))
+            case "K": gs.strokeSpace = .cmyk; gs.strokeColor = PDFColorSpace.cmyk.rgb(o.compactMap(\.number))
+            case "SC", "SCN": gs.strokeColor = gs.strokeSpace.rgb(o.compactMap(\.number))
             case "cs":
+                let space = colorSpace(o.first?.name, resources: resources)
+                setFillColor(space.initial, in: space)
                 gs.fillWhite = false
-                gs.fillColor = .black
-            case "CS": gs.strokeColor = .black
+            case "CS":
+                let space = colorSpace(o.first?.name, resources: resources)
+                gs.strokeSpace = space
+                gs.strokeColor = space.rgb(space.initial)
             case "w": gs.lineWidth = num(0)
             // Paths
             case "m":
@@ -418,6 +420,35 @@ final class ContentInterpreter {
         if let stream { images[marks.count] = (stream, ctm) }
         marks.append(GraphicMark(kind: .image, rect: rect, isWhite: false, location: location, hasCurves: false, segmentCount: 0,
                                  opRange: location.index...location.index))
+    }
+
+    private var colorSpaceCache: [String: PDFColorSpace] = [:]
+
+    /// Where the page has something coloured under its text (pictures, shadings, dark fills): pale words there are
+    /// meant to be; pale words anywhere else are a colour misread, and are drawn in black.
+    private(set) lazy var grounds: [CGRect] = marks.filter { mark in
+        switch mark.kind {
+        case .image, .shading: true
+        case .fill: !mark.isWhite && (mark.color.r + mark.color.g + mark.color.b) / 3 < 0.8
+        case .stroke: false
+        }
+    }.map(\.rect)
+
+    /// A glyph's colour to draw it again in: its own, unless that would leave it invisible on the paper.
+    func visibleColor(of glyph: Glyph) -> RGBColor {
+        guard glyph.color.isPale else { return glyph.color }
+        let center = CGPoint(x: glyph.width / 2, y: 0.3).applying(glyph.matrix)
+        return grounds.contains { $0.insetBy(dx: -0.5, dy: -0.5).contains(center) } ? glyph.color : .black
+    }
+
+    /// The colour space a `cs`/`CS` operand names, from the resources of the stream it is in.
+    private func colorSpace(_ name: String?, resources: CGPDFDictionaryRef?) -> PDFColorSpace {
+        guard let name else { return .gray }
+        let key = "\(resources.map { PDFCopier.key($0) } ?? 0)/\(name)"
+        if let cached = colorSpaceCache[key] { return cached }
+        let space = PDFColorSpace.named(name, resources: resources)
+        colorSpaceCache[key] = space
+        return space
     }
 
     private func font(named name: String, resources: CGPDFDictionaryRef?) -> Int? {
@@ -596,6 +627,8 @@ final class FontMetrics {
 struct RGBColor: Sendable, Hashable {
     var r: Double, g: Double, b: Double
     static let black = RGBColor(r: 0, g: 0, b: 0)
+    /// White or nearly: invisible on the paper.
+    var isPale: Bool { min(r, g, b) > 0.85 }
 }
 
 /// What the layout needs to know about a font: its name and style.

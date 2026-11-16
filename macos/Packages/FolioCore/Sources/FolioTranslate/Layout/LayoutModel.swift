@@ -33,14 +33,6 @@ struct LayoutLine: Sendable {
 enum BlockKind: String, Sendable, CaseIterable {
     case title, heading, paragraph, caption, tableCell
     case formula, figure, header, reference, author, code, rotated, other
-
-    /// Kinds translated by default.
-    var isTranslatable: Bool {
-        switch self {
-        case .title, .heading, .paragraph, .caption, .tableCell: true
-        default: false
-        }
-    }
 }
 
 /// A unit of text: a paragraph, heading, caption, table cell … with the lines it is made of.
@@ -58,9 +50,9 @@ struct LayoutBlock: Sendable {
     var rect: CGRect { lines.dropFirst().reduce(lines[0].rect) { $0.union($1.rect) } }
     var size: Double {
         // The size most characters have.
-        var counts: [Double: Int] = [:]
-        for line in lines { counts[(line.size * 4).rounded() / 4, default: 0] += line.visibleCount }
-        return counts.max { $0.value < $1.value }?.key ?? lines[0].size
+        var counts = Tally<Double>()
+        for line in lines { counts.add((line.size * 4).rounded() / 4, line.visibleCount) }
+        return counts.most ?? lines[0].size
     }
     /// Baseline distance between lines (one line: 1.2 em).
     var pitch: Double {
@@ -70,14 +62,14 @@ struct LayoutBlock: Sendable {
         return gaps[gaps.count / 2]
     }
     var font: FontInfo {
-        var counts: [FontInfo: Int] = [:]
-        for line in lines { counts[line.font, default: 0] += line.visibleCount }
-        return counts.max { $0.value < $1.value }?.key ?? lines[0].font
+        var counts = Tally<FontInfo>()
+        for line in lines { counts.add(line.font, line.visibleCount) }
+        return counts.most ?? lines[0].font
     }
     var color: RGBColor {
-        var counts: [RGBColor: Int] = [:]
-        for line in lines { counts[line.color, default: 0] += line.visibleCount }
-        return counts.max { $0.value < $1.value }?.key ?? lines[0].color
+        var counts = Tally<RGBColor>()
+        for line in lines { counts.add(line.color, line.visibleCount) }
+        return counts.most ?? lines[0].color
     }
     var text: String { lines.map(\.text).joined(separator: " ") }
     /// How far the first line starts right of the others.
@@ -100,6 +92,9 @@ struct LayoutBlock: Sendable {
         let r = rect
         guard lines.allSatisfy({ abs(($0.minX + $0.maxX) / 2 - r.midX) < max(1.5, size * 0.2) }) else { return false }
         if lines.count == 1 { return centeredInColumn }
+        // A list item's second line starts after the bullet; when it happens to end as far from the right edge, its
+        // middle is the block's, and the item is no more centred for it.
+        if LayoutAnalyzer.isListItem(lines[0].text), lines.dropFirst().allSatisfy({ $0.minX > lines[0].minX + size * 0.5 }) { return false }
         if lines.contains(where: { $0.minX - r.minX > size * 0.8 && r.maxX - $0.maxX > size * 0.8 }) { return true }
         // Lines of nearly one width have none set in from both sides; a title's place on the page still says it is centred.
         return centeredInColumn && (kind == .title || kind == .heading)
@@ -121,4 +116,29 @@ struct PageLayout: Sendable {
     var glyphs: [Glyph] = []
     /// The page's link annotations.
     var links: [PageLink] = []
+}
+
+/// Counts by key, for finding the one counted most. Of keys counted alike, `most` is the one counted first: the same
+/// on every run. (A dictionary's `max` gives whichever of them its hashing puts first, which changes from one launch
+/// of the app to the next, and with it how the same page is analysed.)
+struct Tally<Key: Hashable> {
+    private var counts: [Key: Int] = [:]
+    private var order: [Key] = []
+
+    var isEmpty: Bool { order.isEmpty }
+
+    mutating func add(_ key: Key, _ count: Int = 1) {
+        if counts[key] == nil { order.append(key) }
+        counts[key, default: 0] += count
+    }
+
+    var most: Key? {
+        var best: Key?
+        var highest = Int.min
+        for key in order where counts[key]! > highest {
+            best = key
+            highest = counts[key]!
+        }
+        return best
+    }
 }

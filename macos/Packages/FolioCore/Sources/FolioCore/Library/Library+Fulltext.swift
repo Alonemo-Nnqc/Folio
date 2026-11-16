@@ -29,13 +29,6 @@ extension Library {
         }
     }
 
-    public func markFulltextNotApplicable(fileId: String) throws {
-        try writer.write {
-            try $0.execute(sql: "UPDATE file SET fulltextState = ? WHERE id = ?",
-                           arguments: [FulltextState.notApplicable.rawValue, fileId])
-        }
-    }
-
     public func filesNeedingFulltext() throws -> [FileRecord] {
         try writer.read {
             try FileRecord.filter(Column("fulltextState") == FulltextState.pending.rawValue).fetchAll($0)

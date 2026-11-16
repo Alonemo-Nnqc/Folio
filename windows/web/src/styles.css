@@ -165,16 +165,25 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .td.dim { color: var(--secondary); }
 .disc { width: 18px; height: 22px; border: 0; background: transparent; padding: 0; flex: none; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; }
 .disc-space { width: 18px; flex: none; }
-.chip { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 11px; font-weight: 500; border: 1px solid; max-width: 100%; vertical-align: middle; }
+/* A tag, as on the Mac: a soft capsule led by its colour dot (the way Finder shows tags), no outline. */
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px 0 6px; border-radius: 9px; font-size: 11px; font-weight: 500; max-width: 100%; vertical-align: middle; }
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--dot); flex: none; }
+/* "+N": the tags that did not fit, without a dot (as on the Mac). */
+.chip.plain { padding: 0 7px; }
+.chip.plain::before { display: none; }
 .chip .x { margin-left: 4px; border: 0; background: transparent; color: inherit; padding: 0; display: inline-flex; font-weight: 700; }
 .chip .ellipsis { display: block; }
 .empty { position: absolute; inset: 40px 0 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--secondary); text-align: center; pointer-events: none; padding: 20px; }
 .empty .big { color: var(--text); font-size: 16px; font-weight: 600; }
 .insertion { position: absolute; left: 10px; right: 10px; height: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; z-index: 4; }
-/* "已翻译" after a title, in the shape of the macOS badge: a soft green capsule that never shrinks. */
-.translated-badge { flex: none; display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 11px; font-weight: 600;
+/* Badges ("已翻译", "默认"), as on the Mac: small soft rounded rectangles that never shrink. */
+.translated-badge, .default-badge { flex: none; display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border-radius: 4.5px; font-size: 10.5px; font-weight: 600;
   color: #248a3d; background: color-mix(in srgb, #34c759 16%, transparent); }
-:root[data-theme="dark"] .translated-badge { color: #4cd964; background: color-mix(in srgb, #30d158 22%, transparent); }
+:root[data-theme="dark"] .translated-badge { color: #4cd964; background: color-mix(in srgb, #30d158 24%, transparent); }
+.default-badge { color: color-mix(in srgb, var(--accent) 70%, black); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+:root[data-theme="dark"] .default-badge { color: color-mix(in srgb, var(--accent) 60%, white); background: color-mix(in srgb, var(--accent) 24%, transparent); }
+/* "有笔记" after a title (the Mac's note symbol). */
+.note-mark { flex: none; color: var(--secondary); margin-left: -2px; }
 .progress { display: inline-flex; align-items: center; gap: 6px; flex: none; color: var(--secondary); font-size: 12px; }
 .progress .stage { max-width: 130px; }
 .progress .track { width: 64px; height: 4px; border-radius: 2px; background: var(--separator-strong); overflow: hidden; }
@@ -277,6 +286,18 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .menu-item .mi-dot { width: 11px; height: 11px; border-radius: 6px; }
 .menu-sep { height: 1px; margin: 5px 9px; background: var(--separator); }
 .menu-title { padding: 7px 10px 3px; font-size: 11px; font-weight: 600; color: var(--secondary); }
+/* A row of choices in a menu: colours (the last, many-coloured one mixes one's own), or sizes shown as they look. */
+.menu-row { display: flex; align-items: center; gap: 4px; padding: 4px 8px 6px; }
+.menu-row.colors { gap: 2px; }
+.menu-choice { width: 26px; height: 26px; flex: none; border: 0; padding: 0; border-radius: 7px; background: transparent; display: inline-flex; align-items: center; justify-content: center; color: var(--text); }
+.menu-row.sizes .menu-choice { width: 32px; height: 30px; }
+.menu-row.sizes .menu-choice:hover { background: var(--hover); }
+.menu-row.sizes .menu-choice.on { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.menu-row.colors .menu-choice .swatch-dot { width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; }
+.menu-row.colors .menu-choice:hover .swatch-dot { box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .16), 0 0 0 2px var(--popup), 0 0 0 3.5px color-mix(in srgb, var(--text) 45%, transparent); }
+.menu-size-dot { border-radius: 50%; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .25); }
+.menu-size-ring { border-radius: 50%; border: 1.3px solid color-mix(in srgb, var(--text) 80%, transparent); background: color-mix(in srgb, var(--text) 14%, transparent); box-sizing: border-box; }
+.menu-size-letter { font-weight: 500; line-height: 1; }
 
 /* Sheets. */
 .scrim { position: fixed; inset: 0; z-index: 800; background: var(--scrim); display: flex; align-items: center; justify-content: center; animation: fade-in .1s; app-region: no-drag; padding: 40px; }
@@ -320,8 +341,6 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .reader-notes { position: absolute; right: 0; top: 0; bottom: 0; background: var(--inspector); border-left: 1px solid var(--separator); display: flex; flex-direction: column; z-index: 12; }
 .color-dot { width: 16px; height: 16px; border-radius: 8px; box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .2); }
 .hud { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 15; background: var(--popup); backdrop-filter: blur(24px); padding: 6px 8px 6px 14px; border-radius: 16px; box-shadow: var(--popup-shadow); }
-.note-pop { position: fixed; z-index: 950; background: var(--sheet); padding: 8px; border-radius: 10px; box-shadow: var(--popup-shadow); width: 300px; app-region: no-drag; }
-.note-pop textarea { width: 100%; height: 130px; }
 
 /* Settings. */
 .settings { display: flex; height: 100%; }
@@ -531,9 +550,9 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
    JCR quartiles blue, IF violet, CCF teal; the text is the tint darkened (light) or lightened (dark). */
 .jm-row { margin: 0 0 4px 64px; min-height: 18px; display: flex; align-items: center; }
 .jm-badges { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-.jm-badge { --tint: 128, 128, 140; font-size: 11px; font-weight: 500; line-height: 18px; padding: 0 7px; border-radius: 9px; white-space: nowrap; cursor: default;
-  background: rgba(var(--tint), .14); color: color-mix(in srgb, rgb(var(--tint)) 72%, black); box-shadow: inset 0 0 0 .5px rgba(var(--tint), .28); }
-:root[data-theme="dark"] .jm-badge { background: rgba(var(--tint), .22); color: color-mix(in srgb, rgb(var(--tint)) 62%, white); }
+.jm-badge { --tint: 128, 128, 140; font-size: 11px; font-weight: 500; line-height: 18px; padding: 0 6px; border-radius: 4.5px; white-space: nowrap; cursor: default;
+  background: rgba(var(--tint), .13); color: color-mix(in srgb, rgb(var(--tint)) 72%, black); }
+:root[data-theme="dark"] .jm-badge { background: rgba(var(--tint), .24); color: color-mix(in srgb, rgb(var(--tint)) 62%, white); }
 .jm-badge.strong { font-weight: 700; }
 .jm-cas1 { --tint: 235, 66, 61; } .jm-cas2 { --tint: 245, 140, 26; } .jm-cas3 { --tint: 140, 179, 26; } .jm-cas4 { --tint: 102, 153, 133; }
 .jm-q1 { --tint: 26, 115, 242; } .jm-q2 { --tint: 46, 158, 219; } .jm-q3 { --tint: 77, 168, 179; } .jm-q4 { --tint: 128, 143, 158; }
@@ -559,3 +578,92 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .scan-close { width: 20px; height: 20px; border: 0; border-radius: 10px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; }
 .scan-close:hover { background: var(--hover); color: var(--text); }
 @keyframes scan-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* 术语表: the list of terms in its sheet. */
+.sheet.glossary { height: 560px; }
+.glossary-top { display: flex; align-items: center; gap: 10px; flex: none; margin-bottom: 12px; }
+.glossary-top .main { flex: 1; min-width: 0; }
+.glossary-top h2 { margin: 0 0 1px; }
+.glossary-top .search-field { flex: 0 0 170px; height: 28px; border-radius: 7px; box-shadow: none; background: var(--field); border: 1px solid var(--field-border); padding: 0 8px; }
+.glossary-list { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--card); border-radius: 10px; box-shadow: inset 0 0 0 .5px var(--hairline); overflow: hidden; }
+.glossary-rows { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+.glossary-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) minmax(0, .8fr) 24px; align-items: center; gap: 8px; padding: 0 10px; min-height: 32px; border-top: 1px solid var(--separator); }
+.glossary-rows .glossary-row:first-child { border-top: 0; }
+.glossary-row.head { min-height: 28px; border-top: 0; border-bottom: 1px solid var(--separator); font-size: 12px; color: var(--secondary); flex: none; }
+.glossary-row.head span:nth-child(2), .glossary-row.head span:nth-child(3) { padding-left: 7px; }
+.glossary-row:not(.head):hover { background: var(--hover); }
+.glossary-row.off .field { color: var(--secondary); }
+.glossary-row .field.plain { border-color: transparent; background: transparent; padding: 0 6px; height: 24px; }
+.glossary-row .field.plain:hover { border-color: var(--separator-strong); }
+.glossary-row .field.plain:focus { background: var(--content); border-color: var(--accent); }
+.glossary-row > .secondary { font-size: 12px; }
+.glossary-remove { width: 24px; height: 24px; border: 0; border-radius: 5px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; padding: 0; opacity: 0; }
+.glossary-row:hover .glossary-remove, .glossary-remove:focus-visible { opacity: 1; }
+.glossary-remove:hover { background: var(--pressed); color: var(--red); }
+.glossary-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0 60px; text-align: center; color: var(--secondary); }
+.glossary-empty b { color: var(--text); font-weight: 600; }
+.glossary-add { display: flex; gap: 8px; margin-top: 12px; flex: none; }
+
+/* The annotation tools (as on the Mac): the highlighter, the underline and the pen are drawn in their colour (set per
+   theme, so a black pen still shows in the dark). Clicking a chosen tool again opens its menu. */
+.glass-group button.tool { position: relative; }
+.glass-group button.tool.tinted svg { color: var(--tint-light); }
+:root[data-theme="dark"] .glass-group button.tool.tinted svg { color: var(--tint-dark); }
+
+/* Colour dots (the note's card, the text box's bar), and 自定义颜色… after them. */
+.swatch-dot { width: 17px; height: 17px; flex: none; border-radius: 50%; border: 0; padding: 0; cursor: pointer; position: relative;
+  box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .16); transition: transform .08s; }
+.swatch-dot:hover { transform: scale(1.08); }
+.swatch-dot.on::after { content: ""; position: absolute; inset: -3.5px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--text) 50%, transparent); }
+.swatch-dot.custom, .swatch-dot.mix { background: radial-gradient(circle, rgba(255, 255, 255, .85), rgba(255, 255, 255, 0) 70%),
+  conic-gradient(#ff4d4d, #ff9f1a, #ffe14d, #4cd964, #34c7c7, #4d8dff, #a35cff, #ff5fae, #ff4d4d); }
+
+/* A sticky note's or a highlight's comment (as on the Mac): a quiet card in the note's colour beside it, with nothing
+   on it but the words; its colours, its date and deleting it in one low line under them. */
+.note-card-pop { position: fixed; z-index: 950; app-region: no-drag; padding: 12px 14px 9px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px;
+  background: linear-gradient(color-mix(in srgb, var(--note) 13%, transparent), color-mix(in srgb, var(--note) 13%, transparent)), var(--sheet);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .18), 0 2px 6px rgba(0, 0, 0, .07), 0 0 0 .5px var(--separator-strong); animation: note-card-in .14s ease-out; transform-origin: left top; }
+:root[data-theme="dark"] .note-card-pop { background: linear-gradient(color-mix(in srgb, var(--note) 10%, transparent), color-mix(in srgb, var(--note) 10%, transparent)), var(--sheet); }
+@keyframes note-card-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+.note-card-quote { border-left: 3px solid var(--note); border-radius: 1px; padding: 0 0 0 8px; font-size: 12px; line-height: 1.4; color: var(--secondary);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.note-card-text { height: 92px; resize: none; border: 0; background: transparent; padding: 0; margin: 0; font: inherit; font-size: 14px; line-height: 1.5;
+  color: var(--text); outline: none; user-select: text; cursor: text; scrollbar-width: none; }
+.note-card-text::placeholder { color: var(--tertiary); }
+.note-card-foot { display: flex; align-items: center; gap: 6px; padding-top: 2px; padding-right: 8px; }
+.note-card-date { font-size: 11px; color: var(--tertiary); white-space: nowrap; }
+.note-card-delete { width: 24px; height: 24px; margin-right: -5px; border: 0; border-radius: 6px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; }
+.note-card-delete:hover { background: var(--hover); color: var(--red); }
+.note-card-text { flex: 1; height: auto; min-height: 40px; }
+/* The card's lower right corner: dragged, it grows or shrinks (and the next card keeps its size). */
+.note-card-grip { position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 0 55%, color-mix(in srgb, var(--text) 30%, transparent) 55% 62%, transparent 62% 72%, color-mix(in srgb, var(--text) 30%, transparent) 72% 79%, transparent 79%); }
+
+/* A text box written in place: a transparent field over the box with a thin accent line, in its text's colour and
+   size at the page's zoom (the page shows through: what is typed looks as it will on the page). */
+.text-box-field { position: fixed; z-index: 950; app-region: no-drag; margin: 0; border: 0; border-radius: 2px; background: transparent; resize: none; overflow: hidden; outline: none;
+  box-shadow: none; font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  white-space: pre-wrap; overflow-wrap: anywhere; box-sizing: content-box; user-select: text; cursor: text; }
+.text-box-measure { position: fixed; left: -10000px; top: 0; visibility: hidden; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif; width: max-content; }
+.text-box-bar { position: fixed; z-index: 951; app-region: no-drag; height: 34px; padding: 0 8px 0 10px; border-radius: 17px; display: flex; align-items: center; gap: 6px;
+  background: var(--sheet); box-shadow: 0 8px 24px rgba(0, 0, 0, .14), 0 0 0 .5px var(--separator-strong); animation: fade-in .12s; }
+.text-box-bar-sep { width: 1px; height: 16px; background: var(--separator); margin: 0 3px; }
+/* The field's edge, a little outside it: a thin accent line with handles at the corners. Dragged, it moves the box. */
+.text-box-frame { position: fixed; z-index: 949; app-region: no-drag; box-sizing: border-box; border-radius: 4px; cursor: grab;
+  background: linear-gradient(var(--accent), var(--accent)) 0 0 / 5px 5px no-repeat, linear-gradient(var(--accent), var(--accent)) 100% 0 / 5px 5px no-repeat,
+    linear-gradient(var(--accent), var(--accent)) 0 100% / 5px 5px no-repeat, linear-gradient(var(--accent), var(--accent)) 100% 100% / 5px 5px no-repeat;
+  outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent); outline-offset: -3px; }
+.text-box-frame.dragging { cursor: grabbing; }
+/* The size: a smaller A, the size itself (a list of sizes), a larger A. */
+.text-box-size { display: inline-flex; align-items: center; height: 26px; border-radius: 13px; background: color-mix(in srgb, var(--text) 7%, transparent); padding: 0 2px; }
+.text-box-size-step { width: 24px; height: 22px; border: 0; padding: 0; border-radius: 11px; background: transparent; color: var(--text); font-weight: 500; display: inline-flex; align-items: center; justify-content: center; }
+.text-box-size-step:hover:not(:disabled) { background: var(--hover); }
+.text-box-size-step:disabled { color: var(--tertiary); }
+.text-box-size-value { appearance: none; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; font-weight: 500; text-align: center; text-align-last: center; width: 28px; height: 22px; padding: 0; border-radius: 6px; cursor: pointer; }
+.text-box-size-value:hover { background: var(--hover); }
+.text-box-size-value option { color: initial; }
+.note-card-pop { box-sizing: border-box; }
+
+/* A saved model the service no longer offers (设置 ▸ 翻译, as on the Mac). */
+.model-check { display: inline-flex; align-items: center; gap: 6px; }
+.model-check svg { color: #e8a100; flex: none; }

@@ -52,18 +52,23 @@ protocol TranslationProvider: Sendable {
     /// Gets the first request ready without sending any text: the connection to the service opened (DNS, TCP, TLS) and
     /// any token fetched. Failures are ignored; the request itself will say what went wrong.
     func prewarm() async
+    /// The model that answers, for the log (nil where the service has none to name).
+    var modelName: String? { get }
 }
 
 extension TranslationProvider {
     func extractTerms(from excerpt: String, context: TranslationContext) async throws -> [GlossaryEntry] { [] }
     func prewarm() async {}
+    var modelName: String? { nil }
 }
 
 /// Why a request failed. `description` is what the error classifier reads.
 struct ProviderError: Error, LocalizedError, Sendable {
     /// `agentSetup`: the agent cannot work until the user does something (signs in, chooses a model, updates it).
     /// `refused`: the service's content review would not translate this text.
-    enum Kind: Sendable, Equatable { case http(Int), network, invalidResponse, cancelled, process, agentSetup, refused }
+    /// `truncated`: the reply was cut off at the model's output limit; the same request would be cut off again, half
+    /// of it may fit.
+    enum Kind: Sendable, Equatable { case http(Int), network, invalidResponse, cancelled, process, agentSetup, refused, truncated }
     var kind: Kind
     var detail: String
     var host: String?
@@ -75,7 +80,7 @@ struct ProviderError: Error, LocalizedError, Sendable {
         switch kind {
         case .http(let status): status == 429 || status == 408 || status >= 500
         case .network, .invalidResponse, .process: true
-        case .cancelled, .agentSetup, .refused: false
+        case .cancelled, .agentSetup, .refused, .truncated: false
         }
     }
 
@@ -138,6 +143,7 @@ enum LLMBatch {
         - Use the established terminology of the field and translate terms consistently; follow the glossary.
         - Headings, table cells and other short items: translate concisely, without adding final punctuation.
         - Write fluent, natural \(target) academic prose. Do not add, omit or explain anything.
+        - Translate every value in full, each under its own key: never merge two values, leave one out or give one back in \(source) (a value that is only a name, a number or a formula stays as it is).
         - Each value is one piece of text; keep it one piece (no line breaks).
         """
         if let title = context.title, !title.isEmpty { prompt += "\n\nPaper title: \(title)" }
@@ -176,12 +182,57 @@ enum LLMBatch {
 
     /// Reads the reply. Missing keys come back as nil.
     static func parse(_ reply: String, count: Int) -> [String?] {
-        guard let object = jsonObject(in: reply) ?? lenientObject(in: reply) else { return Array(repeating: nil, count: count) }
-        return (1...max(count, 1)).prefix(count).map { key in
-            if let value = object[String(key)] as? String { return value }
-            if let value = object[String(key)] { return "\(value)" }
+        guard count > 0 else { return [] }
+        let reply = withoutThinking(reply)
+        if let object = jsonObject(in: reply) ?? lenientObject(in: reply) {
+            let values = numbered(object, count: count)
+            if values.contains(where: { $0 != nil }) { return values }
+        }
+        // A plain list of the translations, in order.
+        if let list = jsonArray(in: reply), list.count == count { return list }
+        return Array(repeating: nil, count: count)
+    }
+
+    /// The reply without what a reasoning model thought aloud before it (`<think>…</think>`): braces, quotes and
+    /// drafts in there are not the answer.
+    static func withoutThinking(_ reply: String) -> String {
+        var text = reply.replacingOccurrences(of: #"(?s)<(think|thinking)>.*?</\1>"#, with: "", options: .regularExpression)
+        // Only the closing tag (the opening one went with the prompt).
+        for tag in ["</think>", "</thinking>"] {
+            if let end = text.range(of: tag, options: .backwards) { text = String(text[end.upperBound...]) }
+        }
+        return text
+    }
+
+    /// The texts under "1", "2", …: at the top of `object`, or one level down (`{"translations": {…}}`, a list under
+    /// one key). A text may itself be wrapped (`{"translation": "…"}`).
+    static func numbered(_ object: [String: Any], count: Int) -> [String?] {
+        func text(_ value: Any) -> String? {
+            if let string = value as? String { return string }
+            if let wrapped = value as? [String: Any] {
+                let strings = wrapped.values.compactMap { $0 as? String }
+                return strings.count == 1 ? strings[0] : (wrapped["translation"] ?? wrapped["text"] ?? wrapped["target"]) as? String
+            }
+            if let number = value as? NSNumber { return "\(number)" }
             return nil
         }
+        var byNumber: [Int: String] = [:]
+        for (key, value) in object {
+            if let n = Int(key.trimmingCharacters(in: .whitespaces)), let string = text(value) { byNumber[n] = string }
+        }
+        if byNumber.isEmpty, object.count == 1, let inner = object.values.first {
+            if let nested = inner as? [String: Any] { return numbered(nested, count: count) }
+            if let list = inner as? [Any], list.count == count { return list.map(text) }
+        }
+        return (1...count).map { byNumber[$0] }
+    }
+
+    /// A JSON list of texts in `text`, if that is what it holds.
+    static func jsonArray(in text: String) -> [String?]? {
+        guard let start = text.firstIndex(of: "["), let end = text.lastIndex(of: "]"), start < end,
+              let list = (try? JSONSerialization.jsonObject(with: Data(text[start...end].utf8))) as? [Any],
+              list.contains(where: { $0 is String }) else { return nil }
+        return list.map { $0 as? String }
     }
 
     /// The first JSON object in `text` (models sometimes wrap it in code fences or add a sentence).
@@ -224,14 +275,14 @@ enum LLMBatch {
     static func termsPrompt(_ context: TranslationContext) -> String {
         let target = LanguageNames.english(context.targetLanguage)
         return """
-        You build glossaries for translating academic papers into \(target). From the excerpt the user sends, pick the technical terms whose translation must stay consistent (concepts, task names, phrases of the field), at most 40, and give the established \(target) translation of each.
+        You build glossaries for translating academic papers into \(target). From the excerpt the user sends, pick the technical terms whose translation must stay consistent (concepts, task names, phrases of the field), at most 30, and give the established \(target) translation of each.
         Leave out names of models, methods, datasets, metrics and software, and abbreviations, which stay untranslated.
         Reply with only JSON: {"terms": [{"source": "...", "target": "..."}]}
         """
     }
 
     static func parseTerms(_ reply: String) -> [GlossaryEntry] {
-        guard let object = jsonObject(in: reply), let terms = object["terms"] as? [[String: Any]] else { return [] }
+        guard let object = jsonObject(in: withoutThinking(reply)), let terms = object["terms"] as? [[String: Any]] else { return [] }
         return terms.compactMap { term in
             guard let source = term["source"] as? String, let target = term["target"] as? String,
                   !source.isEmpty, !target.isEmpty, source.count < 80 else { return nil }
@@ -281,33 +332,96 @@ enum HTTP {
         }
     }
 
-    /// Sends `request`; non-2xx answers and transport failures become `ProviderError`s.
-    static func send(_ request: URLRequest) async throws -> Data {
-        // With its port: on one machine that is what tells services apart.
-        let host: String? = request.url.flatMap { url -> String? in
+    /// With its port: on one machine that is what tells services apart.
+    private static func host(of request: URLRequest) -> String? {
+        request.url.flatMap { url -> String? in
             guard let name = url.host() else { return nil }
             return url.port.map { "\(name):\($0)" } ?? name
         }
+    }
+
+    /// What a non-2xx answer becomes.
+    private static func failure(_ http: HTTPURLResponse, body data: Data, host: String?) -> ProviderError {
+        let body = String(decoding: data.prefix(2000), as: UTF8.self)
+        let refused = [400, 403, 422, 451].contains(http.statusCode) && ProviderError.isContentRefusal(body)
+        var error = ProviderError(kind: refused ? .refused : .http(http.statusCode), detail: "Error code: \(http.statusCode) - \(body)", host: host)
+        if let retry = http.value(forHTTPHeaderField: "Retry-After"), let seconds = Double(retry) { error.retryAfter = seconds }
+        return error
+    }
+
+    /// What a failure of the transport becomes.
+    private static func failure(_ error: Error, host: String?) -> ProviderError {
+        if let error = error as? ProviderError { return error }
+        if error is CancellationError { return ProviderError(kind: .cancelled, detail: "cancelled", host: host) }
+        if let error = error as? URLError {
+            if error.code == .cancelled { return ProviderError(kind: .cancelled, detail: "cancelled", host: host) }
+            return ProviderError(kind: .network, detail: networkDetail(error), host: host)
+        }
+        return ProviderError(kind: .network, detail: "Connection error: \(error.localizedDescription)", host: host)
+    }
+
+    /// Sends `request`; non-2xx answers and transport failures become `ProviderError`s.
+    static func send(_ request: URLRequest) async throws -> Data {
+        let host = host(of: request)
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 throw ProviderError(kind: .invalidResponse, detail: "no HTTP response", host: host)
             }
-            guard (200..<300).contains(http.statusCode) else {
-                let body = String(decoding: data.prefix(2000), as: UTF8.self)
-                let refused = [400, 403, 422, 451].contains(http.statusCode) && ProviderError.isContentRefusal(body)
-                var error = ProviderError(kind: refused ? .refused : .http(http.statusCode), detail: "Error code: \(http.statusCode) - \(body)", host: host)
-                if let retry = http.value(forHTTPHeaderField: "Retry-After"), let seconds = Double(retry) { error.retryAfter = seconds }
-                throw error
-            }
+            guard (200..<300).contains(http.statusCode) else { throw failure(http, body: data, host: host) }
             return data
-        } catch let error as ProviderError {
-            throw error
-        } catch is CancellationError {
-            throw ProviderError(kind: .cancelled, detail: "cancelled", host: host)
-        } catch let error as URLError {
-            if error.code == .cancelled { throw ProviderError(kind: .cancelled, detail: "cancelled", host: host) }
-            throw ProviderError(kind: .network, detail: networkDetail(error), host: host)
+        } catch {
+            throw failure(error, host: host)
+        }
+    }
+
+    /// Sends `request` and hands over its answer as it arrives: each event of a stream (server-sent events: the text
+    /// after `data:`) goes to `event`, and nil comes back at its end. A server that answers in one piece instead
+    /// (JSON: it does not stream, whatever was asked) gets its whole body returned.
+    ///
+    /// A reply that takes minutes to write no longer runs into the time limit of a request, which now only counts the
+    /// silence between two pieces; and how far the reply has come is known, not guessed.
+    static func stream(_ request: URLRequest, event: (String) throws -> Void) async throws -> Data? {
+        let host = host(of: request)
+        do {
+            let (bytes, response) = try await session.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw ProviderError(kind: .invalidResponse, detail: "no HTTP response", host: host)
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                var body = Data()
+                for try await byte in bytes where body.count < 4000 { body.append(byte) }
+                throw failure(http, body: body, host: host)
+            }
+            // Lines end at a line feed only: a text may hold other characters Unicode calls line ends (U+2028).
+            var whole = Data(), line = Data()
+            var isStream: Bool? = (http.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased().contains("event-stream") ? true : nil
+            func take(_ line: Data) throws -> Bool {
+                var text = String(decoding: line, as: UTF8.self)
+                if text.hasSuffix("\r") { text.removeLast() }
+                if isStream == nil, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+                    isStream = text.hasPrefix("data:") || text.hasPrefix("event:") || text.hasPrefix(":")
+                }
+                guard isStream == true, text.hasPrefix("data:") else { return true }
+                let payload = text.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                if payload == "[DONE]" { return false }
+                if !payload.isEmpty { try event(payload) }
+                return true
+            }
+            for try await byte in bytes {
+                if isStream != true { whole.append(byte) }
+                if byte == 0x0A {
+                    let goesOn = try take(line)
+                    line.removeAll(keepingCapacity: true)
+                    if !goesOn { return nil }
+                } else {
+                    line.append(byte)
+                }
+            }
+            if !line.isEmpty { _ = try take(line) }
+            return isStream == true ? nil : whole
+        } catch {
+            throw failure(error, host: host)
         }
     }
 
@@ -342,6 +456,65 @@ enum HTTP {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         return request
+    }
+}
+
+// MARK: - Replies as they arrive
+
+/// How far the reply to the request under way has come: the characters of the answer received so far (0: the model is
+/// still thinking, but alive). Whoever asked sets `sink` around the call; providers that read their reply as it
+/// arrives report to it.
+enum StreamProgress {
+    @TaskLocal static var sink: (@Sendable (Int) -> Void)?
+
+    static func report(_ characters: Int) { sink?(characters) }
+}
+
+// MARK: - Parameters a server may not take
+
+/// Parameters Folio adds to a request on its own (a low temperature, a thinking level kept low) are not known to every
+/// model and server behind an API: a 400 that turns one down must not stop the translation. The request goes again
+/// without it, and what was turned down is remembered while the app runs, so later requests leave it out at once.
+/// Parameters the user chose are never dropped this way; their refusal is shown.
+final class ParameterMemory: @unchecked Sendable {
+    static let shared = ParameterMemory()
+    private let lock = NSLock()
+    private var refused: [String: Set<String>] = [:]
+
+    func refused(for key: String) -> Set<String> { lock.withLock { refused[key] ?? [] } }
+    func add(_ names: [String], for key: String) { lock.withLock { refused[key, default: []].formUnion(names) } }
+
+    /// The parameter among `sent` that a server's answer (`detail` of an HTTP 400 or 422) names as the one it does
+    /// not take; nil when it names none of them.
+    static func rejected(in detail: String, among sent: [String]) -> String? {
+        let text = detail.lowercased()
+        guard text.range(of: #"unsupported|not support|unknown|unrecognized|unexpected|invalid|not allowed|not permitted|extra|does not exist|only the default|deprecated|incompatible|cannot be"#,
+                         options: .regularExpression) != nil else { return nil }
+        return sent.sorted { $0.count > $1.count }.first { text.contains($0.lowercased()) }
+    }
+
+    /// Sends a request with the optional parameters `extras` (by name), as `send` builds it from those left. On a 400
+    /// or 422 the one the server names goes (or, when it names none, all of them) and the request is sent again;
+    /// what worked without them is remembered under `key`. A request that fails without them as well fails with
+    /// its first answer: the parameters were not the reason.
+    static func send(key: String, extras: [String: Any], _ send: ([String: Any]) async throws -> Data) async throws -> Data {
+        var extras = extras
+        for name in shared.refused(for: key) { extras[name] = nil }
+        var first: ProviderError?
+        var dropped: [String] = []
+        while true {
+            do {
+                let data = try await send(extras)
+                if !dropped.isEmpty { shared.add(dropped, for: key) }
+                return data
+            } catch let error as ProviderError {
+                guard case .http(let status) = error.kind, status == 400 || status == 422, !extras.isEmpty else { throw first ?? error }
+                first = first ?? error
+                let names = rejected(in: error.detail, among: Array(extras.keys)).map { [$0] } ?? Array(extras.keys)
+                for name in names { extras[name] = nil }
+                dropped += names
+            }
+        }
     }
 }
 

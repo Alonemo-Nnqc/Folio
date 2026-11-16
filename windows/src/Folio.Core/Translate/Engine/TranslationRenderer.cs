@@ -381,7 +381,14 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                             var mark = interpreter.Marks[m];
                             var ops = string.Join("\n", Enumerable.Range(mark.OpStart, mark.OpEnd - mark.OpStart + 1)
                                 .Select(o => Encoding.Latin1.GetString(stream.Source, stream.Ops[o].Start, stream.Ops[o].End - stream.Ops[o].Start)));
-                            content.Append($"q {Matrix(ctm)} cm {PdfValue.Format(mark.Color.R)} {PdfValue.Format(mark.Color.G)} {PdfValue.Format(mark.Color.B)} rg\n{ops}\nQ\n");
+                            var color = $"{PdfValue.Format(mark.Color.R)} {PdfValue.Format(mark.Color.G)} {PdfValue.Format(mark.Color.B)}";
+                            if (mark.Kind == GraphicMark.MarkKind.Stroke)
+                            {
+                                // A line: in its colour and as thick as it was (its width is known on the page, the path is in its own space).
+                                double scale = Math.Max(Math.Sqrt(Math.Abs(ctm.A * ctm.D - ctm.B * ctm.C)), 0.001);
+                                content.Append($"q {Matrix(ctm)} cm {color} RG {PdfValue.Format(Math.Max(mark.LineWidth, 0.1) / scale)} w\n{ops}\nQ\n");
+                            }
+                            else content.Append($"q {Matrix(ctm)} cm {color} rg\n{ops}\nQ\n");
                         }
                     }
                     content.Append(Drawing(glyphs.OrderBy(g => g).ToList(), rules, interpreter, font =>
@@ -720,10 +727,11 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     font = g.Font;
                     output.Append('/').Append(fontName(font)).Append(" 1 Tf\n");
                 }
-                if (g.Color != color)
+                var shown = interpreter.VisibleColor(g);
+                if (shown != color)
                 {
-                    color = g.Color;
-                    var c = $"{PdfValue.Format(g.Color.R)} {PdfValue.Format(g.Color.G)} {PdfValue.Format(g.Color.B)}";
+                    color = shown;
+                    var c = $"{PdfValue.Format(shown.R)} {PdfValue.Format(shown.G)} {PdfValue.Format(shown.B)}";
                     output.Append($"{c} rg {c} RG\n");
                 }
                 int render = Math.Min(g.RenderMode, 2);

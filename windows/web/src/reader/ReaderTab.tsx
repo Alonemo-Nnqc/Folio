@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookText, ChevronDown, ChevronUp, Columns2, Eraser, ScanText, SquarePen, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, PenLine, Printer, Search, Strikethrough, StickyNote, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronDown, ChevronUp, Columns2, Eraser, ScanText, SquarePen, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, Pen, Printer, Search, Strikethrough, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
 import { CustomizeToolbarSheet, TOOLBAR_ITEMS, toolbarIds } from "./toolbar";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
-import { TranslateIcon } from "../ui/icons";
+import { FullTextTranslateIcon, NoteToolIcon, TranslateIcon } from "../ui/icons";
 import { filesOf, getState, setSetting, setState, useStore, veilFor, type FileRec, type Item } from "../store";
 import { translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
@@ -12,8 +12,8 @@ import { LEAD_ROOM, PanelToggle, SidebarButtons, Splitter, TabBar, TOGGLE_ROOM }
 import { isEntering, useMoving, usePanelPhase } from "../ui/slide";
 import { NoteEditor } from "../library/Inspector";
 import { TranslationProgress } from "../library/ItemList";
-import { useLayer, within } from "../ui/dismiss";
 import { TranslateBadge, TranslatePopover, type Anchor, type Pinned } from "./SelectionTranslate";
+import { NoteCard, pickColor, TextBoxField, type CardColor } from "./AnnotationEditors";
 
 /** "Alt+D": the modifiers and the key, as 设置 stores 划词翻译's shortcut. */
 export function shortcutOf(k: { code: string; ctrl: boolean; alt: boolean; shift: boolean }) {
@@ -44,21 +44,46 @@ class Pane {
 const TOOLS: { key: string; icon: any; tip: string; shortcut: string; group: number }[] = [
   { key: "select", icon: MousePointer2, tip: "选择", shortcut: "0", group: 0 }, { key: "highlight", icon: Highlighter, tip: "高亮", shortcut: "H", group: 0 },
   { key: "underline", icon: Underline, tip: "下划线", shortcut: "U", group: 0 }, { key: "strike", icon: Strikethrough, tip: "删除线", shortcut: "K", group: 0 },
-  { key: "note", icon: StickyNote, tip: "便签", shortcut: "N", group: 1 }, { key: "textbox", icon: Type, tip: "文本框", shortcut: "T", group: 1 }, { key: "ink", icon: PenLine, tip: "手绘", shortcut: "D", group: 1 },
+  { key: "note", icon: NoteToolIcon, tip: "便签", shortcut: "N", group: 1 }, { key: "textbox", icon: Type, tip: "文本框", shortcut: "T", group: 1 }, { key: "ink", icon: Pen, tip: "手绘", shortcut: "D", group: 1 },
   { key: "eraser", icon: Eraser, tip: "橡皮擦", shortcut: "E", group: 1 },
 ];
+
+/** Each tool's colours, its usual one first (as on the Mac): no black highlighter, no yellow pen. */
+const PALETTES: Record<string, string[]> = {
+  highlight: ["yellow", "green", "blue", "pink", "purple", "orange"], note: ["yellow", "green", "blue", "pink", "purple", "orange"],
+  underline: ["red", "blue", "green", "purple", "orange", "black"], strike: ["black", "red", "blue", "green", "purple", "orange"],
+  textbox: ["black", "red", "blue", "green", "purple", "orange"], ink: ["black", "red", "blue", "green", "purple", "orange"],
+};
+/** Tools whose colour shows on their toolbar button (as on the Mac): the ones picked up and put down all the time. The
+ *  others choose theirs where they are used (the note's card, the text box's bar) or in their menu. */
+const SHOWS_COLOR = new Set(["highlight", "underline", "ink"]);
+
+/** A tool's colour on the toolbar, for the light and the dark theme: a black pen in the dark, or a pale colour in the
+ *  light, is taken toward the toolbar's text colour until it shows (as on the Mac). */
+function toolTint(hex: string): React.CSSProperties {
+  const n = parseInt(hex.replace("#", "").padEnd(6, "0").slice(0, 6), 16);
+  const rgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * lin(rgb[0]) + 0.7152 * lin(rgb[1]) + 0.0722 * lin(rgb[2]);
+  const mix = (toward: number, f: number) => `rgb(${rgb.map((v) => Math.round((v + (toward - v) * f) * 255)).join(", ")})`;
+  const light = luminance > 0.45 ? mix(0, Math.min(0.5, ((luminance - 0.45) / 0.55) * 0.6)) : mix(0, 0);
+  const dark = luminance < 0.12 ? mix(1, Math.min(1, ((0.12 - luminance) / 0.12) * 0.85)) : mix(0, 0);
+  return { ["--tint-light" as any]: light, ["--tint-dark" as any]: dark };
+}
+const isHex = (key: string | null | undefined): key is string => !!key && /^#[0-9a-f]{6}$/i.test(key);
+const hexOfRgb = (rgb: number[]) => `#${rgb.map((x) => Math.round(x).toString(16).padStart(2, "0")).join("")}`.toUpperCase();
+/** A note's or a text box's size, in points: an upright card, as on the Mac. */
+const NOTE_SIZE = { width: 16, height: 19.2 };
+/** The tool that makes an annotation of a PDF type (for the colours offered when it is recoloured). */
+const SUBTYPE_TOOL: Record<string, string> = { Highlight: "highlight", Underline: "underline", Squiggly: "underline", StrikeOut: "strike", Text: "note", FreeText: "textbox", Ink: "ink" };
+/** The pen's widths and the text box's sizes the tools' menus offer, in points. */
+const INK_WIDTHS = [{ title: "细", width: 1 }, { title: "中", width: 2 }, { title: "粗", width: 3.5 }, { title: "特粗", width: 6 }];
+export const TEXT_SIZES = [{ title: "小", size: 11 }, { title: "中", size: 13 }, { title: "大", size: 16 }, { title: "特大", size: 20 }];
+
 
 /** The eraser's sizes (READER-30), as on the Mac: diameters 8, 16 and 32 pt; the ring is drawn in proportion. */
 const ERASER_SIZES = [{ key: "small", title: "小", ring: 6 }, { key: "medium", title: "中", ring: 10 }, { key: "large", title: "大", ring: 15 }];
 
-function EraserRing({ size }: { size: string }) {
-  const ring = ERASER_SIZES.find((s) => s.key === size)?.ring ?? 10;
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <circle cx="9" cy="9" r={ring / 2} fill="currentColor" fillOpacity=".18" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}
 
 let labels: Record<string, string> | null = null;
 export async function readerLabels() { return (labels ??= await call("reader.labels")); }
@@ -101,9 +126,52 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const following = useRef<string | null>(null);
 
   const [tool, setTool] = useState("select");
-  const [color, setColor] = useState<string>(settings.highlightColor ?? "yellow");
+  // Each tool's colour, remembered from one paper to the next (as on the Mac); 默认高亮颜色 before 1.4 is the highlighter's.
+  // 删除线 is black by default since 1.3.1: a red one from before (the old default) becomes black, once.
+  useState(() => {
+    try {
+      if (localStorage.getItem("folio.strikeBlack")) return;
+      localStorage.setItem("folio.strikeBlack", "1");
+      const stored = getState().settings.annotationToolColors ?? {};
+      if (stored.strike === "red") { const { strike, ...rest } = stored; setSetting("annotationToolColors", rest); }
+    } catch {}
+  });
+  const [toolColors, setToolColors] = useState<Record<string, string>>(() => ({
+    ...(settings.highlightColor ? { highlight: settings.highlightColor } : {}), ...(getState().settings.annotationToolColors ?? {}),
+  }));
+  const toolColorsRef = useRef(toolColors); toolColorsRef.current = toolColors;
   const toolRef = useRef(tool); toolRef.current = tool;
-  const colorRef = useRef(color); colorRef.current = color;
+  const colorFor = (key: string) => {
+    const palette = PALETTES[key];
+    if (!palette) return "yellow";
+    const chosen = toolColorsRef.current[key];
+    return chosen && (palette.includes(chosen) || isHex(chosen)) ? chosen : palette[0];
+  };
+  const colorRef = { get current() { return colorFor(toolRef.current); } };
+  const hexOf = (key: string) => (isHex(key) ? key.toUpperCase() : colors.find((c) => c.key === key)?.hex ?? "#FFD933");
+  const titleOf = (key: string) => (isHex(key) ? t("自定义颜色") : colors.find((c) => c.key === key)?.title ?? key);
+  // Colours mixed with 自定义颜色…, newest first: every tool offers them after its own.
+  const [customColors, setCustomColors] = useState<string[]>(() => (settings.annotationCustomColors ?? []).filter(isHex));
+  const rememberCustom = (hex: string) => {
+    const next = [hex, ...customColors.filter((c) => c.toUpperCase() !== hex.toUpperCase())].slice(0, 5);
+    setCustomColors(next);
+    setSetting("annotationCustomColors", next);
+  };
+  /** The colours a tool offers: its own, then the mixed ones, and what it has now if that is neither. */
+  const choicesFor = (key: string, current?: string | null) => {
+    const list = [...(PALETTES[key] ?? PALETTES.highlight), ...customColors];
+    if (current && !list.some((c) => c.toUpperCase() === current.toUpperCase())) list.push(current);
+    return list;
+  };
+  const cardPalette = (key: string, current?: string | null): CardColor[] => choicesFor(key, current).map((c) => ({ key: c, title: titleOf(c), hex: hexOf(c) }));
+  /** 自定义颜色…: the system's picker; what is mixed is remembered for every tool. */
+  const mix = (initial: string, apply: (hex: string) => void) => pickColor(hexOf(initial), (hex) => { rememberCustom(hex); apply(hex); });
+  /** What the page is told about the tools: the chosen one, every tool's colour, the pen's width and the text size. */
+  const toolCommand = (next: string) => ({
+    cmd: "tool", tool: next, color: colorFor(next), eraserSize: eraserSizeRef.current,
+    colors: Object.fromEntries(Object.keys(PALETTES).map((k) => [k, colorFor(k)])),
+    inkWidth: getState().settings.inkLineWidth ?? 2, textSize: getState().settings.textBoxFontSize ?? 13,
+  });
   const [eraserSize, setEraserSize] = useState<string>(ERASER_SIZES.some((s) => s.key === settings.readerEraserSize) ? settings.readerEraserSize : "medium");
   const eraserSizeRef = useRef(eraserSize); eraserSizeRef.current = eraserSize;
   const [sidebarVisible, setSidebarVisible] = useState(true);
@@ -119,7 +187,18 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const noteBox = useRef<HTMLTextAreaElement | null>(null);
   const selection = useRef<any>(null);
   const pageCount = useRef(0);
-  const [editor, setEditor] = useState<{ x: number; y: number; text: string; done: (text: string) => void } | null>(null);
+  const [editor, setEditorState] = useState<EditorState | null>(null);
+  const editorRef = useRef<EditorState | null>(null);
+  editorRef.current = editor;
+  /** The card or the text box being written stays with its place on the page: the page says where it is as it scrolls
+   *  and zooms (`tracked`). */
+  const trackedPane = useRef<Pane | null>(null);
+  const setEditor = (next: EditorState | null, track?: { pane: Pane; page: number; rect: number[] }) => {
+    editorRef.current = next;
+    setEditorState(next);
+    if (track) { trackedPane.current = track.pane; track.pane.send({ cmd: "track", page: track.page, rect: track.rect, key: next?.id }); }
+    else if (!next && trackedPane.current) { trackedPane.current.send({ cmd: "track" }); trackedPane.current = null; }
+  };
   const [badge, setBadge] = useState<{ x: number; y: number; anchor: Anchor; text: string; page: number } | null>(null);
   const [translation, setTranslation] = useState<{ anchor: Anchor; text: string; page: number } | null>(null);
   // Dragged off its selection, the 划词翻译 window stays where it was put, and later selections are translated in it (SEL-21).
@@ -135,11 +214,52 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const send = (command: unknown) => main.send(command);
   const sendBoth = (command: unknown) => { main.send(command); parallelRef.current?.send(command); };
 
-  const applyTool = (next: string, nextColor = colorRef.current) => {
+  const applyTool = (next: string) => {
     // A tool ends 编辑 PDF 文字: annotating and editing the text are not done at once.
     if (editingRef.current) setEditing(false);
     setTool(next);
-    main.send({ cmd: "tool", tool: next, color: nextColor, eraserSize: eraserSizeRef.current });
+    toolRef.current = next;
+    main.send(toolCommand(next));
+  };
+  /** A tool's colour from now on (remembered from one paper to the next). */
+  const keepColor = (key: string, value: string) => {
+    const next = { ...toolColorsRef.current, [key]: value };
+    toolColorsRef.current = next;
+    setToolColors(next);
+    setSetting("annotationToolColors", next);
+  };
+  /** A colour chosen in a tool's menu: the tool takes it, and is chosen. */
+  const chooseColor = (key: string, value: string) => { keepColor(key, value); applyTool(key); };
+  /** A row of a tool's or an annotation's colours, as circles; the last, many-coloured one mixes a colour of one's own. */
+  const colorRow = (key: string, current: string | null | undefined, pick: (color: string) => void): MenuEntry => ({
+    kind: "row", label: t("颜色"), choices: [
+      ...choicesFor(key, current).map((c) => ({ title: titleOf(c), look: { color: hexOf(c) }, selected: c === current, action: () => pick(c) })),
+      { title: t("自定义颜色…"), look: { custom: true as const }, action: () => mix(current ?? "yellow", pick) },
+    ],
+  });
+  /** A tool's menu: its colours, and the pen's width, the text size or the eraser's size, each shown as it looks. */
+  const toolMenu = (key: string): MenuEntry[] => {
+    if (key === "eraser") return eraserMenu();
+    const palette = PALETTES[key];
+    if (!palette) return [];
+    const tip = TOOLS.find((x) => x.key === key)?.tip ?? "";
+    const current = colorFor(key);
+    const entries: MenuEntry[] = [{ kind: "title", label: key === "textbox" ? t("文字颜色") : t("%@颜色", t(tip)) }, colorRow(key, current, (c) => chooseColor(key, c))];
+    if (key === "ink") {
+      const width = getState().settings.inkLineWidth ?? 2;
+      entries.push(sep, { kind: "title", label: t("粗细") }, { kind: "row", label: t("粗细"), choices: INK_WIDTHS.map((w) => ({
+        title: t(w.title), look: { dot: w.width * 2 + 2, color: hexOf(current) }, selected: width === w.width,
+        action: () => { setSetting("inkLineWidth", w.width); setTimeout(() => applyTool("ink")); },
+      })) });
+    }
+    if (key === "textbox") {
+      const size = getState().settings.textBoxFontSize ?? 13;
+      entries.push(sep, { kind: "title", label: t("字号") }, { kind: "row", label: t("字号"), choices: TEXT_SIZES.map((x) => ({
+        title: `${t(x.title)}（${x.size} pt）`, look: { letter: x.size - 1 }, selected: size === x.size,
+        action: () => { setSetting("textBoxFontSize", x.size); setTimeout(() => applyTool("textbox")); },
+      })) });
+    }
+    return entries;
   };
   // 编辑 PDF 文字 (EDIT-01).
   const [editing, setEditingState] = useState(false);
@@ -147,7 +267,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const setEditing = (on: boolean) => {
     editingRef.current = on;
     setEditingState(on);
-    if (on) { setTool("select"); main.send({ cmd: "tool", tool: "select", color: colorRef.current }); }
+    if (on) { setTool("select"); toolRef.current = "select"; main.send(toolCommand("select")); }
     main.send({ cmd: "editMode", on });
   };
   /** A size is chosen to erase with: the eraser becomes the tool, and the size is remembered. */
@@ -157,9 +277,9 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     setSetting("readerEraserSize", size);
     applyTool("eraser");
   };
-  const eraserSizeEntries = (): MenuEntry[] => ERASER_SIZES.map((s) => ({
-    label: t(s.title), icon: <EraserRing size={s.key} />, checked: s.key === eraserSizeRef.current, action: () => chooseEraserSize(s.key),
-  }));
+  const eraserMenu = (): MenuEntry[] => [{ kind: "title", label: t("橡皮擦大小") }, { kind: "row", label: t("橡皮擦大小"), choices: ERASER_SIZES.map((s) => ({
+    title: t(s.title), look: { ring: s.ring * 1.6 }, selected: s.key === eraserSizeRef.current, action: () => chooseEraserSize(s.key),
+  })) }, sep, { label: t("按 [ 或 ] 调整大小"), disabled: true }];
   const zoom = (value: string) => sendBoth({ cmd: "zoom", value });
   const layout = (value: "single" | "twoUp") => { sendBoth({ cmd: "layout", value }); setSetting("readerLayout", value); };
   const step = (value: string) => send({ cmd: "step", value });
@@ -257,7 +377,8 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       const r = await call("reader.openFile", { file: target.id });
       pane.session = r.session; pane.fileId = target.id;
       const isMain = pane === main;
-      const st = isMain ? r.state : null;
+      // 设置 ▸ 阅读 ▸ 记住每篇论文的阅读位置 off: every paper opens at its top, at the usual zoom.
+      const st = isMain && s.settings.rememberReadingPosition !== false ? r.state : null;
       pane.send({
         cmd: "open", url: r.url, page: (isMain ? page : undefined) ?? st?.page, scale: page === undefined ? st?.scale : undefined, top: page === undefined ? st?.top : undefined, left: page === undefined ? st?.left : undefined,
         zoom: s.settings.readerZoom === "actualSize" && isMain ? "actualSize" : "fitWidth", ...common,
@@ -337,9 +458,53 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     } else pane.send(result);
   };
 
-  const editAt = (pane: Pane, text: string, m: any, done: (text: string) => void) => {
-    const rect = pane.frame?.getBoundingClientRect();
-    setEditor({ x: (rect?.left ?? 0) + (m.clientX ?? 0), y: (rect?.top ?? 0) + (m.clientY ?? 0), text, done });
+  /** Opens an annotation for writing: a text box in place, anything else on its card. */
+  const editAnnotation = (pane: Pane, m: any) => {
+    const frame = pane.frame?.getBoundingClientRect();
+    const fx = frame?.left ?? 0, fy = frame?.top ?? 0;
+    if (m.subtype === "FreeText" && m.box) {
+      const scale = m.scale ?? 1, inset = 2 * scale;
+      const colorKey = m.colorKey && (isHex(m.colorKey) || colors.some((c) => c.key === m.colorKey)) ? m.colorKey : hexOfRgb(m.textRgb ?? [0, 0, 0]);
+      pane.send({ cmd: "editingBox", id: m.id, page: m.page });
+      const widthPt = Math.max(m.box.width - 2 * inset, 8) / scale;
+      setEditor({ kind: "text", id: m.id, left: fx + m.box.left + inset, top: fy + m.box.top + inset, width: widthPt * scale, widthPt, scale,
+        size: m.fontSize ?? 12, colorKey, palette: cardPalette("textbox", colorKey), text: m.contents ?? "",
+        done: (text, box, style) => {
+          pane.send({ cmd: "editingBox", id: null, page: m.page });
+          if (!text.trim()) { removeAnnotation(pane, m, false); return; }
+          const moved = style.moved.dx !== 0 || style.moved.dy !== 0;
+          if (text === (m.contents ?? "") && !style.changed && !moved) return;
+          // The box keeps its width and top (where it was dragged); its height follows the text.
+          const s = style.scale, dx = style.moved.dx, dy = -style.moved.dy;
+          const height = box.height / s + 4;
+          const rect = [m.rect[0] + dx, m.rect[3] + dy - height, m.rect[2] + dx, m.rect[3] + dy];
+          const change = { contents: text, rect, ...(style.changed ? { color: style.colorKey, fontSize: style.size } : {}) };
+          pane.send({ cmd: "modifyEntry", page: m.page, id: m.id, ...change });
+          call("reader.modify", { session: pane.session, page: m.page, id: m.id, ...change }).then((r) => applyResult(pane, r));
+        } }, { pane, page: m.page, rect: [m.rect[0] + 2, m.rect[3] - 2, m.rect[0] + 2, m.rect[3] - 2] });
+      return;
+    }
+    const kind = SUBTYPE_TOOL[m.subtype] ?? "highlight";
+    // The card stands beside the annotation, and stays with it.
+    const anchor = m.anchor
+      ? { left: fx + m.anchor.left, top: fy + m.anchor.top, right: fx + m.anchor.right, bottom: fy + m.anchor.bottom }
+      : { left: fx + (m.clientX ?? 0), top: fy + (m.clientY ?? 0), right: fx + (m.clientX ?? 0), bottom: fy + (m.clientY ?? 0) };
+    const original = m.contents ?? "";
+    let shown = original;
+    setEditor({ kind: "note", id: m.id, anchor, text: original, quote: m.subtype === "Text" ? undefined : (m.quoted ?? ""),
+      author: m.author, date: shortDate(m.modified), colorKey: m.colorKey, tool: kind,
+      onColor: (key) => setAnnotationColor(pane, m, key),
+      onText: (text) => {
+        // The note shows whether it has words as they are typed; the change is recorded once, when the card closes.
+        if (m.subtype !== "Text" || !text.trim() === !shown.trim()) return;
+        shown = text;
+        pane.send({ cmd: "modifyEntry", silent: true, page: m.page, id: m.id, contents: text });
+      },
+      onDelete: () => removeAnnotation(pane, m, false),
+      done: (text) => {
+        if (shown !== original) pane.send({ cmd: "modifyEntry", silent: true, page: m.page, id: m.id, contents: original });
+        if (text !== original) setContents(pane, m, text);
+      } }, m.rect ? { pane, page: m.page, rect: m.rect } : undefined);
   };
 
   const setContents = (pane: Pane, m: any, text: string) => {
@@ -360,7 +525,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     const x = (rect?.left ?? 0) + m.clientX, y = (rect?.top ?? 0) + m.clientY;
     let entries: MenuEntry[] = [];
     if (m.kind === "eraser") {
-      openMenu([{ kind: "title", label: t("橡皮擦大小") }, ...eraserSizeEntries()], x, y);
+      openMenu(eraserMenu(), x, y);
       return;
     }
     if (m.kind === "annotation") {
@@ -368,9 +533,9 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       const contents = m.contents ?? "";
       const text = m.quoted || contents;
       entries = [
-        { label: t("颜色"), submenu: colors.map((c) => ({ label: c.title, dot: c.hex, checked: c.key === m.colorKey, action: () => setAnnotationColor(pane, m, c.key) })) },
+        colorRow(SUBTYPE_TOOL[m.subtype] ?? "highlight", m.colorKey, (key) => setAnnotationColor(pane, m, key)),
         sep,
-        { label: textual ? t("编辑内容…") : contents ? t("编辑评论…") : t("添加评论…"), action: () => editAt(pane, contents, m, (v) => setContents(pane, m, v)) },
+        { label: m.subtype === "FreeText" ? t("编辑文字") : textual ? t("打开便签") : contents ? t("编辑评论…") : t("添加评论…"), action: () => editAnnotation(pane, m) },
         ...(text ? [{ label: t("添加到笔记"), action: () => addToNote(text, m.page) } as MenuEntry, { label: t("拷贝文字"), action: () => call("shell.copy", { text }) } as MenuEntry] : []),
         sep,
         { label: t("删除批注"), action: () => removeAnnotation(pane, m, false) },
@@ -499,32 +664,82 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         break;
       case "editRefused": call("toast.show", { message: t("这里不能编辑：%@", m.reason), icon: "warning" }); break;
       case "leaveEditing": if (editingRef.current) setEditing(false); break;
-      case "erase": call("reader.erase", { session: pane.session, page: m.page, ids: m.ids, paths: m.paths, radius: m.radius }).then((r) => applyResult(pane, r)); break;
+      case "erase": call("reader.erase", { session: pane.session, page: m.page, ids: m.ids, paths: m.paths, radius: m.radius, results: m.results }).then((r) => applyResult(pane, r)); break;
       case "eraserStep": {
         const index = ERASER_SIZES.findIndex((s) => s.key === eraserSizeRef.current);
         const next = ERASER_SIZES[Math.min(Math.max(index + m.step, 0), ERASER_SIZES.length - 1)];
         if (next.key !== eraserSizeRef.current) chooseEraserSize(next.key);
         break;
       }
-      case "ink": call("reader.ink", { session: pane.session, page: m.page, color: m.color ?? colorRef.current, strokes: m.strokes, temp: m.temp }).then((r) => applyResult(pane, r)); break;
-      case "note":
-      case "textbox": {
-        const note = m.type === "note";
-        applyTool("select");
-        editAt(pane, "", m, (text) => {
-          if (!text) return;
-          const estimated = [...text].reduce((sum, c) => sum + (c.charCodeAt(0) > 0x2e80 ? 12 : 6.5), 0);
-          const lines = Math.max(1, Math.ceil(estimated / 208) + (text.match(/\n/g)?.length ?? 0));
-          const rect = note ? [m.x - 10, m.y - 10, m.x + 10, m.y + 10] : [m.x, m.y - Math.max(24, lines * 15 + 8), m.x + 220, m.y];
-          const subtype = note ? "Text" : "FreeText";
-          const temp = `pending-${crypto.randomUUID().replace(/-/g, "")}`;
-          const entryColor = m.color ?? colorRef.current;
-          pane.send({ cmd: "addEntry", temp, page: m.page, subtype, rect, color: entryColor, contents: text });
-          call("reader.addText", { session: pane.session, page: m.page, subtype, rect, color: entryColor, contents: text, temp }).then((r) => applyResult(pane, r));
-        });
+      case "ink": call("reader.ink", { session: pane.session, page: m.page, color: m.color ?? colorRef.current, width: m.width ?? 2, strokes: m.strokes, temp: m.temp }).then((r) => applyResult(pane, r)); break;
+      case "note": {
+        // The note is put down at once, where it was clicked, and its card opens beside it. It stays, written in or not
+        // (as on the Mac); it is recorded for 撤销 once, with its words, when the card closes.
+        if (getState().settings.returnToSelectAfterPlacing !== false) applyTool("select");
+        const frame = pane.frame?.getBoundingClientRect();
+        const scale = m.scale ?? 1;
+        const { width: w, height: h } = NOTE_SIZE;
+        const rect = [m.x - w / 2, m.y - h / 2, m.x + w / 2, m.y + h / 2];
+        const draft = `pending-${crypto.randomUUID().replace(/-/g, "")}`;
+        let color: string = m.color ?? colorFor("note");
+        let written = false;
+        pane.send({ cmd: "addEntry", silent: true, temp: draft, page: m.page, subtype: "Text", rect, color, contents: "" });
+        const cx = (frame?.left ?? 0) + m.clientX, cy = (frame?.top ?? 0) + m.clientY;
+        setEditor({ kind: "note", id: draft, anchor: { left: cx - (w / 2) * scale, top: cy - (h / 2) * scale, right: cx + (w / 2) * scale, bottom: cy + (h / 2) * scale },
+          text: "", colorKey: color, tool: "note", author: settings.annotationAuthor ?? "", date: shortDate(new Date()),
+          onColor: (key) => { color = key; keepColor("note", key); pane.send({ cmd: "modifyEntry", silent: true, page: m.page, id: draft, color: key }); },
+          onText: (text) => {
+            if (!!text.trim() === written) return;
+            written = !!text.trim();
+            pane.send({ cmd: "modifyEntry", silent: true, page: m.page, id: draft, contents: text });
+          },
+          onDelete: () => pane.send({ cmd: "removeEntry", silent: true, page: m.page, id: draft }),
+          done: (text) => {
+            pane.send({ cmd: "removeEntry", silent: true, page: m.page, id: draft });
+            const temp = `pending-${crypto.randomUUID().replace(/-/g, "")}`;
+            pane.send({ cmd: "addEntry", temp, page: m.page, subtype: "Text", rect, color, contents: text });
+            call("reader.addText", { session: pane.session, page: m.page, subtype: "Text", rect, color, contents: text, temp }).then((res) => applyResult(pane, res));
+          } }, { pane, page: m.page, rect });
         break;
       }
-      case "annotationEdit": editAt(pane, m.contents ?? "", m, (text) => setContents(pane, m, text)); break;
+      case "textbox": {
+        // Written in place: the field starts where the click was (the first line's middle there) and widens as it is typed.
+        if (getState().settings.returnToSelectAfterPlacing !== false) applyTool("select");
+        const frame = pane.frame?.getBoundingClientRect();
+        const size = m.textSize ?? 13, scale = m.scale ?? 1, color = m.color ?? colorFor("textbox");
+        const line = size * 1.22;
+        const id = `new-text-${Date.now()}`;
+        setEditor({ kind: "text", id, left: (frame?.left ?? 0) + m.clientX, top: (frame?.top ?? 0) + m.clientY - (line / 2) * scale, scale,
+          size, colorKey: color, palette: cardPalette("textbox", color), text: "", done: (text, box, style) => {
+            // A colour or size chosen on the bar is the text box's from now on.
+            if (style.changed) {
+              keepColor("textbox", style.colorKey);
+              setSetting("textBoxFontSize", style.size);
+              setTimeout(() => main.send(toolCommand(toolRef.current)));
+            }
+            if (!text.trim()) return;
+            // Where it was dragged to (page points), from where it was put.
+            const s = style.scale, dx = style.moved.dx, dy = -style.moved.dy;
+            const width = box.width / s + 6, height = box.height / s + 4;
+            const top = m.y + line / 2 + 2 + dy;
+            const r = [m.x - 2 + dx, top - height, m.x - 2 + dx + width, top];
+            const temp = `pending-${crypto.randomUUID().replace(/-/g, "")}`;
+            pane.send({ cmd: "addEntry", temp, page: m.page, subtype: "FreeText", rect: r, color: style.colorKey, contents: text, fontSize: style.size });
+            call("reader.addText", { session: pane.session, page: m.page, subtype: "FreeText", rect: r, color: style.colorKey, contents: text, fontSize: style.size, temp }).then((res) => applyResult(pane, res));
+          } }, { pane, page: m.page, rect: [m.x, m.y + line / 2, m.x, m.y + line / 2] });
+        break;
+      }
+      case "annotationEdit": editAnnotation(pane, m); break;
+      case "tracked": {
+        const current = editorRef.current;
+        if (!current || current.id !== m.key) break;
+        const frame = pane.frame?.getBoundingClientRect();
+        const fx = frame?.left ?? 0, fy = frame?.top ?? 0;
+        const anchor = { left: fx + m.anchor.left, top: fy + m.anchor.top, right: fx + m.anchor.right, bottom: fy + m.anchor.bottom };
+        if (current.kind === "note") setEditorState({ ...current, anchor });
+        else setEditorState({ ...current, left: anchor.left, top: anchor.top, scale: m.scale, width: current.widthPt ? current.widthPt * m.scale : undefined });
+        break;
+      }
       case "annotationDelete": removeAnnotation(pane, m, true); break;
       case "annotationMoved": call("reader.modify", { session: pane.session, page: m.page, id: m.id, dx: m.dx, dy: m.dy }).then((r) => applyResult(pane, r)); break;
       case "contextMenu": contextMenu(pane, m); break;
@@ -558,7 +773,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     main.send({ cmd: "theme", dark: getState().dark });
     main.send({ cmd: "insets", top: 86, sidebarTop: 52, sidebarWidth });
     main.send({ cmd: "shadows", on: getState().settings.readerPageShadows });
-    main.send({ cmd: "tool", tool: "select", color });
+    main.send(toolCommand("select"));
     openPane(main, file, null);
     return () => {
       main.send({ cmd: "flushPosition" });
@@ -569,6 +784,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   useEffect(() => { main.send({ cmd: "theme", dark }); parallelRef.current?.send({ cmd: "theme", dark }); }, [dark]);
   useEffect(() => { main.send({ cmd: "shadows", on: settings.readerPageShadows }); }, [settings.readerPageShadows]);
+  useEffect(() => { main.send({ cmd: "tooltips", on: settings.showAnnotationTooltips !== false }); }, [settings.showAnnotationTooltips]);
   // 背景透明度: the grey around the pages and the reader's sidebar let the desktop through.
   const surface = veilFor(getState().statics.translucency ? settings.backgroundTranslucency ?? 0 : 0);
   useEffect(() => { main.send({ cmd: "surface", alpha: surface }); parallelRef.current?.send({ cmd: "surface", alpha: surface }); }, [surface, parallel]);
@@ -660,15 +876,8 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     const plain = (title: string, Icon: any, action: () => void, extra?: string) => <button className={`glass-button${extra ?? ""}`} title={title} onClick={action}>{icon(Icon)}</button>;
     switch (id) {
       case "view": return <button className="glass-button" style={{ width: 52 }} title={t("显示")} onClick={(e) => openMenuAt(e.currentTarget, viewMenu())}><ChevronDown size={14} /></button>;
-      // While erasing, the colour button beside the tools picks the eraser's size instead.
-      case "color": return tool === "eraser"
-        ? <button className="glass-button" title={t("橡皮擦大小（[ 与 ] 调整）")} onClick={(e) => openMenuAt(e.currentTarget, eraserSizeEntries())}><EraserRing size={eraserSize} /></button>
-        : <button className="glass-button" title={t("批注颜色")} onClick={(e) => openMenuAt(e.currentTarget, colors.map((c) => ({
-        label: c.title, dot: c.hex, checked: c.key === color,
-        action: () => { setColor(c.key); setSetting("highlightColor", c.key); main.send({ cmd: "tool", tool: toolRef.current, color: c.key }); },
-      })))}><span className="color-dot" style={{ background: colorHex }} /></button>;
       case "editText": return plain(t("编辑 PDF 中的文字"), SquarePen, () => setEditing(!editingRef.current), editing ? " on" : "");
-      case "translate": return <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><BookText size={17} strokeWidth={1.7} /></button>;
+      case "translate": return <button className="glass-button" title={t("保留排版翻译全文、对照阅读")} onClick={(e) => openMenuAt(e.currentTarget, translateMenu())}><FullTextTranslateIcon size={17} /></button>;
       case "selectionTranslate": return plain(t("翻译所选文字"), TranslateIcon, () => main.send({ cmd: "translateSelection" }));
       case "search": return searchOpen || query ? (
         <label className="search-field" style={{ flex: "0 1 200px", minWidth: 130 }}>
@@ -708,7 +917,6 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   const left = sidebarVisible ? sidebarWidth : 0;
   const right = notesVisible ? notesWidth : 0;
-  const colorHex = colors.find((c) => c.key === color)?.hex ?? "#FFD933";
   const area = `calc(100% - ${right}px)`;
   const leftPaneWidth = parallel ? `calc(${left}px + (100% - ${left + right}px) / 2)` : area;
   const rightPaneWidth = `calc((100% - ${left + right}px) / 2)`;
@@ -743,7 +951,21 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
                 return (
                   <span key={id} style={{ display: "contents" }}>
                     {previous && previous.group !== x.group && <span className="sep" />}
-                    <button className={tool === x.key ? "on" : ""} title={`${t(x.tip)}（Ctrl+Alt+${x.shortcut}）`} onClick={() => applyTool(x.key)}><Icon size={16} strokeWidth={1.8} /></button>
+                    {(() => {
+                      // The highlighter, the underline and the pen are drawn in their colour (as on the Mac), a little
+                      // lighter or darker where it would not stand out from the toolbar. Clicking a tool chooses it;
+                      // clicking it again (or right-clicking it) opens its menu.
+                      const hasMenu = !!PALETTES[x.key] || x.key === "eraser";
+                      const tip = hasMenu ? t("%@（Ctrl+Alt+%@）：再点一次选择颜色和样式", t(x.tip), x.shortcut) : `${t(x.tip)}（Ctrl+Alt+${x.shortcut}）`;
+                      return (
+                        <button className={`tool${tool === x.key ? " on" : ""}${SHOWS_COLOR.has(x.key) ? " tinted" : ""}`}
+                          style={SHOWS_COLOR.has(x.key) ? toolTint(hexOf(colorFor(x.key))) : undefined} title={tip} aria-label={t(x.tip)} aria-pressed={tool === x.key} aria-haspopup={hasMenu ? "menu" : undefined}
+                          onClick={(e) => { if (hasMenu && tool === x.key) openMenuAt(e.currentTarget, toolMenu(x.key)); else applyTool(x.key); }}
+                          onContextMenu={(e) => { if (!hasMenu) return; e.preventDefault(); e.stopPropagation(); openMenuAt(e.currentTarget, toolMenu(x.key)); }}>
+                          <Icon size={16} strokeWidth={1.8} />
+                        </button>
+                      );
+                    })()}
                   </span>
                 );
               })}
@@ -787,33 +1009,26 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       {badge && visible && <TranslateBadge x={badge.x} y={badge.y} onClick={() => openTranslation(badge.anchor, badge.text, badge.page)} />}
       {translation && visible && <TranslatePopover anchor={translation.anchor} text={translation.text} close={() => { setTranslation(null); setPinned(null); main.frame?.contentWindow?.focus(); }}
         pinned={pinned} onPin={setPinned} addToNote={(source, translated) => addTranslationToNote(source, translated, translation.page)} />}
-      {editor && <NotePopover {...editor} close={() => { setEditor(null); main.frame?.contentWindow?.focus(); }} />}
+      {editor?.kind === "note" && <NoteCard key={editor.id} anchor={editor.anchor} text={editor.text} quote={editor.quote} author={editor.author} date={editor.date}
+        colorKey={editor.colorKey} palette={cardPalette(editor.tool, editor.colorKey)} onColor={editor.onColor} onText={editor.onText}
+        onMix={(apply) => mix(editor.colorKey ?? "yellow", apply)} onDelete={editor.onDelete} done={editor.done}
+        close={() => { setEditor(null); main.frame?.contentWindow?.focus(); }} />}
+      {editor?.kind === "text" && <TextBoxField key={editor.id} left={editor.left} top={editor.top} width={editor.width} scale={editor.scale} size={editor.size} colorKey={editor.colorKey}
+        palette={cardPalette("textbox", editor.colorKey)} text={editor.text} onMix={(apply) => mix(editor.colorKey, apply)}
+        done={editor.done} close={() => { setEditor(null); main.frame?.contentWindow?.focus(); }} />}
     </div>
   );
 }
 
-function NotePopover({ x, y, text, done, close }: { x: number; y: number; text: string; done: (text: string) => void; close: () => void }) {
-  const [value, setValue] = useState(text);
-  const ref = useRef<HTMLDivElement>(null);
-  const latest = useRef(value);
-  latest.current = value;
-  const finished = useRef(false);
-  const finish = () => {
-    if (finished.current) return;
-    finished.current = true;
-    const clean = latest.current.replace(/\r\n/g, "\n").trim();
-    if (clean !== text.trim()) done(clean);
-    close();
-  };
-  // Finished by a press anywhere else (the pages included), Esc, or the window going to the background (WIN-30).
-  useLayer(true, { contains: (target) => within(ref.current, target), onPress: finish, onEscape: finish, onDeactivate: finish });
-  const left = Math.min(x, innerWidth - 316), top = Math.min(y + 6, innerHeight - 170);
-  return (
-    <div ref={ref} className="note-pop" style={{ left, top }}>
-      <textarea className="field" autoFocus value={value} spellCheck={false} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Escape" || (e.key === "Enter" && e.ctrlKey)) { e.preventDefault(); finish(); }
-      }} />
-    </div>
-  );
+type EditorState =
+  | { kind: "note"; id: string; anchor: { left: number; top: number; right: number; bottom: number }; text: string; quote?: string; author?: string; date?: string;
+      colorKey?: string | null; tool: string; onColor: (key: string) => void; onText?: (text: string) => void; onDelete: () => void; done: (text: string) => void }
+  | { kind: "text"; id: string; left: number; top: number; width?: number; widthPt?: number; scale: number; size: number; colorKey: string; palette: CardColor[]; text: string;
+      done: (text: string, box: { width: number; height: number }, style: { colorKey: string; size: number; changed: boolean; moved: { dx: number; dy: number }; scale: number }) => void };
+
+/** When a note was written, short ("11月15日"; who wrote it shows on hover). */
+function shortDate(value: unknown) {
+  const date = value instanceof Date ? value : typeof value === "string" || typeof value === "number" ? new Date(value) : null;
+  if (!date || isNaN(date.getTime())) return undefined;
+  return date.toLocaleDateString(document.documentElement.lang || undefined, { month: "short", day: "numeric" });
 }

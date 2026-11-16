@@ -6,7 +6,7 @@
 
 **An open-source reference manager for people who read papers, with one library for Mac and Windows**
 
-Drop in a PDF and the item builds itself · Annotations live in the file · Translate whole papers with the layout intact · Let AI agents read your library
+Drop in a PDF and the item builds itself · Annotations live in the file · Translate whole papers with the layout intact · Edit the text of a PDF · Let AI agents read your library
 
 [![Latest release](https://img.shields.io/github/v/release/Alonemo-Nnqc/Folio)](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 [![CI](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml/badge.svg)](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml)
@@ -24,9 +24,13 @@ Drop in a PDF and the item builds itself · Annotations live in the file · Tran
 
 **One library, on either system.** The Mac and Windows apps match feature for feature and share one library format. Put the library folder in a synced drive, and the Windows PC in the lab and the Mac at home open the same papers, annotations and notes. No account, no server.
 
-**A translated paper still looks like the paper.** The translation engine is built in, with nothing to download. Formulas are kept glyph by glyph, tables are translated cell by cell, text inside figures stays put, and citations and section links stay clickable. You can read side by side while it works.
+**A translated paper still looks like the paper.** The translation engine is built in, with nothing to download. Formulas are kept glyph by glyph, tables are translated cell by cell, the words inside figures are replaced in place with their centring, alignment and symmetry intact, and citations and section links stay clickable. Read side by side while it works, and select any sentence you're stuck on to translate just that.
 
-**Translate with the AI you already signed in to.** The 19 agents Folio knows, such as Claude Code, Codex and Gemini CLI, work as translation services with no extra API key. Or choose free services, local models such as Ollama, or 17 LLM and translation APIs: 40 options in all.
+**Consistent terms, costs known up front.** The model first finds the paper's terms and settles their translations, then translates the paper. The terms go into a glossary the next paper uses too, and a translation you corrected is never changed back. Paid services show an estimate of tokens and cost before they start, and replies stream in, so progress is real.
+
+**Translate with the AI you already signed in to.** The 20 agents Folio knows, such as Claude Code, Codex and Gemini CLI, work as translation services with no extra API key. Or choose free services, local models such as Ollama, or 17 LLM and translation APIs: 41 options in all, plus Apple's offline translation on the Mac.
+
+**A word translated wrong? Fix it on the page.** In editing mode, click into a PDF's text and change it in place, in the page's own font, size and word spacing. Only the lines it touches are set again, and formulas and citations move with the text.
 
 **Your agents can read your library.** A built-in MCP server (26 tools) and the `folio-cli` command-line tool. Folio finds the agents on your computer and each takes a single switch. They can find papers from a description, read full text and annotations, and write accurate citations, or you can keep them read-only.
 
@@ -39,13 +43,15 @@ Drop in a PDF and the item builds itself · Annotations live in the file · Tran
 | | |
 | --- | --- |
 | **Add papers** | Drop a PDF to identify its title, authors, venue and DOI within seconds (Zotero recognizer + Crossref / arXiv / OpenAlex / DBLP / CVF), add by DOI, arXiv ID or ISBN, or match by hand |
-| **Read and annotate** | Tabs, highlights, underlines, strikethroughs, sticky notes, text boxes and ink; Folio remembers your place in every paper; press Space for Quick Look |
-| **Translate** | Whole papers, many papers at once, side-by-side reading and selected text; an automatic glossary keeps terms consistent, and finished paragraphs are cached |
-| **Organize** | Two-level collections, colour tags, a trash, full-text search, reading status, star ratings, and several files per item |
+| **Read and annotate** | Tabs, highlights, underlines, strikethroughs, sticky notes, text boxes, ink and an eraser; Folio remembers your place in every paper; press Space for Quick Look; scans are read with OCR |
+| **Translate** | Whole papers (layout and figure text included), many at once, side-by-side reading and selected text; a glossary shared across papers that you can review and edit; cost estimates for paid services; streamed replies with real progress; finished paragraphs are cached |
+| **Edit PDFs** | Change the text of a PDF in place, in its own fonts and layout, with only the lines you touch set again, and undo |
+| **Organize** | Collections up to four levels deep, colour tags, a trash, full-text search, reading status, star ratings, several files per item, and a “Translated” badge on translated papers (can be turned off) |
+| **Journal ranks** | With an easyScholar key: CAS and JCR quartiles, impact factors and CCF ranks, sortable in the list |
 | **Notes** | One Markdown note per item; add selected text in one click while reading |
 | **Cite and export** | GB/T 7714-2015, APA, IEEE, MLA, Chicago, Harvard, Vancouver, Nature and BibTeX; export BibTeX, RIS and CSL JSON |
 | **Browser extensions** | Chrome, Edge, Brave, Arc, Firefox and more, plus Safari on Mac; save a paper in one click, or many from search results |
-| **AI integration** | MCP server, `folio-cli` and the Folio skill, with one-switch setup for 19 agents including Claude Code, Codex, Gemini CLI, Copilot CLI, Cursor CLI, Pi, Grok CLI and Hermes Agent |
+| **AI integration** | MCP server (26 tools), `folio-cli` and the Folio skill, with one-switch setup for 19 agents including Claude Code, Codex, Gemini CLI, Copilot CLI, Cursor CLI, Pi, Grok CLI and Hermes Agent |
 | **Look and language** | Dark mode, English and Simplified Chinese; Liquid Glass on macOS 26, acrylic on Windows 11 |
 | **Updates** | Checks in the app, downloads in the background, installs on relaunch |
 
@@ -53,19 +59,27 @@ Drop in a PDF and the item builds itself · Annotations live in the file · Tran
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshots/en/reader.jpg" alt="Reader"></td>
     <td width="50%"><img src="assets/screenshots/en/parallel.jpg" alt="Side-by-side reading"></td>
+    <td width="50%"><img src="assets/screenshots/en/selection.jpg" alt="Translating a selection"></td>
   </tr>
   <tr>
-    <td align="center"><b>Read and annotate</b>: highlights and notes saved into the PDF</td>
     <td align="center"><b>Side by side</b>: the translation next to the original, layout intact</td>
+    <td align="center"><b>Translate a selection</b>: select a sentence, read it below</td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/screenshots/windows.jpg" alt="Folio for Windows"></td>
+    <td width="50%"><img src="assets/screenshots/en/edit.jpg" alt="Editing PDF text"></td>
+    <td width="50%"><img src="assets/screenshots/quicklook-windows.jpg" alt="Quick Look in Folio for Windows"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Edit PDF text</b>: a term added to the translation, the paragraph reflowed</td>
+    <td align="center"><b>Folio for Windows</b>: the same features and library (Quick Look shown)</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/en/reader.jpg" alt="Reader"></td>
     <td width="50%"><img src="assets/screenshots/en/ai.jpg" alt="AI settings"></td>
   </tr>
   <tr>
-    <td align="center"><b>Folio for Windows</b>: the same features and the same library</td>
+    <td align="center"><b>Read and annotate</b>: highlights and notes saved into the PDF</td>
     <td align="center"><b>AI integration</b>: MCP and skills for your agents, one switch each</td>
   </tr>
 </table>

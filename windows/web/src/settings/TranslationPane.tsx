@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Info } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Info, Trash2 } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, setSetting, useStore, type FileRec } from "../store";
-import { Field, Select, Switch } from "../ui/controls";
-import { askText, confirm, Sheet } from "../ui/sheet";
+import { Field, SearchBox, Select, Switch } from "../ui/controls";
+import { askText, confirm, openSheet, Sheet } from "../ui/sheet";
 import { openMenuAt, type MenuEntry } from "../ui/menu";
 import { ServiceLogo } from "../ui/serviceLogo";
 import { Card, Header, Note, Row } from "./parts";
 
 interface Detail { id: string; name: string; note?: string; category: string; isAgent: boolean; supportsProfiles: boolean; profiles: { id: string; name: string }[]; selectedProfile?: string; fields: FieldDef[]; advanced: FieldDef[]; reasoning?: any }
-interface FieldDef { option: string; title: string; kind: string; placeholder: string; value: string; models: boolean; remembered?: string[] }
+interface FieldDef { option: string; title: string; kind: string; placeholder: string; value: string; models: boolean; remembered?: string[]; check?: { saved: string; replacement?: string } | null }
 
 function FieldRow({ service, field, onDetail }: { service: string; field: FieldDef; onDetail: (d: Detail) => void }) {
   if (field.kind === "toggle") {
@@ -40,6 +40,7 @@ function ModelRow({ service, field, onDetail }: { service: string; field: FieldD
     openMenuAt(anchor, [...new Set(list)].map((m) => ({ label: m, checked: m === field.value, action: () => choose(m) })));
   };
   return (
+    <>
     <Row title={field.title} detail={status || undefined}>
       <div style={{ width: 280, display: "flex", gap: 6 }}>
         <div className="combo">
@@ -56,6 +57,14 @@ function ModelRow({ service, field, onDetail }: { service: string; field: FieldD
         <button className="btn" onClick={() => fetchModels()} title={t("刷新")}>↻</button>
       </div>
     </Row>
+    {field.check && (
+      // The saved model is checked against what the service offers now (as on the Mac).
+      <Row title={<span className="model-check"><AlertTriangle size={14} /> {t("“%@”已不在可用模型中", field.check.saved)}</span>}
+        detail={field.check.replacement ? t("翻译时会改用 %@。", field.check.replacement) : t("翻译时会使用默认模型。")}>
+        {field.check.replacement && <button className="btn" onClick={() => choose(field.check!.replacement!)}>{t("改用 %@", field.check.replacement)}</button>}
+      </Row>
+    )}
+    </>
   );
 }
 
@@ -208,10 +217,17 @@ export function OptionsSection({ compact }: { compact: boolean }) {
         <Header>{t("翻译内容")}</Header>
         <Card>
           <ContentRows o={o} update={update} />
-          <Row title={t("术语表（选填）")} detail={t("CSV：原文, 译文")}>
+          <Row title={t("术语表文件（选填）")} detail={t("CSV：原文, 译文；仅用于当前设置，优先于下面的术语表")}>
             <span className="secondary ellipsis" style={{ maxWidth: 160 }}>{o.glossaryFile ? o.glossaryFile.split(/[\\/]/).pop() : t("未选择")}</span>
             {o.glossaryFile && <button className="btn" onClick={() => update({ glossaryFile: null })}>{t("清除")}</button>}
             <button className="btn" onClick={async () => { const path = await call<string | null>("translation.pickGlossary"); if (path) setData({ ...data, options: { ...o, glossaryFile: path } }); }}>{t("选择…")}</button>
+          </Row>
+        </Card>
+        <Header>{t("术语")}</Header>
+        <Card>
+          <GlossaryRow language={o.langOut} languages={languages} />
+          <Row title={t("记住翻译时找到的术语")} detail={t("模型从论文中提取的术语会加入术语表，之后翻译其他论文时沿用；你修改过的译法不会被覆盖")}>
+            <Switch on={o.rememberTerms !== false} onChange={(v) => update({ rememberTerms: v })} />
           </Row>
         </Card>
         <Header>{t("速度")}</Header>
@@ -277,6 +293,90 @@ export function TranslationPane() {
   );
 }
 
+interface Term { id: string; source: string; target: string; enabled: boolean; extracted: boolean; paper?: string | null }
+type Language = { value: string; label: string };
+
+/** Folio's glossary in a line: how many terms the language being translated into has, and the sheet that manages them. */
+function GlossaryRow({ language, languages }: { language: string; languages: Language[] }) {
+  const [count, setCount] = useState<number | null>(null);
+  const load = () => { call("glossary.list", { language }).then((g) => setCount(g.terms.length)).catch(() => setCount(null)); };
+  useEffect(load, [language]);
+  return (
+    <Row title={t("术语表")} detail={t("专业术语的固定译法，翻译每篇论文时都会使用")}>
+      {count !== null && <span className="secondary" style={{ fontVariantNumeric: "tabular-nums" }}>{t("%lld 条术语", count)}</span>}
+      <button className="btn" onClick={() => openSheet((close) => <GlossarySheet language={language} languages={languages} close={close} />).then(load)}>{t("管理…")}</button>
+    </Row>
+  );
+}
+
+/** The terms of a language: looked through, changed, switched off, removed, added, and moved as CSV. What is typed is
+ *  saved when the field is left. */
+export function GlossarySheet({ language: initial, languages, close }: { language: string; languages: Language[]; close: () => void }) {
+  const [language, setLanguage] = useState(initial);
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [query, setQuery] = useState("");
+  const [source, setSource] = useState("");
+  const [target, setTarget] = useState("");
+  const sourceRef = useRef<HTMLInputElement>(null);
+  // Bumped to put back what a field held when what was typed into it is not kept.
+  const [revision, setRevision] = useState(0);
+  const apply = (g: any) => { if (g?.terms) setTerms(g.terms); };
+  useEffect(() => { call("glossary.list", { language }).then(apply); }, [language]);
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? terms.filter((x) => x.source.toLowerCase().includes(needle) || x.target.toLowerCase().includes(needle)) : terms;
+  const canAdd = !!source.trim() && !!target.trim();
+  const add = async () => {
+    if (!canAdd) return;
+    apply(await call("glossary.save", { language, source, target }));
+    setSource(""); setTarget("");
+    sourceRef.current?.focus();
+  };
+  // An emptied field is not saved: the term stays as it was until it has both sides again.
+  const change = (term: Term, patch: { source?: string; target?: string; enabled?: boolean }) => {
+    if ((patch.source !== undefined && !patch.source.trim()) || (patch.target !== undefined && !patch.target.trim())) { setRevision((n) => n + 1); return; }
+    call("glossary.save", { language, id: term.id, ...patch }).then(apply);
+  };
+  return (
+    <Sheet className="glossary" width={680} onEscape={close} actions={
+      <>
+        <button className="btn left" style={{ marginRight: 0 }} onClick={() => call("glossary.import", { language }).then(apply)}>{t("导入…")}</button>
+        <button className="btn left" disabled={!terms.length} onClick={() => call("glossary.export", { language })}>{t("导出…")}</button>
+        <button className="btn primary" onClick={close}>{t("完成")}</button>
+      </>}>
+      <div className="glossary-top">
+        <div className="main">
+          <h2>{t("术语表")}</h2>
+          <div className="secondary" style={{ fontVariantNumeric: "tabular-nums" }}>{t("%lld 条术语", terms.length)}</div>
+        </div>
+        <span className="secondary">{t("译文语言")}</span>
+        <Select value={language} options={languages} onChange={setLanguage} />
+        <SearchBox value={query} onChange={setQuery} placeholder={t("搜索")} />
+      </div>
+      <div className="glossary-list">
+        <div className="glossary-row head"><span /><span>{t("原文")}</span><span>{t("译文")}</span><span>{t("来源")}</span><span /></div>
+        <div className="glossary-rows">
+          {shown.map((term) => (
+            <div key={term.id + ":" + revision} className={`glossary-row${term.enabled ? "" : " off"}`}>
+              <label className="checkbox" title={t("取消勾选后保留在列表中，但翻译时不使用")}><input type="checkbox" aria-label={t("启用")} checked={term.enabled} onChange={(e) => change(term, { enabled: e.target.checked })} /></label>
+              <Field className="plain" value={term.source} onCommit={(v) => change(term, { source: v })} />
+              <Field className="plain" value={term.target} onCommit={(v) => change(term, { target: v })} />
+              <span className="secondary ellipsis" title={term.paper ?? undefined}>{term.extracted ? (term.paper ? t("自动提取 · %@", term.paper) : t("自动提取")) : t("手动添加")}</span>
+              <button className="glossary-remove" title={t("删除")} onClick={() => call("glossary.remove", { language, ids: [term.id] }).then(apply)}><Trash2 size={13} /></button>
+            </div>
+          ))}
+          {!terms.length && <div className="glossary-empty"><b>{t("还没有术语")}</b><span>{t("在下方添加术语，或用大模型翻译一篇论文：提取到的术语会出现在这里")}</span></div>}
+          {terms.length > 0 && !shown.length && <div className="glossary-empty"><b>{t("没有找到结果")}</b></div>}
+        </div>
+      </div>
+      <div className="glossary-add">
+        <input ref={sourceRef} className="field" value={source} placeholder={t("原文术语")} spellCheck={false} onChange={(e) => setSource(e.target.value)} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") add(); }} />
+        <input className="field" value={target} placeholder={t("译文")} spellCheck={false} onChange={(e) => setTarget(e.target.value)} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") add(); }} />
+        <button className="btn" disabled={!canAdd} onClick={add}>{t("添加")}</button>
+      </div>
+    </Sheet>
+  );
+}
+
 /** How many papers a batch translates at once. */
 function ParallelRow() {
   const value = useStore((x) => x.settings.translationParallelJobs ?? 2);
@@ -308,6 +408,24 @@ export function ShortcutRecorder({ value, onChange }: { value: string; onChange:
   return <button className={`btn shortcut${recording ? " recording" : ""}`} title={t("点按后按下新的快捷键；Backspace 恢复默认")} onClick={() => setRecording((v) => !v)}>{recording ? t("请按下快捷键…") : shortcutLabel(value)}</button>;
 }
 
+/** What this run is expected to take, for services that charge: the tokens, and the cost where the model's public
+ *  price is known. Worked out again whenever the service, the model or what is translated changes. */
+function EstimateLine({ files }: { files: FileRec[] }) {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    let latest = 0, timer = 0;
+    const load = () => {
+      const mine = ++latest;
+      call("translation.estimate", { files: files.map((f) => f.id) }).then((line) => { if (mine === latest) setText(line ?? null); }).catch(() => {});
+    };
+    load();
+    // A moment after the last change: typing a model's name is several of them.
+    const off = on("translation.estimateChanged", () => { window.clearTimeout(timer); timer = window.setTimeout(load, 400); });
+    return () => { latest = -1; window.clearTimeout(timer); off(); };
+  }, [files.map((f) => f.id).join(",")]);
+  return text ? <Note>{text}</Note> : null;
+}
+
 /** "翻译…": confirm service, languages and outputs for this run (they become the new defaults). */
 export function TranslateSheet({ files, close }: { files: FileRec[]; close: () => void }) {
   const s = getState();
@@ -322,6 +440,7 @@ export function TranslateSheet({ files, close }: { files: FileRec[]; close: () =
       <div className="body" style={{ maxHeight: "72vh" }}>
         <ServiceSection compact />
         <OptionsSection compact />
+        <EstimateLine files={files} />
         <Note>{t("保留版面、公式与图表，译文将作为附件加入该条目")}</Note>
       </div>
     </Sheet>

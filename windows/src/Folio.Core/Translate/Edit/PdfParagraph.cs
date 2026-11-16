@@ -268,9 +268,6 @@ public sealed class PdfParagraph
         _laidOut = null;
     }
 
-    /// <summary>How many atoms text becomes.</summary>
-    public static int AtomCount(string text) => text.EnumerateRunes().Count(r => r.Value is not ('\n' or '\r'));
-
     // Layout
 
     sealed record Placed(int Atom, double X, double Width, bool Visible, bool HyphenAfter = false);
@@ -303,6 +300,21 @@ public sealed class PdfParagraph
                     double tighter = Math.Max(_pitch * 0.88, room / (count - 1 - first));
                     if (tighter < _pitch) result = MakeLayout(Math.Min(0.66, _pageShrink * 0.95), tighter);
                 }
+                // Still no room (the change is near the paragraph's end, with few lines after it to bring closer): all
+                // the paragraph's lines a little closer together, from its first line down, when that makes it fit. A
+                // line more in ten lines is a tenth less between them, which does not show; the lines of text under
+                // the paragraph stay where they are.
+                if (ReachesBelowFloor(result) && first > 0 && _lines.Count >= 3)
+                {
+                    int lineCount = result.Lines.Count;
+                    double wholeRoom = _lines[0].Baseline - (_floor + _size * 0.3);
+                    double tighter = Math.Max(_pitch * 0.88, wholeRoom / Math.Max(lineCount - 1, 1));
+                    if (tighter < _pitch)
+                    {
+                        var whole = MakeLayout(Math.Min(0.66, _pageShrink * 0.95), tighter, 0);
+                        if (!ReachesBelowFloor(whole)) result = whole;
+                    }
+                }
                 result.Overflows = ReachesBelowFloor(result);
             }
             return _laidOut = result;
@@ -330,7 +342,8 @@ public sealed class PdfParagraph
 
     double LeftOf(int slot) => slot == 0 ? _lines[0].MinX : slot < _lines.Count ? _lines[slot].MinX : _columnLeft;
 
-    Result MakeLayout(double shrink, double pitch)
+    /// <param name="startLine">The line to set again from, when it is before the first changed one.</param>
+    Result MakeLayout(double shrink, double pitch, int? startLine = null)
     {
         var atoms = _atoms;
         bool tight = pitch < _pitch - 0.001;
@@ -340,7 +353,7 @@ public sealed class PdfParagraph
             for (int li = 0; li < _lines.Count; li++) result.Lines.Add(new Line(_lines[li].Baseline, OriginalPlaced(li), true, li));
             return result;
         }
-        int firstDirty = _dirty.Min();
+        int firstDirty = Math.Min(_dirty.Min(), startLine ?? int.MaxValue);
         for (int li = 0; li < Math.Min(firstDirty, _lines.Count); li++) result.Lines.Add(new Line(_lines[li].Baseline, OriginalPlaced(li), true, li));
         int start = Array.FindIndex(atoms, a => a.Line >= firstDirty);
         if (start < 0) start = atoms.Length;
@@ -554,7 +567,7 @@ public sealed class PdfParagraph
 
     double WidthOf(Atom[] atoms, int i) => atoms[i].Kind switch
     {
-        AtomKind.Typed => StyleFor(i, atoms).Advance(atoms[i].Typed ?? ""),
+        AtomKind.Typed => StandsIn(i, atoms) ? StyleFor(i, atoms).StandInAdvance(atoms[i].Typed ?? "") : StyleFor(i, atoms).Advance(atoms[i].Typed ?? ""),
         AtomKind.TypedSpace or AtomKind.Space or AtomKind.LineEnd => 0,
         _ => Geometry(atoms[i])?.Width ?? 0,
     };
@@ -571,6 +584,10 @@ public sealed class PdfParagraph
         public int? GlueBefore;
         /// <summary>The gap's natural width.</summary>
         public double Natural;
+        /// <summary>The gap as the page drew it (a space of the page still between the two words it stood between), and
+        /// the line it was on: a sentence's end is wider than a word space, and stays so when its line is set again.</summary>
+        public double? Drawn;
+        public int DrawnLine;
         /// <summary>A soft hyphen of the page ending it: drawn when the line breaks here.</summary>
         public int? Hyphen;
         /// <summary>A hyphenation place: a hyphen is drawn when the line breaks here.</summary>
@@ -589,6 +606,7 @@ public sealed class PdfParagraph
         int i = start;
         int? pendingGlue = null;
         double pendingNatural = 0;
+        double? pendingDrawn = null;
         bool afterSoftHyphen = false;
         while (i < atoms.Length)
         {
@@ -599,6 +617,7 @@ public sealed class PdfParagraph
                 {
                     pendingGlue = i;
                     pendingNatural = atom.Kind == AtomKind.LineEnd ? (atom.Spaced ? _naturalSpace : 0) : _naturalSpace;
+                    pendingDrawn = DrawnGap(atoms, i);
                 }
                 afterSoftHyphen = false;
                 i++;
@@ -643,6 +662,11 @@ public sealed class PdfParagraph
                     Atoms = part, Width = w, GlueBefore = m == 0 ? pendingGlue : null, Natural = m == 0 ? natural : 0,
                     Hyphen = isLast ? hyphen : null, Kind = m == 0 ? kind : PieceKind.Part,
                 };
+                if (m == 0 && natural > 0 && pendingGlue is { } glue && pendingDrawn is { } drawn)
+                {
+                    piece.Drawn = drawn;
+                    piece.DrawnLine = atoms[glue].Line;
+                }
                 // A break after a hyphen of the word adds none.
                 if (!isLast && part.Count > 0 && Text(atoms[part[^1]]) is not ("-" or "‐")) piece.AddsHyphen = true;
                 pieces.Add(piece);
@@ -652,6 +676,7 @@ public sealed class PdfParagraph
             afterSoftHyphen = hyphen != null;
             pendingGlue = null;
             pendingNatural = 0;
+            pendingDrawn = null;
             i = k;
         }
         return pieces;
@@ -684,6 +709,19 @@ public sealed class PdfParagraph
         return cuts;
     }
 
+    /// <summary>How wide the page drew the space i: from the end of the character before it to the start of the one
+    /// after, when both are still the page's own and still its neighbours. Null for a typed space, a line's end, or a
+    /// space that has lost a neighbour.</summary>
+    double? DrawnGap(Atom[] atoms, int i)
+    {
+        if (atoms[i].Kind != AtomKind.Space || atoms[i].Original is not { } o || i == 0 || i + 1 >= atoms.Length) return null;
+        if (atoms[i - 1].Original != o - 1 || atoms[i + 1].Original != o + 1 || IsGlue(atoms[i - 1]) || IsGlue(atoms[i + 1])) return null;
+        if (_originalAtoms[o - 1].Line != _originalAtoms[o].Line || _originalAtoms[o + 1].Line != _originalAtoms[o].Line) return null;
+        if (Geometry(atoms[i - 1]) is not { } before || Geometry(atoms[i + 1]) is not { } after) return null;
+        double gap = after.X - (before.X + before.Width);
+        return gap > 0 ? gap : null;
+    }
+
     /// <summary>The items of the line slot set from pieces from..to, and the glue after it up to next (where the next
     /// line starts).</summary>
     List<Placed> Place(List<Piece> pieces, int fromPiece, int toPiece, int slot, bool last, int next, Atom[] atoms)
@@ -697,16 +735,33 @@ public sealed class PdfParagraph
         double hyphenAdvance = addsHyphen ? StyleFor((end.Atoms.Count > 0 ? end.Atoms[^1] : 0) + 1, atoms).Advance("-") : 0;
         double natural = line.Select((p, k) => (k == 0 ? 0 : p.Natural) + p.Width).Sum()
             + (breaksAtHyphen ? HyphenWidth(end.Hyphen!.Value, atoms) : 0) + hyphenAdvance;
-        double extra = 0;
-        if (_justified && !last || natural > available + 0.01) extra = available - natural;
-        // Stretching, spaces and the joints between CJK characters share it as they can; squeezing, spaces alone.
         var gaps = line.Skip(1).ToList();
-        var weight = gaps.Select(g => g.Natural > 0 ? g.Natural * 0.6 : (g.Kind == PieceKind.Cjk && extra > 0 ? _size * 0.1 : 0)).ToList();
+        // Each space starts from what the page gave it: on a line the page justifies, as wide as it was drawn (the space
+        // after a sentence wider than the others); on the paragraph's last line and in ragged text, as it stood there.
+        // A line whose words did not change comes out exactly as it was; one that changed shares only the difference
+        // among its spaces, and still looks like the lines around it.
+        int lastLine = _lines.Count - 1;
+        var drawn = gaps.Select(g => g.Natural > 0 && g.Drawn is { } d && (_justified && !last || !_justified || g.DrawnLine == lastLine)
+            ? Math.Min(Math.Max(d, g.Natural * 0.5), g.Natural * 3) : (double?)null).ToList();
+        // A space beside what was typed has no width of its own from the page: on a justified line it is as wide as the
+        // line's other spaces usually are (not the narrow natural space, which would pinch the typed word).
+        var known = drawn.Where(d => d != null).Select(d => d!.Value).OrderBy(d => d).ToList();
+        double? usual = _justified && !last && known.Count > 0 ? known[known.Count / 2] : null;
+        var gapBase = gaps.Select((g, k) => g.Natural > 0 ? drawn[k] ?? usual ?? g.Natural : g.Natural).ToList();
+        double set = natural + gaps.Select((g, k) => gapBase[k] - g.Natural).Sum();
+        double extra = 0;
+        if (_justified && !last || set > available + 0.01) extra = available - set;
+        // Stretching, spaces and the joints between CJK characters share it as they can; squeezing, spaces alone.
+        // Among the words of a line with spaces, a few Chinese characters stay together: a joint that took a space's
+        // share would read as a space ("测 试"). A line of Chinese spreads over its joints.
+        int spaces = gaps.Count(g => g.Natural > 0), joints = gaps.Count(g => g.Natural == 0 && g.Kind == PieceKind.Cjk);
+        double joint = spaces >= 2 && joints <= spaces * 2 ? _size * 0.012 : _size * 0.1;
+        var weight = gaps.Select(g => g.Natural > 0 ? g.Natural * 0.6 : (g.Kind == PieceKind.Cjk && extra > 0 ? joint : 0)).ToList();
         if (weight.All(w => w == 0)) weight = gaps.Select(g => g.Kind == PieceKind.Cjk ? 1.0 : 0).ToList();
         double weightSum = weight.Sum();
         if (weightSum == 0) extra = 0;
         double x = left;
-        if (_centered) x = _columnLeft + (right - _columnLeft - natural) / 2;
+        if (_centered) x = _columnLeft + (right - _columnLeft - set) / 2;
         var items = new List<Placed>();
         int? previousEnd = null;
         for (int n = 0; n < line.Count; n++)
@@ -715,7 +770,7 @@ public sealed class PdfParagraph
             int first = piece.Atoms.Count > 0 ? piece.Atoms[0] : piece.Hyphen ?? 0;
             if (n > 0)
             {
-                double gap = piece.Natural + (weightSum > 0 ? extra * weight[n - 1] / weightSum : 0);
+                double gap = gapBase[n - 1] + (weightSum > 0 ? extra * weight[n - 1] / weightSum : 0);
                 // The glue between the pieces: the one taking the gap, the others with none.
                 if (previousEnd is { } p)
                     for (int g = p + 1; g < first; g++) items.Add(new Placed(g, x, g == piece.GlueBefore ? Math.Max(gap, 0) : 0, false));
@@ -757,10 +812,30 @@ public sealed class PdfParagraph
         public double Advance(string text)
         {
             if (GlyphFor(text) is { } g) return g.Width * Math.Sqrt(context.Matrix.A * context.Matrix.A + context.Matrix.B * context.Matrix.B);
+            return StandInAdvance(text);
+        }
+
+        /// <summary>The character's width in the system font standing in.</summary>
+        public double StandInAdvance(string text)
+        {
             var face = paragraph.FallbackFace(context, text);
             using var font = new SKFont(face.Typeface, (float)FontSize(context)) { Subpixel = true, LinearMetrics = true };
             return font.MeasureText(text);
         }
+    }
+
+    /// <summary>Whether the typed character i is drawn in the system font standing in: no font of the page has it, or none
+    /// has another character of the word it was typed in. A word is set in one font: a single stand-in letter among the
+    /// page's own would show as a different face, and would cut the word in two for searching and copying (the page's
+    /// text would read "carefull y").</summary>
+    bool StandsIn(int i, Atom[] atoms)
+    {
+        bool Lacks(int k) => atoms[k].Kind == AtomKind.Typed && StyleFor(k, atoms).GlyphFor(atoms[k].Typed ?? "") == null;
+        if (atoms[i].Kind != AtomKind.Typed) return false;
+        if (Lacks(i)) return true;
+        for (int k = i - 1; k >= 0 && atoms[k].Kind == AtomKind.Typed; k--) if (Lacks(k)) return true;
+        for (int k = i + 1; k < atoms.Length && atoms[k].Kind == AtomKind.Typed; k++) if (Lacks(k)) return true;
+        return false;
     }
 
     static double FontSize(Glyph g) => Math.Max(Math.Sqrt(g.Matrix.C * g.Matrix.C + g.Matrix.D * g.Matrix.D), 1);
@@ -842,6 +917,12 @@ public sealed class PdfParagraph
 
     public sealed record FallbackRun(string Text, Pt Origin, FontCatalog.Face Face, double Size, RGBColor Color);
 
+    static double MeasureStandIn(FallbackRun run)
+    {
+        using var font = new SKFont(run.Face.Typeface, (float)run.Size) { Subpixel = true, LinearMetrics = true };
+        return font.MeasureText(run.Text);
+    }
+
     /// <summary>What the edited lines draw: glyphs of the page (moved, or borrowed for typed characters), formulas moved
     /// whole, characters in a system font, the page's lines they replace and where the links of the edited lines go.</summary>
     public sealed class Drawing
@@ -904,12 +985,22 @@ public sealed class PdfParagraph
                         var style = StyleFor(item.Atom, atoms);
                         var origin = new Pt(item.X, line.Baseline + style.Rise);
                         var text = atom.Typed ?? "";
-                        if (style.GlyphFor(text) is { } glyph)
+                        if (!StandsIn(item.Atom, atoms) && style.GlyphFor(text) is { } glyph)
                         {
                             glyph.Matrix = glyph.Matrix with { Tx = origin.X, Ty = origin.Y };
                             drawing.Glyphs.Add(glyph);
                         }
-                        else drawing.Fallback.Add(new FallbackRun(text, origin, FallbackFace(style.Context, text), FontSize(style.Context), style.Context.Color));
+                        else
+                        {
+                            var face = FallbackFace(style.Context, text);
+                            double size = FontSize(style.Context);
+                            // Characters following one another are one piece of text (a word reads as a word).
+                            if (drawing.Fallback.Count > 0 && drawing.Fallback[^1] is { } run && ReferenceEquals(run.Face.Typeface, face.Typeface) && run.Size == size
+                                && run.Color.Equals(style.Context.Color) && Math.Abs(run.Origin.Y - origin.Y) < 0.01
+                                && Math.Abs(run.Origin.X + MeasureStandIn(run) - origin.X) < Math.Max(0.5, size * 0.08))
+                                drawing.Fallback[^1] = run with { Text = run.Text + text };
+                            else drawing.Fallback.Add(new FallbackRun(text, origin, face, size, style.Context.Color));
+                        }
                         if (item.HyphenAfter) AppendHyphen(item, line.Baseline, atoms, drawing);
                         break;
                     }

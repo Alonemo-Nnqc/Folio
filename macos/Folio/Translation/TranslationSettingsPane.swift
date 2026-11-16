@@ -52,6 +52,7 @@ struct TranslateSheet: View {
             }
             .formStyle(.grouped)
             .frame(minHeight: 360)
+            TranslationEstimateLine(model: model, fileIds: fileIds)
             HStack {
                 Text("保留版面、公式与图表，译文将作为附件加入该条目")
                     .font(.caption)
@@ -69,6 +70,48 @@ struct TranslateSheet: View {
             .padding([.horizontal, .bottom], 20)
         }
         .frame(width: 520)
+    }
+}
+
+/// What this run is expected to take, for services that charge: the tokens, and the cost where the model's public
+/// price is known. Worked out again whenever the service, the model or what is translated changes.
+private struct TranslationEstimateLine: View {
+    let model: AppModel
+    let fileIds: [String]
+    @State private var text: String?
+
+    var body: some View {
+        let settings = model.settings
+        let service = settings.translationService
+        let requests = fileIds.compactMap { model.snapshot.files[$0] }.map {
+            TranslationRequest(input: model.fileURL($0), outputDirectory: URL(filePath: "/dev/null"), serviceID: service,
+                               fieldValues: settings.translationFields[service] ?? [:], options: settings.translationOptions)
+        }
+        // A stack, not a Group: with nothing in it yet a Group has no view for the task to run on.
+        VStack(spacing: 0) {
+            if let text {
+                Label(text, systemImage: "gauge.with.dots.needle.33percent")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+            }
+        }
+        .task(id: requests) {
+            // The pages are analysed for it, off the main thread; a change of settings starts over.
+            let work = Task.detached(priority: .utility) { () -> TranslationEstimate? in
+                var sum: TranslationEstimate?
+                for request in requests {
+                    guard !Task.isCancelled, let one = TranslationEstimator.estimate(request) else { return nil }
+                    sum = sum.map { $0 + one } ?? one
+                }
+                return sum
+            }
+            let estimate = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+            if !Task.isCancelled { text = estimate.flatMap(TranslationEstimator.text(for:)) }
+        }
     }
 }
 
@@ -446,6 +489,10 @@ private struct FieldRow: View {
                         ModelListButton(model: model, serviceID: serviceID, current: value,
                                         placeholder: field.defaultValue ?? field.placeholder ?? "") { setValue($0) }
                     }
+                    // The saved model is checked against what the service offers now, not discovered from a slow translation.
+                    if let check = ModelCheck.check(serviceID: serviceID, fields: model.settings.translationFields[serviceID] ?? [:]) {
+                        ModelCheckRow(check: check) { setValue($0) }
+                    }
                 } else {
                     TextField(title, text: Binding(get: { value }, set: { setValue($0) }),
                               prompt: Text(field.placeholder ?? field.defaultValue ?? ""))
@@ -516,10 +563,11 @@ private struct OptionsSection: View {
                         Button("选择…", action: chooseGlossary)
                     }
                 } label: {
-                    Text("术语表（选填）")
-                    Text("CSV：原文, 译文")
+                    Text("术语表文件（选填）")
+                    Text("CSV：原文, 译文；仅用于当前设置，优先于下面的术语表")
                 }
             }
+            Section("术语") { GlossarySettingsRows(settings: settings) }
             Section("速度") {
                 Picker(selection: Binding(get: { settings.translationOptions.concurrency ?? 0 },
                                           set: { settings.translationOptions.concurrency = $0 == 0 ? nil : $0 })) {
@@ -604,6 +652,28 @@ private struct OptionsSection: View {
 
 /// The model chosen, in the same dress as the pop-up buttons around it. Opens a searchable list of the models the service
 /// offers, fetched with the key and address entered above; a name typed in the search field can be used as it is.
+/// Under a model the service no longer offers: what will be used instead, and one click to choose it.
+struct ModelCheckRow: View {
+    let check: ModelCheck
+    let choose: (String) -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("“\(check.saved)”已不在可用模型中")
+                Text(check.replacement.map { String(localized: "翻译时会改用 \($0)。") } ?? String(localized: "翻译时会使用默认模型。"))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.callout)
+            Spacer(minLength: 8)
+            if let replacement = check.replacement {
+                Button(String(localized: "改用 \(replacement)")) { choose(replacement) }
+            }
+        }
+    }
+}
+
 struct ModelListButton: View {
     let model: AppModel
     let serviceID: String
@@ -918,25 +988,26 @@ private struct AppleLanguageDownloader: View {
 }
 
 /// 设置 ▸ 划词翻译 (TRANS-10): a selection in the reader translated in a popover, by its own service.
-struct SelectionTranslationSettingsPane: View {
+/// 阅读 ▸ 划词翻译 (a pane of its own before 1.4).
+struct SelectionTranslationSettingsSections: View {
     let model: AppModel
     @State private var services: [TranslationService] = []
 
     var body: some View {
         @Bindable var settings = model.settings
-        Form {
-            Section {
+        Group {
+            Section("划词翻译") {
                 Toggle("划词翻译", isOn: $settings.selectionTranslationEnabled)
-            }
-            Section("使用") {
+                Group {
                 Picker("触发方式", selection: $settings.selectionTranslationTrigger) {
                     ForEach(AppSettings.SelectionTrigger.allCases) { Text($0.title).tag($0) }
                 }
                 LabeledContent("快捷键") {
                     ShortcutRecorder(shortcut: $settings.selectionTranslationShortcut, defaultShortcut: .defaultSelectionTranslation)
                 }
+                }
+                .disabled(!settings.selectionTranslationEnabled)
             }
-            .disabled(!settings.selectionTranslationEnabled)
             Section {
                 Picker(selection: $settings.selectionTranslationService) {
                     Text("与全文翻译相同").tag("")
@@ -954,11 +1025,10 @@ struct SelectionTranslationSettingsPane: View {
                     Text("Google、Microsoft\(AppleSystemTranslator.isSupportedOnThisSystem ? String(localized: "、Apple 离线翻译") : "")互为备用")
                 }
             } header: {
-                Text("服务")
+                Text("划词翻译服务")
             }
             .disabled(!settings.selectionTranslationEnabled)
         }
-        .formStyle(.grouped)
         .task(id: "\(settings.translationProfiles.count)-\(settings.translationFields.count)") {
             services = ServiceAvailability.ready(settings: settings, secrets: model.translations.secrets, agents: ServiceAvailability.knownAgents)
             let agents = await ServiceAvailability.agents()

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
-import { BookText, ChevronDown, Eraser, SquarePen, Columns2, GripVertical, Highlighter, MousePointer2, NotebookPen, PanelRight, PenLine, Printer, Search, StickyNote, Strikethrough, Type, Underline, ZoomIn, ZoomOut, MoveHorizontal, ChevronUp } from "lucide-react";
+import { ChevronDown, Eraser, SquarePen, Columns2, GripVertical, Highlighter, MousePointer2, NotebookPen, PanelRight, Pen, Printer, Search, Strikethrough, Type, Underline, ZoomIn, ZoomOut, MoveHorizontal, ChevronUp } from "lucide-react";
 import { t } from "../i18n";
-import { TranslateIcon } from "../ui/icons";
+import { FullTextTranslateIcon, NoteToolIcon, TranslateIcon } from "../ui/icons";
 import { setSetting } from "../store";
 import { Sheet } from "../ui/sheet";
 
@@ -12,12 +12,11 @@ export const TOOLBAR_ITEMS: { id: string; title: string; icon: any; tool?: boole
   { id: "highlight", title: "高亮", icon: Highlighter, tool: true },
   { id: "underline", title: "下划线", icon: Underline, tool: true },
   { id: "strike", title: "删除线", icon: Strikethrough, tool: true },
-  { id: "note", title: "便签", icon: StickyNote, tool: true },
+  { id: "note", title: "便签", icon: NoteToolIcon, tool: true },
   { id: "textbox", title: "文本框", icon: Type, tool: true },
-  { id: "ink", title: "手绘", icon: PenLine, tool: true },
+  { id: "ink", title: "手绘", icon: Pen, tool: true },
   { id: "eraser", title: "橡皮擦", icon: Eraser, tool: true },
-  { id: "color", title: "批注颜色", icon: null },
-  { id: "translate", title: "翻译", icon: BookText },
+  { id: "translate", title: "翻译", icon: FullTextTranslateIcon },
   { id: "editText", title: "编辑 PDF", icon: SquarePen },
   { id: "selectionTranslate", title: "划词翻译", icon: TranslateIcon },
   { id: "search", title: "查找", icon: Search },
@@ -32,7 +31,7 @@ export const TOOLBAR_ITEMS: { id: string; title: string; icon: any; tool?: boole
   { id: "print", title: "打印", icon: Printer },
 ];
 
-export const DEFAULT_TOOLBAR = ["view", "select", "highlight", "underline", "strike", "note", "textbox", "ink", "eraser", "color", "translate", "editText", "search"];
+export const DEFAULT_TOOLBAR = ["view", "select", "highlight", "underline", "strike", "note", "textbox", "ink", "eraser", "translate", "editText", "search"];
 
 export function toolbarIds(stored: unknown): string[] {
   const known = new Set(TOOLBAR_ITEMS.map((i) => i.id));

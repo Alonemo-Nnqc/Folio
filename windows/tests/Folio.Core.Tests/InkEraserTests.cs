@@ -128,6 +128,36 @@ public class InkEraserTests
         finally { File.Delete(copy); }
     }
 
+    /// <summary>The file gets what the page showed: the strokes it left, or nothing (the annotation goes, and no list shows
+    /// it any more), even where cutting the track again would leave a sliver.</summary>
+    [Fact]
+    public void WritesWhatThePageShowed()
+    {
+        var copy = Path.Combine(Path.GetTempPath(), $"folio-erase-{Guid.NewGuid():N}.pdf");
+        File.WriteAllBytes(copy, TestPdfs.OnePage());
+        try
+        {
+            AnnotationWriter.Add(copy, [
+                new NewAnnotation(1, "Ink", "blue", Strokes: [[20, 100, 280, 100]]),
+                new NewAnnotation(1, "Ink", "red", Strokes: [[20, 200, 60, 200]]),
+            ]);
+            var numbers = AnnotationNumbers(copy);
+            // The track misses the ends of the second line; the page had erased it all.
+            var (changed, removed) = AnnotationWriter.EraseInk(copy, [
+                new InkErasure(1, numbers[0], [[150, 80, 150, 120]], 8, Left: [[20, 100, 140, 100], [160, 100, 280, 100]]),
+                new InkErasure(1, numbers[1], [[30, 200, 50, 200]], 8, Left: []),
+            ]);
+            Assert.Equal([numbers[0]], changed);
+            Assert.Equal([numbers[1]], removed);
+            Assert.Equal([numbers[0]], AnnotationNumbers(copy));
+            var ink = InkList(copy, numbers[0]);
+            Assert.Equal([20.0, 100, 140, 100], ink[0]);
+            Assert.Equal([160.0, 100, 280, 100], ink[1]);
+            Assert.Single(PdfAnnotations.Read(copy));
+        }
+        finally { File.Delete(copy); }
+    }
+
     /// <summary>Ink from other programs keeps its line width and opacity.</summary>
     [Fact]
     public void KeepsWidthAndOpacityOfOtherInk()
@@ -164,6 +194,8 @@ public class InkEraserTests
         changed = changed.PadRight(body.Length);
         File.WriteAllBytes(path, System.Text.Encoding.Latin1.GetBytes(text[..start] + changed + text[end..]));
     }
+
+    internal static List<long> AnnotationNumbersOf(string path) => AnnotationNumbers(path);
 
     static List<long> AnnotationNumbers(string path)
     {

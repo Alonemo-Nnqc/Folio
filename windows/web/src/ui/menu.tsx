@@ -6,7 +6,17 @@ import { useLayer } from "./dismiss";
 export type MenuEntry =
   | { kind?: "item"; label: string; icon?: ReactNode; action?: () => void; disabled?: boolean; checked?: boolean; submenu?: MenuEntry[]; key?: string; dot?: string; indent?: number }
   | { kind: "separator" }
-  | { kind: "title"; label: string };
+  | { kind: "title"; label: string }
+  | { kind: "row"; label: string; choices: RowChoice[] };
+
+/** One choice in a row of a menu (as the Mac shows them): a colour circle, the many-coloured circle that mixes a colour
+ *  of one's own, a dot as thick as a pen's line, a ring as large as the eraser, or a letter as large as a text size. */
+export interface RowChoice {
+  title: string;
+  look: { color: string } | { custom: true } | { dot: number; color: string } | { ring: number } | { letter: number };
+  selected?: boolean;
+  action: () => void;
+}
 
 export const sep: MenuEntry = { kind: "separator" };
 
@@ -53,7 +63,7 @@ function Panel({ items, x, y, parentWidth, close, depth }: { items: MenuEntry[];
     setPos({ left: Math.max(6, left), top });
   }, [x, y, items]);
 
-  const enabled = items.map((i, n) => ({ i, n })).filter(({ i }) => i.kind !== "separator" && i.kind !== "title" && !("disabled" in i && i.disabled));
+  const enabled = items.map((i, n) => ({ i, n })).filter(({ i }) => i.kind !== "separator" && i.kind !== "title" && i.kind !== "row" && !("disabled" in i && i.disabled));
 
   // Only the deepest open panel takes the keys.
   useEffect(() => {
@@ -81,13 +91,14 @@ function Panel({ items, x, y, parentWidth, close, depth }: { items: MenuEntry[];
     setOpen({ index, x: r.right - 2, y: r.top - 4, width: r.width });
   }
 
-  const hasIcons = items.some((i) => i.kind !== "separator" && i.kind !== "title" && (i.icon || i.dot || i.checked !== undefined));
+  const hasIcons = items.some((i) => i.kind !== "separator" && i.kind !== "title" && i.kind !== "row" && (i.icon || i.dot || i.checked !== undefined));
   return (
     <>
       <div ref={ref} className="menu" style={pos ? { left: pos.left, top: pos.top } : { left: x, top: y, visibility: "hidden" }} onContextMenu={(e) => e.preventDefault()}>
         {items.map((item, index) => {
           if (item.kind === "separator") return <div key={index} className="menu-sep" />;
           if (item.kind === "title") return <div key={index} className="menu-title">{item.label}</div>;
+          if (item.kind === "row") return <MenuRow key={index} row={item} close={close} />;
           const hasSub = !!item.submenu;
           return (
             <div key={index} data-index={index} className={`menu-item${item.disabled ? " disabled" : ""}${active === index || open?.index === index ? " active" : ""}`}
@@ -142,4 +153,33 @@ export function MenuHost() {
   }, [menu]);
   if (!menu) return null;
   return <Panel key={menu.n} items={menu.items} x={menu.x} y={menu.y} close={() => setMenu(null)} depth={0} />;
+}
+
+function MenuRow({ row, close }: { row: { label: string; choices: RowChoice[] }; close: () => void }) {
+  const colors = row.choices.every((c) => "color" in c.look && !("dot" in c.look) || "custom" in c.look);
+  return (
+    <div className={`menu-row${colors ? " colors" : " sizes"}`} role="group" aria-label={row.label} onMouseEnter={() => {}}>
+      {row.choices.map((choice, i) => {
+        const look = choice.look as any;
+        return (
+          <button key={i} className={`menu-choice${choice.selected ? " on" : ""}`} title={choice.title} aria-label={choice.title} aria-pressed={!!choice.selected}
+            onMouseUp={() => { close(); choice.action(); }}>
+            {"custom" in look ? <span className="swatch-dot custom" />
+              : "dot" in look ? <span className="menu-size-dot" style={{ width: look.dot, height: look.dot, background: look.color }} />
+              : "ring" in look ? <span className="menu-size-ring" style={{ width: look.ring, height: look.ring }} />
+              : "letter" in look ? <span className="menu-size-letter" style={{ fontSize: look.letter }}>A</span>
+              : <span className="swatch-dot" style={{ background: look.color }}>{choice.selected && <Check size={11} strokeWidth={3} color={light(look.color) ? "rgba(0,0,0,.7)" : "#fff"} />}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Whether a "#RRGGBB" colour is light (a dark checkmark on it). */
+function light(hex: string) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return false;
+  const [r, g, b] = m.slice(1).map((x) => parseInt(x, 16) / 255);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 0.8;
 }

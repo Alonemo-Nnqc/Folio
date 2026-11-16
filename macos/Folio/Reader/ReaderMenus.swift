@@ -52,14 +52,6 @@ enum ReaderMenus {
             if tool == .select { annotate.addItem(.separator()) }
         }
         annotate.addItem(.separator())
-        let colors = NSMenu(title: String(localized: "颜色"))
-        for (index, color) in AnnotationColor.allCases.enumerated() {
-            let entry = item(color.title, #selector(ReaderWindowController.selectColor(_:)), "", .command)
-            entry.tag = index
-            entry.image = ReaderWindowController.colorSwatch(color)
-            colors.addItem(entry)
-        }
-        annotate.addItem(MainMenu.submenu(String(localized: "颜色"), colors))
         let sizes = NSMenu(title: String(localized: "橡皮擦大小"))
         for (index, size) in InkEraser.Size.allCases.enumerated() {
             let entry = item(size.title, #selector(ReaderWindowController.selectEraserSize(_:)), "", .command)

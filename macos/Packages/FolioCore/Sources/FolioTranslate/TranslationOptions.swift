@@ -30,6 +30,8 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
     public var onlyIncludeTranslatedPages: Bool = false
     /// Optional glossary CSV (`source,target`).
     public var glossaryFile: URL?
+    /// Terms a model finds in a paper go into Folio's glossary, for the papers translated after it.
+    public var rememberTerms: Bool = true
     /// Translate table cells in place.
     public var translateTables: Bool = true
     /// Translate the reference list too.
@@ -66,7 +68,7 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case langIn, langOut, outputs, dualLayout, pages, onlyIncludeTranslatedPages, glossaryFile
+        case langIn, langOut, outputs, dualLayout, pages, onlyIncludeTranslatedPages, glossaryFile, rememberTerms
         case translateTables, translateReferences, translateImageText, concurrency, ignoreCache, duplicates
     }
 
@@ -81,6 +83,7 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
         pages = try c.decodeIfPresent(String.self, forKey: .pages)
         onlyIncludeTranslatedPages = try c.decodeIfPresent(Bool.self, forKey: .onlyIncludeTranslatedPages) ?? false
         glossaryFile = try? c.decodeIfPresent(URL.self, forKey: .glossaryFile)
+        rememberTerms = (try? c.decodeIfPresent(Bool.self, forKey: .rememberTerms)) ?? true
         translateTables = try c.decodeIfPresent(Bool.self, forKey: .translateTables) ?? true
         translateReferences = try c.decodeIfPresent(Bool.self, forKey: .translateReferences) ?? false
         translateImageText = try c.decodeIfPresent(Bool.self, forKey: .translateImageText) ?? false

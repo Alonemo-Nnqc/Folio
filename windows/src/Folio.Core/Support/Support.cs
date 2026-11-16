@@ -91,8 +91,6 @@ public static class Text
     public static string CollapseWhitespace(string s) =>
         string.Join(' ', s.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
-    public static int LetterCount(string s) => s.Count(char.IsLetter);
-
     /// <summary>Share of CJK ideographs / kana / hangul among the letters of text.</summary>
     public static double CjkRatio(string text)
     {

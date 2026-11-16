@@ -187,7 +187,7 @@ enum ItemMenuBuilder {
     private static func translateEntry(translating: Bool) -> ItemMenuEntry {
         translating
             ? .action(title: String(localized: "取消翻译"), symbol: "xmark.circle", command: .cancelTranslation)
-            : .action(title: String(localized: "翻译全文…"), symbol: "character.book.closed", command: .translate)
+            : .action(title: String(localized: "翻译全文…"), symbol: TranslationIcon.fullTextSymbol, command: .translate)
     }
 
     // MARK: NSMenu conversion
@@ -200,7 +200,7 @@ enum ItemMenuBuilder {
                 menu.addItem(.separator())
             case let .action(title, symbol, command, enabled, checked, indent):
                 let item = NSMenuItem.closure(title) { perform(command) }
-                if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
+                if let symbol { item.image = TranslationIcon.menuImage(symbol) }
                 if case .openWithApp(let url) = command {
                     let icon = NSWorkspace.shared.icon(forFile: url.path)
                     icon.size = NSSize(width: 16, height: 16)
@@ -218,7 +218,7 @@ enum ItemMenuBuilder {
                 menu.addItem(item)
             case let .submenu(title, symbol, children):
                 let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-                if let symbol { item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil) }
+                if let symbol { item.image = TranslationIcon.menuImage(symbol) }
                 let submenu = NSMenu(title: title)
                 submenu.autoenablesItems = false
                 populate(submenu, with: children, snapshot: snapshot, perform: perform)

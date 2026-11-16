@@ -10,14 +10,4 @@ public enum PDFTextExtractor {
             return (text?.isEmpty ?? true) ? nil : text
         }
     }
-
-    /// Text of the first `count` pages joined by newlines.
-    public static func firstPages(of url: URL, count: Int) -> String? {
-        PDFKitSerial.run {
-            guard let document = PDFDocument(url: url) else { return nil }
-            let pages = (0..<min(count, document.pageCount)).compactMap { document.page(at: $0)?.string }
-            let text = pages.joined(separator: "\n")
-            return text.isEmpty ? nil : text
-        }
-    }
 }

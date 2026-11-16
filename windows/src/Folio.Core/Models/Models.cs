@@ -96,11 +96,6 @@ public sealed record Metadata
     public string? Abstract { get; set; }
 
     public Metadata Copy() => this with { Authors = [.. Authors] };
-
-    public bool Equivalent(Metadata o) =>
-        Type == o.Type && Title == o.Title && Authors.SequenceEqual(o.Authors) && Year == o.Year && Date == o.Date
-        && Source == o.Source && Volume == o.Volume && Issue == o.Issue && Pages == o.Pages && Publisher == o.Publisher
-        && Doi == o.Doi && ArxivId == o.ArxivId && Isbn == o.Isbn && Url == o.Url && Abstract == o.Abstract;
 }
 
 /// <summary>A top-level row in the library: either a regular item or a standalone file.</summary>
@@ -288,7 +283,6 @@ public abstract record ViewScope
     };
 
     public string? GroupId => this is GroupScope g ? g.Id : null;
-    public string? TagId => this is TagScope t ? t.Id : null;
 }
 
 public enum SortColumn

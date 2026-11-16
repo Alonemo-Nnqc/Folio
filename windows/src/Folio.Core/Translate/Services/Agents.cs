@@ -409,6 +409,7 @@ public static class AgentFailure
 /// <summary>Translates with a local agent: large batches (each call starts the agent), a few at a time.</summary>
 public sealed class AgentProvider(LocalAgent agent, string executable, string? model, string? effort) : ChatModel
 {
+    public string? ModelName => model;
     bool _usualLevelRefused;
     /// <summary>Each call starts the agent (seconds before it answers): large batches, eight side by side.</summary>
     public override ProviderLimits Limits { get; } = new(5000, 60, 8, true, 8, 0.006);
@@ -1187,9 +1188,11 @@ public static partial class CodeBuddyAccount
     public static List<string> ModelsInHelp(string help) =>
         SupportedInHelp().Match(help) is { Success: true } m ? m.Groups[1].Value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList() : [];
 
-    /// <summary>For translating, when no model is chosen: a quick one the account has (CodeBuddy's own default reasons at
-    /// length, minutes a page). On four labels these answer in about 4 s, the free models in 8 to 10 s.</summary>
-    static readonly string[] Quick = ["deepseek-v4.1-flash", "space-bunny", "glm-5.3-flash", "minimax-m3.1-flash", "deepseek-v3-2-volc"];
+    /// <summary>For translating, when no model is chosen: a quick one the account has (the same as the Mac). Measured on one
+    /// batch of a paper as Folio sends it (4,600 characters, effort minimal), all lines back: glm-5.3-flash 18 s,
+    /// space-bunny 15 s, minimax-m3.1-flash 19 s, deepseek-v4.1-flash 25 s; hy4flash-free 42 s, and the "hy4free" an older
+    /// version saved 242 s (17,875 tokens of thinking for 932 of answer): the hy models ignore the effort asked for.</summary>
+    static readonly string[] Quick = ["glm-5.3-flash", "space-bunny", "minimax-m3.1-flash", "deepseek-v4.1-flash", "deepseek-v3-2-volc"];
 
     public static string? QuickModel(IReadOnlyCollection<string> models) => Quick.FirstOrDefault(models.Contains);
 }

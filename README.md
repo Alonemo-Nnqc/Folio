@@ -6,7 +6,7 @@
 
 **写给读论文的人的开源文献管理软件，Mac 和 Windows 用同一个文献库**
 
-拖入 PDF 自动建好条目 · 批注写进文件 · 整篇翻译不动排版 · AI 智能体直接读你的文献库
+拖入 PDF 自动建好条目 · 批注写进文件 · 整篇翻译不动排版 · 直接改 PDF 里的字 · AI 智能体直接读你的文献库
 
 [![最新版本](https://img.shields.io/github/v/release/Alonemo-Nnqc/Folio?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/Alonemo-Nnqc/Folio/releases/latest)
 [![CI](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml/badge.svg)](https://github.com/Alonemo-Nnqc/Folio/actions/workflows/ci.yml)
@@ -24,9 +24,13 @@
 
 **一个文献库，两个系统都能打开。** Mac 版和 Windows 版功能一一对应，文献库格式完全相同。把文献库文件夹放进同步盘，实验室的 Windows 和家里的 Mac 打开的就是同一份论文、批注和笔记。不用注册账号，也没有服务器。
 
-**翻译完，还是原来那篇论文。** 翻译引擎内置，无需下载。公式逐字形保留，表格逐格翻译，图内文字不动，译文里的引用和章节链接依然能点。翻译途中就能对照阅读。
+**翻译完，还是原来那篇论文。** 翻译引擎内置，无需下载。公式逐字形保留，表格逐格翻译，插图里的文字也能原位换成译文，居中、对齐和对称都照原样；译文里的引用和章节链接依然能点。翻译途中就能对照阅读，读到一半卡住的句子，选中就能划词翻译。
 
-**用你已经登录的 AI 来翻译。** 电脑上的 Claude Code、Codex、Gemini CLI 等 19 种智能体可以直接当翻译服务，不用另配 API Key。也可以选免费接口、Ollama 等本地模型，或 17 种大模型与机器翻译 API，一共 40 种。
+**术语前后一致，花多少心里有数。** 大模型先从论文里找出术语、定好译法再翻译全文，术语记进术语表，下一篇接着用，你改过的译法不会被改回去。用付费服务前先估算 tokens 和费用；回复边生成边接收，进度条是真实进度。
+
+**用你已经登录的 AI 来翻译。** 电脑上的 Claude Code、Codex、Gemini CLI 等 20 种智能体可以直接当翻译服务，不用另配 API Key。也可以选免费接口、Ollama 等本地模型，或 17 种大模型与机器翻译 API，一共 41 种（Mac 上另有 Apple 离线翻译）。
+
+**哪个词译得不对，就在页面上改掉。** 编辑模式下点一下 PDF 里的文字就能原位修改，沿用原文的字体、字号和词距，只重排受影响的几行，公式和引用跟着文字走。
 
 **AI 智能体能读懂你的文献库。** 内置 MCP 服务器（26 个工具）和命令行工具 `folio-cli`。Folio 会找到电脑上的智能体，每个只需打开一个开关。智能体可以按描述找论文、读全文和批注、生成准确的引用；也可以设为只读。
 
@@ -39,13 +43,15 @@
 | | |
 | --- | --- |
 | **添加文献** | 拖入 PDF，几秒内识别标题、作者、期刊、DOI 等（Zotero 识别服务 + Crossref / arXiv / OpenAlex / DBLP / CVF），也可通过 DOI、arXiv 编号、ISBN 添加，找不到时手动匹配 |
-| **阅读与批注** | 标签页阅读，高亮、下划线、删除线、便签、文本框、手绘，记住每篇论文的阅读位置，按空格快速预览 |
-| **翻译** | 整篇翻译、批量翻译、原文译文对照阅读、划词翻译；自动提取术语表，让专有名词前后一致；已译段落会缓存 |
-| **整理** | 两级分组、彩色标签、回收站、全文搜索、阅读状态、星级评分，一个条目可挂多个文件 |
+| **阅读与批注** | 标签页阅读，高亮、下划线、删除线、便签、文本框、手绘与橡皮擦，记住每篇论文的阅读位置，按空格快速预览；扫描件自动识别文字（OCR） |
+| **翻译** | 整篇翻译（保留排版、翻译插图文字）、批量翻译、对照阅读、划词翻译；跨论文复用的术语表，可查看和修改；付费服务先估算费用；流式接收，进度真实；已译段落会缓存 |
+| **编辑 PDF** | 直接修改 PDF 里的文字，沿用原字体和排版，只重排改动的几行，可撤销 |
+| **整理** | 最多四级分组、彩色标签、回收站、全文搜索、阅读状态、星级评分，一个条目可挂多个文件；有译文的论文带“已翻译”标签（可在设置中关闭） |
+| **期刊指标** | 填写 easyScholar 密钥后显示中科院分区、JCR 分区、影响因子、CCF 等级，可按它们排序 |
 | **笔记** | 每个条目一篇 Markdown 笔记，阅读时可把选中的文字一键加入 |
 | **引用与导出** | GB/T 7714-2015、APA、IEEE、MLA、Chicago、Harvard、Vancouver、Nature、BibTeX，导出 BibTeX / RIS / CSL JSON |
 | **浏览器插件** | Chrome、Edge、Brave、Arc、Firefox 等，Mac 上还有 Safari；在论文页面一键保存，搜索结果页可批量保存 |
-| **AI 接入** | MCP 服务器、`folio-cli`、Folio 技能，一键接入 Claude Code、Codex、Gemini CLI、Copilot CLI、Cursor CLI、Pi、Grok CLI、Hermes Agent 等 19 种智能体 |
+| **AI 接入** | MCP 服务器（26 个工具）、`folio-cli`、Folio 技能，一键接入 Claude Code、Codex、Gemini CLI、Copilot CLI、Cursor CLI、Pi、Grok CLI、Hermes Agent 等 19 种智能体 |
 | **外观与语言** | 深色模式，简体中文和英文界面；macOS 26 上是 Liquid Glass，Windows 11 上是亚克力 |
 | **更新** | 应用内检查更新，后台下载，重新启动即完成安装 |
 
@@ -53,19 +59,27 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshots/reader.jpg" alt="阅读器"></td>
     <td width="50%"><img src="assets/screenshots/parallel.jpg" alt="对照阅读"></td>
+    <td width="50%"><img src="assets/screenshots/selection.jpg" alt="划词翻译"></td>
   </tr>
   <tr>
-    <td align="center"><b>阅读与批注</b>：高亮、便签直接写回 PDF</td>
     <td align="center"><b>对照阅读</b>：保留排版的译文与原文并排</td>
+    <td align="center"><b>划词翻译</b>：选中一句，译文就在下面</td>
   </tr>
   <tr>
-    <td width="50%"><img src="assets/screenshots/windows.jpg" alt="Windows 版"></td>
+    <td width="50%"><img src="assets/screenshots/edit.jpg" alt="编辑 PDF 文字"></td>
+    <td width="50%"><img src="assets/screenshots/quicklook-windows.jpg" alt="Windows 版的快速预览"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>编辑 PDF 文字</b>：在译文里补上术语，段落自动重排</td>
+    <td align="center"><b>Windows 版</b>：功能一致，文献库互通（图为快速预览）</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/reader.jpg" alt="阅读器"></td>
     <td width="50%"><img src="assets/screenshots/ai.jpg" alt="AI 设置"></td>
   </tr>
   <tr>
-    <td align="center"><b>Windows 版</b>：功能一致，文献库互通</td>
+    <td align="center"><b>阅读与批注</b>：高亮、便签直接写回 PDF</td>
     <td align="center"><b>AI 接入</b>：一键为本机的智能体添加 MCP 与技能</td>
   </tr>
 </table>

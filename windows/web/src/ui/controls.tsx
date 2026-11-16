@@ -79,12 +79,12 @@ export function SearchBox({ value, onChange, placeholder, inputRef, onKeyDown, t
 }
 
 function tint(hex: string, dark: boolean) {
-  return { color: dark ? `color-mix(in srgb, ${hex} 75%, white)` : `color-mix(in srgb, ${hex} 78%, black)`, background: `color-mix(in srgb, ${hex} ${dark ? 24 : 14}%, transparent)`, borderColor: `color-mix(in srgb, ${hex} 32%, transparent)` };
+  return { color: dark ? `color-mix(in srgb, ${hex} 75%, white)` : `color-mix(in srgb, ${hex} 78%, black)`, background: `color-mix(in srgb, ${hex} ${dark ? 24 : 13}%, transparent)`, ["--dot" as any]: hex };
 }
 
-export function Chip({ label, color, dark, onRemove, title }: { label: string; color: string; dark: boolean; onRemove?: () => void; title?: string }) {
+export function Chip({ label, color, dark, onRemove, title, plain }: { label: string; color: string; dark: boolean; onRemove?: () => void; title?: string; plain?: boolean }) {
   return (
-    <span className="chip" style={tint(color, dark)} title={title ?? label}>
+    <span className={plain ? "chip plain" : "chip"} style={tint(color, dark)} title={title ?? label}>
       <span className="ellipsis">{label}</span>
       {onRemove && <button className="x" title="" onClick={(e) => { e.stopPropagation(); onRemove(); }}><X size={9} strokeWidth={3} /></button>}
     </span>

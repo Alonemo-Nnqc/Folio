@@ -41,12 +41,16 @@ public interface ITranslationProvider
     /// <summary>Gets the first request ready without sending any text: the connection opened (DNS, TCP, TLS) and any token
     /// fetched. Failures are ignored; the request itself will say what went wrong (SEL-20).</summary>
     Task Prewarm() => Task.CompletedTask;
+    /// <summary>The model that answers, for the log (null where the service has none to name).</summary>
+    string? ModelName => null;
 }
 
 /// <summary>Why a request failed. Detail is what the error classifier reads.</summary>
 public sealed class ProviderError : Exception
 {
-    public enum Kinds { Http, Network, InvalidResponse, Cancelled, Process, AgentSetup, Refused }
+    /// <summary>Truncated: the reply was cut off at the model's output limit; the same request would be cut off again,
+    /// half of it may fit.</summary>
+    public enum Kinds { Http, Network, InvalidResponse, Cancelled, Process, AgentSetup, Refused, Truncated }
 
     public Kinds Kind { get; }
     public int Status { get; }
@@ -134,6 +138,7 @@ public static class LLMBatch
         - Use the established terminology of the field and translate terms consistently; follow the glossary.
         - Headings, table cells and other short items: translate concisely, without adding final punctuation.
         - Write fluent, natural {target} academic prose. Do not add, omit or explain anything.
+        - Translate every value in full, each under its own key: never merge two values, leave one out or give one back in {source} (a value that is only a name, a number or a formula stays as it is).
         - Each value is one piece of text; keep it one piece (no line breaks).
         """);
         prompt.Replace("\r\n", "\n");
@@ -170,13 +175,77 @@ public static class LLMBatch
     /// <summary>Reads the reply. Missing keys come back as null.</summary>
     public static List<string?> Parse(string reply, int count)
     {
-        var obj = JsonObjectIn(reply) ?? LenientObject(reply);
-        if (obj == null) return Enumerable.Repeat<string?>(null, count).ToList();
-        return Enumerable.Range(1, count).Select(key =>
+        if (count <= 0) return [];
+        reply = WithoutThinking(reply);
+        if ((JsonObjectIn(reply) ?? LenientObject(reply)) is { } obj)
         {
-            if (!obj.TryGetPropertyValue(key.ToString(), out var value) || value == null) return null;
-            return value is JsonValue v && v.TryGetValue<string>(out var s) ? s : value.ToJsonString();
-        }).ToList();
+            var values = Numbered(obj, count);
+            if (values.Any(v => v != null)) return values;
+        }
+        // A plain list of the translations, in order.
+        if (JsonArrayIn(reply) is { } list && list.Count == count) return list;
+        return Enumerable.Repeat<string?>(null, count).ToList();
+    }
+
+    static readonly Regex Thinking = new(@"<(think|thinking)>.*?</\1>", RegexOptions.Singleline);
+
+    /// <summary>The reply without what a reasoning model thought aloud before it (&lt;think&gt;…&lt;/think&gt;): braces,
+    /// quotes and drafts in there are not the answer.</summary>
+    public static string WithoutThinking(string reply)
+    {
+        var text = Thinking.Replace(reply, "");
+        // Only the closing tag (the opening one went with the prompt).
+        foreach (var tag in new[] { "</think>", "</thinking>" })
+        {
+            int end = text.LastIndexOf(tag, StringComparison.Ordinal);
+            if (end >= 0) text = text[(end + tag.Length)..];
+        }
+        return text;
+    }
+
+    static string? TextOf(JsonNode? value)
+    {
+        static string? Plain(JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var text) ? text : null;
+        switch (value)
+        {
+            case null: return null;
+            case JsonValue v: return Plain(v) ?? v.ToJsonString();
+            case JsonObject wrapped:
+                var strings = wrapped.Select(p => Plain(p.Value)).Where(t => t != null).ToList();
+                if (strings.Count == 1) return strings[0];
+                return Plain(wrapped["translation"]) ?? Plain(wrapped["text"]) ?? Plain(wrapped["target"]);
+            default: return null;
+        }
+    }
+
+    /// <summary>The texts under "1", "2", …: at the top of the object, or one level down ({"translations": {…}}, a list
+    /// under one key). A text may itself be wrapped ({"translation": "…"}).</summary>
+    public static List<string?> Numbered(JsonObject obj, int count)
+    {
+        var byNumber = new Dictionary<int, string>();
+        foreach (var (key, value) in obj)
+            if (int.TryParse(key.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int n) && TextOf(value) is { } text) byNumber[n] = text;
+        if (byNumber.Count == 0 && obj.Count == 1)
+        {
+            var inner = obj.First().Value;
+            if (inner is JsonObject nested) return Numbered(nested, count);
+            if (inner is JsonArray list && list.Count == count) return list.Select(TextOf).ToList();
+        }
+        return Enumerable.Range(1, count).Select(k => byNumber.TryGetValue(k, out var text) ? text : null).ToList();
+    }
+
+    /// <summary>A JSON list of texts in text, if that is what it holds.</summary>
+    public static List<string?>? JsonArrayIn(string text)
+    {
+        int start = text.IndexOf('['), end = text.LastIndexOf(']');
+        if (start < 0 || end <= start) return null;
+        try
+        {
+            if (JsonNode.Parse(text[start..(end + 1)]) is not JsonArray list) return null;
+            var values = list.Select(v => v is JsonValue value && value.TryGetValue<string>(out var s) ? s : null).ToList();
+            return values.Any(v => v != null) ? values : null;
+        }
+        catch { return null; }
     }
 
     /// <summary>The first JSON object in text (models sometimes wrap it in code fences or add a sentence).</summary>
@@ -228,7 +297,7 @@ public static class LLMBatch
     {
         var target = LanguageNames.English(context.TargetLanguage);
         return $$"""
-        You build glossaries for translating academic papers into {{target}}. From the excerpt the user sends, pick the technical terms whose translation must stay consistent (concepts, task names, phrases of the field), at most 40, and give the established {{target}} translation of each.
+        You build glossaries for translating academic papers into {{target}}. From the excerpt the user sends, pick the technical terms whose translation must stay consistent (concepts, task names, phrases of the field), at most 30, and give the established {{target}} translation of each.
         Leave out names of models, methods, datasets, metrics and software, and abbreviations, which stay untranslated.
         Reply with only JSON: {"terms": [{"source": "...", "target": "..."}]}
         """.Replace("\r\n", "\n");
@@ -236,7 +305,7 @@ public static class LLMBatch
 
     public static List<GlossaryEntry> ParseTerms(string reply)
     {
-        if (JsonObjectIn(reply)?["terms"] is not JsonArray terms) return [];
+        if (JsonObjectIn(WithoutThinking(reply))?["terms"] is not JsonArray terms) return [];
         var result = new List<GlossaryEntry>();
         foreach (var term in terms.OfType<JsonObject>())
         {
@@ -305,25 +374,30 @@ public static class Http
         return request;
     }
 
+    static string HostOf(Uri uri) => uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+
+    /// <summary>What a non-2xx answer becomes.</summary>
+    static ProviderError Failure(HttpResponseMessage response, byte[] data, string host)
+    {
+        int status = (int)response.StatusCode;
+        var body = Encoding.UTF8.GetString(data, 0, Math.Min(data.Length, 2000));
+        bool refused = status is 400 or 403 or 422 or 451 && ProviderError.IsContentRefusal(body);
+        double? retry = response.Headers.RetryAfter?.Delta?.TotalSeconds;
+        return refused ? new ProviderError(ProviderError.Kinds.Refused, $"Error code: {status} - {body}", host) { RetryAfter = retry }
+            : new ProviderError(ProviderError.Kinds.Http, $"Error code: {status} - {body}", host, status) { RetryAfter = retry };
+    }
+
     public static async Task<byte[]> Send(HttpRequestMessage request, CancellationToken cancel, double timeoutSeconds = 180)
     {
         var uri = request.RequestUri!;
-        string host = uri.IsDefaultPort ? uri.Host : $"{uri.Host}:{uri.Port}";
+        string host = HostOf(uri);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         try
         {
             using var response = await Client.SendAsync(request, timeout.Token);
             var data = await response.Content.ReadAsByteArrayAsync(timeout.Token);
-            int status = (int)response.StatusCode;
-            if (status is < 200 or >= 300)
-            {
-                var body = Encoding.UTF8.GetString(data, 0, Math.Min(data.Length, 2000));
-                bool refused = status is 400 or 403 or 422 or 451 && ProviderError.IsContentRefusal(body);
-                double? retry = response.Headers.RetryAfter?.Delta?.TotalSeconds;
-                if (refused) throw new ProviderError(ProviderError.Kinds.Refused, $"Error code: {status} - {body}", host) { RetryAfter = retry };
-                throw new ProviderError(ProviderError.Kinds.Http, $"Error code: {status} - {body}", host, status) { RetryAfter = retry };
-            }
+            if ((int)response.StatusCode is < 200 or >= 300) throw Failure(response, data, host);
             return data;
         }
         catch (ProviderError) { throw; }
@@ -338,6 +412,75 @@ public static class Http
         catch (HttpRequestException e)
         {
             throw new ProviderError(ProviderError.Kinds.Network, NetworkDetail(e, uri.Host), host);
+        }
+    }
+
+    /// <summary>Sends the request and hands over its answer as it arrives: each event of a stream (server-sent events:
+    /// the text after "data:") goes to onEvent, and null comes back at its end. A server that answers in one piece
+    /// instead (JSON: it does not stream, whatever was asked) gets its whole body returned.
+    ///
+    /// A reply that takes minutes to write no longer runs into the time limit of a request, which now only counts the
+    /// silence between two pieces (idleSeconds); and how far the reply has come is known, not guessed.</summary>
+    public static async Task<byte[]?> Stream(HttpRequestMessage request, Action<string> onEvent, CancellationToken cancel, double idleSeconds = 180)
+    {
+        var uri = request.RequestUri!;
+        string host = HostOf(uri);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        timeout.CancelAfter(TimeSpan.FromSeconds(idleSeconds));
+        try
+        {
+            using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            if ((int)response.StatusCode is < 200 or >= 300)
+                throw Failure(response, await response.Content.ReadAsByteArrayAsync(timeout.Token), host);
+            bool? isStream = response.Content.Headers.ContentType?.MediaType?.Contains("event-stream", StringComparison.OrdinalIgnoreCase) == true ? true : null;
+            await using var body = await response.Content.ReadAsStreamAsync(timeout.Token);
+            var whole = new MemoryStream();
+            var line = new MemoryStream();
+            var buffer = new byte[16384];
+            // False once the stream said it is done.
+            bool Take()
+            {
+                var text = Encoding.UTF8.GetString(line.GetBuffer(), 0, (int)line.Length).TrimEnd('\r');
+                line.SetLength(0);
+                if (isStream == null && text.Trim().Length > 0) isStream = text.StartsWith("data:") || text.StartsWith("event:") || text.StartsWith(':');
+                if (isStream != true || !text.StartsWith("data:")) return true;
+                var payload = text[5..].Trim();
+                if (payload == "[DONE]") return false;
+                if (payload.Length > 0) onEvent(payload);
+                return true;
+            }
+            while (true)
+            {
+                int read = await body.ReadAsync(buffer, timeout.Token);
+                if (read <= 0) break;
+                timeout.CancelAfter(TimeSpan.FromSeconds(idleSeconds));
+                // Lines end at a line feed only: a text may hold other characters Unicode calls line ends (U+2028).
+                for (int i = 0; i < read; i++)
+                {
+                    if (isStream != true) whole.WriteByte(buffer[i]);
+                    if (buffer[i] != 0x0A) { line.WriteByte(buffer[i]); continue; }
+                    if (!Take()) return null;
+                }
+            }
+            if (line.Length > 0) Take();
+            return isStream == true ? null : whole.ToArray();
+        }
+        catch (ProviderError) { throw; }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            throw new ProviderError(ProviderError.Kinds.Cancelled, "cancelled", host);
+        }
+        catch (OperationCanceledException)
+        {
+            throw new ProviderError(ProviderError.Kinds.Network, $"Connection timed out: {uri.Host}", host);
+        }
+        catch (HttpRequestException e)
+        {
+            throw new ProviderError(ProviderError.Kinds.Network, NetworkDetail(e, uri.Host), host);
+        }
+        catch (IOException e)
+        {
+            throw new ProviderError(ProviderError.Kinds.Network, $"Connection reset: server disconnected: {uri.Host} ({e.Message})", host);
         }
     }
 
@@ -376,6 +519,84 @@ public static class Http
     public static string Prefix(byte[] data, int n = 300) => Encoding.UTF8.GetString(data, 0, Math.Min(n, data.Length));
 }
 
+/// <summary>How far the reply to the request under way has come: the characters of the answer received so far (0: the
+/// model is still thinking, but alive). Whoever asked sets Sink around the call; providers that read their reply as it
+/// arrives report to it.</summary>
+public static class StreamProgress
+{
+    static readonly AsyncLocal<Action<int>?> Current = new();
+    public static Action<int>? Sink { get => Current.Value; set => Current.Value = value; }
+    public static void Report(int characters) => Current.Value?.Invoke(characters);
+}
+
+/// <summary>Parameters Folio adds to a request on its own (a low temperature, a thinking level kept low) are not known to
+/// every model and server behind an API: a 400 that turns one down must not stop the translation. The request goes
+/// again without it, and what was turned down is remembered while the app runs, so later requests leave it out at once.
+/// Parameters the user chose are never dropped this way; their refusal is shown.</summary>
+public static class ParameterMemory
+{
+    static readonly Dictionary<string, HashSet<string>> RefusedBy = [];
+
+    public static HashSet<string> Refused(string key)
+    {
+        lock (RefusedBy) return RefusedBy.TryGetValue(key, out var names) ? [.. names] : [];
+    }
+
+    static void Add(IEnumerable<string> names, string key)
+    {
+        lock (RefusedBy)
+        {
+            if (!RefusedBy.TryGetValue(key, out var known)) RefusedBy[key] = known = [];
+            known.UnionWith(names);
+        }
+    }
+
+    static readonly Regex TurnedDown = new(
+        "unsupported|not support|unknown|unrecognized|unexpected|invalid|not allowed|not permitted|extra|does not exist|only the default|deprecated|incompatible|cannot be",
+        RegexOptions.IgnoreCase);
+
+    /// <summary>The parameter among those sent that a server's answer (the detail of an HTTP 400 or 422) names as the
+    /// one it does not take; null when it names none of them.</summary>
+    public static string? Rejected(string detail, IEnumerable<string> sent)
+    {
+        if (!TurnedDown.IsMatch(detail)) return null;
+        return sent.OrderByDescending(n => n.Length).FirstOrDefault(n => detail.Contains(n, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Sends a request with the optional parameters extras (by name), as send builds it from those left. On a
+    /// 400 or 422 the one the server names goes (or, when it names none, all of them) and the request is sent again;
+    /// what worked without them is remembered under key. A request that fails without them as well fails with its
+    /// first answer: the parameters were not the reason.</summary>
+    public static async Task<byte[]> Send(string key, Dictionary<string, JsonNode?> extras, Func<Dictionary<string, JsonNode?>, Task<byte[]>> send)
+    {
+        var left = new Dictionary<string, JsonNode?>(extras);
+        foreach (var name in Refused(key)) left.Remove(name);
+        ProviderError? first = null;
+        var dropped = new List<string>();
+        while (true)
+        {
+            try
+            {
+                var data = await send(left);
+                if (dropped.Count > 0) Add(dropped, key);
+                return data;
+            }
+            catch (ProviderError error)
+            {
+                if (error.Kind != ProviderError.Kinds.Http || error.Status is not (400 or 422) || left.Count == 0)
+                {
+                    if (first != null) throw first;
+                    throw;
+                }
+                first ??= error;
+                var names = Rejected(error.Detail, left.Keys) is { } named ? [named] : left.Keys.ToList();
+                foreach (var name in names) left.Remove(name);
+                dropped.AddRange(names);
+            }
+        }
+    }
+}
+
 /// <summary>A chat model that takes a system prompt and a user message and returns text.</summary>
 public abstract class ChatModel : ITranslationProvider
 {
@@ -384,12 +605,26 @@ public abstract class ChatModel : ITranslationProvider
 
     public virtual async Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel)
     {
-        var reply = await Complete(LLMBatch.SystemPrompt(context), LLMBatch.UserMessage(items), cancel);
+        var system = LLMBatch.SystemPrompt(context);
+        var reply = await Complete(system, LLMBatch.UserMessage(items), cancel);
         var parsed = LLMBatch.Parse(reply, items.Count);
-        if (parsed.All(p => p == null) && (ProviderError.IsDecline(reply) || ProviderError.IsContentRefusal(reply)))
-            throw new ProviderError(ProviderError.Kinds.Refused, "declined: " + reply[..Math.Min(300, reply.Length)]);
-        if (parsed.Any(p => p == null))
-            throw new ProviderError(ProviderError.Kinds.InvalidResponse, "the reply is missing translations: " + reply[..Math.Min(300, reply.Length)]);
+        var missingAll = new ProviderError(ProviderError.Kinds.InvalidResponse, "the reply is missing translations: " + reply[..Math.Min(300, reply.Length)]);
+        if (parsed.All(p => p == null))
+        {
+            if (ProviderError.IsDecline(reply) || ProviderError.IsContentRefusal(reply))
+                throw new ProviderError(ProviderError.Kinds.Refused, "declined: " + reply[..Math.Min(300, reply.Length)]);
+            throw missingAll;
+        }
+        // What came back is kept. Only the texts a model left out are asked for again: one skipped of thirty does not
+        // make it translate the other twenty-nine a second time.
+        for (int round = 0; round < 2 && parsed.Any(p => p == null); round++)
+        {
+            var missing = Enumerable.Range(0, parsed.Count).Where(i => parsed[i] == null).ToList();
+            var more = LLMBatch.Parse(await Complete(system, LLMBatch.UserMessage(missing.Select(i => items[i]).ToList()), cancel), missing.Count);
+            for (int k = 0; k < missing.Count; k++) parsed[missing[k]] = more[k];
+            if (more.All(m => m == null)) break;
+        }
+        if (parsed.Any(p => p == null)) throw missingAll;
         return parsed.Select(p => p!).ToList();
     }
 
@@ -397,37 +632,88 @@ public abstract class ChatModel : ITranslationProvider
         LLMBatch.ParseTerms(await Complete(LLMBatch.TermsPrompt(context), excerpt, cancel));
 }
 
-/// <summary>OpenAI Chat Completions and the many services compatible with it.</summary>
+/// <summary>OpenAI Chat Completions and the many services compatible with it. `optional` names the body fields
+/// (temperature, names in extraBody) that are Folio's own idea, not the user's choice: left out when a model or server
+/// turns them down (ParameterMemory).</summary>
 public sealed class OpenAIChatProvider(string endpoint, string? apiKey, string model, double? temperature, Dictionary<string, JsonNode?>? extraBody,
-                                       Dictionary<string, string>? extraHeaders, ProviderLimits limits) : ChatModel
+                                       Dictionary<string, string>? extraHeaders, ProviderLimits limits, HashSet<string>? optional = null) : ChatModel
 {
+    public string? ModelName => model;
     public override ProviderLimits Limits => limits;
+    public Dictionary<string, JsonNode?> ExtraBody => extraBody ?? [];
+    public HashSet<string> Optional => optional ?? [];
 
     public override async Task<string> Complete(string system, string user, CancellationToken cancel)
     {
-        var body = new JsonObject
-        {
-            ["model"] = model,
-            ["messages"] = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = system }, new JsonObject { ["role"] = "user", ["content"] = user }),
-            ["stream"] = false,
-        };
-        if (temperature is { } t) body["temperature"] = t;
-        foreach (var (key, value) in extraBody ?? []) body[key] = value?.DeepClone();
+        // The reply is read as it is written. A server that cannot do that answers in one piece (or, turning the
+        // parameter down, is asked again without it).
+        var extras = new Dictionary<string, JsonNode?> { ["stream"] = true };
+        var chosen = new Dictionary<string, JsonNode?>();
+        if (temperature is { } t) (Optional.Contains("temperature") ? extras : chosen)["temperature"] = t;
+        foreach (var (key, value) in extraBody ?? []) (Optional.Contains(key) ? extras : chosen)[key] = value;
         var headers = new Dictionary<string, string>(extraHeaders ?? []);
         if (!string.IsNullOrEmpty(apiKey)) headers["Authorization"] = $"Bearer {apiKey}";
-        var data = await Http.Send(Http.Request(endpoint, headers: headers, json: body), cancel);
-        if (Http.Json(data) is not JsonObject obj || obj["choices"] is not JsonArray { Count: > 0 } choices || choices[0]?["message"] is not JsonObject message)
-            throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply: " + Http.Prefix(data));
-        var finish = choices[0]?["finish_reason"]?.GetValueKind() == JsonValueKind.String ? choices[0]!["finish_reason"]!.GetValue<string>() : null;
-        string? content = message["content"] switch
+        StringBuilder? written = null;
+        string? finish = null;
+        var data = await ParameterMemory.Send(endpoint + "|" + model, extras, async left =>
         {
-            JsonValue v when v.TryGetValue<string>(out var s) => s,
-            JsonArray parts => string.Concat(parts.OfType<JsonObject>().Select(p => p["text"]?.GetValue<string>() ?? "")),
-            _ => null,
-        };
+            written = null;
+            finish = null;
+            var body = new JsonObject
+            {
+                ["model"] = model,
+                ["messages"] = new JsonArray(new JsonObject { ["role"] = "system", ["content"] = system }, new JsonObject { ["role"] = "user", ["content"] = user }),
+            };
+            foreach (var (key, value) in chosen) body[key] = value?.DeepClone();
+            foreach (var (key, value) in left) body[key] = value?.DeepClone();
+            if (!body.ContainsKey("stream")) body["stream"] = false;
+            return await Http.Stream(Http.Request(endpoint, headers: headers, json: body), payload =>
+            {
+                if (TryParse(payload) is not { } piece) return;
+                if (piece["error"] is { } error) throw StreamFailure(error);
+                if (piece["choices"] is not JsonArray { Count: > 0 } pieces || pieces[0] is not JsonObject choice) return;
+                if (choice["delta"]?["content"] is JsonValue delta && delta.TryGetValue<string>(out var text)) (written ??= new()).Append(text);
+                if (choice["finish_reason"] is JsonValue reason && reason.TryGetValue<string>(out var why)) finish = why;
+                // Thinking counts as a sign of life, not as part of the answer.
+                StreamProgress.Report(written?.Length ?? 0);
+            }, cancel) ?? [];
+        });
+        string? content = written?.ToString();
+        if (data.Length > 0)
+        {
+            // Answered in one piece.
+            if (Http.Json(data) is not JsonObject obj || obj["choices"] is not JsonArray { Count: > 0 } choices || choices[0]?["message"] is not JsonObject message)
+                throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply: " + Http.Prefix(data));
+            finish = choices[0]?["finish_reason"]?.GetValueKind() == JsonValueKind.String ? choices[0]!["finish_reason"]!.GetValue<string>() : null;
+            content = message["content"] switch
+            {
+                JsonValue v when v.TryGetValue<string>(out var s) => s,
+                JsonArray parts => string.Concat(parts.OfType<JsonObject>().Select(p => p["text"]?.GetValue<string>() ?? "")),
+                _ => null,
+            };
+        }
         if (finish is "content_filter" or "safety" && string.IsNullOrWhiteSpace(content))
             throw new ProviderError(ProviderError.Kinds.Refused, $"finish_reason: {finish}");
+        // Cut off at the output limit: what is there ends in the middle of a text.
+        if (finish == "length")
+            throw new ProviderError(ProviderError.Kinds.Truncated, "the reply was cut off at the model's output limit (finish_reason: length)");
         return content ?? throw new ProviderError(ProviderError.Kinds.InvalidResponse, "empty reply");
+    }
+
+    internal static JsonObject? TryParse(string json)
+    {
+        try { return JsonNode.Parse(json) as JsonObject; } catch (JsonException) { return null; }
+    }
+
+    static readonly Regex Busy = new("overloaded|rate.?limit|too many requests|capacity|busy", RegexOptions.IgnoreCase);
+
+    /// <summary>An error a server sends in the middle of a stream (the status was already 200).</summary>
+    internal static ProviderError StreamFailure(JsonNode error)
+    {
+        var text = error is JsonObject o && o["message"] is JsonValue m && m.TryGetValue<string>(out var message) ? message : error.ToJsonString();
+        if (ProviderError.IsContentRefusal(text)) return new ProviderError(ProviderError.Kinds.Refused, "stream error: " + text);
+        return Busy.IsMatch(text) ? ProviderError.HttpStatus(429, "Error code: 429 - " + text)
+            : new ProviderError(ProviderError.Kinds.InvalidResponse, "stream error: " + text);
     }
 
     /// <summary>{base}/chat/completions; a bare host means its /v1.</summary>
@@ -442,55 +728,152 @@ public sealed class OpenAIChatProvider(string endpoint, string? apiKey, string m
 /// <summary>Anthropic's Messages API.</summary>
 public sealed class AnthropicProvider(string @base, string apiKey, string model, ProviderLimits limits) : ChatModel
 {
+    public string? ModelName => model;
     public override ProviderLimits Limits => limits;
 
     public override async Task<string> Complete(string system, string user, CancellationToken cancel)
     {
-        var body = new JsonObject
+        var url = @base.TrimEnd('/') + "/v1/messages";
+        // Translating needs little deliberation: a low effort answers much sooner. Models from before the parameter
+        // (and gateways that do not know it) turn it down, and go without.
+        var extras = new Dictionary<string, JsonNode?> { ["output_config"] = new JsonObject { ["effort"] = "low" } };
+        var text = new StringBuilder();
+        string? stop = null;
+        var data = await ParameterMemory.Send(url + "|" + model, extras, async left =>
         {
-            ["model"] = model, ["max_tokens"] = 8192, ["system"] = system,
-            ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = user }),
-        };
-        var data = await Http.Send(Http.Request(@base.TrimEnd('/') + "/v1/messages",
-            headers: new() { ["x-api-key"] = apiKey, ["anthropic-version"] = "2023-06-01" }, json: body), cancel);
-        if (Http.Json(data) is not JsonObject obj || obj["content"] is not JsonArray content)
-            throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply: " + Http.Prefix(data));
-        return string.Concat(content.OfType<JsonObject>().Where(c => c["type"]?.GetValue<string>() == "text").Select(c => c["text"]?.GetValue<string>() ?? ""));
+            text.Clear();
+            stop = null;
+            // Room for the translation and for the thinking current models do before it (it counts against the limit);
+            // the reply is read as it is written, so a long one does not run into a time limit.
+            // No temperature: current models take only their default.
+            var body = new JsonObject
+            {
+                ["model"] = model, ["max_tokens"] = 32000, ["system"] = system, ["stream"] = true,
+                ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = user }),
+            };
+            foreach (var (key, value) in left) body[key] = value?.DeepClone();
+            return await Http.Stream(Http.Request(url, headers: new() { ["x-api-key"] = apiKey, ["anthropic-version"] = "2023-06-01" }, json: body), payload =>
+            {
+                if (OpenAIChatProvider.TryParse(payload) is not { } piece) return;
+                switch (piece["type"] is JsonValue kind && kind.TryGetValue<string>(out var type) ? type : null)
+                {
+                    case "content_block_delta":
+                        if (piece["delta"] is JsonObject delta && delta["type"]?.GetValue<string>() == "text_delta" && delta["text"] is JsonValue part
+                            && part.TryGetValue<string>(out var written)) text.Append(written);
+                        StreamProgress.Report(text.Length);
+                        break;
+                    case "message_delta":
+                        if (piece["delta"]?["stop_reason"] is JsonValue reason && reason.TryGetValue<string>(out var why)) stop = why;
+                        break;
+                    case "error":
+                        throw OpenAIChatProvider.StreamFailure(piece["error"] ?? piece);
+                }
+            }, cancel) ?? [];
+        });
+        var reply = text.ToString();
+        if (data.Length > 0)
+        {
+            // Answered in one piece (a gateway that does not stream).
+            if (Http.Json(data) is not JsonObject obj || obj["content"] is not JsonArray content)
+                throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply: " + Http.Prefix(data));
+            reply = string.Concat(content.OfType<JsonObject>().Where(c => c["type"]?.GetValue<string>() == "text").Select(c => c["text"]?.GetValue<string>() ?? ""));
+            stop = obj["stop_reason"]?.GetValueKind() == JsonValueKind.String ? obj["stop_reason"]!.GetValue<string>() : null;
+        }
+        if (stop == "refusal") throw new ProviderError(ProviderError.Kinds.Refused, "stop_reason: refusal");
+        if (stop == "max_tokens")
+            throw new ProviderError(ProviderError.Kinds.Truncated, "the reply was cut off at the model's output limit (stop_reason: max_tokens)");
+        return reply;
     }
 }
 
 /// <summary>Google's Gemini API.</summary>
 public sealed class GeminiProvider(string apiKey, string model, ProviderLimits limits) : ChatModel
 {
+    public string? ModelName => model;
     public override ProviderLimits Limits => limits;
+
+    /// <summary>How little a model is asked to think before translating, for the models that think by default: Gemini
+    /// 2.5 Flash takes a budget (0: none), Gemini 3 and later a level. Other models are told nothing.</summary>
+    public static JsonObject? ThinkingConfig(string model)
+    {
+        var name = model.ToLowerInvariant();
+        if (name.Contains("2.5-flash")) return new JsonObject { ["thinkingBudget"] = 0 };
+        if (Regex.IsMatch(name, @"gemini-([3-9]|\d{2})")) return new JsonObject { ["thinkingLevel"] = "low" };
+        return null;
+    }
 
     public override async Task<string> Complete(string system, string user, CancellationToken cancel)
     {
         var name = model.StartsWith("models/") ? model[7..] : model;
-        var body = new JsonObject
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(name)}:streamGenerateContent?alt=sse";
+        var extras = new Dictionary<string, JsonNode?>();
+        if (ThinkingConfig(name) is { } thinking) extras["thinkingConfig"] = thinking;
+        var text = new StringBuilder();
+        string? finish = null, blocked = null;
+        bool answered = false;
+        // One answer, or one piece of an answer as it is written.
+        void Take(JsonObject piece)
         {
-            ["systemInstruction"] = new JsonObject { ["parts"] = new JsonArray(new JsonObject { ["text"] = system }) },
-            ["contents"] = new JsonArray(new JsonObject { ["role"] = "user", ["parts"] = new JsonArray(new JsonObject { ["text"] = user }) }),
-            ["generationConfig"] = new JsonObject { ["responseMimeType"] = "application/json", ["temperature"] = 0.2 },
-        };
-        var data = await Http.Send(Http.Request($"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(name)}:generateContent",
-            headers: new() { ["x-goog-api-key"] = apiKey }, json: body), cancel);
-        if (Http.Json(data) is not JsonObject obj || obj["candidates"] is not JsonArray { Count: > 0 } candidates
-            || candidates[0]?["content"]?["parts"] is not JsonArray parts)
-            throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply: " + Http.Prefix(data));
-        return string.Concat(parts.OfType<JsonObject>().Select(p => p["text"]?.GetValue<string>() ?? ""));
+            if (piece["promptFeedback"]?["blockReason"] is JsonValue block && block.TryGetValue<string>(out var reason)) blocked = reason;
+            if (piece["candidates"] is not JsonArray { Count: > 0 } candidates || candidates[0] is not JsonObject candidate) return;
+            answered = true;
+            foreach (var part in (candidate["content"]?["parts"] as JsonArray ?? []).OfType<JsonObject>())
+            {
+                if (part["thought"] is JsonValue thought && thought.TryGetValue<bool>(out var isThought) && isThought) continue;
+                if (part["text"] is JsonValue v && v.TryGetValue<string>(out var s)) text.Append(s);
+            }
+            if (candidate["finishReason"] is JsonValue f && f.TryGetValue<string>(out var why)) finish = why;
+        }
+        var data = await ParameterMemory.Send(url, extras, async left =>
+        {
+            text.Clear();
+            finish = blocked = null;
+            answered = false;
+            var generation = new JsonObject { ["responseMimeType"] = "application/json", ["temperature"] = 0.2 };
+            foreach (var (key, value) in left) generation[key] = value?.DeepClone();
+            var body = new JsonObject
+            {
+                ["systemInstruction"] = new JsonObject { ["parts"] = new JsonArray(new JsonObject { ["text"] = system }) },
+                ["contents"] = new JsonArray(new JsonObject { ["role"] = "user", ["parts"] = new JsonArray(new JsonObject { ["text"] = user }) }),
+                ["generationConfig"] = generation,
+            };
+            return await Http.Stream(Http.Request(url, headers: new() { ["x-goog-api-key"] = apiKey }, json: body), payload =>
+            {
+                if (OpenAIChatProvider.TryParse(payload) is not { } piece) return;
+                if (piece["error"] is { } error) throw OpenAIChatProvider.StreamFailure(error);
+                Take(piece);
+                StreamProgress.Report(text.Length);
+            }, cancel) ?? [];
+        });
+        if (data.Length > 0)
+        {
+            // Answered in one piece: one object, or a list of the pieces.
+            var json = Http.Json(data);
+            foreach (var piece in json is JsonArray list ? list.OfType<JsonObject>() : json is JsonObject one ? [one] : []) Take(piece);
+        }
+        // Stopped by the content review: before the model saw the text, or while it answered.
+        if (blocked != null) throw new ProviderError(ProviderError.Kinds.Refused, $"blockReason: {blocked}");
+        var reply = text.ToString();
+        if (finish is "SAFETY" or "PROHIBITED_CONTENT" or "BLOCKLIST" or "SPII" or "RECITATION" && string.IsNullOrWhiteSpace(reply))
+            throw new ProviderError(ProviderError.Kinds.Refused, $"finishReason: {finish}");
+        if (finish == "MAX_TOKENS")
+            throw new ProviderError(ProviderError.Kinds.Truncated, "the reply was cut off at the model's output limit (finishReason: MAX_TOKENS)");
+        if (!answered || reply.Length == 0) throw new ProviderError(ProviderError.Kinds.InvalidResponse, "unexpected reply: " + Http.Prefix(data));
+        return reply;
     }
 }
 
 /// <summary>Azure OpenAI: a deployment URL with an API version, and an api-key header.</summary>
 public sealed class AzureOpenAIProvider(string resource, string apiKey, string deployment, string apiVersion, ProviderLimits limits) : ChatModel
 {
+    public string? ModelName => deployment;
     public override ProviderLimits Limits => limits;
 
     public override Task<string> Complete(string system, string user, CancellationToken cancel)
     {
         var url = $"{resource.TrimEnd('/')}/openai/deployments/{deployment}/chat/completions?api-version={apiVersion}";
-        var chat = new OpenAIChatProvider(url, null, deployment, null, null, new() { ["api-key"] = apiKey }, limits);
+        // A deployment may be a reasoning model, which takes no temperature: sent, and left out when turned down.
+        var chat = new OpenAIChatProvider(url, null, deployment, 0.2, null, new() { ["api-key"] = apiKey }, limits, ["temperature"]);
         return chat.Complete(system, user, cancel);
     }
 }
@@ -502,6 +885,7 @@ public sealed class ConcurrencyOverride(ITranslationProvider inner, int concurre
     public Task<List<string>> Translate(List<TranslationItem> items, TranslationContext context, CancellationToken cancel) => inner.Translate(items, context, cancel);
     public Task<List<GlossaryEntry>> ExtractTerms(string excerpt, TranslationContext context, CancellationToken cancel) => inner.ExtractTerms(excerpt, context, cancel);
     public Task Prewarm() => inner.Prewarm();
+    public string? ModelName => inner.ModelName;
 }
 
 /// <summary>OpenAI-style APIs live under /v1: an address given as a bare host means its /v1; one with a path is used as given.</summary>

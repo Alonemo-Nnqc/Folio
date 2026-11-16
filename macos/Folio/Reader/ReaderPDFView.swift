@@ -25,13 +25,14 @@ nonisolated final class ReaderPage: PDFPage {
 private final class InkOverlayView: NSView {
     var path: NSBezierPath? { didSet { needsDisplay = true } }
     var color = NSColor.systemRed
+    var width: CGFloat = 2
 
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let path else { return }
         color.setStroke()
-        path.lineWidth = 2
+        path.lineWidth = width
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.stroke()
@@ -48,7 +49,13 @@ final class ReaderPDFView: PDFView {
             window?.invalidateCursorRects(for: self)
         }
     }
-    var inkColor = NSColor.systemRed
+    var inkColor = NSColor.systemRed { didSet { if inkColor != oldValue { window?.invalidateCursorRects(for: self) } } }
+    /// The pen's width in points (手绘 ▸ 粗细).
+    var inkWidth: CGFloat = 2 { didSet { if inkWidth != oldValue { window?.invalidateCursorRects(for: self) } } }
+    /// The note tool's colour: its pointer is a little note in it.
+    var noteColor = NSColor.systemYellow { didSet { if noteColor != oldValue { window?.invalidateCursorRects(for: self) } } }
+    /// Resting the pointer on a note or a commented annotation shows what it says (设置 ▸ 阅读).
+    var showsTooltips = true
     /// The eraser's size (READER-30); the pointer is a ring this large at the current zoom.
     var eraserSize = InkEraser.Size.medium {
         didSet { window?.invalidateCursorRects(for: self) }
@@ -68,7 +75,7 @@ final class ReaderPDFView: PDFView {
     private let inkOverlay = InkOverlayView()
     private var inkPoints: [NSPoint] = []
     private var inkPage: PDFPage?
-    private var drag: (annotation: PDFAnnotation, page: PDFPage, start: NSPoint, original: NSRect, moved: Bool)?
+    private var drag: (annotation: PDFAnnotation, page: PDFPage, start: NSPoint, original: NSRect, moved: Bool, opensCard: Bool)?
     private var erasing: InkEraseSession?
 
     /// Annotation kinds the reader edits; links, widgets and popups are left to PDFKit.
@@ -77,15 +84,22 @@ final class ReaderPDFView: PDFView {
     /// Kinds that can be dragged to a new place.
     static let movableTypes: Set<String> = ["Text", "FreeText", "Ink", "Square", "Circle", "Line"]
 
+    /// The reader's own sharp drawing of notes, text boxes and ink over each page.
+    let overlays = AnnotationOverlays()
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        pageOverlayViewProvider = overlays
         inkOverlay.frame = bounds
         inkOverlay.autoresizingMask = [.width, .height]
         addSubview(inkOverlay)
         // The eraser's ring follows the zoom.
         NotificationCenter.default.addObserver(forName: .PDFViewScaleChanged, object: self, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.tool == .eraser else { return }
+                // The annotations are drawn again for the new zoom; the eraser's ring and the pen's dot follow it.
+                guard let self else { return }
+                self.overlays.refreshAll()
+                guard self.tool == .eraser || self.tool == .ink else { return }
                 self.window?.invalidateCursorRects(for: self)
             }
         }
@@ -94,6 +108,17 @@ final class ReaderPDFView: PDFView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// Every change to a page's annotations comes through here (the editor, drags, the eraser): the overlay follows.
+    override func annotationsChanged(on page: PDFPage) {
+        super.annotationsChanged(on: page)
+        overlays.refresh(page)
+    }
+
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        overlays.refreshAll()
+    }
 
     // MARK: Selection of annotations
 
@@ -106,11 +131,29 @@ final class ReaderPDFView: PDFView {
         }
     }
 
+    /// Whether `point` (page space) is on one of the ink's strokes, give or take a few points.
+    static func isNear(_ point: NSPoint, ink: PDFAnnotation) -> Bool {
+        let reach = (ink.border?.lineWidth ?? 1) / 2 + 4
+        let strokes = InkEraseSession.strokes(of: ink)
+        for stroke in strokes {
+            if stroke.count == 1, hypot(stroke[0].x - point.x, stroke[0].y - point.y) <= reach { return true }
+            for (a, b) in zip(stroke, stroke.dropFirst()) {
+                let dx = b.x - a.x, dy = b.y - a.y, length = dx * dx + dy * dy
+                let t = length > 0 ? max(0, min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / length)) : 0
+                if hypot(a.x + t * dx - point.x, a.y + t * dy - point.y) <= reach { return true }
+            }
+        }
+        return false
+    }
+
     private func editableAnnotation(at point: NSPoint, on page: PDFPage) -> PDFAnnotation? {
         // Topmost first; small hit slop so thin underlines are still easy to click.
         page.annotations.reversed().first { annotation in
             guard let type = annotation.type, Self.editableTypes.contains(type) else { return false }
-            return annotation.bounds.insetBy(dx: -3, dy: -3).contains(point)
+            guard annotation.bounds.insetBy(dx: -3, dy: -3).contains(point) else { return false }
+            // A pen stroke is hit on its line, not anywhere in the box around it (a loop's box can cover half a column).
+            if type == "Ink" { return Self.isNear(point, ink: annotation) }
+            return true
         }
     }
 
@@ -123,6 +166,11 @@ final class ReaderPDFView: PDFView {
             if editLayer.isEditingBlock { editLayer.finish() }
             return
         }
+        // A text box being written ends with a click elsewhere.
+        if editor?.isWritingTextBox == true {
+            editor?.finishTextBox()
+            if tool == .select { return }
+        }
         window?.makeFirstResponder(self)
         onMouseDown()
         let point = convert(event.locationInWindow, from: nil)
@@ -130,21 +178,30 @@ final class ReaderPDFView: PDFView {
         let pagePoint = convert(point, to: page)
         switch tool {
         case .note, .text:
+            // On a note (or a text box) of its own kind, the tool opens it rather than adding another.
+            if let hit = editableAnnotation(at: pagePoint, on: page), hit.type == (tool == .note ? "Text" : "FreeText") {
+                selectAnnotation(hit)
+                if editor?.cardWasClosed(for: hit, by: event) != true { editor?.edit(hit) }
+                return
+            }
             editor?.place(tool, at: pagePoint, on: page)
         case .ink:
             inkPage = page
             inkPoints = [pagePoint]
             inkOverlay.color = inkColor
+            inkOverlay.width = inkWidth * scaleFactor
             inkOverlay.path = nil
         case .eraser:
             beginErasing(at: pagePoint, on: page)
         case .select:
             if let hit = editableAnnotation(at: pagePoint, on: page) {
                 selectAnnotation(hit)
-                if event.clickCount == 2, let type = hit.type, type == "Text" || type == "FreeText" {
+                if event.clickCount == 2, hit.type == "FreeText" {
                     editor?.edit(hit)
                 } else if let type = hit.type, Self.movableTypes.contains(type) {
-                    drag = (hit, page, pagePoint, hit.bounds, false)
+                    // A note opens with one click (when it was not dragged); it can still be dragged.
+                    let opens = type == "Text" && editor?.cardWasClosed(for: hit, by: event) != true
+                    drag = (hit, page, pagePoint, hit.bounds, false, opens)
                 }
                 return
             }
@@ -200,6 +257,7 @@ final class ReaderPDFView: PDFView {
         if let current = drag {
             drag = nil
             if current.moved { editor?.didMove(current.annotation, from: current.original) }
+            else if current.opensCard { editor?.edit(current.annotation) }
             return
         }
         super.mouseUp(with: event)
@@ -213,8 +271,20 @@ final class ReaderPDFView: PDFView {
 
     override func resetCursorRects() {
         super.resetCursorRects()
-        if [.note, .text, .ink].contains(tool) { addCursorRect(visibleRect, cursor: .crosshair) }
-        if tool == .eraser { addCursorRect(visibleRect, cursor: eraserCursor) }
+        // Not under the panels over the page (a text box being written, a note's card): they have pointers of their own,
+        // and two pointers for one place flicker between them.
+        let free = floatingPanels.reduce([visibleRect]) { rects, panel in rects.flatMap { $0.subtracting(panel.frame) } }
+        if let cursor = toolCursor { free.forEach { addCursorRect($0, cursor: cursor) } }
+        if tool == .eraser { free.forEach { addCursorRect($0, cursor: eraserCursor) } }
+    }
+
+    /// The panels over the page: a text box being written and its bar, a note's card.
+    private var floatingPanels: [NSView] { subviews.filter { $0 is ReaderFloatingPanel && !$0.isHidden } }
+
+    /// The pointer is over one of them: they answer it.
+    private func isOverFloatingPanel(_ event: NSEvent) -> Bool {
+        let point = convert(event.locationInWindow, from: nil)
+        return floatingPanels.contains { $0.frame.contains(point) }
     }
 
     /// While editing the text, the layer over the pages answers first: PDFKit adds its page views over it as they come
@@ -233,13 +303,38 @@ final class ReaderPDFView: PDFView {
             editLayer.pointerMoved(event)
             return
         }
+        if isOverFloatingPanel(event) { return }
         super.mouseMoved(with: event)
+        updateTooltip(for: event)
         // PDFView resets the cursor while tracking; keep the tool cursor.
-        if [.note, .text, .ink].contains(tool) { NSCursor.crosshair.set() }
+        toolCursor?.set()
         if tool == .eraser { eraserCursor.set() }
     }
 
+    /// What a note or a commented annotation says, shown as the view's tooltip while the pointer rests on it.
+    private func updateTooltip(for event: NSEvent) {
+        guard showsTooltips, tool == .select else { if toolTip != nil { toolTip = nil }; return }
+        let point = convert(event.locationInWindow, from: nil)
+        var text: String?
+        if let page = page(for: point, nearest: false), let hit = editableAnnotation(at: convert(point, to: page), on: page),
+           hit.type != "FreeText", let contents = hit.contents?.trimmingCharacters(in: .whitespacesAndNewlines), !contents.isEmpty {
+            text = contents.count > 400 ? String(contents.prefix(400)) + "…" : contents
+        }
+        if toolTip != text { toolTip = text }
+    }
+
     // MARK: Eraser (READER-30)
+
+    /// The pointer of the tools that put something down: an I-beam for a text box (it is typed where clicked), a
+    /// little note in the note's colour, the pen's own dot. The markup tools keep PDFKit's (an I-beam over text).
+    private var toolCursor: NSCursor? {
+        switch tool {
+        case .text: .iBeam
+        case .note: ToolCursors.note(color: noteColor)
+        case .ink: ToolCursors.pen(color: inkColor, diameter: inkWidth * scaleFactor)
+        default: nil
+        }
+    }
 
     private var eraserCursor: NSCursor { EraserCursor.cursor(diameter: eraserSize.diameter * scaleFactor) }
 
@@ -307,5 +402,78 @@ final class ReaderPDFView: PDFView {
             return editor?.menu(forSelection: selection, base: base) ?? base
         }
         return base
+    }
+}
+
+
+/// The pointers of the note and pen tools.
+enum ToolCursors {
+    /// A small upright note, its middle where it will be placed.
+    static func note(color: NSColor) -> NSCursor {
+        let size = NSSize(width: 16, height: 19)
+        let image = NSImage(size: size, flipped: false) { _ in
+            let card = NSRect(x: 2, y: 1.5, width: 12, height: 15)
+            let fold: CGFloat = 4
+            let path = NSBezierPath()
+            path.move(to: NSPoint(x: card.minX + 2, y: card.minY))
+            path.line(to: NSPoint(x: card.maxX - 2, y: card.minY))
+            path.curve(to: NSPoint(x: card.maxX, y: card.minY + 2), controlPoint1: NSPoint(x: card.maxX, y: card.minY), controlPoint2: NSPoint(x: card.maxX, y: card.minY))
+            path.line(to: NSPoint(x: card.maxX, y: card.maxY - fold))
+            path.line(to: NSPoint(x: card.maxX - fold, y: card.maxY))
+            path.line(to: NSPoint(x: card.minX + 2, y: card.maxY))
+            path.curve(to: NSPoint(x: card.minX, y: card.maxY - 2), controlPoint1: NSPoint(x: card.minX, y: card.maxY), controlPoint2: NSPoint(x: card.minX, y: card.maxY))
+            path.line(to: NSPoint(x: card.minX, y: card.minY + 2))
+            path.curve(to: NSPoint(x: card.minX + 2, y: card.minY), controlPoint1: NSPoint(x: card.minX, y: card.minY), controlPoint2: NSPoint(x: card.minX, y: card.minY))
+            path.close()
+            NSColor.white.setStroke()
+            path.lineWidth = 2.5
+            path.stroke()
+            color.withAlphaComponent(1).setFill()
+            path.fill()
+            NSColor.black.withAlphaComponent(0.55).setStroke()
+            path.lineWidth = 0.8
+            path.stroke()
+            return true
+        }
+        return NSCursor(image: image, hotSpot: NSPoint(x: 8, y: 9.5))
+    }
+
+    /// The pen's tip: a dot as wide as its line at this zoom, in its colour, with a light and a dark edge so it shows
+    /// on any page.
+    static func pen(color: NSColor, diameter: CGFloat) -> NSCursor {
+        let dot = max(min(diameter, 40), 3)
+        let side = ceil(dot + 6)
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            let circle = NSRect(x: (rect.width - dot) / 2, y: (rect.height - dot) / 2, width: dot, height: dot)
+            let ring = NSBezierPath(ovalIn: circle.insetBy(dx: -1.25, dy: -1.25))
+            NSColor.white.withAlphaComponent(0.9).setStroke()
+            ring.lineWidth = 1.5
+            ring.stroke()
+            color.withAlphaComponent(1).setFill()
+            NSBezierPath(ovalIn: circle).fill()
+            NSColor.black.withAlphaComponent(0.45).setStroke()
+            let edge = NSBezierPath(ovalIn: circle.insetBy(dx: -2, dy: -2))
+            edge.lineWidth = 0.5
+            edge.stroke()
+            return true
+        }
+        return NSCursor(image: image, hotSpot: NSPoint(x: side / 2, y: side / 2))
+    }
+}
+
+/// A view the reader floats over the page (a text box being written and its bar, a note's card): the page view leaves
+/// the pointer to it.
+protocol ReaderFloatingPanel: NSView {}
+
+extension NSRect {
+    /// What is left of the rectangle without `hole`: up to four rectangles around it.
+    func subtracting(_ hole: NSRect) -> [NSRect] {
+        let cut = intersection(hole)
+        guard !cut.isNull, cut.width > 0, cut.height > 0 else { return [self] }
+        return [NSRect(x: minX, y: minY, width: width, height: cut.minY - minY),
+                NSRect(x: minX, y: cut.maxY, width: width, height: maxY - cut.maxY),
+                NSRect(x: minX, y: cut.minY, width: cut.minX - minX, height: cut.height),
+                NSRect(x: cut.maxX, y: cut.minY, width: maxX - cut.maxX, height: cut.height)]
+            .filter { $0.width > 0 && $0.height > 0 }
     }
 }

@@ -106,7 +106,6 @@ public enum BlockKind { Title, Heading, Paragraph, Caption, TableCell, Formula, 
 
 public static class BlockKinds
 {
-    public static bool IsTranslatable(this BlockKind k) => k is BlockKind.Title or BlockKind.Heading or BlockKind.Paragraph or BlockKind.Caption or BlockKind.TableCell;
     public static string Raw(this BlockKind k) => char.ToLowerInvariant(k.ToString()[0]) + k.ToString()[1..];
 }
 
@@ -201,6 +200,9 @@ public sealed class LayoutBlock
             var r = Rect;
             if (!Lines.All(l => Math.Abs((l.MinX + l.MaxX) / 2 - r.MidX) < Math.Max(1.5, Size * 0.2))) return false;
             if (Lines.Count == 1) return CenteredInColumn;
+            // A list item's second line starts after the bullet; when it happens to end as far from the right edge, its
+            // middle is the block's, and the item is no more centred for it.
+            if (LayoutAnalyzer.IsListItem(Lines[0].Text) && Lines.Skip(1).All(l => l.MinX > Lines[0].MinX + Size * 0.5)) return false;
             if (Lines.Any(l => l.MinX - r.MinX > Size * 0.8 && r.MaxX - l.MaxX > Size * 0.8)) return true;
             // Lines of nearly one width have none set in from both sides; a title's place on the page still says it is centred.
             return CenteredInColumn && Kind is BlockKind.Title or BlockKind.Heading;

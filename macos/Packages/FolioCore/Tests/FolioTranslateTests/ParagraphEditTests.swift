@@ -88,6 +88,53 @@ import Testing
         #expect(text.contains("噪声"))
     }
 
+    /// Where atom `index` stands (its line and x), as the editor shows the paragraph.
+    static func place(of index: Int, in paragraph: PDFParagraph) -> (line: Int, x: Double)? {
+        for (l, line) in paragraph.shownLines.enumerated() {
+            if let stop = line.stops.first(where: { $0.index == index }) { return (l, stop.x) }
+        }
+        return nil
+    }
+
+    @Test func chineseTypedAmongWordsStaysTogether() throws {
+        let (_, paragraph) = try Self.paragraph(Self.pdf())
+        let range = try #require(paragraph.range(of: "Hessian"))
+        paragraph.replace(range.upperBound..<range.upperBound, with: " 测试")
+        let typed = try #require(paragraph.range(of: "测试"))
+        let first = try #require(Self.place(of: typed.lowerBound, in: paragraph)), second = try #require(Self.place(of: typed.lowerBound + 1, in: paragraph))
+        try #require(first.line == second.line)
+        // One character's width apart: the line's slack goes to its word spaces, not between the two characters
+        // (which would read, and be found, as "测 试").
+        #expect(second.x - first.x < 10.6, "\(second.x - first.x)")
+    }
+
+    @Test func aWordWithALetterThePageLacksIsSetInOneFont() throws {
+        let (editor, paragraph) = try Self.paragraph(Self.pdf())
+        let range = try #require(paragraph.range(of: "image noise"))
+        // The page's font has an "a", but neither "j" nor "z": the word is not pieced together from two fonts.
+        paragraph.replace(range.upperBound..<range.upperBound, with: " jazz")
+        let drawing = paragraph.drawing()
+        // (A hyphen the editor adds at a line's end is a piece of its own: the page's font has none.)
+        #expect(drawing.fallback.map(\.text).filter { $0 != "-" } == ["jazz"], "\(drawing.fallback.map(\.text))")
+        #expect(Self.pageText(try editor.apply(paragraph)).contains("jazz"), "found as a word when searching")
+        // A word the page's font has all the letters of is drawn with them.
+        let (_, other) = try Self.paragraph(Self.pdf())
+        let place = try #require(other.range(of: "image noise"))
+        other.replace(place.upperBound..<place.upperBound, with: " mean")
+        #expect(other.drawing().fallback.allSatisfy { $0.text == "-" })
+    }
+
+    @Test func aWordTypedOverItselfLeavesItsNeighboursWhereTheyWere() throws {
+        let (_, paragraph) = try Self.paragraph(Self.pdf())
+        let range = try #require(paragraph.range(of: "symmetry"))
+        // The word after it (past the space), before and after.
+        let next = range.upperBound + 1
+        let before = try #require(Self.place(of: next, in: paragraph))
+        paragraph.replace(range, with: "symmetry")
+        let after = try #require(Self.place(of: next, in: paragraph))
+        #expect(before.line == after.line && abs(before.x - after.x) < 0.6, "\(before) \(after)")
+    }
+
     @Test func undoingToTheOriginalSnapshotIsUnmodified() throws {
         let data = Self.pdf()
         let (_, paragraph) = try Self.paragraph(data)

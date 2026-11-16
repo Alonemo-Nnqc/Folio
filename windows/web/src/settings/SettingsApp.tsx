@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, ScanText, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Search, Settings as Gear, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Settings as Gear, Sparkles } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, setSetting, setState, useStore } from "../store";
@@ -12,13 +12,16 @@ import { TranslationPane } from "./TranslationPane";
 import { SelectionTranslationPane } from "./SelectionPane";
 import { setCaption } from "../ui/caption";
 import { ZoteroSheet } from "./ZoteroSheet";
+import { TEXT_SIZES } from "../reader/ReaderTab";
 
 const PANES = [
   { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen },
-  { key: "library", title: "文献库", icon: Library }, { key: "retrieval", title: "检索", icon: Search },
-  { key: "translation", title: "翻译", icon: Languages }, { key: "selection", title: "划词翻译", icon: ScanText },
+  { key: "library", title: "文献库", icon: Library }, { key: "translation", title: "翻译", icon: Languages },
   { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
 ];
+/** Panes merged into others in 1.4 (as on the Mac): 检索 into 文献库, 划词翻译 into 阅读. */
+const MOVED: Record<string, string> = { retrieval: "library", selection: "reader" };
+const paneKey = (key: string | null | undefined) => (key && MOVED[key]) || key;
 
 let launchedLanguage: string | null = null;
 
@@ -67,21 +70,10 @@ function General() {
     <>
       <Header>{t("外观")}</Header>
       <Card><Appearance /><Translucency /></Card>
-      <Header>{t("打开")}</Header>
-      <Card>
-        <Row title={t("打开 PDF 时使用")}><Select value={s.openWithMode} options={[{ value: "folio", label: t("Folio 阅读器") }, { value: "system", label: t("系统默认应用") }, { value: "custom", label: t("指定应用…") }]} onChange={(v) => setSetting("openWithMode", v)} /></Row>
-        {s.openWithMode === "custom" && (
-          <Row title={t("应用")}>
-            <span className="secondary ellipsis">{s.openWithAppPath ? s.openWithAppPath.split(/[\\/]/).pop().replace(/\.exe$/i, "") : t("未选择")}</span>
-            <button className="btn" onClick={async () => { const [path] = await call<string[]>("pick.file", { filter: "EXE|*.exe", multiple: false }); if (path) setSetting("openWithAppPath", path); }}>{t("选择…")}</button>
-          </Row>
-        )}
-        <Row title={t("打开未读的论文时，标为\"在读\"")}><Switch on={s.markReadingOnOpen} onChange={(v) => setSetting("markReadingOnOpen", v)} /></Row>
-        <Row title={t("启动时重新打开上次的论文标签页")}><Switch on={s.reopenReaderTabs} onChange={(v) => setSetting("reopenReaderTabs", v)} /></Row>
-      </Card>
       <Header>{t("列表")}</Header>
       <Card>
         <Row title={t("父分组中显示子分组的条目")}><Switch on={s.includeSubgroupItems} onChange={(v) => setSetting("includeSubgroupItems", v)} /></Row>
+        <Row title={t("显示“已翻译”标签")} detail={t("有译文的论文，标题后显示绿色的“已翻译”标签")}><Switch on={s.showTranslatedBadge !== false} onChange={(v) => setSetting("showTranslatedBadge", v)} /></Row>
         <Row title={t("默认引用样式")}><Select value={s.citationStyle} options={statics.citationStyles.map((c) => ({ value: c.raw, label: c.name }))} onChange={(v) => setSetting("citationStyle", v)} /></Row>
       </Card>
       <Header>{t("语言")}</Header>
@@ -108,20 +100,36 @@ function General() {
 
 function Reader() {
   const s = useStore((x) => x.settings);
-  const colors = useStore((x) => x.statics.annotationColors);
   return (
     <>
+      <Header>{t("打开")}</Header>
+      <Card>
+        <Row title={t("打开 PDF 时使用")}><Select value={s.openWithMode} options={[{ value: "folio", label: t("Folio 阅读器") }, { value: "system", label: t("系统默认应用") }, { value: "custom", label: t("指定应用…") }]} onChange={(v) => setSetting("openWithMode", v)} /></Row>
+        {s.openWithMode === "custom" && (
+          <Row title={t("应用")}>
+            <span className="secondary ellipsis">{s.openWithAppPath ? s.openWithAppPath.split(/[\\/]/).pop().replace(/\.exe$/i, "") : t("未选择")}</span>
+            <button className="btn" onClick={async () => { const [path] = await call<string[]>("pick.file", { filter: "EXE|*.exe", multiple: false }); if (path) setSetting("openWithAppPath", path); }}>{t("选择…")}</button>
+          </Row>
+        )}
+        <Row title={t("打开未读的论文时，标为\"在读\"")}><Switch on={s.markReadingOnOpen} onChange={(v) => setSetting("markReadingOnOpen", v)} /></Row>
+        <Row title={t("启动时重新打开上次的论文标签页")}><Switch on={s.reopenReaderTabs} onChange={(v) => setSetting("reopenReaderTabs", v)} /></Row>
+        <Row title={t("记住每篇论文的阅读位置")} detail={t("再次打开时回到上次读到的页面和缩放")}><Switch on={s.rememberReadingPosition !== false} onChange={(v) => setSetting("rememberReadingPosition", v)} /></Row>
+      </Card>
       <Header>{t("页面")}</Header>
       <Card>
-        <Row title={t("首次打开时的缩放")}><Select value={s.readerZoom} options={[{ value: "fitWidth", label: t("适合页宽") }, { value: "actualSize", label: t("实际大小") }]} onChange={(v) => setSetting("readerZoom", v)} /></Row>
+        <Row title={s.rememberReadingPosition !== false ? t("首次打开时的缩放") : t("打开时的缩放")}><Select value={s.readerZoom} options={[{ value: "fitWidth", label: t("适合页宽") }, { value: "actualSize", label: t("实际大小") }]} onChange={(v) => setSetting("readerZoom", v)} /></Row>
         <Row title={t("显示方式")}><Select value={s.readerLayout} options={[{ value: "single", label: t("单页连续") }, { value: "twoUp", label: t("双页连续") }]} onChange={(v) => setSetting("readerLayout", v)} /></Row>
         <Row title={t("显示页面阴影")}><Switch on={s.readerPageShadows} onChange={(v) => setSetting("readerPageShadows", v)} /></Row>
       </Card>
       <Header>{t("批注")}</Header>
       <Card>
-        <Row title={t("默认高亮颜色")}><div className="swatches">{colors.map((c) => <button key={c.key} title={c.title} className={`swatch${s.highlightColor === c.key ? " on" : ""}`} style={{ background: c.hex }} onClick={() => setSetting("highlightColor", c.key)} />)}</div></Row>
         <Row title={t("批注作者")}><Field className="set-field" value={s.annotationAuthor ?? ""} placeholder={getState().statics.userName} onCommit={(v) => setSetting("annotationAuthor", v.trim())} /></Row>
+        <Row title={t("文本框字号")}><Select value={s.textBoxFontSize ?? 13} options={TEXT_SIZES.map((x) => ({ value: x.size, label: `${t(x.title)}（${x.size} pt）` }))} onChange={(v) => setSetting("textBoxFontSize", v)} /></Row>
+        <Row title={t("添加便签或文本框后回到选择工具")} detail={t("关闭后可以连续添加多个")}><Switch on={s.returnToSelectAfterPlacing !== false} onChange={(v) => setSetting("returnToSelectAfterPlacing", v)} /></Row>
+        <Row title={t("指针停留时显示便签和评论的内容")}><Switch on={s.showAnnotationTooltips !== false} onChange={(v) => setSetting("showAnnotationTooltips", v)} /></Row>
       </Card>
+      <Note>{t("点一下工具即可使用；再点一次已选中的工具，选择它的颜色和样式（也可以自定义颜色）。")}</Note>
+      <SelectionTranslationPane />
     </>
   );
 }
@@ -161,16 +169,19 @@ function LibraryPane() {
         <Row title={t("检索到元数据后按「作者_年份_标题」重命名文件")}><Switch on={s.autoRenameFiles} onChange={(v) => setSetting("autoRenameFiles", v)} /></Row>
         <Row title={t("自动彻底删除回收站中超过 30 天的内容")}><Switch on={s.autoPurgeTrash} onChange={(v) => setSetting("autoPurgeTrash", v)} /></Row>
       </Card>
+      <Retrieval />
       <Header>{t("导入")}</Header>
       <Card><Row title="Zotero" detail={t("不会改动 Zotero 数据")}><button className="btn" onClick={() => openSheet((close) => <ZoteroSheet close={close} />)}>{t("从 Zotero 导入…")}</button></Row></Card>
     </>
   );
 }
 
+/** 文献库 ▸ 元数据检索 and 期刊指标 (a pane of their own, 检索, before 1.4). */
 function Retrieval() {
   const s = useStore((x) => x.settings);
   return (
     <>
+      <Header>{t("元数据检索")}</Header>
       <Card>
         <Row title={t("添加 PDF 后自动检索元数据")}><Switch on={s.autoRetrieveOnImport} onChange={(v) => setSetting("autoRetrieveOnImport", v)} /></Row>
         <Row title={t("使用 Zotero 识别服务")} detail={t("将发送 PDF 前 5 页文字，无需账号")}><Switch on={s.useZoteroRecognizer} onChange={(v) => setSetting("useZoteroRecognizer", v)} /></Row>
@@ -361,8 +372,8 @@ function Ai() {
 
 export function SettingsApp() {
   const stored = useStore((s) => s.settings.settingsPane);
-  const [pane, setPane] = useState<string>(PANES.some((p) => p.key === stored) ? stored : "general");
-  useEffect(() => on("settings.page", (p) => { if (p) setPane(p); }), []);
+  const [pane, setPane] = useState<string>(PANES.some((p) => p.key === paneKey(stored)) ? paneKey(stored)! : "general");
+  useEffect(() => on("settings.page", (p) => { if (p) setPane(paneKey(p)!); }), []);
   useEffect(() => { setCaption(getState().dark ? "#1c1c1e" : "#f4f4f6", getState().dark ? "#ffffff" : "#000000"); });
   const title = PANES.find((p) => p.key === pane)?.title ?? "";
   return (
@@ -384,9 +395,7 @@ export function SettingsApp() {
           {pane === "general" && <General />}
           {pane === "reader" && <Reader />}
           {pane === "library" && <LibraryPane />}
-          {pane === "retrieval" && <Retrieval />}
           {pane === "translation" && <TranslationPane />}
-          {pane === "selection" && <SelectionTranslationPane />}
           {pane === "browser" && <Browser />}
           {pane === "ai" && <Ai />}
         </div>

@@ -39,7 +39,6 @@ public sealed record TranslationService(string Id, string DisplayName, Translati
                                         List<TranslationServiceField> Fields, string? Note = null)
 {
     public bool IsFree => Category is ServiceCategory.Free or ServiceCategory.Local or ServiceCategory.Agent;
-    public bool IsLocal => Category == ServiceCategory.Local;
     public bool IsLLM => Backend is TranslationBackend.OpenAI or TranslationBackend.AzureOpenAI or TranslationBackend.Anthropic
         or TranslationBackend.Gemini or TranslationBackend.Agent;
     public IEnumerable<TranslationServiceField> RequiredFields => Fields.Where(f => f.IsRequired);
@@ -154,7 +153,7 @@ public static class TranslationServiceCatalog
         new("gemini", "Gemini", new TranslationBackend.Gemini(), ServiceCategory.Llm, [ApiKey("--gemini-api-key"), Model("--gemini-model", "gemini-2.5-flash")]),
         new("deepseek", "DeepSeek", new TranslationBackend.OpenAI("https://api.deepseek.com"), ServiceCategory.Llm,
         [
-            ApiKey("--deepseek-api-key"), Model("--deepseek-model", "deepseek-chat"), new("--deepseek-reasoning-effort", Loc.S("推理强度"), IsAdvanced: true),
+            ApiKey("--deepseek-api-key"), Model("--deepseek-model", "deepseek-flash"), new("--deepseek-reasoning-effort", Loc.S("推理强度"), IsAdvanced: true),
         ]),
         new("aliyundashscope", Loc.S("阿里云百炼（通义千问）"), new TranslationBackend.OpenAI("https://dashscope.aliyuncs.com/compatible-mode/v1"), ServiceCategory.Llm,
         [

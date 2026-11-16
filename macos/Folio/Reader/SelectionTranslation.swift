@@ -303,7 +303,7 @@ final class SelectionTranslationController: NSObject, NSPopoverDelegate {
             openSettings: { [weak self] in
                 self?.popover?.performClose(nil)
                 AppDelegate.shared.showSettings(nil)
-                AppDelegate.shared.settingsWindow?.select(pane: "selectionTranslation")
+                AppDelegate.shared.settingsWindow?.select(pane: "reading")
             },
             close: { [weak self] in self?.popover?.performClose(nil) })
         let popover = NSPopover()

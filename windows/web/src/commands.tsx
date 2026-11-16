@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, Folder, FolderOpen, Languages, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { FullTextTranslateIcon } from "./ui/icons";
 import { call } from "./rpc";
 import { t } from "./i18n";
 import { defaultFile, filesOf, getState, groupsForMenus, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
@@ -260,7 +261,7 @@ function tagMenu(ids: string[]): MenuEntry {
 function translateEntry(itemId: string, run: () => void): MenuEntry {
   return getState().jobs[itemId]
     ? { label: t("取消翻译"), icon: icon(X), action: () => call("translation.cancel", { item: itemId }) }
-    : { label: t("翻译全文…"), icon: icon(Languages), key: "Ctrl+Alt+T", action: run };
+    : { label: t("翻译全文…"), icon: icon(FullTextTranslateIcon), key: "Ctrl+Alt+T", action: run };
 }
 
 export function showNotes() {
@@ -309,7 +310,7 @@ export function itemMenu(ids: string[]): MenuEntry[] {
       entries.push({ label: t("手动匹配…"), icon: icon(Search), action: () => manualMatch(single) });
     }
   } else if (selected.some((i) => defaultFile(s, i)?.isPdf)) {
-    entries.push({ label: t("翻译全文…"), icon: icon(Languages), action: () => translate(ids) });
+    entries.push({ label: t("翻译全文…"), icon: icon(FullTextTranslateIcon), action: () => translate(ids) });
   }
   if (!single && selected.some((i) => i.hasJournal)) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
   if (selected.some((i) => defaultFile(s, i))) entries.push({ label: t("在资源管理器中显示"), icon: icon(Folder), key: "Ctrl+Shift+R", action: () => revealFirstFile(ids) });
@@ -327,7 +328,7 @@ export function fileMenu(file: FileRec): MenuEntry[] {
     { label: t("打开"), icon: icon(FolderOpen), action: () => call("file.open", { id: file.id }) },
     openWithMenu(file),
     sep,
-    { label: t("设为默认打开文件"), icon: icon(Star), disabled: item?.defaultFileId === file.id, action: () => call("file.setDefault", { id: file.id }) },
+    { label: t("设为默认打开文件"), icon: icon(Star), disabled: item?.defaultFileId === file.id, checked: item?.defaultFileId === file.id, action: () => call("file.setDefault", { id: file.id }) },
     { label: t("重命名…"), icon: icon(Edit3), action: async () => {
       const name = await askText(t("重命名文件"), t("文件名"), file.fileName.replace(/\.[^.]+$/, ""), t("重命名"));
       if (name?.trim()) call("file.rename", { id: file.id, name: name.trim() });

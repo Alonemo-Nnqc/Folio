@@ -443,6 +443,8 @@ struct AgentProvider: ChatModel {
     /// Each call starts the agent (seconds before it answers): large batches, eight side by side.
     var limits = ProviderLimits(batchCharacters: 5000, batchItems: 60, concurrency: 8, usesContext: true, startupSeconds: 8, secondsPerCharacter: 0.006)
 
+    var modelName: String? { model }
+
     func complete(system: String, user: String) async throws -> String {
         do {
             return try await complete(system: system, user: user, effort: usualLevelRefused.value ? "" : effort)
@@ -706,9 +708,12 @@ public enum CodeBuddyAccount {
         return match.output.1.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
-    /// For translating, when no model is chosen: a quick one the account has (CodeBuddy's own default reasons at length,
-    /// minutes a page). Measured on four labels: these answer in about 4 s, the free models in 8 to 10 s.
-    static let quickModels = ["deepseek-v4.1-flash", "space-bunny", "glm-5.3-flash", "minimax-m3.1-flash", "deepseek-v3-2-volc"]
+    /// For translating, when no model is chosen: a quick one the account has. Measured on one batch of a paper as Folio
+    /// sends it (4,600 characters, 15 lines, effort minimal), all lines back: glm-5.3-flash 18 s (7 thinking tokens),
+    /// space-bunny 15 s (36), minimax-m3.1-flash 19 s (45), deepseek-v4.1-flash 25 s (3,207); the free hy4flash-free
+    /// 42 s (7,127), and the "hy4free" an older version saved 242 s (17,875 tokens of thinking for 932 of answer) — the
+    /// hy models ignore the effort asked for.
+    static let quickModels = ["glm-5.3-flash", "space-bunny", "minimax-m3.1-flash", "deepseek-v4.1-flash", "deepseek-v3-2-volc"]
 
     static func quickModel(among models: [String]) -> String? {
         quickModels.first { models.contains($0) }

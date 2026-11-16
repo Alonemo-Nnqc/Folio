@@ -90,6 +90,8 @@ enum FeatureSelfTest {
                 reader.pdfView.endErasing()
             }
             check(inks().isEmpty, "erasing along everything removes the annotation")
+            try? await Task.sleep(for: .milliseconds(300))
+            check(!reader.state.annotations.contains { $0.kind == String(localized: "手绘") }, "the annotation list no longer shows it (\(reader.state.annotations.map(\.kind)))")
             reader.state.tool = .select
             undo?.groupsByEvent = true
             check(reader.save(), "saved")

@@ -192,18 +192,6 @@ public sealed class JournalMetricsService(Library library, EasyScholarClient? cl
         return await _client.Lookup(journal, key.Trim());
     }
 
-    /// <summary>Waits until the queue is empty (tests).</summary>
-    public async Task Idle()
-    {
-        while (true)
-        {
-            Task? worker;
-            lock (_gate) worker = _worker;
-            if (worker == null) return;
-            await worker;
-        }
-    }
-
     void StartIfNeeded()
     {
         lock (_gate)

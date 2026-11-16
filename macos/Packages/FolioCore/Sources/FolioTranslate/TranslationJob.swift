@@ -15,17 +15,24 @@ public final class TranslationJob: @unchecked Sendable {
     private var task: Task<Void, Never>?
     private var cancelled = false
 
-    /// Where translations are cached, logs written. Tests point them at scratch folders.
-    nonisolated(unsafe) public static var supportDirectory: URL = {
+    /// Where translations are cached and logs written.
+    public static let supportDirectory: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appending(path: "Folio/Translation", directoryHint: .isDirectory)
     }()
+    /// This job's own: tests give each job a scratch folder (jobs of suites running side by side must not share one).
+    private let supportDirectory: URL
+    /// The glossary kept from paper to paper (the app's; a job with its own folder has its own, there).
+    private let glossaryStore: GlossaryStore
 
-    public init(request: TranslationRequest, logURL: URL? = nil) {
+    public init(request: TranslationRequest, logURL: URL? = nil, supportDirectory: URL? = nil) {
         self.request = request
+        let directory = supportDirectory ?? Self.supportDirectory
+        self.supportDirectory = directory
+        glossaryStore = supportDirectory == nil ? .shared : GlossaryStore(url: directory.appending(path: "glossary.json"))
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        self.logURL = logURL ?? Self.supportDirectory.appending(path: "logs/translate-\(formatter.string(from: Date())).log")
+        self.logURL = logURL ?? directory.appending(path: "logs/translate-\(formatter.string(from: Date())).log")
     }
 
     public func start() -> AsyncStream<TranslationEvent> {
@@ -84,6 +91,17 @@ public final class TranslationJob: @unchecked Sendable {
         log.write("translate \(request.input.lastPathComponent) with \(request.serviceID) \(options.langIn)→\(options.langOut)")
         let provider = try ProviderFactory.make(serviceID: request.serviceID, fields: request.fieldValues, secrets: request.secrets,
                                                 concurrency: options.concurrency)
+        log.write("model: \(provider.modelName ?? "-"), \(provider.limits.concurrency) requests at a time"
+                  + (options.concurrency.map { " (同时请求数 set to \($0))" } ?? ""))
+        if let check = ModelCheck.check(serviceID: request.serviceID, fields: request.fieldValues) {
+            // Said at once, not discovered from a translation that takes an hour.
+            let service = TranslationServiceCatalog.service(id: request.serviceID)?.displayName ?? request.serviceID
+            let message = check.replacement.map {
+                String(localized: "设置中的模型“\(check.saved)”已不在\(service)的可用模型中，本次改用 \($0)。可在 设置 ▸ 翻译 中更换。", bundle: .module)
+            } ?? String(localized: "设置中的模型“\(check.saved)”已不在\(service)的可用模型中，本次使用它的默认模型。可在 设置 ▸ 翻译 中更换。", bundle: .module)
+            log.write("saved model \(check.saved) is not offered (offered: \(check.offered.joined(separator: ", "))), using \(check.replacement ?? "the default")")
+            emit(.problem(message))
+        }
 
         // 1. Layout.
         emit(.stage(String(localized: "分析版面", bundle: .module)))
@@ -111,7 +129,10 @@ public final class TranslationJob: @unchecked Sendable {
         // 2. Context and glossary.
         var context = TranslationContext(sourceLanguage: options.langIn, targetLanguage: options.langOut,
                                          title: segments.first { $0.kind == .title }?.source, summary: Self.summary(of: segments), glossary: [])
-        context.glossary = Self.readGlossary(options.glossaryFile)
+        // The user's file first, then Folio's glossary: terms written by the user and terms found in earlier papers.
+        let fromFile = Self.readGlossary(options.glossaryFile)
+        let known = Set(fromFile.map { $0.source.lowercased() })
+        context.glossary = fromFile + glossaryStore.entries(for: options.langOut).filter { !known.contains($0.source.lowercased()) }
         // Terms are extracted while the first batches (title, abstract, introduction: where the terms come from)
         // are already being translated; later batches get the glossary.
         let glossary = GlossaryBox(context.glossary)
@@ -123,7 +144,9 @@ public final class TranslationJob: @unchecked Sendable {
                 do {
                     let terms = try await withTimeout(seconds: 150) { try await provider.extractTerms(from: excerpt, context: base) }
                     glossary.add(terms)
-                    log.write("glossary: \(glossary.entries.count) terms")
+                    // Kept for the papers after this one (what the glossary already has stays as it is).
+                    let learned = options.rememberTerms ? self.glossaryStore.learn(terms, language: options.langOut, paper: base.title) : 0
+                    log.write("glossary: \(glossary.entries.count) terms, \(learned) new kept")
                 } catch {
                     log.write("term extraction failed, continuing without: \(error)")
                 }
@@ -133,7 +156,7 @@ public final class TranslationJob: @unchecked Sendable {
         progress(0.06)
 
         // 3. Translations: the cache first, then the service.
-        let cache = TranslationCache(directory: Self.supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
+        let cache = TranslationCache(directory: supportDirectory.appending(path: "cache", directoryHint: .isDirectory),
                                      document: request.input, signature: signature(), ignore: options.ignoreCache)
         defer { cache.save() }
         let state = TranslationState(segments: segments)
@@ -161,9 +184,13 @@ public final class TranslationJob: @unchecked Sendable {
         let previews = PreviewWriter(renderer: renderer, layouts: layouts, segments: segments,
                                      directory: request.outputDirectory, emit: emit)
 
-        // What is left to send: whole paragraphs, the continued ones as one text each.
+        // What is left to send: whole paragraphs, the continued ones as one text each. A text the paper has more than
+        // once (a table's "Method", a label under each of several figures) is sent once, and its translation set for
+        // all of them: less to translate, and never two translations of the same words.
         var units: [TextSegment] = []
         var sent = Set<String>()
+        var firstWithSource: [String: String] = [:]
+        var repeats: [String: [TextSegment]] = [:]
         for segment in segments where state.translation(for: segment) == nil {
             if inContinuation.contains(segment.id) {
                 guard let c = continuations.first(where: { $0.parts.contains { $0.id == segment.id } }), !sent.contains(c.joined.id) else { continue }
@@ -173,13 +200,22 @@ public final class TranslationJob: @unchecked Sendable {
                     continue
                 }
             }
+            if let first = firstWithSource[segment.source] {
+                repeats[first, default: []].append(segment)
+                continue
+            }
+            firstWithSource[segment.source] = segment.id
             units.append(segment)
         }
+        let twins = repeats
+        if !twins.isEmpty { log.write("repeated texts sent once: \(twins.values.reduce(0) { $0 + $1.count })") }
         let refusals = RefusalCount(limit: max(5, segments.count / 20))
         let batches = Self.batches(units, limits: provider.limits)
         let total = segments.count
         // Between finished batches the bar goes on moving, by what is running and how long that usually takes.
-        let estimate = ProgressEstimate(done: state.characters.done, total: state.characters.total, limits: provider.limits)
+        let cachedCharacters = state.characters.done
+        let estimate = ProgressEstimate(done: cachedCharacters, total: cachedCharacters + units.reduce(0) { $0 + $1.source.count },
+                                        limits: provider.limits, replyPerCharacter: ImageText.isCJK(options.langOut) ? 0.5 : 1.1)
         let serviceName = TranslationServiceCatalog.service(id: request.serviceID)?.displayName ?? request.serviceID
         activity.touch()
         let target = ProgressTarget { 0.08 + 0.86 * estimate.fraction() }
@@ -188,6 +224,7 @@ public final class TranslationJob: @unchecked Sendable {
             var shown = target.value()
             var lastCount = -1
             var lastWaiting = ""
+            var slowReported = false
             while !Task.isCancelled {
                 let goal = target.value()
                 shown = min(goal, shown + max(0.001, (goal - shown) * 0.2))
@@ -195,6 +232,14 @@ public final class TranslationJob: @unchecked Sendable {
                 if shown <= 0.94 {
                     let count = max(state.doneCount, min(total - 1, Int(Double(total) * (shown - 0.08) / 0.86)))
                     let idle = self.activity.idleSeconds
+                    if idle >= 90, !slowReported {
+                        // Far slower than a batch should take (10 to 30 s): why, and what to do about it.
+                        slowReported = true
+                        let model = provider.modelName.map { "（\($0)）" } ?? ""
+                        let message = String(localized: "\(serviceName)\(model)已经 \(Int(idle)) 秒没有返回任何一批译文，正常一批只要 10 到 30 秒。多半是模型在长时间思考；可以在 设置 ▸ 翻译 中换用更快的模型。", bundle: .module)
+                        log.write("slow: nothing back for \(Int(idle)) s from \(provider.modelName ?? serviceName)")
+                        emit(.problem(message))
+                    }
                     if idle >= 60 {
                         // Nothing back for a minute: say what it waits for, rather than seem to hang.
                         let minutes = Int(idle / 60)
@@ -233,40 +278,55 @@ public final class TranslationJob: @unchecked Sendable {
                                                 cache: inputs.cache, log: inputs.log, estimate: inputs.estimate, refusals: inputs.refusals)
         } : nil
         defer { imageWork?.cancel() }
+        // The first batches (title, abstract, introduction: what is read first, and shown first) go at once. The others
+        // wait a moment for the paper's terms, so that the whole paper translates a term the same way: without the
+        // wait every batch of a short paper would be under way before the terms are known.
+        let leading = termTask == nil ? batches.count : max(1, min(2, provider.limits.concurrency / 2))
+        let termsDeadline = Date().addingTimeInterval(provider.limits.startupSeconds * 2 + 8)
+        let targetLanguage = options.langOut
         try await withThrowingTaskGroup(of: Void.self) { group in
             var pending = batches[...]
+            var started = 0
             func startNext() {
                 guard let batch = pending.popFirst() else { return }
+                let waitsForTerms = started >= leading
+                started += 1
                 group.addTask {
+                    if waitsForTerms { await glossary.wait(until: termsDeadline) }
                     var context = batchContext
                     context.glossary = glossary.entries
                     let texts = try await self.translate(batch, provider: provider, context: context, log: log, estimate: estimate,
                                                          refusals: refusals)
+                    /// Sets the translation of one segment. A text that came back empty or as it went (still in the
+                    /// source language) is not kept for next time: another run, or another service, may do better.
+                    func settle(_ segment: TextSegment, _ raw: String) {
+                        let text = segment.kind == .heading ? HeadingNumbers.restoreSpace(source: segment.source, translation: raw) : raw
+                        state.store(text.isEmpty ? segment.source : text, for: segment)
+                        if !Self.isUntranslated(text, source: segment.source, target: targetLanguage) { cache.store(text, for: segment.source) }
+                    }
                     for (segment, raw) in zip(batch, texts) {
                         guard let raw else {
                             // Refused by the service's content review: the original stays, and is not cached.
-                            for part in joinedParts[segment.id]?.parts ?? [segment] { state.store(part.source, for: part) }
+                            for part in (joinedParts[segment.id]?.parts ?? [segment]) + (twins[segment.id] ?? []) { state.store(part.source, for: part) }
                             continue
                         }
                         if let continuation = joinedParts[segment.id] {
                             if let pieces = Continuations.split(raw, continuation) {
                                 for (part, piece) in zip(continuation.parts, pieces) { state.store(piece, for: part) }
-                                cache.store(raw, for: segment.source)
+                                if !Self.isUntranslated(raw, source: segment.source, target: targetLanguage) { cache.store(raw, for: segment.source) }
                             } else {
                                 // The translator moved a formula across the break: the parts go on their own.
                                 log.write("continued paragraph p\(segment.page) not splittable, translating its parts apart")
                                 let apart = try await self.translate(continuation.parts, provider: provider, context: context, log: log,
                                                                      estimate: estimate, refusals: refusals)
                                 for (part, text) in zip(continuation.parts, apart) {
-                                    state.store(text ?? part.source, for: part)
-                                    if let text { cache.store(text, for: part.source) }
+                                    if let text { settle(part, text) } else { state.store(part.source, for: part) }
                                 }
                             }
                             continue
                         }
-                        let text = segment.kind == .heading ? HeadingNumbers.restoreSpace(source: segment.source, translation: raw) : raw
-                        state.store(text, for: segment)
-                        cache.store(text, for: segment.source)
+                        settle(segment, raw)
+                        for twin in twins[segment.id] ?? [] { settle(twin, raw) }
                     }
                 }
             }
@@ -455,7 +515,7 @@ public final class TranslationJob: @unchecked Sendable {
             context.glossary = Array(context.glossary.filter { text.contains($0.source.lowercased()) }.prefix(80))
         }
         var lastError: Error?
-        var refused = false
+        var refused = false, truncated = false
         let attemptCount = 5
         attempts: for attempt in 0..<attemptCount {
             try Task.checkCancellation()
@@ -464,18 +524,28 @@ public final class TranslationJob: @unchecked Sendable {
             let request = estimate.begin(characters: characters)
             do {
                 let started = Date()
-                var texts = try await provider.translate(items, context: context).map(Self.clean)
+                // A reply read as it arrives says how far it has come, and that the service is alive.
+                let activity = activity
+                var texts = try await StreamProgress.$sink.withValue({ received in
+                    estimate.received(request, characters: received)
+                    activity.touch()
+                }) {
+                    try await provider.translate(items, context: context).map(Self.clean)
+                }
                 log.write(String(format: "batch of %d (%d chars) in %.1f s", batch.count, characters, Date().timeIntervalSince(started)))
                 estimate.finish(request)
                 activity.touch()
-                // Formulas: each placeholder exactly once. A model that dropped one gets a second chance; failing that,
-                // the typesetter puts what is missing at the end.
-                let broken = batch.indices.filter { !Self.placeholdersIntact(texts[$0], source: batch[$0].source) }
+                // What a model may get wrong in a text: a formula's placeholder lost or doubled (each has to be there
+                // exactly once), nothing given back, or the text given back as it went, untranslated. Such texts get a
+                // second chance, and the better of the two answers is kept; failing that, the typesetter puts a missing
+                // formula at the end, and a text still untranslated stays as the original.
+                let target = context.targetLanguage
+                let broken = batch.indices.filter { Self.defects(texts[$0], source: batch[$0].source, target: target) > 0 }
                 if !broken.isEmpty, provider.limits.usesContext {
-                    log.write("placeholders lost in \(broken.count) of \(batch.count), asking again")
+                    log.write("\(broken.count) of \(batch.count) came back incomplete (placeholders lost, empty or untranslated), asking again")
                     if let again = try? await provider.translate(broken.map { items[$0] }, context: context).map(Self.clean) {
                         for (k, i) in broken.enumerated() where k < again.count
-                            && Self.placeholderErrors(again[k], source: batch[i].source) < Self.placeholderErrors(texts[i], source: batch[i].source) {
+                            && Self.defects(again[k], source: batch[i].source, target: target) < Self.defects(texts[i], source: batch[i].source, target: target) {
                             texts[i] = again[k]
                         }
                     }
@@ -487,6 +557,12 @@ public final class TranslationJob: @unchecked Sendable {
                 log.write("attempt \(attempt + 1) failed: \(error.detail.prefix(500))")
                 if error.kind == .refused {
                     refused = true
+                    break attempts
+                }
+                // Cut off at the model's output limit: the same batch would be cut off again; smaller ones fit.
+                if error.kind == .truncated {
+                    guard batch.count > 1 else { throw EngineError.replyCutOff }
+                    truncated = true
                     break attempts
                 }
                 guard error.isRetryable else { throw error }
@@ -509,7 +585,7 @@ public final class TranslationJob: @unchecked Sendable {
         }
         // Halves until the paragraph that is the problem is found: a refusal or an unreadable reply. A failure of the
         // service itself (it is down, a process error) is the same for half the text, and is not tried again and again.
-        let byContent: Bool = refused || {
+        let byContent: Bool = refused || truncated || {
             if case .invalidResponse = (lastError as? ProviderError)?.kind { return true }
             return false
         }()
@@ -539,6 +615,31 @@ public final class TranslationJob: @unchecked Sendable {
         return Set(want.keys).union(got.keys).reduce(0) { $0 + abs((want[$1] ?? 0) - (got[$1] ?? 0)) }
     }
 
+    /// How much is wrong with a translation: its placeholder errors, and far more when it is empty or untranslated.
+    static func defects(_ text: String, source: String, target: String) -> Int {
+        placeholderErrors(text, source: source) + (isUntranslated(text, source: source, target: target) ? 100 : 0)
+    }
+
+    /// Nothing came back for a text with words in it, or the text came back as it went: a sentence (four words or
+    /// more) that is the source again, or, for a language written in another script than the source's (Chinese,
+    /// Japanese, Korean), without a single character of that script. Names, numbers and short labels may well stay
+    /// as they are, and do not count.
+    static func isUntranslated(_ text: String, source: String, target: String) -> Bool {
+        guard SegmentBuilder.hasWords(source) else { return false }
+        let translation = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if translation.isEmpty { return true }
+        let plain = Placeholders.replace(in: source) { _ in " " }
+        let words = plain.split(whereSeparator: { !$0.isLetter }).filter { $0.count >= 2 }
+        guard words.count >= 4, !SegmentBuilder.isInScript(of: target, plain, share: 0.3) else { return false }
+        if translation == source.trimmingCharacters(in: .whitespacesAndNewlines) { return true }
+        let language = target.lowercased()
+        guard ["zh", "ja", "ko"].contains(where: { language.hasPrefix($0) }) else { return false }
+        return !translation.unicodeScalars.contains { scalar in
+            (0x3040...0x30FF).contains(scalar.value) || (0x3400...0x4DBF).contains(scalar.value) || (0x4E00...0x9FFF).contains(scalar.value)
+                || (0xAC00...0xD7AF).contains(scalar.value)
+        }
+    }
+
     static func clean(_ text: String) -> String {
         text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -562,18 +663,40 @@ public final class TranslationJob: @unchecked Sendable {
         parts += segments.filter { $0.kind == .caption }.map(\.source)
         parts += segments.filter { $0.kind == .paragraph }.prefix(6).map(\.source)
         var excerpt = ""
-        for part in parts where excerpt.count + part.count < 7000 { excerpt += Placeholders.replace(in: part) { _ in "…" } + "\n" }
+        for part in parts where excerpt.count + part.count < 6000 { excerpt += Placeholders.replace(in: part) { _ in "…" } + "\n" }
         return excerpt
     }
 
-    /// A CSV glossary: `source,target` per line (more columns are ignored).
+    /// A CSV glossary: `source,target` per line (more columns are ignored; a field with a comma in it is in quotes).
     static func readGlossary(_ url: URL?) -> [GlossaryEntry] {
-        guard let url, let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        guard let url, var text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        // A byte order mark (files saved by Excel, or exported on Windows) is not part of the first term.
+        if text.hasPrefix("\u{FEFF}") { text.removeFirst() }
         return text.split(whereSeparator: \.isNewline).compactMap { line in
-            let columns = line.split(separator: ",", maxSplits: 2).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \"\t")) }
+            let columns = csvFields(String(line))
             guard columns.count >= 2, !columns[0].isEmpty, !columns[1].isEmpty, columns[0].lowercased() != "source" else { return nil }
             return GlossaryEntry(source: columns[0], target: columns[1])
         }
+    }
+
+    /// The fields of a CSV line: split at commas outside quotes, `""` inside quotes being a quote.
+    static func csvFields(_ line: String) -> [String] {
+        var fields: [String] = [], field = "", quoted = false
+        let characters = Array(line)
+        var index = 0
+        while index < characters.count {
+            let c = characters[index]
+            if c == "\"" {
+                if quoted, index + 1 < characters.count, characters[index + 1] == "\"" { field.append("\""); index += 1 } else { quoted.toggle() }
+            } else if c == ",", !quoted {
+                fields.append(field.trimmingCharacters(in: .whitespaces)); field = ""
+            } else {
+                field.append(c)
+            }
+            index += 1
+        }
+        fields.append(field.trimmingCharacters(in: .whitespaces))
+        return fields
     }
 }
 
@@ -583,6 +706,8 @@ enum EngineError: Error, LocalizedError {
     case alreadyInTarget(String)
     /// The service refused this many paragraphs: more than a few, so something else is wrong.
     case tooManyRefused(Int)
+    /// The model's reply ends at its output limit even for a single paragraph.
+    case replyCutOff
 
     var errorDescription: String? {
         switch self {
@@ -593,6 +718,8 @@ enum EngineError: Error, LocalizedError {
             String(localized: "这篇论文已经是\(language)，不需要翻译成\(language)。可以在翻译设置里换一种译文语言。", bundle: .module)
         case .tooManyRefused(let count):
             String(localized: "翻译服务拒绝翻译 \(count) 个段落（内容审核）。请换一个翻译服务或模型再试。", bundle: .module)
+        case .replyCutOff:
+            String(localized: "模型的回复在输出上限处被截断，连一个段落也放不下。请换用输出上限更高的模型，或调低思考程度。", bundle: .module)
         }
     }
 }
@@ -641,6 +768,13 @@ final class GlossaryBox: @unchecked Sendable {
     var isComplete: Bool { lock.withLock { complete } }
 
     func markComplete() { lock.withLock { complete = true } }
+
+    /// Returns once the paper's terms are in, at `deadline` at the latest (or when the task is cancelled).
+    func wait(until deadline: Date) async {
+        while !isComplete, Date() < deadline, !Task.isCancelled {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
 
     /// Adds terms the user's glossary does not already have.
     func add(_ terms: [GlossaryEntry]) {
@@ -697,12 +831,15 @@ final class ProgressTarget: @unchecked Sendable {
     func value() -> Double { lock.withLock { current } () }
 }
 
-/// How far the translation has come, at any moment: what is done, plus how far the requests under way should be by
-/// now, going by how long requests of this job have taken so far (at first, by what is usual for the service).
-/// Services only answer when they are done, so the part under way is an estimate; it never gets ahead of a request
-/// that takes longer than expected, it slows down.
+/// How far the translation has come, at any moment: what is done, plus how far the requests under way are.
+///
+/// A service that sends its reply as it writes it says how far each request is: the characters received, against how
+/// long such a reply usually is (measured on this job's replies; at first, what is usual for the language). Before
+/// the first of them arrives (the model reads, and thinks), and for services that only answer when they are done, a
+/// request counts by the time it has taken against what requests of this job took so far; it never gets ahead of a
+/// request that takes longer than expected, it slows down.
 final class ProgressEstimate: @unchecked Sendable {
-    private struct Running { var characters: Double; var started: Date }
+    private struct Running { var characters: Double; var started: Date; var received = 0.0 }
     private let lock = NSLock()
     private var running: [Int: Running] = [:]
     private var nextID = 0
@@ -711,14 +848,20 @@ final class ProgressEstimate: @unchecked Sendable {
     private let startup: Double
     private var secondsPerCharacter: Double
     private var measured = false
+    /// Characters of reply for each character sent, as replies come in.
+    private var replyPerCharacter: Double
+    private var measuredReply = false
+    /// Replies of this job arrive piece by piece.
+    private var streams = false
     private var highest = 0.0
     private let clock: @Sendable () -> Date
 
-    init(done: Int, total: Int, limits: ProviderLimits, clock: @escaping @Sendable () -> Date = { Date() }) {
+    init(done: Int, total: Int, limits: ProviderLimits, replyPerCharacter: Double = 0.6, clock: @escaping @Sendable () -> Date = { Date() }) {
         self.done = Double(done)
         self.total = Double(max(total, 1))
         startup = limits.startupSeconds
         secondsPerCharacter = limits.secondsPerCharacter
+        self.replyPerCharacter = replyPerCharacter
         self.clock = clock
     }
 
@@ -730,6 +873,15 @@ final class ProgressEstimate: @unchecked Sendable {
         }
     }
 
+    /// So much of the reply to request `id` has arrived (it may start over: a part asked for again).
+    func received(_ id: Int, characters: Int) {
+        guard characters > 0 else { return }
+        lock.withLock {
+            streams = true
+            if let request = running[id] { running[id]?.received = max(request.received, Double(characters)) }
+        }
+    }
+
     func finish(_ id: Int) {
         lock.withLock {
             guard let request = running.removeValue(forKey: id) else { return }
@@ -737,6 +889,11 @@ final class ProgressEstimate: @unchecked Sendable {
             let rate = max(clock().timeIntervalSince(request.started) - startup, 0.05) / max(request.characters, 1)
             secondsPerCharacter = measured ? (secondsPerCharacter + rate) / 2 : rate
             measured = true
+            if request.received > 0, request.characters > 0 {
+                let reply = request.received / request.characters
+                replyPerCharacter = measuredReply ? (replyPerCharacter + reply) / 2 : reply
+                measuredReply = true
+            }
         }
     }
 
@@ -750,7 +907,13 @@ final class ProgressEstimate: @unchecked Sendable {
             var sum = done
             for request in running.values {
                 let expected = startup + request.characters * secondsPerCharacter
-                sum += request.characters * Self.share(elapsed: now.timeIntervalSince(request.started) / expected)
+                let byTime = Self.share(elapsed: now.timeIntervalSince(request.started) / expected)
+                // While nothing of a streamed reply has come, time only says that the request is under way.
+                var share = streams ? min(byTime, 0.15) : byTime
+                if request.received > 0 {
+                    share = max(share, min(request.received / max(request.characters * replyPerCharacter, 1), 0.97))
+                }
+                sum += request.characters * share
             }
             highest = max(highest, min(sum / total, 1))
             return highest
@@ -879,10 +1042,12 @@ final class TranslationCache: @unchecked Sendable {
 
     func lookup(_ source: String) -> String? {
         guard !ignore else { return nil }
-        return lock.withLock { entries[Self.key(source)] }
+        // An empty entry (kept by earlier versions when a service gave nothing back) is no translation.
+        return lock.withLock { entries[Self.key(source)] }.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     func store(_ text: String, for source: String) {
+        guard !text.isEmpty else { return }
         lock.withLock {
             entries[Self.key(source)] = text
             dirty += 1

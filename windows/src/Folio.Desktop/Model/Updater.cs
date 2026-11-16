@@ -52,8 +52,6 @@ public sealed class Updater
     /// <summary>Installed by Folio's installer (not run from a build folder): only then is there something to update.</summary>
     public bool IsInstalled => File.Exists(Path.Combine(AppContext.BaseDirectory, "unins000.exe"));
 
-    public string? PendingVersion => _pendingVersion;
-
     static HttpClient CreateClient()
     {
         var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };

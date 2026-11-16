@@ -40,7 +40,10 @@ final class TranslationCoordinator {
     private(set) var legacyRevision = 0
 
     @ObservationIgnored private weak var model: AppModel?
-    @ObservationIgnored let secrets = SecretStore()
+    /// Screenshot and UI-test runs (`-FolioUITesting YES`) keep their keys apart: a build signed differently from the
+    /// installed app would otherwise make the Keychain ask the user about every key it reads.
+    @ObservationIgnored let secrets = UserDefaults.standard.bool(forKey: "FolioUITesting")
+        ? SecretStore(service: SecretStore.defaultService + ".uitesting") : SecretStore()
     @ObservationIgnored private var queue: [(itemId: String, fileId: String)] = []
     private final class Running {
         let itemId: String

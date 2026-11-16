@@ -9,8 +9,6 @@ public readonly record struct Pt(double X, double Y)
     public static double Distance(Pt a, Pt b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
 }
 
-public readonly record struct Size2(double Width, double Height);
-
 /// <summary>CGAffineTransform: [a b 0; c d 0; tx ty 1], points as row vectors.</summary>
 public readonly record struct Affine(double A, double B, double C, double D, double Tx, double Ty)
 {
@@ -25,28 +23,17 @@ public readonly record struct Affine(double A, double B, double C, double D, dou
         C * t2.A + D * t2.C, C * t2.B + D * t2.D,
         Tx * t2.A + Ty * t2.C + t2.Tx, Tx * t2.B + Ty * t2.D + t2.Ty);
 
-    public Affine Inverted()
-    {
-        double det = A * D - B * C;
-        if (Math.Abs(det) < 1e-300) return this;
-        double ia = D / det, ib = -B / det, ic = -C / det, id = A / det;
-        return new Affine(ia, ib, ic, id, -(Tx * ia + Ty * ic), -(Tx * ib + Ty * id));
-    }
-
     public Affine Translated(double x, double y) => Translation(x, y).Concatenating(this);
     public Affine Scaled(double x, double y) => Scale(x, y).Concatenating(this);
-    public bool IsIdentity => this == Identity;
 }
 
 /// <summary>CGRect, including the null rectangle (result of an empty intersection).</summary>
 public readonly record struct Rect(double X, double Y, double Width, double Height)
 {
     public static readonly Rect Null = new(double.PositiveInfinity, double.PositiveInfinity, 0, 0);
-    public static readonly Rect ZeroRect = new(0, 0, 0, 0);
 
     public bool IsNull => double.IsPositiveInfinity(X) || double.IsPositiveInfinity(Y);
     public bool IsEmpty => IsNull || Width == 0 || Height == 0;
-    public bool IsInfinite => double.IsInfinity(Width) || double.IsInfinity(Height);
 
     Rect Standardized => Width >= 0 && Height >= 0 ? this : new Rect(Math.Min(X, X + Width), Math.Min(Y, Y + Height), Math.Abs(Width), Math.Abs(Height));
     public double MinX => Standardized.X;
@@ -127,4 +114,6 @@ public readonly record struct Rect(double X, double Y, double Width, double Heig
 public readonly record struct RGBColor(double R, double G, double B)
 {
     public static readonly RGBColor Black = new(0, 0, 0);
+    /// <summary>White or nearly: invisible on the paper.</summary>
+    public bool IsPale => Math.Min(R, Math.Min(G, B)) > 0.85;
 }

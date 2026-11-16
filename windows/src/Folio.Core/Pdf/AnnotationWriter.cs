@@ -7,17 +7,22 @@ using UglyToad.PdfPig.Tokens;
 
 namespace Folio.Core;
 
-/// <summary>The reader's six markup colours (the macOS AnnotationColor), as sRGB components.</summary>
+/// <summary>The reader's annotation colours (the macOS AnnotationColor), as sRGB components. Each tool offers its
+/// own few of them (the page decides which).</summary>
 public static class AnnotationColors
 {
     public static readonly (string Key, string Title, double R, double G, double B)[] All =
     [
         ("yellow", "黄色", 1.00, 0.85, 0.20), ("green", "绿色", 0.45, 0.85, 0.40), ("blue", "蓝色", 0.40, 0.70, 1.00),
         ("pink", "粉色", 1.00, 0.55, 0.75), ("purple", "紫色", 0.75, 0.55, 1.00), ("red", "红色", 1.00, 0.35, 0.35),
+        ("orange", "橙色", 1.00, 0.62, 0.20), ("black", "黑色", 0.11, 0.11, 0.12),
     ];
 
+    /// <summary>A preset's colour, or a colour mixed with 自定义颜色… ("#RRGGBB").</summary>
     public static (double R, double G, double B) Rgb(string key)
     {
+        if (key is ['#', ..] && key.Length == 7 && int.TryParse(key.AsSpan(1), System.Globalization.NumberStyles.HexNumber, null, out var value))
+            return (((value >> 16) & 0xFF) / 255.0, ((value >> 8) & 0xFF) / 255.0, (value & 0xFF) / 255.0);
         var c = All.FirstOrDefault(c => c.Key == key, All[0]);
         return (c.R, c.G, c.B);
     }
@@ -42,11 +47,17 @@ public sealed record NewAnnotation(
     /// <summary>Strokes for ink: x y x y …</summary>
     IReadOnlyList<double[]>? Strokes = null,
     string? Contents = null,
-    string? Author = null);
+    string? Author = null,
+    /// <summary>The pen's width in points (ink).</summary>
+    double Width = 2,
+    /// <summary>The text's size in points (text boxes, whose colour is their text's).</summary>
+    double FontSize = 13);
 
 /// <summary>What the eraser did to one ink annotation: its tracks over the page (x y x y …, page coordinates) and the
 /// eraser's radius in page points.</summary>
-public sealed record InkErasure(int Page, long ObjectNumber, IReadOnlyList<double[]> Paths, double Radius);
+/// <summary>One ink annotation the eraser went over: its tracks and radius, or (<c>Left</c>) the strokes the page already
+/// shows for it, written as they are so the file is what was seen (empty: erased completely).</summary>
+public sealed record InkErasure(int Page, long ObjectNumber, IReadOnlyList<double[]> Paths, double Radius, IReadOnlyList<double[]>? Left = null);
 
 /// <summary>
 /// Writes annotations into a PDF by incremental update: the original bytes stay untouched and new objects, a new
@@ -104,8 +115,10 @@ public static partial class AnnotationWriter
         return removed;
     }
 
-    /// <summary>Changes an annotation in place: colour, text (null leaves it, empty clears it) and position.</summary>
-    public static bool Modify(string path, int page, long objectNumber, string? color = null, string? contents = null, double dx = 0, double dy = 0)
+    /// <summary>Changes an annotation in place: colour, text (null leaves it, empty clears it), position, and a text
+    /// box's text size.</summary>
+    public static bool Modify(string path, int page, long objectNumber, string? color = null, string? contents = null, double dx = 0, double dy = 0,
+                              double[]? rect = null, double? fontSize = null)
     {
         bool modified = false;
         Update(path, (document, pages, next, write) =>
@@ -127,7 +140,27 @@ public static partial class AnnotationWriter
                     entries["InkList"] = new ArrayToken(ink.Data.Select(Resolve).OfType<ArrayToken>()
                         .Select(s => (IToken)Array(s.Data.Select(Resolve).OfType<NumericToken>().Select((n, i) => n.Double + (i % 2 == 0 ? dx : dy)).ToArray())).ToList());
             }
-            if (color != null)
+            // A text box resized to fit its text.
+            if (rect is { Length: 4 }) entries["Rect"] = Array(rect[0], rect[1], rect[2], rect[3]);
+            if ((color != null || fontSize is > 0) && subtype == "FreeText")
+            {
+                // A text box's colour is its text's: the colour (and the size) in its default appearance change, the rest stays.
+                var da = entries.TryGetValue("DA", out var daToken) && Resolve(daToken) is StringToken daString ? daString.Data : "/Helv 12 Tf 0 g";
+                if (fontSize is > 0)
+                {
+                    var sized = System.Text.RegularExpressions.Regex.Replace(da, @"(/\S+\s+)[-\d.]+(\s+Tf\b)", m => m.Groups[1].Value + N(fontSize.Value) + m.Groups[2].Value);
+                    da = sized != da || da.Contains(" Tf") ? sized : $"/Helv {N(fontSize.Value)} Tf {da}";
+                }
+                if (color != null)
+                {
+                    var (r, g, b) = AnnotationColors.Rgb(color);
+                    da = System.Text.RegularExpressions.Regex.Replace(da, @"(?:[-\d.]+\s+){0,3}[-\d.]+\s+(?:rg|g|k)\b", "").Trim();
+                    da = $"{da} {N(r)} {N(g)} {N(b)} rg";
+                }
+                entries["DA"] = new StringToken(da);
+                entries.Remove("AP");
+            }
+            else if (color != null)
             {
                 var (r, g, b) = AnnotationColors.Rgb(color);
                 entries["C"] = Array(r, g, b);
@@ -149,7 +182,9 @@ public static partial class AnnotationWriter
                 var quads = Enumerable.Range(0, flat.Length / 8).Select(i => flat.Skip(i * 8).Take(8).ToArray()).ToList();
                 var strokes = entries.TryGetValue("InkList", out var inkToken) && Resolve(inkToken) is ArrayToken inkList
                     ? inkList.Data.Select(Resolve).OfType<ArrayToken>().Select(s => s.Data.Select(Resolve).OfType<NumericToken>().Select(n => n.Double).ToArray()).ToList() : [];
-                var stream = Appearance(subtype, quads, strokes, r, g, b);
+                var borderWidth = entries.TryGetValue("BS", out var bsToken) && Resolve(bsToken) is DictionaryToken bs
+                    && bs.TryGet(NameToken.Create("W"), out var wToken) && Resolve(wToken) is NumericToken w ? w.Double : 2;
+                var stream = Appearance(subtype, quads, strokes, r, g, b, borderWidth);
                 if (rect.Length == 4 && stream != null)
                 {
                     long ap = next();
@@ -190,7 +225,7 @@ public static partial class AnnotationWriter
                 if (!entries.TryGetValue("InkList", out var inkRaw) || Resolve(inkRaw) is not ArrayToken inkList) continue;
                 var strokes = inkList.Data.Select(Resolve).OfType<ArrayToken>().Select(s => Numbers(s)).ToList();
                 double width = InkWidth(entries, Resolve);
-                var left = InkEraser.Erase(strokes, erasure.Paths, erasure.Radius + width / 2);
+                var left = erasure.Left?.Where(s => s.Length >= 2).ToList() ?? InkEraser.Erase(strokes, erasure.Paths, erasure.Radius + width / 2);
                 if (left == null) continue;
                 if (left.Count == 0)
                 {
@@ -448,14 +483,15 @@ public static partial class AnnotationWriter
             case "Ink":
             {
                 var strokes = a.Strokes ?? [];
-                rect = Bounds(strokes.SelectMany(s => Pairs(s)), pad: 2);
-                extra = $"/InkList [{string.Join(' ', strokes.Select(s => "[" + string.Join(' ', s.Select(N)) + "]"))}] /BS << /W 2 >>";
-                stream = Appearance("Ink", [], strokes, r, g, b);
+                rect = Bounds(strokes.SelectMany(s => Pairs(s)), pad: a.Width + 1);
+                extra = $"/InkList [{string.Join(' ', strokes.Select(s => "[" + string.Join(' ', s.Select(N)) + "]"))}] /BS << /W {N(a.Width)} >>";
+                stream = Appearance("Ink", [], strokes, r, g, b, a.Width);
                 break;
             }
             case "FreeText":
                 rect = a.Rect ?? [0, 0, 200, 40];
-                extra = $"/DA (/Helv 12 Tf 0 g) /IT /FreeTextTypeWriter /BS << /W 0 >> /IC {color}";
+                // The text in the chosen colour, on no background (as the Mac writes them since 1.4).
+                extra = $"/DA (/Helv {N(a.FontSize)} Tf {N(r)} {N(g)} {N(b)} rg) /IT /FreeTextTypeWriter /BS << /W 0 >>";
                 break;
             default:
                 rect = a.Rect ?? [0, 0, 20, 20];
@@ -471,7 +507,8 @@ public static partial class AnnotationWriter
             ap = $"/AP << /N {apNumber} 0 R >>";
         }
         var subtype = a.Subtype == "Note" ? "Text" : a.Subtype;
-        var body = new StringBuilder($"<< /Type /Annot /Subtype /{subtype} /Rect [{string.Join(' ', rect.Select(N))}] /C {color} /F 4 /NM {Str(name)} /M ({date}) /CreationDate ({date}) ");
+        var fill = subtype == "FreeText" ? "" : $"/C {color} ";
+        var body = new StringBuilder($"<< /Type /Annot /Subtype /{subtype} /Rect [{string.Join(' ', rect.Select(N))}] {fill}/F 4 /NM {Str(name)} /M ({date}) /CreationDate ({date}) ");
         if (a.Subtype == "Highlight") body.Append("/CA 0.5 ");
         if (a.Contents is { Length: > 0 } contents) body.Append("/Contents ").Append(Str(contents)).Append(' ');
         if (a.Author is { Length: > 0 } author) body.Append("/T ").Append(Str(author)).Append(' ');
@@ -480,7 +517,7 @@ public static partial class AnnotationWriter
     }
 
     /// <summary>The drawing of a markup or ink annotation in page coordinates.</summary>
-    static string? Appearance(string subtype, IReadOnlyList<double[]> quads, IReadOnlyList<double[]> strokes, double r, double g, double b)
+    static string? Appearance(string subtype, IReadOnlyList<double[]> quads, IReadOnlyList<double[]> strokes, double r, double g, double b, double width = 2)
     {
         var sb = new StringBuilder();
         switch (subtype)
@@ -499,7 +536,7 @@ public static partial class AnnotationWriter
                 }
                 break;
             case "Ink":
-                sb.Append(CultureInfo.InvariantCulture, $"{N(r)} {N(g)} {N(b)} RG 2 w 1 J 1 j ");
+                sb.Append(CultureInfo.InvariantCulture, $"{N(r)} {N(g)} {N(b)} RG {N(width)} w 1 J 1 j ");
                 foreach (var s in strokes)
                 {
                     for (int i = 0; i + 1 < s.Length; i += 2) sb.Append(CultureInfo.InvariantCulture, $"{N(s[i])} {N(s[i + 1])} {(i == 0 ? "m" : "l")} ");

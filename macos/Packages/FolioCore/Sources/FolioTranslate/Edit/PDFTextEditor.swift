@@ -320,7 +320,7 @@ public final class PDFTextEditor: @unchecked Sendable {
         let lowest = entry.layout.blocks.map(\.rect.minY).min() ?? entry.layout.mediaBox.minY + 36
         let floor = under.map(\.maxY).max().map { $0 + 2 } ?? min(lowest, rect.minY)
         return PDFParagraph(page: page, block: index, layoutBlock: block, formulas: parts.formulas, interpreter: entry.interpreter,
-                            mediaBox: entry.layout.mediaBox, floor: floor)
+                            mediaBox: entry.layout.mediaBox, floor: floor, document: cg)
     }
 
     /// The file with `paragraph`'s edits written in: only the lines that changed are drawn again, with the page's own

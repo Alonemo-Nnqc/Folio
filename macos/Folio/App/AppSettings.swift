@@ -95,6 +95,13 @@ final class AppSettings {
         static let readerLayout = "readerLayout"
         static let reopenReaderTabs = "reopenReaderTabs"
         static let highlightColor = "highlightColor"
+        static let annotationToolColors = "annotationToolColors"
+        static let annotationCustomColors = "annotationCustomColors"
+        static let inkLineWidth = "inkLineWidth"
+        static let textBoxFontSize = "textBoxFontSize"
+        static let returnToSelectAfterPlacing = "returnToSelectAfterPlacing"
+        static let rememberReadingPosition = "rememberReadingPosition"
+        static let showAnnotationTooltips = "showAnnotationTooltips"
         static let readerEraserSize = "readerEraserSize"
         static let useZoteroRecognizer = "useZoteroRecognizer"
         static let translationService = "translationService"
@@ -117,6 +124,7 @@ final class AppSettings {
         static let translationParallelJobs = "translationParallelJobs"
         static let selectionTranslationFallback = "selectionTranslationFallback"
         static let journalMetricsAutoFetch = "journalMetricsAutoFetch"
+        static let showTranslatedBadge = "showTranslatedBadge"
     }
 
     private let defaults: UserDefaults
@@ -139,8 +147,20 @@ final class AppSettings {
     var readerZoom: ReaderZoom { didSet { save(readerZoom.rawValue, Key.readerZoom) } }
     var readerLayout: ReaderLayout { didSet { save(readerLayout.rawValue, Key.readerLayout) } }
     var reopenReaderTabs: Bool { didSet { save(reopenReaderTabs, Key.reopenReaderTabs) } }
-    /// Name of the default highlight colour (see AnnotationColor).
-    var highlightColor: String { didSet { save(highlightColor, Key.highlightColor) } }
+    /// Each annotation tool's colour, chosen in its own menu on the toolbar: tool name → colour name (AnnotationColor).
+    var annotationToolColors: [String: String] { didSet { save(annotationToolColors, Key.annotationToolColors) } }
+    /// Colours mixed in the colour panel for annotations, newest first (at most five).
+    var annotationCustomColors: [String] { didSet { save(annotationCustomColors, Key.annotationCustomColors) } }
+    /// The pen's line width in points (手绘 ▸ 粗细).
+    var inkLineWidth: Double { didSet { save(inkLineWidth, Key.inkLineWidth) } }
+    /// The font size of new text boxes (文本框 ▸ 字号; 设置 ▸ 阅读).
+    var textBoxFontSize: Double { didSet { save(textBoxFontSize, Key.textBoxFontSize) } }
+    /// After placing a sticky note or a text box the reader goes back to the select tool (off: the tool stays on).
+    var returnToSelectAfterPlacing: Bool { didSet { save(returnToSelectAfterPlacing, Key.returnToSelectAfterPlacing) } }
+    /// Each paper opens where it was left (page and zoom); off: always at the top, at the zoom chosen below.
+    var rememberReadingPosition: Bool { didSet { save(rememberReadingPosition, Key.rememberReadingPosition) } }
+    /// Resting the pointer on a note or a commented highlight shows what it says.
+    var showAnnotationTooltips: Bool { didSet { save(showAnnotationTooltips, Key.showAnnotationTooltips) } }
     /// The reader's eraser size (READER-30): small, medium or large (see InkEraser.Size).
     var readerEraserSize: String { didSet { save(readerEraserSize, Key.readerEraserSize) } }
     var useZoteroRecognizer: Bool { didSet { save(useZoteroRecognizer, Key.useZoteroRecognizer) } }
@@ -209,6 +229,8 @@ final class AppSettings {
     var translationParallelJobs: Int { didSet { save(translationParallelJobs, Key.translationParallelJobs) } }
     /// 设置 ▸ 检索 ▸ 期刊指标: look up the ranks of new and changed items' journals by itself (META-30).
     var journalMetricsAutoFetch: Bool { didSet { save(journalMetricsAutoFetch, Key.journalMetricsAutoFetch) } }
+    /// 设置 ▸ 通用 ▸ 列表: the green "已翻译" badge after the title of papers that have a translation.
+    var showTranslatedBadge: Bool { didSet { save(showTranslatedBadge, Key.showTranslatedBadge) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -221,7 +243,11 @@ final class AppSettings {
             Key.readerZoom: ReaderZoom.fitWidth.rawValue,
             Key.readerLayout: ReaderLayout.single.rawValue,
             Key.reopenReaderTabs: true,
-            Key.highlightColor: "yellow",
+            Key.inkLineWidth: 2.0,
+            Key.textBoxFontSize: 13.0,
+            Key.returnToSelectAfterPlacing: true,
+            Key.rememberReadingPosition: true,
+            Key.showAnnotationTooltips: true,
             Key.useZoteroRecognizer: true,
             Key.markReadingOnOpen: true,
             Key.readerPageShadows: true,
@@ -235,6 +261,7 @@ final class AppSettings {
             Key.translationParallelJobs: 2,
             Key.selectionTranslationFallback: true,
             Key.journalMetricsAutoFetch: true,
+            Key.showTranslatedBadge: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -246,7 +273,24 @@ final class AppSettings {
         readerZoom = ReaderZoom(rawValue: defaults.string(forKey: Key.readerZoom) ?? "") ?? .fitWidth
         readerLayout = ReaderLayout(rawValue: defaults.string(forKey: Key.readerLayout) ?? "") ?? .single
         reopenReaderTabs = defaults.bool(forKey: Key.reopenReaderTabs)
-        highlightColor = defaults.string(forKey: Key.highlightColor) ?? "yellow"
+        var toolColors = defaults.dictionary(forKey: Key.annotationToolColors) as? [String: String] ?? [:]
+        // 设置 ▸ 阅读 ▸ 默认高亮颜色 (before 1.4) becomes the highlighter's colour.
+        if toolColors["highlight"] == nil, let old = defaults.string(forKey: Key.highlightColor) { toolColors["highlight"] = old }
+        // 删除线 is black by default since 1.3.1; a red one from before (the old default) becomes black once.
+        if !defaults.bool(forKey: "annotationStrikeOutBlack") {
+            if toolColors["strikeOut"] == "red" {
+                toolColors["strikeOut"] = nil
+                defaults.set(toolColors, forKey: Key.annotationToolColors)
+            }
+            defaults.set(true, forKey: "annotationStrikeOutBlack")
+        }
+        annotationToolColors = toolColors
+        annotationCustomColors = defaults.stringArray(forKey: Key.annotationCustomColors) ?? []
+        inkLineWidth = defaults.double(forKey: Key.inkLineWidth)
+        textBoxFontSize = defaults.double(forKey: Key.textBoxFontSize)
+        returnToSelectAfterPlacing = defaults.bool(forKey: Key.returnToSelectAfterPlacing)
+        rememberReadingPosition = defaults.bool(forKey: Key.rememberReadingPosition)
+        showAnnotationTooltips = defaults.bool(forKey: Key.showAnnotationTooltips)
         readerEraserSize = defaults.string(forKey: Key.readerEraserSize) ?? "medium"
         useZoteroRecognizer = defaults.bool(forKey: Key.useZoteroRecognizer)
         // Services of the old pdf2zh_next engine that are gone map to their replacement.
@@ -270,6 +314,7 @@ final class AppSettings {
         selectionTranslationFallback = defaults.bool(forKey: Key.selectionTranslationFallback)
         translationParallelJobs = defaults.integer(forKey: Key.translationParallelJobs)
         journalMetricsAutoFetch = defaults.bool(forKey: Key.journalMetricsAutoFetch)
+        showTranslatedBadge = defaults.bool(forKey: Key.showTranslatedBadge)
         backgroundTranslucency = min(1, max(0, defaults.double(forKey: Key.backgroundTranslucency)))
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.

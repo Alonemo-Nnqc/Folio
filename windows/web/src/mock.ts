@@ -55,7 +55,7 @@ const library = () => ({
 });
 
 const settings: Record<string, unknown> = {
-  libraryPath: "/Users/demo/Folio", openWithMode: "folio", includeSubgroupItems: true, autoRenameFiles: true, autoPurgeTrash: true, readerZoom: "fitWidth", readerLayout: "single", reopenReaderTabs: true,
+  libraryPath: "/Users/demo/Folio", openWithMode: "folio", includeSubgroupItems: true, showTranslatedBadge: true, autoRenameFiles: true, autoPurgeTrash: true, readerZoom: "fitWidth", readerLayout: "single", reopenReaderTabs: true,
   highlightColor: "yellow", useZoteroRecognizer: true, markReadingOnOpen: true, readerPageShadows: true, annotationAuthor: "demo", autoRetrieveOnImport: true, aiAllowWrites: true, browserConnectorEnabled: true,
   appearance: "system", language: "", citationStyle: "gbt7714", autoCheckUpdates: true, updatePrereleases: false, onboardingDone: true, openReaderTabs: [], columnWidths: {}, visibleColumns: ["title", "source", "authors", "year", "journalRank", "impactFactor", "tags", "dateAdded"],
   sidebarWidth: 210, inspectorWidth: 270, inspectorVisible: true, sidebarVisible: true, settingsPane: "general", readerSidebarWidth: 220,
@@ -66,13 +66,22 @@ export async function mockCall(method: string, params: any): Promise<any> {
     case "app.boot": return {
       isEnglish: false, settings, version: "1.0.0", channel: "win-x64", captionWidth: 138, windowState: "normal", library: library(), jobs: {},
       rows: { rows: ["s0", ...items.map((_, i) => `i${i}`)], scope: "all", searchText: "", sortAscending: true },
-      annotationColors: [{ key: "yellow", title: "黄色", hex: "#FFD933" }, { key: "green", title: "绿色", hex: "#73D966" }, { key: "blue", title: "蓝色", hex: "#66B3FF" }, { key: "pink", title: "粉色", hex: "#FF8CBF" }, { key: "purple", title: "紫色", hex: "#BF8CFF" }, { key: "red", title: "红色", hex: "#FF5959" }],
+      annotationColors: [{ key: "yellow", title: "黄色", hex: "#FFD933" }, { key: "green", title: "绿色", hex: "#73D966" }, { key: "blue", title: "蓝色", hex: "#66B3FF" }, { key: "pink", title: "粉色", hex: "#FF8CBF" }, { key: "purple", title: "紫色", hex: "#BF8CFF" }, { key: "red", title: "红色", hex: "#FF5959" }, { key: "orange", title: "橙色", hex: "#FF9E33" }, { key: "black", title: "黑色", hex: "#1C1C1F" }],
       tagPresets: [["红", "#FF3B30"], ["橙", "#FF9500"], ["黄", "#FFCC00"], ["绿", "#34C759"], ["薄荷", "#00C7BE"], ["青", "#32ADE6"], ["蓝", "#007AFF"], ["靛", "#5856D6"], ["紫", "#AF52DE"], ["粉", "#FF2D55"]].map(([name, hex]) => ({ name, hex })),
       citationStyles: [{ raw: "gbt7714", name: "GB/T 7714-2015" }, { raw: "apa", name: "APA" }, { raw: "ieee", name: "IEEE" }],
       referenceFormats: [{ raw: "bibtex", name: "BibTeX" }, { raw: "ris", name: "RIS" }],
       itemTypes: [{ raw: "journalArticle", name: "期刊论文" }, { raw: "preprint", name: "预印本" }],
       statuses: [{ raw: 0, name: "未读" }, { raw: 1, name: "在读" }, { raw: 2, name: "已读" }], homeFolder: "/Users/demo", userName: "demo",
     };
+    case "glossary.list": case "glossary.import": return { language: params?.language, terms: mockTerms };
+    case "glossary.save": {
+      const hit = mockTerms.find((x) => x.id === params.id);
+      if (hit) Object.assign(hit, params.source !== undefined && { source: params.source, extracted: false }, params.target !== undefined && { target: params.target, extracted: false }, params.enabled !== undefined && { enabled: params.enabled });
+      else mockTerms.push({ id: String(Date.now()), source: params.source, target: params.target, enabled: true, extracted: false });
+      return { language: params.language, terms: [...mockTerms] };
+    }
+    case "glossary.remove": mockTerms = mockTerms.filter((x) => !params.ids.includes(x.id)); return { language: params.language, terms: mockTerms };
+    case "glossary.export": return true;
     case "translation.services": return { groups: [{ title: "免费", services: [{ id: "google", label: "Google 翻译" }] }], current: "google", languages: [{ code: "en", name: "英语" }, { code: "zh", name: "简体中文" }], options: { langIn: "en", langOut: "zh", outputs: "both", dualLayout: "sideBySide", translateTables: true, translateReferences: false, translateImageText: false, duplicates: "keepBoth", ignoreCache: false }, detail: { id: "google", name: "Google 翻译", category: "free", isAgent: false, supportsProfiles: false, profiles: [], fields: [], advanced: [] } };
     case "ai.detect": return [{ id: "claude", name: "Claude Code", location: "~/.local/bin/claude", version: "2.1", mcp: false, skill: false, mcpAvailable: true, skillAvailable: true, skillNote: "" }];
     case "ai.info": return { cliPath: "C:\\Program Files\\Folio\\folio-cli.exe", cliExists: true, catalog: "Claude Code" };
@@ -89,3 +98,11 @@ export async function mockCall(method: string, params: any): Promise<any> {
     default: return null;
   }
 }
+
+let mockTerms: any[] = [
+  { id: "1", source: "domain generalization", target: "域泛化", enabled: true, extracted: false },
+  { id: "2", source: "semantic segmentation", target: "语义分割", enabled: true, extracted: true, paper: "A Simple Recipe for Language-guided Domain Generalized Segmentation" },
+  { id: "3", source: "style augmentation", target: "风格增强", enabled: true, extracted: true, paper: "A Simple Recipe for Language-guided Domain Generalized Segmentation" },
+  { id: "4", source: "fine-tuning", target: "微调", enabled: false, extracted: true, paper: "A Simple Recipe for Language-guided Domain Generalized Segmentation" },
+  { id: "5", source: "curvilinear structure", target: "曲线结构", enabled: true, extracted: true, paper: "Dual-level Adapter Boosting Prompt-free Curvilinear Structure Segmentation" },
+];

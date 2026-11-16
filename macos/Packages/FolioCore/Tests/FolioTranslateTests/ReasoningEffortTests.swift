@@ -18,8 +18,9 @@ import Testing
         guard case let .choices(gpt6, d6) = ReasoningEffort.support(serviceID: "openaicompatible", fields: ["--openai-compatible-model": "gpt-6.1-sol"]) else {
             Issue.record("gpt-6 reasons"); return
         }
-        #expect(gpt6.map(\.value) == ["minimal", "low", "medium", "high", "xhigh"] && d6 == "medium")
-        #expect(d5 == "medium")
+        #expect(gpt6.map(\.value) == ["minimal", "low", "medium", "high", "xhigh"] && d6 == "low")
+        // Low unless the user raises it: translating needs little deliberation.
+        #expect(d5 == "low")
         guard case let .choices(o3, _) = ReasoningEffort.support(serviceID: "openai", fields: ["--openai-model": "o3"]) else {
             Issue.record("o3 should reason"); return
         }
@@ -31,9 +32,16 @@ import Testing
         } else { Issue.record("deepseek") }
     }
 
-    @Test func defaultMediumIsSentForReasoningModels() throws {
-        let extra = try body("openai", ["--openai-model": "gpt-5"], secrets: ["--openai-api-key": "k"])
-        #expect(extra["reasoning_effort"] as? String == "medium")
+    @Test func theUsualLowLevelIsSentForReasoningModels() throws {
+        let provider = try ProviderFactory.make(serviceID: "openai", fields: ["--openai-model": "gpt-5"], secrets: ["--openai-api-key": "k"], concurrency: nil)
+        let chat = try #require(provider as? OpenAIChatProvider)
+        #expect(chat.extraBody["reasoning_effort"] as? String == "low")
+        // Folio's own idea, so a model that does not take it goes without; a level the user chose is theirs.
+        #expect(chat.optional.contains("reasoning_effort"))
+        let chosen = try ProviderFactory.make(serviceID: "openai", fields: ["--openai-model": "gpt-5", "--openai-reasoning-effort": "high"],
+                                              secrets: ["--openai-api-key": "k"], concurrency: nil)
+        #expect((chosen as? OpenAIChatProvider)?.optional.contains("reasoning_effort") == false)
+        #expect((chosen as? OpenAIChatProvider)?.extraBody["reasoning_effort"] as? String == "high")
     }
 
     @Test func nothingIsSentForModelsThatCannotReason() throws {

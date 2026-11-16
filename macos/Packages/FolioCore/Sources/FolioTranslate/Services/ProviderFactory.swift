@@ -68,9 +68,17 @@ enum ProviderFactory {
             default: break
             }
             let temperatureOption = service.fields.first { $0.title == "Temperature" }?.option
-            let temperature = temperatureOption.flatMap { fields[$0] }.flatMap(Double.init) ?? (extra["reasoning_effort"] == nil ? 0.2 : nil)
+            let chosenTemperature = temperatureOption.flatMap { fields[$0] }.flatMap(Double.init)
+            let temperature = chosenTemperature ?? (extra["reasoning_effort"] == nil ? 0.2 : nil)
+            // What the user did not choose is Folio's own idea, and goes when a model or server does not take it.
+            var optional: Set<String> = []
+            if chosenTemperature == nil { optional.insert("temperature") }
+            if extra["think"] != nil { optional.insert("think") }
+            if extra["reasoning_effort"] != nil, ReasoningEffort.option(for: serviceID).flatMap({ fields[$0] })?.isEmpty != false {
+                optional.insert("reasoning_effort")
+            }
             provider = OpenAIChatProvider(endpoint: endpoint, apiKey: key, model: try required(modelOption ?? ""), temperature: temperature,
-                                          extraBody: extra,
+                                          extraBody: extra, optional: optional,
                                           limits: local ? ProviderLimits(batchCharacters: 1800, batchItems: 20, concurrency: 2, usesContext: true, startupSeconds: 2, secondsPerCharacter: 0.04)
                                                         : ProviderLimits(batchCharacters: 2600, batchItems: 30, concurrency: 8, usesContext: true))
         case .azureOpenAI:
@@ -112,8 +120,13 @@ enum ProviderFactory {
                 throw TranslationConfigurationError.agentNotFound(agent.command)
             }
             var model = modelOption.flatMap(value)
-            // CodeBuddy without a model chosen: a quick one of the account's, not its own default (minutes a page).
-            if agent == .codebuddy, model?.isEmpty != false { model = CodeBuddyAccount.quickModel(among: CodeBuddyAccount.models()) }
+            // CodeBuddy without a model chosen, or with one its account no longer offers: a quick one of the account's
+            // (`modelCheck` says so to the user). CodeBuddy takes any name without complaint and answers with a model of
+            // its own choosing that thinks at length: four minutes for one batch the quick models do in 15 to 20 s.
+            if agent == .codebuddy {
+                if let check = ModelCheck.check(serviceID: serviceID, fields: fields) { model = check.replacement }
+                else if model?.isEmpty != false { model = CodeBuddyAccount.quickModel(among: CodeBuddyAccount.models()) }
+            }
             provider = AgentProvider(agent: agent, executable: executable, model: model,
                                      effort: ReasoningEffort.agentEffort(serviceID: serviceID, fields: fields))
         case .command:
@@ -122,6 +135,31 @@ enum ProviderFactory {
         }
         if let concurrency, concurrency > 0 { provider = ConcurrencyOverride(base: provider, concurrency: concurrency) }
         return provider
+    }
+}
+
+/// A model name the service no longer offers, and the one used instead.
+public struct ModelCheck: Sendable, Equatable {
+    /// The name saved in the settings.
+    public var saved: String
+    /// What the service offers now.
+    public var offered: [String]
+    /// The model translations use instead (nil: the service's own default).
+    public var replacement: String?
+}
+
+extension ModelCheck {
+    /// Whether the model saved for `serviceID` is one the service still offers, for the services that take any name
+    /// without complaint (CodeBuddy: it answers with a model of its own choosing). nil when it is, or cannot be told.
+    /// Services that say so themselves (an API answering "model not found", a command that refuses the name) are not
+    /// checked here: their own message reaches the user.
+    public static func check(serviceID: String, fields: [String: String]) -> ModelCheck? {
+        guard let service = TranslationServiceCatalog.service(id: serviceID), case .agent(.codebuddy) = service.backend,
+              let option = service.fields.first(where: { $0.title == TranslationServiceCatalog.modelFieldTitle })?.option,
+              let saved = fields[option]?.trimmingCharacters(in: .whitespacesAndNewlines), !saved.isEmpty else { return nil }
+        let offered = CodeBuddyAccount.models()
+        guard !offered.isEmpty, !offered.contains(saved) else { return nil }
+        return ModelCheck(saved: saved, offered: offered, replacement: CodeBuddyAccount.quickModel(among: offered))
     }
 }
 
@@ -145,4 +183,6 @@ struct ConcurrencyOverride: TranslationProvider {
     }
 
     func prewarm() async { await base.prewarm() }
+
+    var modelName: String? { base.modelName }
 }

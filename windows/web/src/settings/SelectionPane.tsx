@@ -9,7 +9,7 @@ import { ServiceLogo } from "../ui/serviceLogo";
 import { Card, Header, Row } from "./parts";
 import { ShortcutRecorder } from "./TranslationPane";
 
-/** 设置 ▸ 划词翻译: a selection in the reader translated in a popover, by its own service. */
+/** 设置 ▸ 阅读 ▸ 划词翻译 (a pane of its own before 1.4): a selection in the reader translated in a popover, by its own service. */
 export function SelectionTranslationPane() {
   const s = useStore((x) => x.settings);
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
@@ -29,16 +29,17 @@ export function SelectionTranslationPane() {
   ]);
   return (
     <>
+      <Header>{t("划词翻译")}</Header>
       <Card><Row title={t("划词翻译")}><Switch on={enabled} onChange={(v) => setSetting("selectionTranslationEnabled", v)} /></Row></Card>
       <div className={enabled ? undefined : "set-disabled"}>
-        <Header>{t("使用")}</Header>
+        <div style={{ height: 12 }} />
         <Card>
           <Row title={t("触发方式")}><Select value={s.selectionTranslationTrigger ?? "button"} options={[
             { value: "button", label: t("选中后显示翻译按钮") }, { value: "automatic", label: t("选中后自动翻译") }, { value: "shortcut", label: t("仅使用快捷键") },
           ]} onChange={(v) => setSetting("selectionTranslationTrigger", v)} /></Row>
           <Row title={t("快捷键")}><ShortcutRecorder value={s.selectionTranslationShortcut || "Alt+D"} onChange={(v) => setSetting("selectionTranslationShortcut", v)} /></Row>
         </Card>
-        <Header>{t("服务")}</Header>
+        <Header>{t("划词翻译服务")}</Header>
         <Card>
           <Row title={t("翻译服务")}>
             <button className="btn service-picker" onClick={(e) => pick(e.currentTarget)}><ServiceLogo id={shown} size={17} /><span className="label">{name}</span><ChevronDown size={13} className="secondary" /></button>

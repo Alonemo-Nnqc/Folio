@@ -294,7 +294,6 @@ public sealed partial class AppModel : IImportUi
         SelectionChanged?.Invoke();
     }
 
-    public Item? SelectedItem => SelectedItemIds.Count == 1 ? Snapshot.Items.GetValueOrDefault(SelectedItemIds[0]) : null;
 
     public void Sort(SortColumn? column, bool ascending)
     {

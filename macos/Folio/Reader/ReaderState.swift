@@ -47,6 +47,35 @@ enum AnnotationTool: Int, CaseIterable {
         }
     }
 
+    /// The tool's name where its colour is remembered (设置: annotationToolColors).
+    var key: String { String(describing: self) }
+
+    /// The colours the tool offers, its usual one first. Tools without a colour (select, eraser) offer none.
+    var palette: [AnnotationColor] {
+        switch self {
+        case .highlight, .note: [.yellow, .green, .blue, .pink, .purple, .orange]
+        case .underline: [.red, .blue, .green, .purple, .orange, .black]
+        case .strikeOut: [.black, .red, .blue, .green, .purple, .orange]
+        case .text, .ink: [.black, .red, .blue, .green, .purple, .orange]
+        case .select, .eraser: []
+        }
+    }
+
+    var hasColor: Bool { !palette.isEmpty }
+
+    /// The tool that makes annotations of a PDF type (for the palette offered when one is recoloured).
+    static func forAnnotationType(_ type: String?) -> AnnotationTool? {
+        switch type {
+        case "Highlight": .highlight
+        case "Underline", "Squiggly": .underline
+        case "StrikeOut": .strikeOut
+        case "Text": .note
+        case "FreeText": .text
+        case "Ink": .ink
+        default: nil
+        }
+    }
+
     /// Tools that turn a text selection into markup.
     var markupType: PDFAnnotationSubtype? {
         switch self {
@@ -121,6 +150,8 @@ struct AnnotationRow: Identifiable, Equatable {
     let color: NSColor
     let text: String
     let comment: String
+    /// Wholly outside the page's visible area (ink run off its edge): it shows nowhere.
+    var isOffPage = false
 }
 
 /// One find result as listed in the sidebar.
@@ -143,7 +174,10 @@ struct OutlineRow: Identifiable {
 @Observable
 final class ReaderState {
     var tool = AnnotationTool.select
-    var color: AnnotationColor
+    /// Each tool's colour (a preset's name or "#RRGGBB"), remembered from one paper to the next.
+    var colors: [AnnotationTool: String]
+    /// Colours mixed in the colour panel, newest first: every tool offers them after its presets.
+    var customColors: [String] = []
     var eraserSize: InkEraser.Size
     var sidebarTab = ReaderSidebarTab.thumbnails
     var pageIndex = 0
@@ -157,8 +191,28 @@ final class ReaderState {
     /// The mono/dual translation shown next to the original, when 对照阅读 is on (READER-10).
     var parallelFileId: String?
 
-    init(color: AnnotationColor, eraserSize: InkEraser.Size) {
-        self.color = color
+    init(colors: [AnnotationTool: String], customColors: [String], eraserSize: InkEraser.Size) {
+        self.colors = colors
+        self.customColors = customColors
         self.eraserSize = eraserSize
+    }
+
+    /// The tool's colour: the one chosen for it, else its usual one.
+    func color(for tool: AnnotationTool) -> ToolColor {
+        if let key = colors[tool] {
+            let chosen = ToolColor(key: key)
+            if chosen.preset.map(tool.palette.contains) ?? chosen.isValid { return chosen }
+        }
+        return ToolColor(tool.palette.first ?? .yellow)
+    }
+
+    /// The colours a tool offers: its presets, then the colours mixed lately (and its own, if it is another).
+    func choices(for tool: AnnotationTool) -> [ToolColor] {
+        let presets = tool.palette.map(ToolColor.init)
+        // A mixed colour that is (nearly) one of the tool's own is not offered twice.
+        var list = presets + customColors.map { ToolColor(key: $0) }.filter { $0.isValid && ToolColor.matching($0.nsColor, in: presets) == nil }
+        let current = color(for: tool)
+        if !list.contains(current) { list.append(current) }
+        return list
     }
 }

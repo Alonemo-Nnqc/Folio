@@ -62,25 +62,35 @@ final class SettingsWindowController: NSWindowController {
     /// Opens a given pane by title (preview hooks, "打开设置" buttons). Old pane names map to where
     /// their settings live now.
     func select(pane title: String) {
-        let moved = [String(localized: "外观"): String(localized: "通用"), String(localized: "导入"): String(localized: "文献库")]
+        let moved = [String(localized: "外观"): String(localized: "通用"), String(localized: "导入"): String(localized: "文献库"),
+                     String(localized: "检索"): String(localized: "文献库"), String(localized: "划词翻译"): String(localized: "阅读")]
         let target = moved[title] ?? title
-        if let pane = SettingsPane.allCases.first(where: { $0.title == target || $0.rawValue == target }) { navigation.pane = pane }
+        if let pane = SettingsPane.allCases.first(where: { $0.title == target || $0.rawValue == target }) ?? SettingsPane.moved(title) {
+            navigation.pane = pane
+        }
     }
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, reading, library, retrieval, translation, selectionTranslation, browser, ai
+    case general, reading, library, translation, browser, ai
 
     var id: String { rawValue }
+
+    /// Panes that were merged into others (1.4): 检索 into 文献库, 划词翻译 into 阅读.
+    static func moved(_ name: String) -> SettingsPane? {
+        switch name {
+        case "retrieval": .library
+        case "selectionTranslation": .reading
+        default: nil
+        }
+    }
 
     var title: String {
         switch self {
         case .general: String(localized: "通用")
         case .reading: String(localized: "阅读")
         case .library: String(localized: "文献库")
-        case .retrieval: String(localized: "检索")
         case .translation: String(localized: "翻译")
-        case .selectionTranslation: String(localized: "划词翻译")
         case .browser: String(localized: "浏览器")
         case .ai: "AI"
         }
@@ -92,9 +102,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .reading: "book"
         case .library: "books.vertical"
-        case .retrieval: "magnifyingglass"
         case .translation: "character.book.closed"
-        case .selectionTranslation: "translate"
         case .browser: "safari"
         case .ai: "sparkles"
         }
@@ -103,7 +111,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
 @Observable
 final class SettingsNavigation {
-    var pane: SettingsPane = SettingsPane(rawValue: UserDefaults.standard.string(forKey: "settingsPane") ?? "") ?? .general {
+    var pane: SettingsPane = SettingsPane(rawValue: UserDefaults.standard.string(forKey: "settingsPane") ?? "")
+        ?? SettingsPane.moved(UserDefaults.standard.string(forKey: "settingsPane") ?? "") ?? .general {
         didSet { UserDefaults.standard.set(pane.rawValue, forKey: "settingsPane") }
     }
 }
@@ -130,11 +139,9 @@ struct SettingsRootView: View {
     private var detail: some View {
         switch navigation.pane {
         case .general: GeneralSettings(settings: model.settings, model: model)
-        case .reading: ReadingSettings(settings: model.settings)
+        case .reading: ReadingSettings(model: model)
         case .library: LibrarySettings(model: model)
-        case .retrieval: RetrievalSettings(settings: model.settings, model: model)
         case .translation: TranslationSettingsPane(model: model)
-        case .selectionTranslation: SelectionTranslationSettingsPane(model: model)
         case .browser: BrowserSettingsPane(model: model)
         case .ai: AISettingsPane(settings: model.settings)
         }
@@ -235,38 +242,18 @@ struct GeneralSettings: View {
                     }
                 }
             }
-            Section("打开") {
-                Picker("打开 PDF 时使用", selection: $settings.openWith) {
-                    ForEach(AppSettings.OpenWith.allCases) { Text($0.title).tag($0) }
-                }
-                if settings.openWith == .custom {
-                    LabeledContent("应用") {
-                        HStack {
-                            Text(settings.openWithAppPath.isEmpty ? String(localized: "未选择")
-                                 : FileManager.default.displayName(atPath: settings.openWithAppPath))
-                                .foregroundStyle(.secondary)
-                            Button("选择…", action: chooseApp)
-                        }
-                    }
-                }
-                Toggle("打开未读的论文时，标为\"在读\"", isOn: $settings.markReadingOnOpen)
-                Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
-            }
             Section("列表") {
                 Toggle("父分组中显示子分组的条目", isOn: $settings.includeSubgroupItems)
                 .onChange(of: settings.includeSubgroupItems) { model.recompute() }
+                Toggle(isOn: $settings.showTranslatedBadge) {
+                    Text("显示“已翻译”标签")
+                    Text("有译文的论文，标题后显示绿色的“已翻译”标签")
+                }
             }
             LanguageSettingsSection()
             UpdateSettingsSection(updater: AppDelegate.shared.updater)
         }
         .formStyle(.grouped)
-    }
-
-    private func chooseApp() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.application]
-        panel.directoryURL = URL(filePath: "/Applications")
-        if panel.runModal() == .OK, let url = panel.url { settings.openWithAppPath = url.path }
     }
 }
 
@@ -348,12 +335,34 @@ private struct UpdateSettingsSection: View {
 }
 
 struct ReadingSettings: View {
-    @Bindable var settings: AppSettings
+    let model: AppModel
 
     var body: some View {
+        @Bindable var settings = model.settings
         Form {
+            Section("打开") {
+                Picker("打开 PDF 时使用", selection: $settings.openWith) {
+                    ForEach(AppSettings.OpenWith.allCases) { Text($0.title).tag($0) }
+                }
+                if settings.openWith == .custom {
+                    LabeledContent("应用") {
+                        HStack {
+                            Text(settings.openWithAppPath.isEmpty ? String(localized: "未选择")
+                                 : FileManager.default.displayName(atPath: settings.openWithAppPath))
+                                .foregroundStyle(.secondary)
+                            Button("选择…", action: chooseApp)
+                        }
+                    }
+                }
+                Toggle("打开未读的论文时，标为\"在读\"", isOn: $settings.markReadingOnOpen)
+                Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
+                Toggle(isOn: $settings.rememberReadingPosition) {
+                    Text("记住每篇论文的阅读位置")
+                    Text("再次打开时回到上次读到的页面和缩放")
+                }
+            }
             Section("页面") {
-                Picker("首次打开时的缩放", selection: $settings.readerZoom) {
+                Picker(settings.rememberReadingPosition ? "首次打开时的缩放" : "打开时的缩放", selection: $settings.readerZoom) {
                     ForEach(AppSettings.ReaderZoom.allCases) { Text($0.title).tag($0) }
                 }
                 Picker("显示方式", selection: $settings.readerLayout) {
@@ -361,21 +370,31 @@ struct ReadingSettings: View {
                 }
                 Toggle("显示页面阴影", isOn: $settings.readerPageShadows)
             }
-            Section("批注") {
-                LabeledContent("默认高亮颜色") {
-                    ColorSwatchRow(hex: Binding(
-                        get: { AnnotationColor(rawValue: settings.highlightColor)?.nsColor.hexString },
-                        set: { hex in
-                            if let match = AnnotationColor.allCases.first(where: { $0.nsColor.hexString == hex }) {
-                                settings.highlightColor = match.rawValue
-                            }
-                        }),
-                        presets: AnnotationColor.allCases.map { ($0.title, $0.nsColor.hexString) }, allowsCustom: false)
-                }
+            Section {
                 TextField("批注作者", text: $settings.annotationAuthor, prompt: Text(NSFullUserName()))
+                Picker("文本框字号", selection: $settings.textBoxFontSize) {
+                    ForEach(AnnotationToolOptions.textSizes, id: \.size) { Text("\($0.title)（\(Int($0.size)) pt）").tag($0.size) }
+                }
+                Toggle(isOn: $settings.returnToSelectAfterPlacing) {
+                    Text("添加便签或文本框后回到选择工具")
+                    Text("关闭后可以连续添加多个")
+                }
+                Toggle("指针停留时显示便签和评论的内容", isOn: $settings.showAnnotationTooltips)
+            } header: {
+                Text("批注")
+            } footer: {
+                Text("点一下工具即可使用；再点一次已选中的工具，选择它的颜色和样式（也可以自定义颜色）。")
             }
+            SelectionTranslationSettingsSections(model: model)
         }
         .formStyle(.grouped)
+    }
+
+    private func chooseApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(filePath: "/Applications")
+        if panel.runModal() == .OK, let url = panel.url { model.settings.openWithAppPath = url.path }
     }
 }
 
@@ -411,6 +430,7 @@ struct LibrarySettings: View {
                 Toggle("检索到元数据后按「作者_年份_标题」重命名文件", isOn: $settings.autoRenameFiles)
                 Toggle("自动彻底删除回收站中超过 30 天的内容", isOn: $settings.autoPurgeTrash)
             }
+            RetrievalSettingsSections(settings: settings, model: model)
             Section {
                 LabeledContent("Zotero") {
                     Button("从 Zotero 导入…") {
@@ -450,13 +470,14 @@ struct LibrarySettings: View {
     }
 }
 
-struct RetrievalSettings: View {
+/// 文献库 ▸ 元数据检索 and 期刊指标 (a pane of their own, 检索, before 1.4).
+struct RetrievalSettingsSections: View {
     @Bindable var settings: AppSettings
     let model: AppModel
 
     var body: some View {
-        Form {
-            Section {
+        Group {
+            Section("元数据检索") {
                 Toggle("添加 PDF 后自动检索元数据", isOn: $settings.autoRetrieveOnImport)
                 Toggle(isOn: $settings.useZoteroRecognizer) {
                     Text("使用 Zotero 识别服务")
@@ -471,7 +492,6 @@ struct RetrievalSettings: View {
             }
             JournalMetricsSettingsSection(settings: settings, coordinator: model.journalMetrics)
         }
-        .formStyle(.grouped)
         .onChange(of: settings.crossrefMailto) { model.refreshResolver() }
         .onChange(of: settings.openAlexAPIKey) { model.refreshResolver() }
         .onChange(of: settings.useZoteroRecognizer) { model.refreshResolver() }

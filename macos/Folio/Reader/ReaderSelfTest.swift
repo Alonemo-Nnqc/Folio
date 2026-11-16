@@ -38,7 +38,7 @@ enum ReaderSelfTest {
             check(count() == before + 1, "highlight added")
             // Separate run-loop turns, like separate clicks: one undo step each.
             try? await Task.sleep(for: .milliseconds(100))
-            reader.state.color = .blue
+            reader.state.colors[.highlight] = AnnotationColor.blue.rawValue
             step { editor.addInk(points: [NSPoint(x: 100, y: 100), NSPoint(x: 140, y: 130), NSPoint(x: 180, y: 110)], on: page) }
             try? await Task.sleep(for: .milliseconds(100))
             let note = PDFAnnotation(bounds: NSRect(x: 300, y: 300, width: 20, height: 20), forType: .text, withProperties: nil)
@@ -46,6 +46,12 @@ enum ReaderSelfTest {
             step { editor.add(note, to: page) }
             check(count() == before + 3, "ink and note added")
             check(reader.state.annotations.count >= 3, "sidebar lists annotations (\(reader.state.annotations.count))")
+            check(page.annotations.contains { $0 is InkAnnotation }, "ink is drawn by the reader (sharp)")
+            check(CrispDrawing.isActive, "the reader draws notes, text boxes and ink itself")
+            // A stroke run off the page's edge keeps only what is on the page.
+            let box = page.bounds(for: .cropBox)
+            let runs = AnnotationEditor.runs(of: [NSPoint(x: box.maxX - 20, y: 200), NSPoint(x: box.maxX + 30, y: 200), NSPoint(x: box.maxX + 30, y: 260), NSPoint(x: box.maxX - 20, y: 260)], inside: box)
+            check(runs.count == 2 && runs.flatMap { $0 }.allSatisfy { $0.x <= box.maxX + 0.001 }, "ink off the page's edge is cut at the edge (\(runs))")
 
             // Undo / redo through the window's undo manager (⌘Z / ⇧⌘Z).
             try? await Task.sleep(for: .milliseconds(100))
@@ -64,6 +70,9 @@ enum ReaderSelfTest {
             check(types.contains("Highlight") && types.contains("Ink") && types.contains("Text"),
                   "annotations are in the file: \(types)")
             check(reopened?.page(at: 0)?.annotations.contains { $0.contents == "Folio 自测便签" } == true, "note text saved")
+            // Every other reader draws an annotation from its picture: one left empty showed nowhere.
+            let empty = reopened?.page(at: 0).map { AppearanceRepair.emptyAppearances(on: $0).map(\.subtype) } ?? ["?"]
+            check(empty.isEmpty, "notes, text boxes and ink are saved with their pictures (empty: \(empty))")
             let hidden = (try? FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path))?
                 .filter { $0.contains("folio-saving") } ?? []
             check(hidden.isEmpty, "no temporary files left")
@@ -83,6 +92,11 @@ enum ReaderSelfTest {
             let current = again?.pdfView.currentPage.flatMap { again?.pdfView.document?.index(for: $0) }
             check(current == target, "position restored (page \((current ?? -1) + 1))")
             check(again?.state.annotations.count == reader.state.annotations.count, "annotations reload with the file")
+            let reloaded = again?.pdfView.document?.page(at: 0)?.annotations ?? []
+            check(reloaded.contains { $0 is InkAnnotation } && reloaded.contains { $0 is NoteAnnotation }, "reopened ink and notes are the reader's own classes")
+            // Ink read from the file is drawn opaque (it was drawn fully transparent: invisible, yet in the list).
+            let opacities = reloaded.compactMap { ($0 as? InkAnnotation)?.opacity }
+            check(!opacities.isEmpty && opacities.allSatisfy { $0 > 0.99 }, "reopened ink is drawn opaque (\(opacities))")
 
             // Library follows the file: fingerprint updated, item marked as being read.
             try? await Task.sleep(for: .seconds(1))
