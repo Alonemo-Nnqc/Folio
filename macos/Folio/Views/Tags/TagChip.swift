@@ -8,7 +8,8 @@ struct TagChip: View {
     var onRemove: (() -> Void)?
 
     var body: some View {
-        CapsuleText(text: tag.name, tint: NSColor(hex: tag.colorHex), maxTextWidth: TagChipsView.maxChipWidth - 2 * CapsuleLabel.tagPadding) {
+        CapsuleText(text: tag.name, tint: NSColor(hex: tag.colorHex), dot: true,
+                    maxTextWidth: TagChipsView.maxChipWidth - 2 * CapsuleLabel.tagPadding - CapsuleLabel.dotSpace) {
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
@@ -40,15 +41,23 @@ struct CapsuleText<Trailing: View>: View {
     var font = CapsuleLabel.tagFont
     var height = CapsuleLabel.tagHeight
     var padding = CapsuleLabel.tagPadding
+    /// A tag: a capsule led by its colour dot. Otherwise a badge, a small rounded rectangle.
+    var dot = false
     var maxTextWidth: CGFloat = .infinity
     @ViewBuilder var trailing: () -> Trailing
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         let dark = colorScheme == .dark
         let textColor = CapsuleLabel.textColor(resolved(tint), dark: dark)
         HStack(spacing: 3) {
+            if dot {
+                Circle()
+                    .fill(Color(nsColor: tint))
+                    .frame(width: CapsuleLabel.dotSize, height: CapsuleLabel.dotSize)
+                    .padding(.leading, -1)
+                    .padding(.trailing, 1)
+            }
             Image(nsImage: CapsuleLabel.textImage(text, font: font, color: textColor, height: height, maxWidth: maxTextWidth))
                 .accessibilityLabel(text)
             trailing()
@@ -56,8 +65,8 @@ struct CapsuleText<Trailing: View>: View {
         }
         .padding(.horizontal, padding)
         .frame(height: height)
-        .background(Color(nsColor: tint).opacity(dark ? 0.26 : 0.16), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color(nsColor: tint).opacity(dark ? 0.50 : 0.42), lineWidth: 1 / max(displayScale, 1)))
+        .background(Color(nsColor: CapsuleLabel.fill(tint, dark: dark)),
+                    in: RoundedRectangle(cornerRadius: dot ? height / 2 : CapsuleLabel.badgeRadius, style: .continuous))
         .fixedSize()
     }
 
@@ -73,7 +82,7 @@ struct CapsuleText<Trailing: View>: View {
 
 extension CapsuleText where Trailing == EmptyView {
     init(text: String, tint: NSColor, font: NSFont = CapsuleLabel.tagFont, height: CGFloat = CapsuleLabel.tagHeight,
-         padding: CGFloat = CapsuleLabel.tagPadding) {
-        self.init(text: text, tint: tint, font: font, height: height, padding: padding, trailing: { EmptyView() })
+         padding: CGFloat = CapsuleLabel.tagPadding, dot: Bool = false) {
+        self.init(text: text, tint: tint, font: font, height: height, padding: padding, dot: dot, trailing: { EmptyView() })
     }
 }

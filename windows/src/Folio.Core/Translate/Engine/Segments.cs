@@ -76,15 +76,17 @@ public static partial class SegmentBuilder
         else if (language.StartsWith("ja")) ranges = [(0x4E00, 0x9FFF), (0x3040, 0x30FF)];
         else if (language.StartsWith("ko")) ranges = [(0xAC00, 0xD7AF)];
         else return false;
-        int letters = 0, inScript = 0;
+        int letters = 0, inScript = 0, fullWidth = 0;
         foreach (var r in PlaceholderPattern().Replace(text, "").EnumerateRunes())
         {
             if (!System.Text.Rune.IsLetter(r)) continue;
-            if (r.Value is >= 0xFF21 and <= 0xFF5A) continue;
+            if (r.Value is >= 0xFF21 and <= 0xFF5A) { fullWidth++; continue; }
             letters++;
             if (ranges.Any(x => r.Value >= x.Item1 && r.Value <= x.Item2)) inScript++;
         }
-        return letters > 0 && inScript >= letters * share;
+        // Nothing but full-width letters (a formula in a Chinese paper, "ｆ（ｘ，ｙ）＝…"): set in these scripts already.
+        if (letters == 0) return fullWidth > 0;
+        return inScript >= letters * share;
     }
 
     static readonly Dictionary<string, string> Ligatures = new() { ["ﬁ"] = "fi", ["ﬂ"] = "fl", ["ﬀ"] = "ff", ["ﬃ"] = "ffi", ["ﬄ"] = "ffl", ["ﬅ"] = "st", ["ﬆ"] = "st" };
@@ -269,7 +271,7 @@ public static class StandardCells
     static readonly Dictionary<string, string> Chinese = new()
     {
         ["mean"] = "平均", ["average"] = "平均", ["avg"] = "平均", ["avg."] = "平均", ["method"] = "方法", ["methods"] = "方法",
-        ["ours"] = "本文方法", ["ours (full)"] = "本文方法（完整）", ["backbone"] = "骨干网络", ["arch."] = "架构", ["architecture"] = "架构",
+        ["ours"] = "本文", ["ours (full)"] = "本文（完整）", ["backbone"] = "骨干网络", ["arch."] = "架构", ["architecture"] = "架构",
         ["params"] = "参数量", ["params."] = "参数量", ["parameters"] = "参数量", ["dataset"] = "数据集", ["datasets"] = "数据集",
         ["setting"] = "设置", ["settings"] = "设置", ["baseline"] = "基线", ["model"] = "模型", ["models"] = "模型", ["year"] = "年份",
         ["venue"] = "来源", ["source"] = "源域", ["target"] = "目标域", ["time"] = "时间", ["memory"] = "显存", ["accuracy"] = "准确率",

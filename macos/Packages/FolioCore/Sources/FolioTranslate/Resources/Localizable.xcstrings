@@ -123,6 +123,16 @@
         }
       }
     },
+    "%@%@已经 %lld 秒没有返回任何一批译文，正常一批只要 10 到 30 秒。多半是模型在长时间思考；可以在 设置 ▸ 翻译 中换用更快的模型。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@%2$@ has not returned a batch for %3$lld seconds; a batch normally takes 10 to 30 seconds. The model is most likely thinking at length; you can choose a faster model in Settings ▸ Translation."
+          }
+        }
+      }
+    },
     "%@失败：%@" : {
       "localizations" : {
         "en" : {
@@ -611,6 +621,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The downloaded uv can't run"
+          }
+        }
+      }
+    },
+    "不到 $0.01" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "under $0.01"
           }
         }
       }
@@ -1675,6 +1695,16 @@
         }
       }
     },
+    "模型的回复在输出上限处被截断，连一个段落也放不下。请换用输出上限更高的模型，或调低思考程度。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model's reply was cut off at its output limit, with no room for even one paragraph. Use a model with a higher output limit, or lower its thinking level."
+          }
+        }
+      }
+    },
     "模型默认" : {
       "localizations" : {
         "en" : {
@@ -2179,6 +2209,26 @@
         }
       }
     },
+    "设置中的模型“%@”已不在%@的可用模型中，本次使用它的默认模型。可在 设置 ▸ 翻译 中更换。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model “%1$@” in the settings is no longer offered by %2$@; this translation uses its default model. You can change it in Settings ▸ Translation."
+          }
+        }
+      }
+    },
+    "设置中的模型“%@”已不在%@的可用模型中，本次改用 %@。可在 设置 ▸ 翻译 中更换。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model “%1$@” in the settings is no longer offered by %2$@; this translation uses %3$@. You can change it in Settings ▸ Translation."
+          }
+        }
+      }
+    },
     "识别公式和样式" : {
       "localizations" : {
         "en" : {
@@ -2205,6 +2255,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recognize tables"
+          }
+        }
+      }
+    },
+    "译文已在缓存中，不需要再次请求翻译服务。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The translation is already cached: nothing has to be asked of the service again."
           }
         }
       }
@@ -2793,6 +2853,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Korean"
+          }
+        }
+      }
+    },
+    "预计发送约 %@ 个字符（按字符计费的服务）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About %@ characters to send (this service charges by the character)."
+          }
+        }
+      }
+    },
+    "预计约 %@ 输入 + %@ 输出 tokens（估算，不含模型思考）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About %1$@ input + %2$@ output tokens (an estimate; the model's thinking is not counted)."
+          }
+        }
+      }
+    },
+    "预计约 %@ 输入 + %@ 输出 tokens，费用约 %@（按公开价格估算，不含模型思考）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About %1$@ input + %2$@ output tokens, about %3$@ (estimated from public prices; the model's thinking is not counted)."
           }
         }
       }

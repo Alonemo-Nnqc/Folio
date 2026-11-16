@@ -16,7 +16,7 @@
 
   const EN = {
     skip: "Skip to content",
-    "nav.film": "Film",
+    "nav.translate": "Translation",
     "nav.features": "Features",
     "nav.ai": "AI",
     "nav.docs": "Guide",
@@ -33,9 +33,6 @@
     "plat.lede": "The two apps match feature for feature and share one library format. Put the library folder in a synced drive, and the Windows PC in the lab and the Mac at home open the same papers, annotations and notes. No account, no server.",
     "plat.c1d": "macOS 14 or later, on Apple silicon and Intel.",
     "plat.c2d": "Windows 10 / 11, x64 and ARM64. No administrator rights needed to install.",
-    "film.eyebrow": "The film",
-    "film.title": "Meet Folio in two minutes.",
-    "film.play": "Play the film",
     "import.eyebrow": "Automatic metadata",
     "import.title": "Drop it in. It’s done.",
     "import.lede": "Drag a PDF into the window and within seconds you have its title, authors, venue and DOI. Folio asks the Zotero translation server, Crossref, arXiv, OpenAlex, DBLP and CVF in turn, and you can match it by hand when nothing turns up.",
@@ -52,7 +49,7 @@
     "org.eyebrow": "Organize",
     "org.title": "Tidy by design. Found in a keystroke.",
     "org.lede":
-      "Two-level collections, tags in your own colours, a trash, reading status and star ratings. Search reaches into the full text of your PDFs, and one item can hold several files.",
+      "Collections up to four levels deep, tags in your own colours, a trash, reading status and star ratings. Search reaches into the full text of your PDFs, one item can hold several files, and papers with a translation carry a “Translated” badge.",
     "org.c1t": "Colour tags",
     "org.c1d": "Click “Must read” and those papers gather in one place.",
     "org.c2t": "Full-text search",
@@ -66,7 +63,30 @@
     "reader.p4": "Markdown notes",
     "tr.eyebrow": "Full-paper translation",
     "tr.title": "Translate the whole paper.<br>Keep every layout.",
-    "tr.lede": "The engine is built in, with nothing to download. Formulas are kept glyph by glyph, tables are translated cell by cell, citations stay clickable, and you can read side by side while it works, or translate many papers at once. Use free services, local models, 17 LLM and translation APIs, or the 19 agents already signed in on your computer, such as Claude Code and Codex, with no extra key.",
+    "tr.lede": "The engine is built in, with nothing to download. Formulas are kept glyph by glyph, tables are translated cell by cell, and the words inside figures are replaced too, with their centring, alignment and symmetry intact. Citations stay clickable, you can read side by side while it works, and many papers translate at once. Use free services, local models, 17 LLM and translation APIs, or the 20 agents already signed in on your computer, such as Claude Code and Codex, with no extra key.",
+    "trm.eyebrow": "Translation, done well",
+    "trm.title": "Terms stay consistent.<br>Costs are known up front.",
+    "trm.lede": "The model first reads the title, abstract and captions and settles how each term is translated, then translates the paper. The terms go into a glossary that the next paper uses too, and a translation you corrected is never changed back. Before a paid service starts, Folio estimates the tokens and the cost.",
+    "trm.c1t": "A glossary across papers",
+    "trm.c1d": "Review, edit or switch off the terms it found, add your own, or move them as CSV.",
+    "trm.c2t": "The cost, before you start",
+    "trm.c2d": "Tokens and cost from the model’s public price; paragraphs translated before come from the cache, free.",
+    "trm.p1t": "Real progress",
+    "trm.p1d": "Replies stream in as the model writes them, so the progress bar follows what has arrived and long paragraphs never time out.",
+    "trm.p2t": "Gaps filled in",
+    "trm.p2d": "Paragraphs a model skipped, left in English or stripped of a formula are asked for again, alone; repeated headers and captions are translated once.",
+    "trm.p3t": "Works with every model",
+    "trm.p3d": "Parameters a model or gateway refuses are dropped and remembered; reasoning models think less by default and translate faster.",
+    "sel.eyebrow": "Translate a selection",
+    "sel.title": "Stuck on a sentence?<br>Select it.",
+    "sel.lede": "Select text in the reader and click the button beside it, or press ⌥D / Alt D: the translation appears under it. Switch services on the spot, copy it, or add it with the original to the paper’s note. Selections can use a different service from full papers.",
+    "edit.eyebrow": "Edit PDF text",
+    "edit.title": "A word translated wrong?<br>Fix it on the page.",
+    "edit.lede": "Turn on editing and click into the text to get a caret, then change it in place. Your edit uses the page’s own font, size and word spacing, only the lines it touches are set again, with dictionary hyphenation for English and line-breaking rules for Chinese, and formulas and citations move with the text. Click away and it’s saved in the PDF, with undo any time.",
+    "edit.p1": "Term added; the paragraph reflows",
+    "ql.eyebrow": "Quick Look",
+    "ql.title": "Press Space.<br>Take a look.",
+    "ql.lede": "Select a paper in the list and press Space to page through it without opening the reader; the arrow keys move to the next paper and the preview follows. On the Mac it’s the system’s Quick Look; on Windows, a frosted panel with thumbnails (shown here), also opened with a middle click.",
     "cite.eyebrow": "Citations",
     "cite.title": "Copy a citation in one click.",
     "cite.lede":
@@ -100,10 +120,10 @@
     "more.c5d": "Downloads in the background and installs on relaunch, after checking the update first.",
     "more.c6t": "Private by default",
     "more.c6d": "No usage data, ever. Your library stays on your own computer, and API keys are encrypted by the system.",
-    "more.c7t": "Translate a selection",
-    "more.c7d": "Stuck on a sentence? Select it, press the shortcut or click the button, and the translation appears right there, ready to add to your note.",
-    "more.c8t": "Quick Look",
-    "more.c8d": "Press Space in the list to glance at a paper and use the arrow keys to move on, without opening the reader.",
+    "more.c7t": "Text in scans",
+    "more.c7d": "Scanned PDFs are read with the system’s own OCR as you import them, then they can be selected, searched, translated and edited like any other.",
+    "more.c8t": "Journal ranks",
+    "more.c8d": "With an easyScholar key, the list and inspector show CAS and JCR quartiles, impact factors and CCF ranks, and the list sorts by them.",
     "more.c9t": "Free and open source",
     "more.c9d": "MIT licensed, with all the code in the open. No subscription, and your papers aren’t tied to anyone’s cloud.",
     "dl.title": "Get Folio.",
@@ -292,14 +312,6 @@
     }
   );
 
-  // Film: the frame scales up to full size as it enters.
-  const filmFrame = $("#filmFrame");
-  scene(
-    filmFrame,
-    (r) => clamp((vh - r.top) / (vh * 0.9)),
-    (p) => filmFrame.style.setProperty("--scale", lerp(0.86, 1, easeOut(p)).toFixed(4))
-  );
-
   // Import: a pinned walkthrough through five real screenshots.
   const importTrack = $("#importTrack");
   const importImgs = $$("#importStack > img");
@@ -392,30 +404,6 @@
   }
 
   kick();
-
-  /* ---------------- Film ---------------- */
-
-  const film = $("#film");
-  const video = $("#filmVideo");
-  $("#filmPlay").addEventListener("click", () => {
-    video.preload = "auto";
-    video.controls = true;
-    film.classList.add("is-playing");
-    const p = video.play();
-    if (p && p.catch) p.catch(() => {});
-  });
-  video.addEventListener("ended", () => {
-    film.classList.remove("is-playing");
-    video.controls = false;
-    video.currentTime = 0;
-    video.load();
-  });
-  new IntersectionObserver(
-    ([e]) => {
-      if (!e.isIntersecting && !video.paused) video.pause();
-    },
-    { threshold: 0.25 }
-  ).observe(video);
 
   /* ---------------- Citations ---------------- */
 

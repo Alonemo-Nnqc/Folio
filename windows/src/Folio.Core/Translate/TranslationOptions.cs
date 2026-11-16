@@ -24,6 +24,8 @@ public sealed class TranslationOptions
     [JsonPropertyName("pages")] public string? Pages { get; set; }
     [JsonPropertyName("onlyIncludeTranslatedPages")] public bool OnlyIncludeTranslatedPages { get; set; }
     [JsonPropertyName("glossaryFile")] public string? GlossaryFile { get; set; }
+    /// <summary>Terms a model finds in a paper are kept in Folio's glossary, for the papers translated after it.</summary>
+    [JsonPropertyName("rememberTerms")] public bool RememberTerms { get; set; } = true;
     [JsonPropertyName("translateTables")] public bool TranslateTables { get; set; } = true;
     [JsonPropertyName("translateReferences")] public bool TranslateReferences { get; set; }
     /// <summary>Translate the words inside pictures too (read with OCR, set back over the picture in place).</summary>
@@ -100,6 +102,4 @@ public static class TranslationStageText
 {
     public static string Paragraphs(int done, int total) => Loc.S("翻译段落 %lld/%lld", done, total);
     public static string Layout => Loc.S("排版译文");
-    /// <summary>The stages' widest forms.</summary>
-    public static IReadOnlyList<string> Widest => [Paragraphs(888, 888), Layout];
 }

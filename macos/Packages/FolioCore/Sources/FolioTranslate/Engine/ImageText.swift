@@ -1,7 +1,7 @@
 import CoreGraphics
 import CoreText
 import Foundation
-import Vision
+@preconcurrency import Vision
 
 /// Text inside pictures (TRANS-40, optional): figures that are images keep their words in pixels, out of reach of the
 /// layout analysis. Each picture of a page (pictures side by side read as one) is rendered and read with Vision,
@@ -125,7 +125,8 @@ enum ImageText {
         // Words the page draws as text: not read again from the picture under them.
         let textBoxes = interpreter.glyphs.filter { $0.isVisible && ($0.text?.contains { $0.isLetter || $0.isNumber } ?? false) }.map(\.box)
         var pictures: [CGRect] = []
-        for (_, image) in interpreter.images {
+        // In drawing order: the same on every run (pictures merge, and labels are numbered, in this order).
+        for (_, image) in interpreter.images.sorted(by: { $0.key < $1.key }) {
             let rect = CGRect(x: 0, y: 0, width: 1, height: 1).applying(image.matrix).standardized.intersection(media)
             guard rect.width >= 24, rect.height >= 12, rect.width * rect.height < media.width * media.height * 0.8 else { continue }
             pictures.append(rect)
@@ -1096,9 +1097,11 @@ enum ImageText {
         var width: Double
     }
 
+    /// A sans-serif face, as figure labels are set: the target language's own (Traditional Chinese, Japanese and
+    /// Korean have their own forms of the characters; the Simplified Chinese face would draw them wrongly).
     private static func font(_ size: Double, language: String) -> CTFont {
-        let cjk = ["zh", "ja", "ko"].contains { language.lowercased().hasPrefix($0) }
-        return CTFontCreateWithName((cjk ? "PingFang SC" : "Helvetica") as CFString, max(size, 1), nil)
+        let name = FontCatalog.scriptFont(language: language, bold: false, serif: false) ?? (isCJK(language) ? "PingFangSC-Regular" : "Helvetica")
+        return CTFontCreateWithName(name as CFString, max(size, 1), nil)
     }
 
     private static func measure(_ text: String, size: Double, language: String) -> Double {

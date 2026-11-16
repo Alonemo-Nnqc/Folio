@@ -130,11 +130,6 @@ enum BrowserExtensions {
         return best
     }
 
-    static func isInstalled(in browser: BrowserInfo) -> Bool {
-        if case .installed = installState(in: browser) { return true }
-        return false
-    }
-
     /// Opens the browser's extensions page. Chromium browsers may refuse internal pages opened from
     /// another app; the install guide then offers the address to paste.
     static func openExtensionsPage(of browser: BrowserInfo) {

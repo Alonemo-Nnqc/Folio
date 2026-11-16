@@ -239,7 +239,7 @@ public sealed partial class LayoutAnalyzer
     // MARK: Lines
 
     /// <summary>Groups characters (in reading order) into lines; in tables a gap of under an em ends a line.</summary>
-    List<LayoutLine> BuildLines(List<PageChar> chars, List<Rect> tables, List<List<Gap>>? gutters = null, double pageWidth = 600)
+    List<LayoutLine> BuildLines(List<PageChar> chars, List<Rect> tables, List<List<Gap>>? gutters = null, double pageWidth = 600, List<List<Rect>>? dividers = null)
     {
         gutters ??= [];
         var lines = new List<LayoutLine>();
@@ -271,6 +271,9 @@ public sealed partial class LayoutAnalyzer
                 int table = tables.FindIndex(t => t.InsetBy(-1, -2).Contains(c.Center));
                 double limit = (table >= 0 ? 0.75 : 2.2) * Math.Max(mainSize, c.Size);
                 bool acrossGutter = table >= 0 && table < gutters.Count && gutters[table].Any(g => last.Rect.MaxX <= g.Lower + 0.5 && c.Rect.MinX >= g.Upper - 0.5);
+                // …and so does an upright rule of the grid standing between the two characters, on their row.
+                acrossGutter |= table >= 0 && dividers != null && table < dividers.Count && dividers[table].Any(rule =>
+                    last.Rect.MaxX <= rule.MidX + 0.5 && c.Rect.MinX >= rule.MidX - 0.5 && rule.MinY < c.Baseline + c.Size * 0.5 && rule.MaxY > c.Baseline);
                 if (!sameLine || gap > limit || acrossGutter || gap < -Math.Max(mainSize, 4) * 1.5 || c.IsRotated != last.IsRotated) Flush();
             }
             if (current.Count == 0 || c.Size > mainSize * 1.15 || (c.Size >= mainSize * 0.85 && current.Count < 3))
@@ -761,6 +764,24 @@ public sealed partial class LayoutAnalyzer
         return result;
     }
 
+    /// <summary>The size of a line set in small capitals (IEEE's table titles and headings): capitals of two sizes on
+    /// one baseline and not a lowercase letter among them. Such a line is as large as its large capitals, however few of
+    /// them it has: a line with one capital in ten is not smaller type than the next, which has figures and
+    /// abbreviations and so more of them. (Taken by the share of each size, the lines of one title came out in
+    /// different sizes, and the title fell apart.)</summary>
+    public static double? SmallCapitalsSize(List<PageChar> visible)
+    {
+        var letters = visible.Where(c => c.Text.Length > 0 && char.IsLetter(c.Text, 0)).ToList();
+        if (letters.Count < 4 || letters.Any(c => char.IsLower(c.Text, 0))) return null;
+        double large = letters.Max(c => Math.Round(c.Size * 4) / 4), small = letters.Min(c => Math.Round(c.Size * 4) / 4);
+        if (small < large * 0.6 || small > large * 0.92) return null;
+        // Two sizes and nothing in between, the small one the commoner; all on the line (scripts are off it).
+        int larger = letters.Count(c => c.Size > large * 0.96), smaller = letters.Count(c => c.Size < small * 1.04);
+        if (larger + smaller != letters.Count || smaller < 2 || smaller < larger) return null;
+        if (letters.Max(c => c.Baseline) - letters.Min(c => c.Baseline) >= large * 0.06) return null;
+        return large;
+    }
+
     public static LayoutLine? MakeLine(List<PageChar> unordered)
     {
         var chars = unordered;
@@ -770,7 +791,8 @@ public sealed partial class LayoutAnalyzer
         if (visible.Count == 0) return null;
         var first = visible[0];
         var sizes = visible.Select(c => Math.Round(c.Size * 4) / 4).Distinct().OrderByDescending(s => s).ToList();
-        double mainSize = sizes.Cast<double?>().FirstOrDefault(s => visible.Count(c => Math.Abs(c.Size - s!.Value) < s.Value * 0.1) * 4 >= visible.Count) ?? (sizes.Count > 0 ? sizes[^1] : first.Size);
+        double mainSize = SmallCapitalsSize(visible)
+            ?? sizes.Cast<double?>().FirstOrDefault(s => visible.Count(c => Math.Abs(c.Size - s!.Value) < s.Value * 0.1) * 4 >= visible.Count) ?? (sizes.Count > 0 ? sizes[^1] : first.Size);
         var reference = visible.Where(c => Math.Abs(c.Size - mainSize) < mainSize * 0.1).ToList();
         var ink = first.Rect;
         foreach (var c in visible.Skip(1)) ink = ink.Union(c.Rect);

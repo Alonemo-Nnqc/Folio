@@ -238,11 +238,16 @@ public sealed partial class LayoutAnalyzer
         return result;
     }
 
+    // …starting where that line starts, or, the last line of a centred title (IEEE's table titles end in a short
+    // centred line), with its middle under that line's middle and no further below than the lines of one text are.
     static bool ContinuesText(LayoutLine line, List<LayoutLine> lines) => lines.Any(other =>
     {
         double drop = other.Baseline - line.Baseline;
-        return drop > line.Size * 0.5 && drop < line.Size * 1.7 && Math.Abs(other.Size - line.Size) < line.Size * 0.1
-               && other.WordCount >= 6 && line.MinX < other.MaxX && line.MaxX > other.MinX && Math.Abs(other.MinX - line.MinX) < line.Size * 2;
+        if (!(drop > line.Size * 0.5 && drop < line.Size * 1.7 && Math.Abs(other.Size - line.Size) < line.Size * 0.1
+              && other.WordCount >= 6 && line.MinX < other.MaxX && line.MaxX > other.MinX)) return false;
+        if (Math.Abs(other.MinX - line.MinX) < line.Size * 2) return true;
+        bool centred = Math.Abs((other.MinX + other.MaxX) - (line.MinX + line.MaxX)) < line.Size * 1.2;
+        return centred && drop < line.Size * 1.4 && line.WordCount >= 2 && line.MinX > other.MinX && line.MaxX < other.MaxX;
     });
 
     static bool EndsParagraph(LayoutLine line, List<LayoutLine> lines) => lines.Any(other =>

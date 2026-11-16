@@ -38,13 +38,13 @@ final class TagChipsView: NSView {
                 width = max(limit - x - reserve, 28)
             }
             CapsuleLabel.draw(tag.name, in: NSRect(x: x, y: y, width: width, height: height), tint: NSColor(hex: tag.colorHex),
-                              font: Self.font, padding: Self.padding, appearance: effectiveAppearance, flipped: true, scale: scale)
+                              font: Self.font, padding: Self.padding, dot: true, appearance: effectiveAppearance, flipped: true, scale: scale)
             x += width + Self.spacing
         }
     }
 
     static func chipWidth(_ name: String) -> CGFloat {
-        min(CapsuleLabel.textWidth(name, font: font) + padding * 2, maxChipWidth)
+        min(CapsuleLabel.width(name, font: font, padding: padding, dot: true), maxChipWidth)
     }
 
     private static func badgeWidth(_ count: Int) -> CGFloat {

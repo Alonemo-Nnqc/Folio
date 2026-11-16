@@ -117,6 +117,7 @@ function FilesSection({ item }: { item: Item }) {
           onContextMenu={(e) => { e.preventDefault(); openMenu(fileMenu(file), e.clientX, e.clientY); }}>
           <FileText size={14} className="secondary" style={{ flex: "none" }} />
           <span className="ellipsis">{file.title}</span>
+          {file.id === item.defaultFileId && <span className="default-badge">{t("默认")}</span>}
         </button>
       ))}
       {item.kind === "regular" && <button className="btn small" style={{ marginTop: 6 }} onClick={() => call("files.attachPick", { item: item.id })}><Paperclip size={12} />{t("添加文件…")}</button>}

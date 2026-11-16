@@ -312,7 +312,9 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             let origin = entry.originItemId.flatMap { snapshot.items[$0]?.title }
             let job = model.translations.currentJob(of: entry.id)
             let translation = job.map { (stage: $0.stage, fraction: $0.fraction) }
-            let translations = snapshot.files(of: entry.id).filter { $0.translationKind != nil }.map(model.label(of:))
+            // 设置 ▸ 通用 ▸ 显示“已翻译”标签 off: no badge (the files are still listed under the paper).
+            let translations = model.settings.showTranslatedBadge
+                ? snapshot.files(of: entry.id).filter { $0.translationKind != nil }.map(model.label(of:)) : []
             cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin,
                                hasNote: snapshot.notedItems.contains(entry.id), translation: translation,
                                translations: translations)

@@ -97,6 +97,15 @@ case "fonts":
     print(EngineDiagnostics.fonts(input: url(arguments[1]), page: Int(arguments[2]) ?? 1))
 case "bing":
     print(await EngineDiagnostics.bing(arguments[1]))
+case "estimate":
+    // estimate <pdf> <service> [model]: what the sheet says before a translation starts.
+    let service = TranslationServiceCatalog.service(id: arguments[2])
+    let field = service?.fields.first { $0.title == TranslationServiceCatalog.modelFieldTitle }?.option
+    let request = TranslationRequest(input: URL(fileURLWithPath: arguments[1]), outputDirectory: URL(filePath: "/dev/null"), serviceID: arguments[2],
+                                     fieldValues: arguments.count > 3 && field != nil ? [field!: arguments[3]] : [:])
+    let estimate = TranslationEstimator.estimate(request)
+    print(estimate.map { "\($0)" } ?? "no estimate")
+    print(estimate.flatMap(TranslationEstimator.text(for:)) ?? "nothing to say")
 case "audit":
     // audit <pdf> <service> [model] [--out file.pdf] [--verbose]
     let out = arguments.firstIndex(of: "--out").map { url(arguments[$0 + 1]) }
@@ -179,6 +188,10 @@ case "para":
             CGImageDestinationFinalize(dest)
         }
     }
+case "edit-audit":
+    // edit-audit <pdf> [pages] [--verbose]: edits each paragraph of the pages the ways a person does, and holds the result against the page as it was.
+    let pages = arguments.count > 2 && !arguments[2].hasPrefix("--") ? arguments[2].split(separator: ",").compactMap { Int($0) } : nil
+    print(try EditDiagnostics.audit(input: url(arguments[1]), pages: pages, verbose: arguments.contains("--verbose")))
 case "edit-preview":
     // edit-preview <pdf> <page> <out.png>: the page with the editor's blocks drawn over it (blue: editable, grey: not),
     // numbered, to see how the page is cut into blocks.

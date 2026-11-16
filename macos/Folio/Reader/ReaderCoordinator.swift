@@ -13,8 +13,6 @@ final class ReaderCoordinator {
         self.model = model
     }
 
-    var openFileIds: [String] { order }
-
     func reader(for fileId: String) -> ReaderWindowController? { readers[fileId] }
 
     /// Opens the paper and shows a given page (0-based), e.g. from the inspector's annotation list.
@@ -66,6 +64,8 @@ final class ReaderCoordinator {
         var ok = true
         for reader in readers.values {
             reader.savePosition()
+            // A text box being written is finished first (an empty one is dropped), so the file has what is on screen.
+            reader.finishWriting()
             ok = reader.save() && ok
         }
         return ok

@@ -19,6 +19,8 @@ public sealed class EngineError(string message) : Exception(message)
     public static EngineError NoText => new(Loc.S("这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。"));
     public static EngineError AlreadyInTarget(string language) => new(Loc.S("这篇论文已经是%@，不需要翻译成%@。可以在翻译设置里换一种译文语言。", language, language));
     public static EngineError TooManyRefused(int count) => new(Loc.S("翻译服务拒绝翻译 %lld 个段落（内容审核）。请换一个翻译服务或模型再试。", count));
+    /// <summary>The model's reply ends at its output limit even for a single paragraph.</summary>
+    public static EngineError ReplyCutOff => new(Loc.S("模型的回复在输出上限处被截断，连一个段落也放不下。请换用输出上限更高的模型，或调低思考程度。"));
 }
 
 /// <summary>Translates one PDF with the native engine: layout analysis, a glossary of the paper's terms, batched
@@ -91,6 +93,18 @@ public sealed class TranslationJob
         _activity.Attach(emit);
         log.Write($"translate {Path.GetFileName(Request.Input)} with {Request.ServiceId} {options.LangIn}→{options.LangOut}");
         var provider = ProviderFactory.Make(Request.ServiceId, Request.FieldValues, Request.Secrets, options.Concurrency);
+        log.Write($"model: {provider.ModelName ?? "-"}, {provider.Limits.Concurrency} requests at a time"
+                  + (options.Concurrency is { } chosen ? $" (同时请求数 set to {chosen})" : ""));
+        if (ModelCheck.Check(Request.ServiceId, Request.FieldValues) is { } check)
+        {
+            // Said at once, not discovered from a translation that takes an hour (as on the Mac).
+            var service = TranslationServiceCatalog.Service(Request.ServiceId)?.DisplayName ?? Request.ServiceId;
+            var message = check.Replacement is { } used
+                ? Loc.S("设置中的模型“%@”已不在%@的可用模型中，本次改用 %@。可在 设置 ▸ 翻译 中更换。", check.Saved, service, used)
+                : Loc.S("设置中的模型“%@”已不在%@的可用模型中，本次使用它的默认模型。可在 设置 ▸ 翻译 中更换。", check.Saved, service);
+            log.Write($"saved model {check.Saved} is not offered (offered: {string.Join(", ", check.Offered)}), using {check.Replacement ?? "the default"}");
+            emit(new TranslationEvent.Problem(message));
+        }
 
         // 1. Layout.
         emit(new TranslationEvent.Stage(Loc.S("分析版面")));
@@ -121,8 +135,12 @@ public sealed class TranslationJob
         }
 
         // 2. Context and glossary.
+        // The user's file first, then Folio's glossary: terms written by the user and terms found in earlier papers.
+        var store = GlossaryStore.Shared;
+        var fromFile = ReadGlossary(options.GlossaryFile);
+        var known = fromFile.Select(g => g.Source.ToLowerInvariant()).ToHashSet();
         var context = new TranslationContext(options.LangIn, options.LangOut, segments.FirstOrDefault(s => s.Kind == BlockKind.Title)?.Source, Summary(segments),
-                                             ReadGlossary(options.GlossaryFile));
+                                             [.. fromFile, .. store.Entries(options.LangOut).Where(g => !known.Contains(g.Source.ToLowerInvariant()))]);
         var glossary = new GlossaryBox(context.Glossary);
         using var termCancel = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         Task? termTask = null;
@@ -137,7 +155,9 @@ public sealed class TranslationJob
                     timeout.CancelAfter(TimeSpan.FromSeconds(150));
                     var terms = await provider.ExtractTerms(excerpt, context, timeout.Token);
                     glossary.Add(terms);
-                    log.Write($"glossary: {glossary.Entries.Count} terms");
+                    // Kept for the papers after this one (what the glossary already has stays as it is).
+                    var learned = options.RememberTerms ? store.Learn(terms, options.LangOut, context.Title) : 0;
+                    log.Write($"glossary: {glossary.Entries.Count} terms, {learned} new kept");
                 }
                 catch (Exception e) { log.Write($"term extraction failed, continuing without: {e.Message}"); }
                 glossary.MarkComplete();
@@ -169,9 +189,13 @@ public sealed class TranslationJob
             var renderer = new TranslationRenderer(source, options.LangOut);
             var previews = new PreviewWriter(renderer, layouts, segments, Request.OutputDirectory, emit);
 
-            // What is left to send: whole paragraphs, the continued ones as one text each.
+            // What is left to send: whole paragraphs, the continued ones as one text each. A text the paper has more than
+            // once (a table's "Method", a label under each of several figures) is sent once, and its translation set
+            // for all of them: less to translate, and never two translations of the same words.
             var units = new List<TextSegment>();
             var sent = new HashSet<string>();
+            var firstWithSource = new Dictionary<string, string>();
+            var twins = new Dictionary<string, List<TextSegment>>();
             foreach (var segment in segments.Where(s => state.Translation(s) == null))
             {
                 if (inContinuation.Contains(segment.Id))
@@ -185,13 +209,22 @@ public sealed class TranslationJob
                         continue;
                     }
                 }
+                if (firstWithSource.TryGetValue(segment.Source, out var first))
+                {
+                    if (!twins.TryGetValue(first, out var same)) twins[first] = same = [];
+                    same.Add(segment);
+                    continue;
+                }
+                firstWithSource[segment.Source] = segment.Id;
                 units.Add(segment);
             }
+            if (twins.Count > 0) log.Write($"repeated texts sent once: {twins.Values.Sum(t => t.Count)}");
             var refusals = new RefusalCount(Math.Max(5, segments.Count / 20));
             var batches = Batches(units, provider.Limits);
             int total = segments.Count;
-            var (doneChars, totalChars) = state.Characters;
-            var estimate = new ProgressEstimate(doneChars, totalChars, provider.Limits);
+            int doneChars = state.Characters.Done;
+            var estimate = new ProgressEstimate(doneChars, doneChars + units.Sum(u => u.Source.Length), provider.Limits,
+                                                ImageText.IsCjk(options.LangOut.ToLowerInvariant()) ? 0.5 : 1.1);
             var serviceName = TranslationServiceCatalog.Service(Request.ServiceId)?.DisplayName ?? Request.ServiceId;
             _activity.Touch();
             var target = new ProgressTarget(() => 0.08 + 0.86 * estimate.Fraction());
@@ -202,6 +235,7 @@ public sealed class TranslationJob
                 double shown = target.Value();
                 int lastCount = -1;
                 string lastWaiting = "";
+                bool slowReported = false;
                 while (!tickerStop.IsCancellationRequested)
                 {
                     double goal = target.Value();
@@ -211,6 +245,14 @@ public sealed class TranslationJob
                     {
                         int count = Math.Max(state.DoneCount, Math.Min(total - 1, (int)(total * (shown - 0.08) / 0.86)));
                         double idle = _activity.IdleSeconds;
+                        if (idle >= 90 && !slowReported)
+                        {
+                            // Far slower than a batch should take (10 to 30 s): why, and what to do about it (as on the Mac).
+                            slowReported = true;
+                            var modelName = provider.ModelName is { } m ? $"（{m}）" : "";
+                            log.Write($"slow: nothing back for {(int)idle} s from {provider.ModelName ?? serviceName}");
+                            emit(new TranslationEvent.Problem(Loc.S("%@%@已经 %lld 秒没有返回任何一批译文，正常一批只要 10 到 30 秒。多半是模型在长时间思考；可以在 设置 ▸ 翻译 中换用更快的模型。", serviceName, modelName, (int)idle)));
+                        }
                         if (idle >= 60)
                         {
                             // Nothing back for a minute: say what it waits for, rather than seem to hang.
@@ -235,18 +277,33 @@ public sealed class TranslationJob
                 : null;
             try
             {
-                async Task RunBatch(List<TextSegment> batch)
+                // The first batches (title, abstract, introduction: what is read first, and shown first) go at once. The
+                // others wait a moment for the paper's terms, so that the whole paper translates a term the same way:
+                // without the wait every batch of a short paper would be under way before the terms are known.
+                int leading = termTask == null ? batches.Count : Math.Max(1, Math.Min(2, provider.Limits.Concurrency / 2));
+                var termsDeadline = DateTime.UtcNow.AddSeconds(provider.Limits.StartupSeconds * 2 + 8);
+                // Sets the translation of one segment. A text that came back empty or as it went (still in the source
+                // language) is not kept for next time: another run, or another service, may do better.
+                void Settle(TextSegment segment, string raw)
                 {
+                    var translated = segment.Kind == BlockKind.Heading ? HeadingNumbers.RestoreSpace(segment.Source, raw) : raw;
+                    state.Store(translated.Length == 0 ? segment.Source : translated, segment);
+                    if (!IsUntranslated(translated, segment.Source, options.LangOut)) cache.Store(translated, segment.Source);
+                }
+                async Task RunBatch(List<TextSegment> batch, bool waitsForTerms)
+                {
+                    if (waitsForTerms) await glossary.Wait(termsDeadline, cancel);
                     var batchContext = context with { Glossary = glossary.Entries };
                     var texts = await TranslateBatch(batch, provider, batchContext, log, estimate, refusals, cancel);
                     for (int i = 0; i < batch.Count; i++)
                     {
                         var segment = batch[i];
                         var raw = texts[i];
+                        var same = twins.GetValueOrDefault(segment.Id) ?? [];
                         if (raw == null)
                         {
                             // Refused by the service's content review: the original stays, and is not cached.
-                            foreach (var part in joinedParts.TryGetValue(segment.Id, out var refused) ? refused.Parts : [segment]) state.Store(part.Source, part);
+                            foreach (var part in (joinedParts.TryGetValue(segment.Id, out var refused) ? refused.Parts : [segment]).Concat(same)) state.Store(part.Source, part);
                             continue;
                         }
                         if (joinedParts.TryGetValue(segment.Id, out var continuation))
@@ -254,7 +311,7 @@ public sealed class TranslationJob
                             if (Continuations.Split(raw, continuation) is { } pieces)
                             {
                                 for (int k = 0; k < continuation.Parts.Count; k++) state.Store(pieces[k], continuation.Parts[k]);
-                                cache.Store(raw, segment.Source);
+                                if (!IsUntranslated(raw, segment.Source, options.LangOut)) cache.Store(raw, segment.Source);
                             }
                             else
                             {
@@ -263,22 +320,22 @@ public sealed class TranslationJob
                                 var apart = await TranslateBatch(continuation.Parts, provider, batchContext, log, estimate, refusals, cancel);
                                 for (int k = 0; k < continuation.Parts.Count; k++)
                                 {
-                                    state.Store(apart[k] ?? continuation.Parts[k].Source, continuation.Parts[k]);
-                                    if (apart[k] is { } text) cache.Store(text, continuation.Parts[k].Source);
+                                    if (apart[k] is { } text) Settle(continuation.Parts[k], text);
+                                    else state.Store(continuation.Parts[k].Source, continuation.Parts[k]);
                                 }
                             }
                             continue;
                         }
-                        var translated = segment.Kind == BlockKind.Heading ? HeadingNumbers.RestoreSpace(segment.Source, raw) : raw;
-                        state.Store(translated, segment);
-                        cache.Store(translated, segment.Source);
+                        Settle(segment, raw);
+                        foreach (var twin in same) Settle(twin, raw);
                     }
                 }
                 var pending = new Queue<List<TextSegment>>(batches);
                 var running = new List<Task>();
+                int batchesStarted = 0;
                 void StartNext()
                 {
-                    if (pending.Count > 0) running.Add(RunBatch(pending.Dequeue()));
+                    if (pending.Count > 0) running.Add(RunBatch(pending.Dequeue(), batchesStarted++ >= leading));
                 }
                 for (int i = 0; i < Math.Max(1, provider.Limits.Concurrency); i++) StartNext();
                 while (running.Count > 0)
@@ -459,7 +516,7 @@ public sealed class TranslationJob
             context = context with { Glossary = context.Glossary.Where(g => text.Contains(g.Source.ToLowerInvariant())).Take(80).ToList() };
         }
         Exception? lastError = null;
-        bool refused = false;
+        bool refused = false, truncated = false;
         const int attemptCount = 5;
         for (int attempt = 0; attempt < attemptCount; attempt++)
         {
@@ -470,21 +527,30 @@ public sealed class TranslationJob
             try
             {
                 var watch = Stopwatch.StartNew();
-                var texts = (await provider.Translate(items, context, cancel)).Select(Clean).ToList();
+                // A reply read as it arrives says how far it has come, and that the service is alive.
+                StreamProgress.Sink = received => { estimate.Received(request, received); _activity.Touch(); };
+                List<string> texts;
+                try { texts = (await provider.Translate(items, context, cancel)).Select(Clean).ToList(); }
+                finally { StreamProgress.Sink = null; }
                 log.Write(string.Create(CultureInfo.InvariantCulture, $"batch of {batch.Count} ({characters} chars) in {watch.Elapsed.TotalSeconds:F1} s"));
                 estimate.Finish(request);
                 _activity.Touch();
-                var broken = Enumerable.Range(0, batch.Count).Where(i => !PlaceholdersIntact(texts[i], batch[i].Source)).ToList();
+                // What a model may get wrong in a text: a formula's placeholder lost or doubled (each has to be there
+                // exactly once), nothing given back, or the text given back as it went, untranslated. Such texts get a
+                // second chance, and the better of the two answers is kept; failing that, the typesetter puts a missing
+                // formula at the end, and a text still untranslated stays as the original.
+                var target = context.TargetLanguage;
+                var broken = Enumerable.Range(0, batch.Count).Where(i => Defects(texts[i], batch[i].Source, target) > 0).ToList();
                 if (broken.Count > 0 && provider.Limits.UsesContext)
                 {
-                    log.Write($"placeholders lost in {broken.Count} of {batch.Count}, asking again");
+                    log.Write($"{broken.Count} of {batch.Count} came back incomplete (placeholders lost, empty or untranslated), asking again");
                     try
                     {
                         var again = (await provider.Translate(broken.Select(i => items[i]).ToList(), context, cancel)).Select(Clean).ToList();
                         for (int k = 0; k < broken.Count && k < again.Count; k++)
                         {
                             int i = broken[k];
-                            if (PlaceholderErrors(again[k], batch[i].Source) < PlaceholderErrors(texts[i], batch[i].Source)) texts[i] = again[k];
+                            if (Defects(again[k], batch[i].Source, target) < Defects(texts[i], batch[i].Source, target)) texts[i] = again[k];
                         }
                     }
                     catch (Exception) when (!cancel.IsCancellationRequested) { }
@@ -497,6 +563,13 @@ public sealed class TranslationJob
                 lastError = e;
                 log.Write($"attempt {attempt + 1} failed: {e.Detail[..Math.Min(500, e.Detail.Length)]}");
                 if (e.Kind == ProviderError.Kinds.Refused) { refused = true; break; }
+                // Cut off at the model's output limit: the same batch would be cut off again; smaller ones fit.
+                if (e.Kind == ProviderError.Kinds.Truncated)
+                {
+                    if (batch.Count <= 1) throw EngineError.ReplyCutOff;
+                    truncated = true;
+                    break;
+                }
                 if (!e.IsRetryable) throw;
                 _activity.Touch();
                 // The last attempt: the job ends with the error, no waiting first.
@@ -513,7 +586,7 @@ public sealed class TranslationJob
         }
         // Halves until the paragraph that is the problem is found: a refusal or an unreadable reply. A failure of the
         // service itself is the same for half the text, and is not tried again and again.
-        if (batch.Count > 1 && (refused || lastError is ProviderError { Kind: ProviderError.Kinds.InvalidResponse }))
+        if (batch.Count > 1 && (refused || truncated || lastError is ProviderError { Kind: ProviderError.Kinds.InvalidResponse }))
         {
             int half = batch.Count / 2;
             var first = await TranslateBatch(batch[..half], provider, context, log, estimate, refusals, cancel);
@@ -539,6 +612,34 @@ public sealed class TranslationJob
         return want.Keys.Union(got.Keys).Sum(k => Math.Abs(want.GetValueOrDefault(k) - got.GetValueOrDefault(k)));
     }
 
+    /// <summary>How much is wrong with a translation: its placeholder errors, and far more when it is empty or untranslated.</summary>
+    public static int Defects(string text, string source, string target) =>
+        PlaceholderErrors(text, source) + (IsUntranslated(text, source, target) ? 100 : 0);
+
+    /// <summary>Nothing came back for a text with words in it, or the text came back as it went: a sentence (four words
+    /// or more) that is the source again, or, for a language written in another script than the source's (Chinese,
+    /// Japanese, Korean), without a single character of that script. Names, numbers and short labels may well stay
+    /// as they are, and do not count.</summary>
+    public static bool IsUntranslated(string text, string source, string target)
+    {
+        if (!SegmentBuilder.HasWords(source)) return false;
+        var translation = text.Trim();
+        if (translation.Length == 0) return true;
+        var plain = Placeholders.Replace(source, _ => " ");
+        int words = 0, letters = 0;
+        foreach (var rune in (plain + " ").EnumerateRunes())
+        {
+            if (System.Text.Rune.IsLetter(rune)) { letters++; continue; }
+            if (letters >= 2) words++;
+            letters = 0;
+        }
+        if (words < 4 || SegmentBuilder.IsInScript(target, plain, 0.3)) return false;
+        if (translation == source.Trim()) return true;
+        var language = target.ToLowerInvariant();
+        if (!(language.StartsWith("zh") || language.StartsWith("ja") || language.StartsWith("ko"))) return false;
+        return !translation.EnumerateRunes().Any(r => r.Value is >= 0x3040 and <= 0x30FF or >= 0x3400 and <= 0x4DBF or >= 0x4E00 and <= 0x9FFF or >= 0xAC00 and <= 0xD7AF);
+    }
+
     public static string Clean(string text) => text.Replace("\r", " ").Replace("\n", " ").Trim();
 
     /// <summary>The abstract: the first long paragraph on the first page.</summary>
@@ -560,22 +661,43 @@ public sealed class TranslationJob
         parts.AddRange(segments.Where(s => s.Kind == BlockKind.Paragraph).Take(6).Select(s => s.Source));
         var excerpt = new StringBuilder();
         foreach (var part in parts)
-            if (excerpt.Length + part.Length < 7000) excerpt.Append(Placeholders.Replace(part, _ => "…")).Append('\n');
+            if (excerpt.Length + part.Length < 6000) excerpt.Append(Placeholders.Replace(part, _ => "…")).Append('\n');
         return excerpt.ToString();
     }
 
-    /// <summary>A CSV glossary: source,target per line (more columns are ignored).</summary>
+    /// <summary>A CSV glossary: source,target per line (more columns are ignored; a field with a comma in it is in quotes).</summary>
     public static List<GlossaryEntry> ReadGlossary(string? path)
     {
         if (string.IsNullOrEmpty(path) || !File.Exists(path)) return [];
         var result = new List<GlossaryEntry>();
         foreach (var line in File.ReadAllLines(path))
         {
-            var columns = line.Split(',', 3).Select(c => c.Trim(' ', '"', '\t')).ToList();
+            var columns = CsvFields(line);
             if (columns.Count < 2 || columns[0].Length == 0 || columns[1].Length == 0 || columns[0].ToLowerInvariant() == "source") continue;
             result.Add(new GlossaryEntry(columns[0], columns[1]));
         }
         return result;
+    }
+
+    /// <summary>The fields of a CSV line: split at commas outside quotes, "" inside quotes being a quote.</summary>
+    public static List<string> CsvFields(string line)
+    {
+        var fields = new List<string>();
+        var field = new StringBuilder();
+        bool quoted = false;
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (quoted && i + 1 < line.Length && line[i + 1] == '"') { field.Append('"'); i++; }
+                else quoted = !quoted;
+            }
+            else if (c == ',' && !quoted) { fields.Add(field.ToString().Trim()); field.Clear(); }
+            else field.Append(c);
+        }
+        fields.Add(field.ToString().Trim());
+        return fields;
     }
 }
 
@@ -621,6 +743,15 @@ sealed class GlossaryBox(List<GlossaryEntry> entries)
     public bool IsComplete => _complete;
     public void MarkComplete() => _complete = true;
 
+    /// <summary>Returns once the paper's terms are in, at the deadline at the latest (or when the job is cancelled).</summary>
+    public async Task Wait(DateTime deadline, CancellationToken cancel)
+    {
+        while (!_complete && DateTime.UtcNow < deadline && !cancel.IsCancellationRequested)
+        {
+            try { await Task.Delay(100, cancel); } catch (OperationCanceledException) { return; }
+        }
+    }
+
     public void Add(List<GlossaryEntry> terms)
     {
         lock (_stored)
@@ -657,22 +788,44 @@ sealed class ProgressTarget(Func<double> value)
 }
 
 /// <summary>How far the translation has come: what is done, plus how far the requests under way should be by now.</summary>
-sealed class ProgressEstimate(int done, int total, ProviderLimits limits)
+sealed class ProgressEstimate(int done, int total, ProviderLimits limits, double replyPerCharacter = 0.6, Func<DateTime>? clock = null)
 {
-    sealed record Running(double Characters, DateTime Started);
+    sealed class Running(double characters, DateTime started)
+    {
+        public readonly double Characters = characters;
+        public readonly DateTime Started = started;
+        public double Received;
+    }
     readonly object _lock = new();
     readonly Dictionary<int, Running> _running = [];
+    readonly Func<DateTime> _clock = clock ?? (() => DateTime.UtcNow);
     int _nextId;
     double _done = done;
     readonly double _total = Math.Max(total, 1);
     readonly double _startup = limits.StartupSeconds;
     double _secondsPerCharacter = limits.SecondsPerCharacter;
     bool _measured;
+    // Characters of reply for each character sent, as replies come in.
+    double _replyPerCharacter = replyPerCharacter;
+    bool _measuredReply;
+    // Replies of this job arrive piece by piece.
+    bool _streams;
     double _highest;
 
     public int Begin(int characters)
     {
-        lock (_lock) { _running[++_nextId] = new Running(characters, DateTime.UtcNow); return _nextId; }
+        lock (_lock) { _running[++_nextId] = new Running(characters, _clock()); return _nextId; }
+    }
+
+    /// <summary>So much of the reply to a request has arrived (it may start over: a part asked for again).</summary>
+    public void Received(int id, int characters)
+    {
+        if (characters <= 0) return;
+        lock (_lock)
+        {
+            _streams = true;
+            if (_running.TryGetValue(id, out var request)) request.Received = Math.Max(request.Received, characters);
+        }
     }
 
     public void Finish(int id)
@@ -681,9 +834,15 @@ sealed class ProgressEstimate(int done, int total, ProviderLimits limits)
         {
             if (!_running.Remove(id, out var request)) return;
             _done += request.Characters;
-            double rate = Math.Max((DateTime.UtcNow - request.Started).TotalSeconds - _startup, 0.05) / Math.Max(request.Characters, 1);
+            double rate = Math.Max((_clock() - request.Started).TotalSeconds - _startup, 0.05) / Math.Max(request.Characters, 1);
             _secondsPerCharacter = _measured ? (_secondsPerCharacter + rate) / 2 : rate;
             _measured = true;
+            if (request.Received > 0 && request.Characters > 0)
+            {
+                double reply = request.Received / request.Characters;
+                _replyPerCharacter = _measuredReply ? (_replyPerCharacter + reply) / 2 : reply;
+                _measuredReply = true;
+            }
         }
     }
 
@@ -693,18 +852,24 @@ sealed class ProgressEstimate(int done, int total, ProviderLimits limits)
     {
         lock (_lock)
         {
-            var now = DateTime.UtcNow;
+            var now = _clock();
             double sum = _done;
             foreach (var r in _running.Values)
             {
                 double expected = _startup + r.Characters * _secondsPerCharacter;
-                sum += r.Characters * Share((now - r.Started).TotalSeconds / expected);
+                double byTime = Share((now - r.Started).TotalSeconds / expected);
+                // While nothing of a streamed reply has come, time only says that the request is under way.
+                double share = _streams ? Math.Min(byTime, 0.15) : byTime;
+                if (r.Received > 0) share = Math.Max(share, Math.Min(r.Received / Math.Max(r.Characters * _replyPerCharacter, 1), 0.97));
+                sum += r.Characters * share;
             }
             _highest = Math.Max(_highest, Math.Min(sum / _total, 1));
             return _highest;
         }
     }
 
+    /// <summary>How much of a request to count after x times its expected time: steadily up to nine tenths, then ever
+    /// more slowly, so a slow one keeps moving without being counted as done.</summary>
     public static double Share(double x) => x <= 1 ? 0.9 * Math.Max(x, 0) : 0.9 + 0.09 * (1 - 1 / (1 + (x - 1) / 1.5));
 }
 
@@ -825,11 +990,13 @@ sealed class TranslationCache
     public string? Lookup(string source)
     {
         if (_ignore) return null;
-        lock (_lock) return _entries.GetValueOrDefault(Key(source));
+        // An empty entry (kept by earlier versions when a service gave nothing back) is no translation.
+        lock (_lock) return _entries.GetValueOrDefault(Key(source)) is { Length: > 0 } hit ? hit : null;
     }
 
     public void Store(string text, string source)
     {
+        if (text.Length == 0) return;
         lock (_lock) { _entries[Key(source)] = text; _dirty++; }
     }
 

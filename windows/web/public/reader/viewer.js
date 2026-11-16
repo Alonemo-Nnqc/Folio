@@ -48,6 +48,14 @@ let oldTask = null;
 let loadId = 0;
 let tool = "select";
 let color = "yellow";
+const currentColor = () => color;
+/** The pen's width and new text boxes' size, in page points (the tools' menus on the app's toolbar). */
+let inkWidth = 2, textSize = 13;
+/** Each tool's colour (the app's toolbar): markup made from a menu takes its own tool's. */
+let toolColors = {};
+const markupTool = { Highlight: "highlight", Underline: "underline", StrikeOut: "strike" };
+/** Notes and text boxes are drawn by Folio (as on the Mac), whoever wrote them: pdf.js's own icons and text are hidden. */
+const ownDrawn = new Set(["Text", "FreeText"]);
 let labels = {};
 let suppressScroll = 0;
 let autoFit = null; // the pdf.js scale keyword while the zoom follows the window
@@ -61,6 +69,7 @@ const undoStack = [], redoStack = [];
 const colors = {
   yellow: "rgb(255,217,51)", green: "rgb(115,217,102)", blue: "rgb(102,178,255)",
   pink: "rgb(255,140,191)", purple: "rgb(191,140,255)", red: "rgb(255,89,89)",
+  orange: "rgb(255,158,51)", black: "rgb(28,28,31)",
 };
 const editableTypes = new Set(["Highlight", "Underline", "StrikeOut", "Squiggly", "Text", "FreeText", "Ink", "Square", "Circle", "Line"]);
 const movableTypes = new Set(["Text", "FreeText", "Ink", "Square", "Circle", "Line"]);
@@ -444,12 +453,13 @@ let tempCounter = 0;
 const tempId = () => `pending-${++tempCounter}`;
 
 function addMarkup(subtype, found) {
+  const color = toolColors[markupTool[subtype]] ?? currentColor();
   const pages = found.pages.map(({ page, quads }) => ({ page, quads, temp: tempId() }));
   const changes = pages.map(({ page, quads, temp }) => {
     const flat = quads.flat();
     return { page, before: null, after: {
       id: temp, page, subtype, quads: flat, rect: boundsOf(flat), strokes: null, colorKey: color, colorRgb: rgbOfKey(color),
-      contents: "", quoted: found.text, author: annotationAuthor, live: true,
+      contents: "", quoted: found.text, author: annotationAuthor, modified: Date.now(), live: true,
     } };
   });
   commit(changes);
@@ -491,7 +501,24 @@ document.addEventListener("pointerdown", (e) => post({ type: "press", button: e.
 window.addEventListener("blur", () => post({ type: "blur" }));
 // While a layer of the app is open, Esc is the app's: it closes the layer instead of leaving a tool or a selection.
 let overlayOpen = false;
-container.addEventListener("scroll", () => post({ type: "viewMoved" }), { passive: true });
+container.addEventListener("scroll", () => { post({ type: "viewMoved" }); postTracked(); }, { passive: true });
+
+/** What the app keeps beside a place on a page (a note's card, a text box being written): { page, rect } in page
+ *  coordinates. Where it is on screen is sent again as the page scrolls or zooms. */
+let tracked = null;
+function postTracked() {
+  if (!tracked) return;
+  const view = viewer.getPageView(tracked.page - 1);
+  if (!view?.div || !view.viewport) return;
+  const origin = view.div.getBoundingClientRect();
+  const [x1, y1] = view.viewport.convertToViewportPoint(tracked.rect[0], tracked.rect[3]);
+  const [x2, y2] = view.viewport.convertToViewportPoint(tracked.rect[2], tracked.rect[1]);
+  post({ type: "tracked", key: tracked.key, scale: view.viewport.scale,
+    anchor: { left: origin.left + Math.min(x1, x2), top: origin.top + Math.min(y1, y2), right: origin.left + Math.max(x1, x2), bottom: origin.top + Math.max(y1, y2) } });
+}
+eventBus.on("scalechanging", () => requestAnimationFrame(postTracked));
+eventBus.on("pagerendered", (e) => { if (tracked && e.pageNumber === tracked.page) postTracked(); });
+addEventListener("resize", () => requestAnimationFrame(postTracked));
 
 // MARK: Annotations added or changed since the file was loaded
 //
@@ -508,7 +535,12 @@ function boundsOf(flat) {
   return [l, b, r, t];
 }
 
-function rgbOfKey(key) { return (colors[key] ?? colors.yellow).match(/\d+/g).map(Number); }
+/** A preset's name, or a colour mixed by the user ("#RRGGBB"). */
+function rgbOfKey(key) {
+  if (typeof key === "string" && /^#[0-9a-f]{6}$/i.test(key)) return [1, 3, 5].map((i) => parseInt(key.slice(i, i + 2), 16));
+  return (colors[key] ?? colors.yellow).match(/\d+/g).map(Number);
+}
+const hexOfRgb = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase();
 
 function commit(changes) {
   applyChanges(changes, "after");
@@ -544,7 +576,7 @@ function syncCanvas(page) {
   let changed = false;
   for (const original of originals.values()) {
     if (original.page !== page) continue;
-    const hide = !list.includes(original);
+    const hide = !list.includes(original) || ownDrawn.has(original.subtype);
     if (hide === hiddenOnCanvas.has(original.id)) continue;
     if (hide) hiddenOnCanvas.add(original.id); else hiddenOnCanvas.delete(original.id);
     pdf.annotationStorage.setValue(original.id, { noView: hide });
@@ -571,12 +603,57 @@ function hideSections(view) {
 
 const SVG = "http://www.w3.org/2000/svg";
 
+/** A sticky note as on the Mac: a small upright card in its colour, its top right corner folded, a soft shadow, and
+ *  two lines on it once something is written. */
+function drawNote(make, a, P) {
+  const [x1, y1] = P(a.rect[0], a.rect[3]);
+  const [x2, y2] = P(a.rect[2], a.rect[1]);
+  const unit = Math.abs(P(1, 0)[0] - P(0, 0)[0]) || 1;
+  let width = Math.min(Math.abs(x2 - x1), 16 * unit), height = width * 1.2;
+  if (height > Math.abs(y2 - y1)) { height = Math.abs(y2 - y1); width = height / 1.2; }
+  const left = Math.min(x1, x2) + (Math.abs(x2 - x1) - width) / 2, top = Math.min(y1, y2);
+  const [r, g, b] = a.colorRgb;
+  const shade = (k) => `rgb(${Math.round(r * k)},${Math.round(g * k)},${Math.round(b * k)})`;
+  const group = make("g", { transform: `translate(${left} ${top}) scale(${width / 16})`, class: "note-card" });
+  make("path", { d: "M2.6 0H10.9L16 5.1V16.6A2.6 2.6 0 0 1 13.4 19.2H2.6A2.6 2.6 0 0 1 0 16.6V2.6A2.6 2.6 0 0 1 2.6 0Z", fill: `rgb(${r},${g},${b})`,
+    stroke: shade(0.6), "stroke-opacity": 0.35, "stroke-width": 0.5, style: "filter: drop-shadow(0 0.6px 1.4px rgba(0,0,0,.25))" }, group);
+  make("path", { d: "M10.9 0L11.7 4.3L16 5.1Z", fill: shade(0.82) }, group);
+  if ((a.contents ?? "").trim()) {
+    make("path", { d: "M3.5 9.2H12.5M3.5 13H10", stroke: shade(0.45), "stroke-opacity": 0.6, "stroke-width": 1.2, "stroke-linecap": "round", fill: "none" }, group);
+  }
+}
+
+/** Text boxes as real text over the page, at the page's zoom: sharp at every size. */
+function drawTextBoxes(page, view) {
+  if (!view?.div || !view.viewport) return;
+  const boxes = (pageAnnotations.get(page) ?? []).filter((a) => a.subtype === "FreeText" && (a.live || ownDrawn.has(a.subtype)) && editingBox !== a.id);
+  let layer = view.div.querySelector(".folio-text-boxes");
+  if (!boxes.length) { layer?.remove(); return; }
+  if (!layer) { layer = document.createElement("div"); layer.className = "folio-text-boxes"; }
+  const marks = view.div.querySelector(".folio-marks") ?? view.div.querySelector(".canvasWrapper");
+  if (layer.parentElement !== view.div) { if (marks) marks.after(layer); else view.div.prepend(layer); }
+  layer.textContent = "";
+  const scale = view.viewport.scale;
+  for (const a of boxes) {
+    const [x1, y1] = view.viewport.convertToViewportPoint(a.rect[0], a.rect[3]);
+    const [x2, y2] = view.viewport.convertToViewportPoint(a.rect[2], a.rect[1]);
+    const box = document.createElement("div");
+    box.className = "free-text";
+    Object.assign(box.style, { left: `${Math.min(x1, x2)}px`, top: `${Math.min(y1, y2)}px`, width: `${Math.abs(x2 - x1)}px`, minHeight: `${Math.abs(y2 - y1)}px`,
+      fontSize: `${(a.fontSize || 12) * scale}px`, padding: `${2 * scale}px`, color: `rgb(${(a.textRgb ?? [0, 0, 0]).join(",")})` });
+    if (a.fillRgb) box.style.background = `rgba(${a.fillRgb.join(",")},.25)`;
+    box.textContent = a.contents;
+    layer.appendChild(box);
+  }
+}
+
 function drawMarks(page, source) {
   const view = source ?? viewer.getPageView(page - 1);
   if (!view?.div || !view.viewport) return;
-  const live = (pageAnnotations.get(page) ?? []).filter((a) => a.live);
+  drawTextBoxes(page, view);
+  const live = (pageAnnotations.get(page) ?? []).filter((a) => a.live || ownDrawn.has(a.subtype));
   let svg = view.div.querySelector(".folio-marks");
-  if (!live.length) { svg?.remove(); return; }
+  if (!live.length) { svg?.remove(); view.div.querySelector(".folio-notes")?.remove(); return; }
   const base = view.viewport.clone({ scale: 1 });
   if (!svg) svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("class", "folio-marks");
@@ -587,6 +664,15 @@ function drawMarks(page, source) {
   if (svg.parentElement !== view.div || svg.previousElementSibling !== wrapper) {
     if (wrapper) wrapper.after(svg); else view.div.prepend(svg);
   }
+  // Notes are paper over the page: drawn apart from the marks, which multiply with it.
+  let notes = view.div.querySelector(".folio-notes");
+  if (live.some((a) => a.subtype === "Text")) {
+    if (!notes) { notes = document.createElementNS(SVG, "svg"); notes.setAttribute("class", "folio-notes"); }
+    notes.setAttribute("viewBox", `0 0 ${base.width} ${base.height}`);
+    notes.setAttribute("preserveAspectRatio", "none");
+    notes.textContent = "";
+    if (notes.previousElementSibling !== svg) svg.after(notes);
+  } else { notes?.remove(); notes = null; }
   const P = (x, y) => base.convertToViewportPoint(x, y);
   const make = (name, attributes, parent = svg) => {
     const element = document.createElementNS(SVG, name);
@@ -602,7 +688,7 @@ function drawMarks(page, source) {
       for (const stroke of a.strokes ?? []) {
         const points = [];
         for (let i = 0; i + 1 < stroke.length; i += 2) points.push(P(stroke[i], stroke[i + 1]).join(","));
-        make("polyline", { points: points.join(" "), fill: "none", stroke: fill, "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round", style: "mix-blend-mode:normal" });
+        make("polyline", { points: points.join(" "), fill: "none", stroke: fill, "stroke-width": a.width || 2, "stroke-linecap": "round", "stroke-linejoin": "round", style: "mix-blend-mode:normal" });
       }
     } else if (a.quads?.length) {
       for (let i = 0; i + 7 < a.quads.length; i += 8) {
@@ -616,19 +702,9 @@ function drawMarks(page, source) {
         }
       }
     } else if (a.subtype === "FreeText") {
-      const [x1, y1] = P(a.rect[0], a.rect[3]), [x2, y2] = P(a.rect[2], a.rect[1]);
-      const object = make("foreignObject", { x: Math.min(x1, x2), y: Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) });
-      const box = document.createElement("div");
-      box.className = "free-text";
-      box.style.background = `rgba(${a.colorRgb.join(",")},.25)`;
-      box.textContent = a.contents;
-      object.appendChild(box);
+      continue; // Text boxes are HTML over the page (drawTextBoxes): text in a scaled SVG comes out soft.
     } else if (a.subtype === "Text") {
-      const [x1, y1] = P(a.rect[0], a.rect[3]);
-      const size = Math.abs(P(a.rect[2], a.rect[3])[0] - x1);
-      const group = make("g", { transform: `translate(${x1} ${y1}) scale(${size / 20})` });
-      make("rect", { x: 1, y: 1, width: 18, height: 18, rx: 3, fill, stroke: "rgba(0,0,0,.45)", "stroke-width": 1 }, group);
-      make("path", { d: "M5 7h10M5 10.5h10M5 14h7", stroke: "rgba(0,0,0,.6)", "stroke-width": 1.2, fill: "none" }, group);
+      drawNote((name, attributes, parent = notes) => make(name, attributes, parent), a, P);
     }
   }
 }
@@ -704,6 +780,40 @@ function shifted(entry, dx, dy) {
 
 const isPending = (id) => String(id).startsWith("pending-");
 
+/** The text box being written in the app's field (it is not drawn meanwhile). */
+let editingBox = null;
+
+/** What the app needs to edit an annotation: its kind, text, colour, author, and for a text box where it stands on
+ *  screen (the field is laid over it) with its text's size at this zoom. */
+/** A PDF date ("D:20261115103000+08'00'") as milliseconds, or null. */
+function pdfDate(value) {
+  const m = /^D?:?(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?([Zz+-])?(\d{2})?'?(\d{2})?/.exec(String(value ?? ""));
+  if (!m) return null;
+  const [y, mo = "01", d = "01", h = "00", mi = "00", sec = "00", sign, oh = "00", om = "00"] = m.slice(1);
+  const offset = sign === "+" || sign === "-" ? `${sign}${oh}:${om}` : sign ? "Z" : "";
+  const time = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${sec}${offset}`);
+  return isNaN(time) ? null : time;
+}
+
+function annotationMessage(annotation, hit) {
+  const message = { page: hit.number, id: annotation.id, subtype: annotation.subtype, contents: annotation.contents, quoted: annotation.quoted,
+    colorKey: annotation.colorKey, author: annotation.author, modified: annotation.modified, scale: hit.view.viewport.scale, rect: annotation.rect };
+  {
+    const origin = hit.div.getBoundingClientRect();
+    const [x1, y1] = hit.view.viewport.convertToViewportPoint(annotation.rect[0], annotation.rect[3]);
+    const [x2, y2] = hit.view.viewport.convertToViewportPoint(annotation.rect[2], annotation.rect[1]);
+    message.anchor = { left: origin.left + Math.min(x1, x2), top: origin.top + Math.min(y1, y2), right: origin.left + Math.max(x1, x2), bottom: origin.top + Math.max(y1, y2) };
+  }
+  if (annotation.subtype === "FreeText") {
+    const origin = hit.div.getBoundingClientRect();
+    const [x1, y1] = hit.view.viewport.convertToViewportPoint(annotation.rect[0], annotation.rect[3]);
+    const [x2, y2] = hit.view.viewport.convertToViewportPoint(annotation.rect[2], annotation.rect[1]);
+    Object.assign(message, { box: { left: origin.left + Math.min(x1, x2), top: origin.top + Math.min(y1, y2), width: Math.abs(x2 - x1), height: Math.abs(y2 - y1) },
+      fontSize: annotation.fontSize || 12, textRgb: annotation.textRgb ?? [0, 0, 0], rect: annotation.rect });
+  }
+  return message;
+}
+
 function pageAt(event) {
   const pageDiv = event.target.closest?.(".page");
   if (!pageDiv) return null;
@@ -772,6 +882,19 @@ let erasing = null;
 const eraserRadius = () => (ERASER_DIAMETERS[eraserSize] ?? 16) / 2;
 
 /** The ring under the pointer, as large on screen as the eraser at this zoom. */
+/** The note tool's pointer is a little note in its colour; the pen's, its tip: a dot as wide as its line. */
+function updatePlacingCursors() {
+  const scale = viewer.getPageView(Math.max(0, viewer.currentPageNumber - 1))?.viewport?.scale ?? viewer.currentScale * 4 / 3;
+  const [r, g, b] = rgbOfKey(toolColors.note ?? "yellow");
+  const note = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="21"><path d="M3.6 1.5H11.4L15.5 5.6V17A2 2 0 0 1 13.5 19H3.6A2 2 0 0 1 1.6 17V3.5A2 2 0 0 1 3.6 1.5Z" fill="rgb(${r},${g},${b})" stroke="rgba(0,0,0,.55)" stroke-width=".8"/><path d="M11.4 1.5V5.6H15.5" fill="none" stroke="rgba(0,0,0,.35)" stroke-width=".7"/></svg>`;
+  document.body.style.setProperty("--note-cursor", `url("data:image/svg+xml,${encodeURIComponent(note)}") 8 10, default`);
+  const [pr, pg, pb] = rgbOfKey(toolColors.ink ?? "black");
+  const dot = Math.max(3, Math.min(40, inkWidth * scale)), size = Math.ceil(dot + 6), half = size / 2;
+  const pen = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${half}" cy="${half}" r="${dot / 2 + 1.2}" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="1.4"/><circle cx="${half}" cy="${half}" r="${dot / 2 + 2}" fill="none" stroke="rgba(0,0,0,.4)" stroke-width=".6"/><circle cx="${half}" cy="${half}" r="${dot / 2}" fill="rgb(${pr},${pg},${pb})"/></svg>`;
+  document.body.style.setProperty("--pen-cursor", `url("data:image/svg+xml,${encodeURIComponent(pen)}") ${Math.floor(half)} ${Math.floor(half)}, default`);
+}
+eventBus.on("scalechanging", () => { if (tool === "ink") requestAnimationFrame(updatePlacingCursors); });
+
 function updateEraserCursor() {
   const scale = viewer.getPageView(Math.max(0, viewer.currentPageNumber - 1))?.viewport?.scale ?? viewer.currentScale * 4 / 3;
   const size = Math.round(Math.max(6, Math.min(120, (ERASER_DIAMETERS[eraserSize] ?? 16) * scale)));
@@ -795,7 +918,8 @@ function continueErasing(x, y) {
   let changed = false;
   for (const entry of pageAnnotations.get(e.page) ?? []) {
     if (entry.subtype !== "Ink" || isPending(entry.id) || !entry.strokes?.length) continue;
-    const left = eraseStrokes(entry.strokes, segment, eraserRadius() + (entry.width ?? 1) / 2);
+    // Pieces shorter than one and a half line widths are specks: they go too (as on the Mac).
+    const left = eraseStrokes(entry.strokes, segment, eraserRadius() + (entry.width ?? 1) / 2, Math.max(1, (entry.width ?? 1) * 1.5));
     if (!left) continue;
     if (!e.before.has(entry.id)) e.before.set(entry.id, entry);
     e.current.set(entry.id, left.length ? changedCopy(entry, { strokes: left, rect: boundsOf(left.flat()) }) : null);
@@ -826,7 +950,9 @@ function finishErasing() {
     if (index >= 0) list[index] = original; else list.push(original);
   }
   commit([...e.before].map(([id, before]) => ({ page: e.page, before, after: e.current.get(id) ?? null })));
-  post({ type: "erase", page: e.page, ids: [...e.before.keys()], paths: [e.path], radius: eraserRadius() });
+  // The file gets what the page shows: the strokes left of each (none when it was erased completely).
+  const results = [...e.before.keys()].map((id) => ({ id, strokes: e.current.get(id)?.strokes ?? [] }));
+  post({ type: "erase", page: e.page, ids: [...e.before.keys()], paths: [e.path], radius: eraserRadius(), results });
 }
 
 // MARK: Moving the page with the mouse
@@ -948,7 +1074,14 @@ container.addEventListener("pointerdown", (e) => {
   if (tool === "note" || tool === "textbox") {
     e.preventDefault();
     clearSelection();
-    post({ type: tool, page: hit.number, x: hit.x, y: hit.y, clientX: e.clientX, clientY: e.clientY, color });
+    // On a note (or a text box) of its own kind, the tool opens it rather than adding another.
+    const existing = annotationAt(hit);
+    if (existing && !isPending(existing.id) && existing.subtype === (tool === "note" ? "Text" : "FreeText")) {
+      select(existing, hit.number);
+      post({ type: "annotationEdit", ...annotationMessage(existing, hit), clientX: e.clientX, clientY: e.clientY });
+      return;
+    }
+    post({ type: tool, page: hit.number, x: hit.x, y: hit.y, clientX: e.clientX, clientY: e.clientY, color, textSize, scale: hit.view.viewport.scale });
     return;
   }
   if (tool === "eraser") {
@@ -961,11 +1094,20 @@ container.addEventListener("pointerdown", (e) => {
   if (tool === "ink") {
     e.preventDefault();
     container.setPointerCapture(e.pointerId);
-    const canvas = document.createElement("canvas");
-    canvas.className = "ink-preview";
-    canvas.width = hit.div.clientWidth * devicePixelRatio; canvas.height = hit.div.clientHeight * devicePixelRatio;
+    // The stroke is drawn as it will stay: the same line in the same kind of layer as the finished one (drawMarks), so
+    // nothing changes on screen when it is let go.
+    const base = hit.view.viewport.clone({ scale: 1 });
+    const canvas = document.createElementNS(SVG, "svg");
+    canvas.setAttribute("class", "ink-preview");
+    canvas.setAttribute("viewBox", `0 0 ${base.width} ${base.height}`);
+    canvas.setAttribute("preserveAspectRatio", "none");
+    const line = document.createElementNS(SVG, "polyline");
+    const [r, g, b] = rgbOfKey(color);
+    for (const [k, v] of Object.entries({ fill: "none", stroke: `rgb(${r},${g},${b})`, "stroke-width": inkWidth, "stroke-linecap": "round", "stroke-linejoin": "round" })) line.setAttribute(k, v);
+    canvas.appendChild(line);
     hit.div.appendChild(canvas);
-    stroke = { canvas, hit, points: [[hit.cssX, hit.cssY]] };
+    stroke = { canvas, line, base, hit, points: [[hit.cssX, hit.cssY]], drawn: [] };
+    extendStroke(hit.cssX, hit.cssY);
     return;
   }
   if (tool !== "select") { select(null); return; }
@@ -982,7 +1124,7 @@ container.addEventListener("pointerdown", (e) => {
   select(annotation, hit.number);
   if (isPending(annotation.id)) return; // Still being written: a moment later it can be edited.
   if (e.detail === 2 && (annotation.subtype === "Text" || annotation.subtype === "FreeText")) {
-    post({ type: "annotationEdit", page: hit.number, id: annotation.id, subtype: annotation.subtype, contents: annotation.contents, clientX: e.clientX, clientY: e.clientY });
+    post({ type: "annotationEdit", ...annotationMessage(annotation, hit), clientX: e.clientX, clientY: e.clientY });
   } else if (movableTypes.has(annotation.subtype)) {
     container.setPointerCapture(e.pointerId);
     drag = { annotation, hit, startX: e.clientX, startY: e.clientY, moved: false, box: hit.div.querySelector(".annotation-selection") };
@@ -1003,11 +1145,8 @@ container.addEventListener("pointermove", (e) => {
   if (stroke) {
     const origin = stroke.hit.div.getBoundingClientRect();
     const p = [e.clientX - origin.left, e.clientY - origin.top];
-    const ctx = stroke.canvas.getContext("2d");
-    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    ctx.strokeStyle = colors[color]; ctx.lineWidth = 2 * viewer.currentScale; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(...stroke.points[stroke.points.length - 1]); ctx.lineTo(...p); ctx.stroke();
     stroke.points.push(p);
+    extendStroke(p[0], p[1]);
   } else if (drag) {
     const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
     drag.moved = drag.moved || Math.abs(dx) + Math.abs(dy) > 2;
@@ -1020,10 +1159,12 @@ container.addEventListener("pointermove", (e) => {
 // What a note or a comment says, when the pointer rests on it (pdf.js's own popups would run off the page).
 const tip = document.getElementById("tip");
 let tipTimer = 0;
+/** 设置 ▸ 阅读 ▸ 指针停留时显示便签和评论的内容. */
+let tooltips = true;
 container.addEventListener("pointermove", (e) => {
   clearTimeout(tipTimer);
   tip.hidden = true;
-  if (drag || stroke || tool !== "select" || e.buttons) return;
+  if (!tooltips || drag || stroke || tool !== "select" || e.buttons) return;
   const hit = pageAt(e);
   const annotation = hit && annotationAt(hit);
   if (!annotation?.contents) return;
@@ -1036,6 +1177,37 @@ container.addEventListener("pointermove", (e) => {
 });
 container.addEventListener("pointerleave", () => { clearTimeout(tipTimer); tip.hidden = true; });
 
+/** The stroke being drawn takes another point (page CSS pixels), placed as drawMarks places the finished stroke's. */
+function extendStroke(cssX, cssY) {
+  const [x, y] = stroke.hit.view.viewport.convertToPdfPoint(cssX, cssY);
+  stroke.drawn.push(stroke.base.convertToViewportPoint(x, y).join(","));
+  stroke.line.setAttribute("points", stroke.drawn.join(" "));
+}
+
+/** The parts of a stroke (x y x y … in page space) inside the page box [x0, y0, x1, y1], cut where it crosses the edge. */
+function runsInside(flat, box) {
+  const [x0, y0, x1, y1] = [Math.min(box[0], box[2]), Math.min(box[1], box[3]), Math.max(box[0], box[2]), Math.max(box[1], box[3])];
+  const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const edge = (ax, ay, bx, by) => {
+    let t = 1; const dx = bx - ax, dy = by - ay;
+    if (dx > 0) t = Math.min(t, (x1 - ax) / dx); else if (dx < 0) t = Math.min(t, (x0 - ax) / dx);
+    if (dy > 0) t = Math.min(t, (y1 - ay) / dy); else if (dy < 0) t = Math.min(t, (y0 - ay) / dy);
+    t = Math.max(0, t);
+    return [ax + dx * t, ay + dy * t];
+  };
+  const runs = [];
+  let current = inside(flat[0], flat[1]) ? [flat[0], flat[1]] : [];
+  for (let i = 2; i + 1 < flat.length; i += 2) {
+    const ax = flat[i - 2], ay = flat[i - 1], bx = flat[i], by = flat[i + 1];
+    const inA = inside(ax, ay), inB = inside(bx, by);
+    if (inA && inB) current.push(bx, by);
+    else if (inA) { current.push(...edge(ax, ay, bx, by)); runs.push(current); current = []; }
+    else if (inB) current = [...edge(bx, by, ax, ay), bx, by];
+  }
+  if (current.length) runs.push(current);
+  return runs.filter((r) => r.length >= 4);
+}
+
 function finishPointer(e) {
   if (endPan()) return;
   if (erasing) { finishErasing(); return; }
@@ -1044,13 +1216,15 @@ function finishPointer(e) {
     stroke = null;
     const flat = points.flatMap(([x, y]) => hit.view.viewport.convertToPdfPoint(x, y));
     canvas.remove();
-    if (points.length > 1) {
+    // Only what is on the page (as on the Mac): a stroke run off its edge would leave ink nobody can see or erase.
+    const strokes = points.length > 1 ? runsInside(flat, hit.view.pdfPage.view) : [];
+    if (strokes.length) {
       const temp = tempId();
       commit([{ page: hit.number, before: null, after: {
-        id: temp, page: hit.number, subtype: "Ink", quads: null, strokes: [flat], rect: boundsOf(flat), colorKey: color, colorRgb: rgbOfKey(color),
-        contents: "", quoted: "", author: annotationAuthor, live: true,
+        id: temp, page: hit.number, subtype: "Ink", quads: null, strokes, rect: boundsOf(strokes.flat()), colorKey: color, colorRgb: rgbOfKey(color), width: inkWidth,
+        contents: "", quoted: "", author: annotationAuthor, modified: Date.now(), live: true,
       } }]);
-      post({ type: "ink", page: hit.number, color, strokes: [flat], temp });
+      post({ type: "ink", page: hit.number, color, width: inkWidth, strokes, temp });
     }
   } else if (drag) {
     const { annotation, hit, moved, startX, startY, box } = drag;
@@ -1086,7 +1260,7 @@ document.addEventListener("contextmenu", (e) => {
     lastSelection = info;
     if (annotation && !isPending(annotation.id)) {
       select(annotation, hit.number);
-      Object.assign(message, { kind: "annotation", page: hit.number, id: annotation.id, subtype: annotation.subtype, contents: annotation.contents, quoted: annotation.quoted, colorKey: annotation.colorKey });
+      Object.assign(message, { kind: "annotation", ...annotationMessage(annotation, hit) });
     } else if (info?.text) {
       Object.assign(message, { kind: "selection", text: info.text, pages: info.pages, ...selectionGeometry() });
     } else {
@@ -1339,7 +1513,7 @@ function nearestColorKey(c) {
     const d = (r - c[0]) ** 2 + (g - c[1]) ** 2 + (b - c[2]) ** 2;
     if (d < bestDistance) { best = key; bestDistance = d; }
   }
-  return bestDistance < 2500 ? best : null;
+  return bestDistance < 2500 ? best : hexOfRgb(c);
 }
 
 function quotedText(content, annotation) {
@@ -1385,13 +1559,24 @@ async function refreshAnnotations() {
         id: a.id, page: i, subtype: a.subtype, rect: Array.from(a.rect), quads: a.quadPoints ? Array.from(a.quadPoints) : null,
         strokes: a.inkLists ? a.inkLists.map((l) => Array.from(l)) : null, width: a.borderStyle?.width || 1,
         colorRgb: a.color ? Array.from(a.color) : rgbOfKey("yellow"), colorKey: nearestColorKey(a.color),
-        contents: a.contentsObj?.str ?? a.contents ?? "", quoted: quotedText(content, a), author: a.titleObj?.str ?? "", live: false,
+        contents: a.contentsObj?.str ?? a.contents ?? "", quoted: quotedText(content, a), author: a.titleObj?.str ?? "", modified: pdfDate(a.modificationDate ?? a.creationDate), live: false,
       };
+      if (a.subtype === "FreeText") {
+        // A text box's colour is its text's; a fill (boxes made before 1.4) stays as it was.
+        const da = a.defaultAppearanceData;
+        entry.textRgb = da?.fontColor ? Array.from(da.fontColor) : [0, 0, 0];
+        entry.fontSize = da?.fontSize || 12;
+        entry.fillRgb = a.color ? Array.from(a.color) : null;
+        entry.colorRgb = entry.textRgb;
+        entry.colorKey = nearestColorKey(entry.textRgb);
+        if (!entry.contents && a.textContent) entry.contents = a.textContent.join("\n");
+      }
       originals.set(entry.id, entry);
       return entry;
     });
     // Anything added meanwhile stays.
     pageAnnotations.set(i, [...list, ...(pageAnnotations.get(i) ?? []).filter((x) => x.live)]);
+    if (list.some((x) => ownDrawn.has(x.subtype))) { syncCanvas(i); drawMarks(i); }
   }
   renderAnnotationList();
   if (selected) drawSelection(selected.page);
@@ -2266,28 +2451,41 @@ host.addEventListener("message", async (e) => {
       if (changes) { applyChanges(changes, "after"); undoStack.push(changes); }
       break;
     }
+    // `silent`: shown, not recorded for 撤销 (a new note while its card is open: it is recorded once, when the card closes).
     case "addEntry":
-      commit([{ page: m.page, before: null, after: {
+      (m.silent ? (c) => applyChanges(c, "after") : commit)([{ page: m.page, before: null, after: {
         id: m.temp, page: m.page, subtype: m.subtype, rect: m.rect, quads: null, strokes: null, colorKey: m.color, colorRgb: rgbOfKey(m.color),
-        contents: m.contents ?? "", quoted: "", author: annotationAuthor, live: true,
+        contents: m.contents ?? "", quoted: "", author: annotationAuthor, modified: Date.now(), live: true,
+        ...(m.subtype === "FreeText" ? { textRgb: rgbOfKey(m.color), fontSize: m.fontSize || textSize, fillRgb: null } : {}),
       } }]);
       break;
     case "modifyEntry": {
       const entry = findEntry(m.page, m.id);
       if (!entry) break;
       const change = {};
-      if (m.color) { change.colorKey = m.color; change.colorRgb = rgbOfKey(m.color); }
+      if (m.color) {
+        change.colorKey = m.color; change.colorRgb = rgbOfKey(m.color);
+        if (entry.subtype === "FreeText") change.textRgb = rgbOfKey(m.color);
+      }
       if (m.contents != null) change.contents = m.contents;
+      if (m.rect) change.rect = m.rect;
+      if (m.fontSize) change.fontSize = m.fontSize;
       const copy = changedCopy(entry, change);
-      commit([{ page: m.page, before: entry, after: copy }]);
+      (m.silent ? (c) => applyChanges(c, "after") : commit)([{ page: m.page, before: entry, after: copy }]);
       if (selected?.id === m.id) select(copy, m.page);
       break;
     }
+    case "track": tracked = m.page ? { page: m.page, rect: m.rect, key: m.key } : null; break;
+    case "tooltips": tooltips = !!m.on; break;
+    case "editingBox":
+      editingBox = m.id ?? null;
+      if (m.page) drawMarks(m.page);
+      break;
     case "removeEntry": {
       const entry = findEntry(m.page, m.id);
       if (!entry) break;
       if (selected?.id === m.id) select(null);
-      commit([{ page: m.page, before: entry, after: null }]);
+      (m.silent ? (c) => applyChanges(c, "after") : commit)([{ page: m.page, before: entry, after: null }]);
       break;
     }
     case "translateSelection": {
@@ -2319,6 +2517,10 @@ host.addEventListener("message", async (e) => {
     case "tool": {
       const changed = m.tool !== tool;
       tool = m.tool; color = m.color ?? color;
+      if (m.inkWidth) inkWidth = m.inkWidth;
+      if (m.textSize) textSize = m.textSize;
+      if (m.colors) toolColors = m.colors;
+      updatePlacingCursors();
       if (m.eraserSize) eraserSize = m.eraserSize;
       if (tool === "eraser") updateEraserCursor();
       document.body.className = document.body.className.replace(/\btool-\S+/g, "").trim() + ` tool-${tool}`;

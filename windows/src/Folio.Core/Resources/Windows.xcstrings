@@ -242,7 +242,9 @@
     "这里的文字不能编辑" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "This text can't be edited" } } } },
     "这个 PDF 的页面已经有文字。" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "The pages of this PDF already have text." } } } },
     "Esc 取消 · Ctrl+Enter 完成" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Esc to cancel · Ctrl+Enter to finish" } } } },
-    "{v1} 这样的标记是公式或引用，保留它们即可原样保留" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Marks like {v1} are formulas or citations: keep them and they stay as they are" } } } }
+    "{v1} 这样的标记是公式或引用，保留它们即可原样保留" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Marks like {v1} are formulas or citations: keep them and they stay as they are" } } } },
+    "%@（Ctrl+Alt+%@）：再点一次选择颜色和样式" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@ (Ctrl+Alt+%2$@): click again to choose color and style" } } } },
+    "拖动以移动文本框" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Drag to move the text box" } } } }
   },
   "version" : "1.0"
 }

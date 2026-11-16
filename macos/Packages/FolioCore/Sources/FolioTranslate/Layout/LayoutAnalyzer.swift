@@ -37,7 +37,7 @@ struct LayoutAnalyzer {
     /// Analyses `pages` (1-based numbers) of the document.
     mutating func analyze(document: PDFDocument, cgDocument: CGPDFDocument, pages: [Int]) -> [PageLayout] {
         var prepared: [(Int, ContentInterpreter, [PageChar])] = []
-        var sizeCounts: [Double: Int] = [:]
+        var sizeCounts = Tally<Double>()
         // Pages before the selection too: the body size is the document's, and whether a page is in the references
         // depends on the pages before it.
         let selected = Set(pages)
@@ -48,11 +48,11 @@ struct LayoutAnalyzer {
             interpreter.run(page: cgPage)
             let chars = PageText.characters(of: page, interpreter: interpreter)
             for c in chars where !c.isSpace && !c.isNewline && !c.isRotated {
-                sizeCounts[(c.size * 2).rounded() / 2, default: 0] += 1
+                sizeCounts.add((c.size * 2).rounded() / 2)
             }
             prepared.append((number, interpreter, chars))
         }
-        bodySize = sizeCounts.max { $0.value < $1.value }?.key ?? 10
+        bodySize = sizeCounts.most ?? 10
         inReferences = false
         return prepared.compactMap { number, interpreter, chars in
             let layout = analyzePage(number: number, cgPage: cgDocument.page(at: number)!, interpreter: interpreter, chars: chars)
@@ -68,6 +68,7 @@ struct LayoutAnalyzer {
         if crop.isNull || crop.width < 1 { crop = media }
         currentPage = number
         var chars = rawChars
+        Self.inkOnPaper(&chars, interpreter: interpreter)
         MathDetector.mark(&chars)
         let links = PageLinks.links(of: cgPage)
         PageLinks.assign(links, to: &chars, page: crop)
@@ -93,7 +94,11 @@ struct LayoutAnalyzer {
         let figures = figureRegions(marks: marks, lines: lines, tables: tables, page: crop)
         tables.removeAll { table in figures.contains { $0.intersection(table).area > table.area * 0.4 } }
         let gutters = tables.map { Self.columnGutters(in: $0, lines: lines) }
-        lines = buildLines(chars, tables: tables, gutters: gutters, pageWidth: crop.width).map(Self.markScripts)
+        // The upright rules of a table drawn with a grid: two cells with a rule between them are two cells, however
+        // close their words come to it.
+        let uprights = marks.filter { ($0.kind == .fill || $0.kind == .stroke) && !$0.isWhite && $0.rect.width < 2.5 && $0.rect.height > bodySize * 0.8 }.map(\.rect)
+        let dividers = tables.map { table in uprights.filter { table.insetBy(dx: -1, dy: -2).intersects($0) } }
+        lines = buildLines(chars, tables: tables, gutters: gutters, dividers: dividers, pageWidth: crop.width).map(Self.markScripts)
         Self.joinWordFractions(&lines, marks: marks)
         Self.markChips(&lines, marks: marks)
         lines = Self.readingOrder(lines)
@@ -232,13 +237,28 @@ struct LayoutAnalyzer {
         var result: [(mark: Int, anchor: PageChar?, char: PageChar)] = []
         let flat = lines.filter { !$0.isRotated && $0.wordCount >= 5 }
         var shapes: [(result: Int, line: Double)] = []
+        var strokes: [(result: Int, line: Double)] = []
         for (index, mark) in interpreter.marks.enumerated() {
             let isImage = mark.kind == .image && interpreter.images[index] != nil
             let isShape = mark.kind == .fill && !mark.isWhite && mark.hasCurves && mark.segmentCount >= 6 && interpreter.paths[index] != nil
-            guard isImage || isShape else { continue }
+            // A bracket of a formula drawn as lines (⟨ … ⟩ in equations set by a word processor): a short slanting stroke
+            // right beside one of the formula's characters. It goes where the formula goes; left where it was, it
+            // would stand in the middle of the translation. (Upright and level strokes are rules: of a table, under a
+            // word, between the columns of a header; they stay.)
+            let isStroke = mark.kind == .stroke && !mark.isWhite && !mark.hasCurves && mark.segmentCount <= 3 && interpreter.paths[index] != nil
+                && mark.rect.width >= 1.2 && mark.rect.height >= mark.rect.width * 1.5 && mark.rect.height <= mark.rect.width * 6
+            guard isImage || isShape || isStroke else { continue }
             let r = mark.rect
             let candidates = flat.filter { line in
-                r.width <= line.size * 2.6 && r.height <= line.size * 1.9 && r.height >= line.size * 0.5
+                if isStroke {
+                    guard r.width <= line.size * 0.7, r.width >= line.size * 0.12, r.height >= line.size * 0.3, r.height <= line.size * 1.9,
+                          r.midY > line.baseline - line.size * 0.35, r.midY < line.baseline + line.size * 0.85 else { return false }
+                    return line.chars.contains { c in
+                        !c.isSpace && c.isMath && max(c.rect.minX - r.maxX, r.minX - c.rect.maxX) < line.size * 0.45
+                            && c.rect.minY < r.maxY && c.rect.maxY > r.minY
+                    }
+                }
+                return r.width <= line.size * 2.6 && r.height <= line.size * 1.9 && r.height >= line.size * 0.5
                     && r.midY > line.baseline - line.size * 0.35 && r.midY < line.baseline + line.size * 0.85
                     && line.chars.contains { !$0.isSpace && ($0.rect.maxX <= r.midX && r.minX - $0.rect.maxX < line.size * 1.5 || $0.rect.minX >= r.midX && $0.rect.minX - r.maxX < line.size * 1.5) }
             }
@@ -258,12 +278,18 @@ struct LayoutAnalyzer {
             char.linkTarget = nil
             char.icon = index
             if isShape { shapes.append((result.count, line.baseline)) }
+            if isStroke { strokes.append((result.count, line.baseline)) }
             result.append((index, line.chars.last { !$0.isSpace && $0.rect.maxX <= r.midX }, char))
         }
         // Many small shapes on a line, or on the page, are not icons: text set as outlines, or marks of a drawing.
         var perLine: [Double: Int] = [:]
         for shape in shapes { perLine[shape.line, default: 0] += 1 }
-        let tooMany = shapes.count > 12 ? Set(shapes.map(\.result)) : Set(shapes.filter { perLine[$0.line]! > 3 }.map(\.result))
+        var tooMany = shapes.count > 12 ? Set(shapes.map(\.result)) : Set(shapes.filter { perLine[$0.line]! > 3 }.map(\.result))
+        // Strokes come in pairs and halves (a bracket is two lines, a formula has two brackets), so a line may have a
+        // few more of them; a page full of them is a drawing.
+        var strokesPerLine: [Double: Int] = [:]
+        for stroke in strokes { strokesPerLine[stroke.line, default: 0] += 1 }
+        tooMany.formUnion(strokes.count > 48 ? strokes.map(\.result) : strokes.filter { strokesPerLine[$0.line]! > 8 }.map(\.result))
         return result.indices.filter { !tooMany.contains($0) }.map { result[$0] }
     }
 
@@ -651,7 +677,8 @@ struct LayoutAnalyzer {
 
     /// Groups characters (in reading order) into lines; a big horizontal gap also ends a line — in tables a
     /// gap of under an em does, so each cell is its own line.
-    func buildLines(_ chars: [PageChar], tables: [CGRect], gutters: [[ClosedRange<Double>]] = [], pageWidth: Double) -> [LayoutLine] {
+    func buildLines(_ chars: [PageChar], tables: [CGRect], gutters: [[ClosedRange<Double>]] = [], dividers: [[CGRect]] = [],
+                    pageWidth: Double) -> [LayoutLine] {
         var lines: [LayoutLine] = []
         var current: [PageChar] = []
         var mainSize = 0.0
@@ -685,6 +712,11 @@ struct LayoutAnalyzer {
                 // In a table, a gap over a column gutter ends the cell however narrow it is.
                 let acrossGutter = table.map { t in
                     t < gutters.count && gutters[t].contains { last.rect.maxX <= $0.lowerBound + 0.5 && c.rect.minX >= $0.upperBound - 0.5 }
+                        // …and so does an upright rule of the grid standing between the two characters, on their row.
+                        || t < dividers.count && dividers[t].contains { rule in
+                            last.rect.maxX <= rule.midX + 0.5 && c.rect.minX >= rule.midX - 0.5
+                                && rule.minY < c.baseline + c.size * 0.5 && rule.maxY > c.baseline
+                        }
                 } ?? false
                 if !sameLine || gap > limit || acrossGutter || gap < -max(mainSize, 4) * 1.5 || c.isRotated != last.isRotated {
                     flush()
@@ -953,7 +985,8 @@ struct LayoutAnalyzer {
         spanning.sort(by: topDown)
         let separators = spanning.map { lines[$0].rect.midY }
         var cells: [[Int]: [Int]] = [:]
-        for (k, c) in column {
+        // In the lines' own order, not the dictionary's (which differs from run to run).
+        for (k, c) in column.sorted(by: { $0.key < $1.key }) {
             let band = separators.filter { $0 > lines[k].rect.midY }.count
             cells[[band, c], default: []].append(k)
         }
@@ -1002,6 +1035,19 @@ struct LayoutAnalyzer {
 
     /// Characters clearly smaller than the line's text are sub- or superscripts: part of a formula, together
     /// with the letter they are attached to ("f" in fₛ).
+    /// Text that reads as white with nothing coloured behind it: a colour the page gives in a way the engine does not
+    /// follow, not white words on a dark ground. Its translation is set in black, never invisible on the paper.
+    static func inkOnPaper(_ chars: inout [PageChar], interpreter: ContentInterpreter) {
+        guard chars.contains(where: { $0.color.isPale }) else { return }
+        let grounds = interpreter.grounds
+        for i in chars.indices where chars[i].color.isPale && !chars[i].isSpace && !chars[i].isNewline {
+            let center = CGPoint(x: chars[i].rect.midX, y: chars[i].baseline + chars[i].size * 0.3)
+            if !grounds.contains(where: { $0.insetBy(dx: -0.5, dy: -0.5).contains(center) }) {
+                chars[i].color = .black
+            }
+        }
+    }
+
     static func markScripts(_ line: LayoutLine) -> LayoutLine {
         var line = line
         var chars = line.chars
@@ -1182,6 +1228,24 @@ struct LayoutAnalyzer {
         return result
     }
 
+    /// The size of a line set in small capitals (IEEE's table titles and headings): capitals of two sizes on one
+    /// baseline and not a lowercase letter among them. Such a line is as large as its large capitals, however few of
+    /// them it has: a line with one capital in ten is not smaller type than the next, which has figures and
+    /// abbreviations and so more of them. (Taken by the share of each size, the lines of one title came out in
+    /// different sizes, and the title fell apart.)
+    static func smallCapitalsSize(_ visible: [PageChar]) -> Double? {
+        let letters = visible.filter { $0.text.first?.isLetter == true }
+        guard letters.count >= 4, !letters.contains(where: { $0.text.first?.isLowercase == true }) else { return nil }
+        let sizes = letters.map { ($0.size * 4).rounded() / 4 }
+        guard let large = sizes.max(), let small = sizes.min(), small >= large * 0.6, small <= large * 0.92 else { return nil }
+        // Two sizes and nothing in between, the small one the commoner; all on the line (scripts are off it).
+        let larger = letters.filter { $0.size > large * 0.96 }, smaller = letters.filter { $0.size < small * 1.04 }
+        guard larger.count + smaller.count == letters.count, smaller.count >= 2, smaller.count >= larger.count else { return nil }
+        let baselines = letters.map(\.baseline)
+        guard baselines.max()! - baselines.min()! < large * 0.06 else { return nil }
+        return large
+    }
+
     static func makeLine(_ unordered: [PageChar]) -> LayoutLine? {
         // Left to right: PDFKit sometimes lists scripts out of order.
         var chars = unordered
@@ -1195,26 +1259,27 @@ struct LayoutAnalyzer {
         // Size and baseline come from the line's text, not its scripts: the largest size a quarter of the characters
         // have (PDFKit's own baseline offsets are unreliable around stacked scripts).
         let sizes = Set(visible.map { ($0.size * 4).rounded() / 4 }).sorted(by: >)
-        let mainSize = sizes.first { s in visible.filter { abs($0.size - s) < s * 0.1 }.count * 4 >= visible.count } ?? sizes.last ?? first.size
+        let mainSize = smallCapitalsSize(visible)
+            ?? sizes.first { s in visible.filter { abs($0.size - s) < s * 0.1 }.count * 4 >= visible.count } ?? sizes.last ?? first.size
         let reference = visible.filter { abs($0.size - mainSize) < mainSize * 0.1 }
         var ink = first.rect
         for c in visible.dropFirst() { ink = ink.union(c.rect) }
         var sizeCounts: [Double: Int] = [:]
-        var fontCounts: [FontInfo: Int] = [:]
+        var fontCounts = Tally<FontInfo>()
         for c in reference {
             sizeCounts[(c.size * 4).rounded() / 4, default: 0] += 1
-            fontCounts[c.font, default: 0] += 1
+            fontCounts.add(c.font)
         }
         let size = sizeCounts.max { $0.value < $1.value || ($0.value == $1.value && $0.key < $1.key) }!.key
         let main = reference.filter { abs($0.size - size) < size * 0.1 }
         let baselines = (main.isEmpty ? reference : main).map(\.baseline).sorted()
-        let font = fontCounts.max { $0.value < $1.value }!.key
+        let font = fontCounts.most!
         // The colour of the words: links and citations are often coloured, the text around them is not.
-        var colorCounts: [RGBColor: Int] = [:]
-        for c in visible where c.text.first?.isLetter == true && c.link == nil { colorCounts[c.color, default: 0] += 1 }
-        if colorCounts.isEmpty { for c in visible where c.text.first?.isLetter == true { colorCounts[c.color, default: 0] += 1 } }
-        if colorCounts.isEmpty { for c in visible { colorCounts[c.color, default: 0] += 1 } }
-        let color = colorCounts.max { $0.value < $1.value }!.key
+        var colorCounts = Tally<RGBColor>()
+        for c in visible where c.text.first?.isLetter == true && c.link == nil { colorCounts.add(c.color) }
+        if colorCounts.isEmpty { for c in visible where c.text.first?.isLetter == true { colorCounts.add(c.color) } }
+        if colorCounts.isEmpty { for c in visible { colorCounts.add(c.color) } }
+        let color = colorCounts.most!
         return LayoutLine(chars: chars, inkRect: ink, baseline: baselines[baselines.count / 2], size: max(size, 1),
                           font: font, color: color,
                           isRotated: visible.filter(\.isRotated).count * 2 > visible.count)
@@ -1371,9 +1436,12 @@ struct LayoutAnalyzer {
             let entry = clusters[root] ?? (all[i], 0)
             clusters[root] = (entry.rect.union(all[i]), entry.seeds + (i < seeds.count ? 1 : 0))
         }
-        var regions = clusters.values.filter { $0.seeds > 0 && $0.rect.area > 150 }.map(\.rect)
+        // In the order the marks were drawn (a dictionary's own order differs from run to run, and the order decides
+        // which drawing a label between two of them goes to).
+        let ordered = clusters.sorted { $0.key < $1.key }.map(\.value)
+        var regions = ordered.filter { $0.seeds > 0 && $0.rect.area > 150 }.map(\.rect)
         // Small marks next to a drawing (legend swatches, markers) belong to it.
-        let small = clusters.values.filter { $0.seeds > 0 && $0.rect.area <= 150 }.map(\.rect)
+        let small = ordered.filter { $0.seeds > 0 && $0.rect.area <= 150 }.map(\.rect)
         for mark in small {
             if let k = regions.firstIndex(where: { $0.area > 2000 && $0.insetBy(dx: -30, dy: -30).intersects(mark) }) {
                 regions[k] = regions[k].union(mark)
@@ -1460,12 +1528,17 @@ struct LayoutAnalyzer {
         return result
     }
 
-    /// A line right under a line of running text (a caption's second line), in the same type.
+    /// A line right under a line of running text (a caption's second line), in the same type: starting where that
+    /// line starts, or, the last line of a centred title (IEEE's table titles end in a short centred line), with its
+    /// middle under that line's middle and no further below than the lines of one text are.
     static func continuesText(_ line: LayoutLine, in lines: [LayoutLine]) -> Bool {
         lines.contains { other in
             let drop = other.baseline - line.baseline
-            return drop > line.size * 0.5 && drop < line.size * 1.7 && abs(other.size - line.size) < line.size * 0.1
-                && other.wordCount >= 6 && line.minX < other.maxX && line.maxX > other.minX && abs(other.minX - line.minX) < line.size * 2
+            guard drop > line.size * 0.5, drop < line.size * 1.7, abs(other.size - line.size) < line.size * 0.1,
+                  other.wordCount >= 6, line.minX < other.maxX, line.maxX > other.minX else { return false }
+            if abs(other.minX - line.minX) < line.size * 2 { return true }
+            let centred = abs((other.minX + other.maxX) - (line.minX + line.maxX)) < line.size * 1.2
+            return centred && drop < line.size * 1.4 && line.wordCount >= 2 && line.minX > other.minX && line.maxX < other.maxX
         }
     }
 

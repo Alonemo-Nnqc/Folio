@@ -49,15 +49,6 @@ struct OpenLibraryClient: Sendable {
         metadata(from: try JSONDecoder().decode(Edition.self, from: data), isbn: isbn)
     }
 
-    static func parseAuthor(_ data: Data) throws -> Author? {
-        let record = try JSONDecoder().decode(AuthorRecord.self, from: data)
-        return (record.name ?? record.personalName).flatMap(NameParser.author(fromDisplayName:))
-    }
-
-    static func parseWorkAuthorKeys(_ data: Data) throws -> [String] {
-        try JSONDecoder().decode(Work.self, from: data).authors?.compactMap { $0.author?.key } ?? []
-    }
-
     static func metadata(from edition: Edition, isbn: String) -> Metadata? {
         guard var title = FieldNormalizer.cleanTitle(edition.title) else { return nil }
         if let subtitle = FieldNormalizer.cleanTitle(edition.subtitle) {

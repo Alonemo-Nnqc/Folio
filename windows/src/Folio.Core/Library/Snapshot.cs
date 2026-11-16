@@ -12,8 +12,6 @@ public static class TagPalette
         ("红", "#FF3B30"), ("橙", "#FF9500"), ("黄", "#FFCC00"), ("绿", "#34C759"), ("薄荷", "#00C7BE"),
         ("青", "#32ADE6"), ("蓝", "#007AFF"), ("靛", "#5856D6"), ("紫", "#AF52DE"), ("粉", "#FF2D55"),
     ];
-
-    public const string ImportDefault = "#8E8E93";
 }
 
 /// <summary>An immutable, fully-loaded view of the library, rebuilt whenever the database changes.</summary>

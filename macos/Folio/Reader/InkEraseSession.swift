@@ -39,7 +39,9 @@ final class InkEraseSession {
             guard annotation.bounds.insetBy(dx: -width, dy: -width).intersects(reach) else { continue }
             let id = ObjectIdentifier(annotation)
             let current = strokes[id] ?? Self.strokes(of: annotation)
-            guard let left = InkEraser.erase(current, along: track, radius: diameter / 2 + width / 2) else { continue }
+            // Pieces shorter than one and a half line widths are specks: they go too (as on Windows).
+            guard let left = InkEraser.erase(current, along: track, radius: diameter / 2 + width / 2,
+                                             minimumLength: max(InkEraser.defaultMinimumLength, width * 1.5)) else { continue }
             changed = true
             if let index = copies[id] {
                 // Already a working copy: cut it further, or take it away.
@@ -59,7 +61,7 @@ final class InkEraseSession {
             var change = Change(page: page, original: annotation, replacement: nil)
             page.removeAnnotation(annotation)
             if let popup = annotation.popup, left.isEmpty { page.removeAnnotation(popup) }
-            if !left.isEmpty, let copy = annotation.copy() as? PDFAnnotation {
+            if !left.isEmpty, let copy = Self.workingCopy(of: annotation) {
                 // Its picture shows the old strokes: PDFKit draws (and saves) a new one from the paths without it.
                 copy.removeValue(forAnnotationKey: .appearanceDictionary)
                 if let opacity = Self.opacity(of: annotation, on: page), opacity < 1, copy.color.alphaComponent >= 1 {
@@ -80,6 +82,18 @@ final class InkEraseSession {
     // MARK: Ink geometry
 
     /// An ink annotation's line width (PDF default 1).
+    /// A copy of the stroke to cut, of the reader's own ink class (drawn sharp on screen).
+    private static func workingCopy(of annotation: PDFAnnotation) -> PDFAnnotation? {
+        if let copy = annotation.copy() as? InkAnnotation { return copy }
+        let copy = InkAnnotation(bounds: annotation.bounds, forType: .ink, withProperties: nil)
+        copy.color = annotation.color
+        copy.border = annotation.border
+        copy.userName = annotation.userName
+        copy.contents = annotation.contents
+        for path in annotation.paths ?? [] { copy.add(path) }
+        return copy
+    }
+
     static func lineWidth(of annotation: PDFAnnotation) -> CGFloat {
         annotation.border.map { max(0, $0.lineWidth) } ?? 1
     }

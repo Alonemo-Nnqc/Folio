@@ -18,6 +18,25 @@ public sealed class TranslationConfigurationError(string message) : Exception(me
     public static TranslationConfigurationError AgentNotFound(string command) => new(Loc.S("在这台电脑上找不到 %@。请先安装并登录，或在 设置 ▸ 翻译 的高级选项里填写它的路径。", command));
 }
 
+/// <summary>A model name the service no longer offers, and the one used instead (the same as the Mac).</summary>
+public sealed record ModelCheck(string Saved, IReadOnlyList<string> Offered, string? Replacement)
+{
+    /// <summary>Whether the model saved for serviceId is one the service still offers, for the services that take any name
+    /// without complaint (CodeBuddy: it answers with a model of its own choosing). Null when it is, or cannot be told.
+    /// Services that say so themselves (an API answering "model not found") are not checked here.</summary>
+    public static ModelCheck? Check(string serviceId, IReadOnlyDictionary<string, string> fields)
+    {
+        if (TranslationServiceCatalog.Service(serviceId) is not { } service || service.Backend is not TranslationBackend.Agent { Which: LocalAgent.Codebuddy })
+            return null;
+        var option = service.Fields.FirstOrDefault(f => f.Title == TranslationServiceCatalog.ModelFieldTitle)?.Option;
+        var saved = option != null ? fields.GetValueOrDefault(option)?.Trim() : null;
+        if (string.IsNullOrEmpty(saved)) return null;
+        var offered = CodeBuddyAccount.Models();
+        if (offered.Count == 0 || offered.Contains(saved)) return null;
+        return new ModelCheck(saved, offered, CodeBuddyAccount.QuickModel(offered));
+    }
+}
+
 public static class ProviderFactory
 {
     /// <summary>The provider for serviceId with the user's values. concurrency overrides the provider's own.</summary>
@@ -80,10 +99,17 @@ public static class ProviderFactory
                         break;
                 }
                 var temperatureOption = service.Fields.FirstOrDefault(f => f.Title == "Temperature")?.Option;
-                double? temperature = temperatureOption != null && double.TryParse(fields.GetValueOrDefault(temperatureOption), System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : extra.ContainsKey("reasoning_effort") ? null : 0.2;
+                double? chosenTemperature = temperatureOption != null && double.TryParse(fields.GetValueOrDefault(temperatureOption), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : null;
+                double? temperature = chosenTemperature ?? (extra.ContainsKey("reasoning_effort") ? null : 0.2);
+                // What the user did not choose is Folio's own idea, and goes when a model or server does not take it.
+                var optional = new HashSet<string>();
+                if (chosenTemperature == null) optional.Add("temperature");
+                if (extra.ContainsKey("think")) optional.Add("think");
+                if (extra.ContainsKey("reasoning_effort") && string.IsNullOrEmpty(ReasoningEffort.OptionFor(serviceId) is { } stored ? fields.GetValueOrDefault(stored) : null))
+                    optional.Add("reasoning_effort");
                 provider = new OpenAIChatProvider(endpoint, key, Required(modelOption ?? ""), temperature, extra, null,
-                    local ? new ProviderLimits(1800, 20, 2, true, 2, 0.04) : llmLimits);
+                    local ? new ProviderLimits(1800, 20, 2, true, 2, 0.04) : llmLimits, optional);
                 break;
             }
             case TranslationBackend.AzureOpenAI:
@@ -122,8 +148,14 @@ public static class ProviderFactory
                 var executable = agent.Which.Locate(pathOption != null ? fields.GetValueOrDefault(pathOption) : null)
                                  ?? throw TranslationConfigurationError.AgentNotFound(agent.Which.Command());
                 var model = modelOption != null ? Value(modelOption) : null;
-                // CodeBuddy without a model chosen: a quick one of the account's, not its own default (minutes a page).
-                if (agent.Which == LocalAgent.Codebuddy && string.IsNullOrEmpty(model)) model = CodeBuddyAccount.QuickModel(CodeBuddyAccount.Models());
+                // CodeBuddy without a model chosen, or with one its account no longer offers (a name saved by an older
+                // version, such as "hy4free"): a quick one of the account's (as on the Mac). CodeBuddy would otherwise answer
+                // with a model that thinks at length: four minutes for a batch the quick models do in 15 to 20 s.
+                if (agent.Which == LocalAgent.Codebuddy)
+                {
+                    if (ModelCheck.Check(serviceId, fields) is { } check) model = check.Replacement;
+                    else if (string.IsNullOrEmpty(model)) model = CodeBuddyAccount.QuickModel(CodeBuddyAccount.Models());
+                }
                 provider = new AgentProvider(agent.Which, executable, model, ReasoningEffort.AgentEffort(serviceId, fields));
                 break;
             }
@@ -219,8 +251,10 @@ public static class ReasoningEffort
                 var model = fields.GetValueOrDefault(ModelOption[serviceId])?.Trim() ?? "";
                 var name = (model.Length == 0 ? fallback : model).ToLowerInvariant();
                 var bare = name.Split('/').Last();
-                if (Regex.IsMatch(bare, @"^gpt-([5-9]|\d{2})")) return new Support.Choices(FullRange, "medium");
-                if (Regex.IsMatch(bare, "^o[1-9]")) return new Support.Choices([new("low", Loc.S("低")), new("medium", Loc.S("中")), new("high", Loc.S("高"))], "medium");
+                // The usual level is low, as for the local agents: translating needs little deliberation, and a paper
+                // comes back several times sooner (the level stays the user's to raise).
+                if (Regex.IsMatch(bare, @"^gpt-([5-9]|\d{2})")) return new Support.Choices(FullRange, "low");
+                if (Regex.IsMatch(bare, "^o[1-9]")) return new Support.Choices([new("low", Loc.S("低")), new("medium", Loc.S("中")), new("high", Loc.S("高"))], "low");
                 if (bare.StartsWith("gpt-4") || bare.StartsWith("gpt-3") || bare.StartsWith("chatgpt")) return new Support.UnsupportedModel();
                 if (serviceId == "openaicompatible") return new Support.Choices([new("", Loc.S("不设置")), .. FullRange], "");
                 return new Support.UnsupportedModel();
@@ -236,7 +270,7 @@ public static class ReasoningEffort
 
     /// <summary>Where a service's level is kept: its own option, or for any local agent "--&lt;service&gt;-effort" (an agent
     /// added later is never left without one, which would keep its choice from being stored).</summary>
-    static string? OptionFor(string serviceId)
+    internal static string? OptionFor(string serviceId)
     {
         if (ValueOption.TryGetValue(serviceId, out var known)) return known;
         return TranslationServiceCatalog.Service(serviceId)?.Backend is TranslationBackend.Agent ? $"--{serviceId}-effort" : null;

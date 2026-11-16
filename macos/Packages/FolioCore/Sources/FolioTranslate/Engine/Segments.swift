@@ -86,14 +86,16 @@ enum SegmentBuilder {
         } else {
             return false
         }
-        var letters = 0, inScript = 0
+        var letters = 0, inScript = 0, fullWidth = 0
         for scalar in text.replacingOccurrences(of: #"\{v\d+\}"#, with: "", options: .regularExpression).unicodeScalars where scalar.properties.isAlphabetic {
             // Full-width Latin letters only occur in text set in these scripts.
-            if (0xFF21...0xFF5A).contains(scalar.value) { continue }
+            if (0xFF21...0xFF5A).contains(scalar.value) { fullWidth += 1; continue }
             letters += 1
             if ranges.contains(where: { $0.contains(scalar.value) }) { inScript += 1 }
         }
-        return letters > 0 && Double(inScript) >= Double(letters) * share
+        // Nothing but full-width letters (a formula in a Chinese paper, "ｆ（ｘ，ｙ）＝…"): set in these scripts already.
+        if letters == 0 { return fullWidth > 0 }
+        return Double(inScript) >= Double(letters) * share
     }
 
     private static let ligatures: [String: String] = ["ﬁ": "fi", "ﬂ": "fl", "ﬀ": "ff", "ﬃ": "ffi", "ﬄ": "ffl", "ﬅ": "st", "ﬆ": "st"]
@@ -272,7 +274,7 @@ enum StandardHeadings {
 enum StandardCells {
     static let chinese: [String: String] = [
         "mean": "平均", "average": "平均", "avg": "平均", "avg.": "平均", "method": "方法", "methods": "方法",
-        "ours": "本文方法", "ours (full)": "本文方法（完整）", "backbone": "骨干网络", "arch.": "架构", "architecture": "架构",
+        "ours": "本文", "ours (full)": "本文（完整）", "backbone": "骨干网络", "arch.": "架构", "architecture": "架构",
         "params": "参数量", "params.": "参数量", "parameters": "参数量", "dataset": "数据集", "datasets": "数据集",
         "setting": "设置", "settings": "设置", "baseline": "基线", "model": "模型", "models": "模型", "year": "年份",
         "venue": "来源", "source": "源域", "target": "目标域", "time": "时间", "memory": "显存", "accuracy": "准确率",

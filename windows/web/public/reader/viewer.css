@@ -117,13 +117,21 @@ body.panning .textLayer { user-select: none; }
 .selection-layer { position: absolute; inset: 0; pointer-events: none; opacity: .3; mix-blend-mode: multiply; }
 .selection-layer div { position: absolute; background: rgb(0, 110, 255); }
 .folio-marks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; mix-blend-mode: multiply; overflow: visible; }
-.free-text { width: 100%; height: 100%; box-sizing: border-box; padding: 3px; font: 12px "Segoe UI", "Microsoft YaHei UI", sans-serif; color: #000; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; }
+.folio-notes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+/* Text boxes: real text over the page at its zoom (sharp at every size), in their colour, on no background unless
+   they were made with one (as on the Mac). */
+.folio-text-boxes { position: absolute; inset: 0; pointer-events: none; }
+.free-text { position: absolute; box-sizing: border-box; font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", sans-serif; line-height: 1.22; color: #000;
+  white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; -webkit-font-smoothing: antialiased; }
 
 #tip { position: fixed; z-index: 40; max-width: 320px; padding: 6px 9px; border-radius: 6px; background: var(--tip); border: 1px solid var(--separator);
   box-shadow: 0 2px 10px rgba(0, 0, 0, .2); white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
 
 /* Tools: the text layer stays selectable for the markup tools; drawing tools get a crosshair. */
-body.tool-note .page, body.tool-textbox .page, body.tool-ink .page { cursor: crosshair; }
+/* Pointers (as on the Mac): an I-beam where a text box is typed, a little note in its colour, the pen's tip. */
+body.tool-textbox .page { cursor: text; }
+body.tool-note .page { cursor: var(--note-cursor, default); }
+body.tool-ink .page { cursor: var(--pen-cursor, crosshair); }
 body.tool-ink .textLayer, body.tool-note .textLayer, body.tool-textbox .textLayer,
 body.tool-ink .annotationLayer, body.tool-note .annotationLayer, body.tool-textbox .annotationLayer { pointer-events: none; }
 body.tool-ink .textLayer *, body.tool-note .textLayer *, body.tool-textbox .textLayer *,
@@ -131,7 +139,7 @@ body.tool-ink .annotationLayer *, body.tool-note .annotationLayer *, body.tool-t
 /* The eraser (READER-30): its pointer is a ring as large as it erases (set from viewer.js), nothing under it is selected. */
 body.tool-eraser .textLayer, body.tool-eraser .annotationLayer, body.tool-eraser .textLayer *, body.tool-eraser .annotationLayer * { pointer-events: none !important; }
 body.tool-eraser .page { cursor: var(--eraser-cursor, crosshair); }
-.ink-preview { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 30; pointer-events: none; }
+.ink-preview { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 30; pointer-events: none; overflow: visible; mix-blend-mode: multiply; }
 .annotation-selection { position: absolute; z-index: 25; pointer-events: none; border: 1.5px dashed var(--accent); border-radius: 2px; }
 
 .freeze { position: fixed; z-index: 20; overflow: hidden; pointer-events: none; }

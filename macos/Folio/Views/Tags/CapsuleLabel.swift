@@ -13,7 +13,17 @@ enum CapsuleLabel {
     static let tagHeight: CGFloat = 18
     static let badgeHeight: CGFloat = 16
     static let tagPadding: CGFloat = 7
-    static let badgePadding: CGFloat = 6
+    static let badgePadding: CGFloat = 5
+    /// A tag's colour dot (as Finder shows tags) and the gap after it, before its name.
+    static let dotSize: CGFloat = 6
+    static let dotSpace: CGFloat = 10
+    /// Badges ("已翻译", "默认", journal ranks) are small rounded rectangles; tags are capsules.
+    static let badgeRadius: CGFloat = 4.5
+
+    /// How wide a capsule for `text` is.
+    static func width(_ text: String, font: NSFont, padding: CGFloat, dot: Bool) -> CGFloat {
+        textWidth(text, font: font) + padding * 2 + (dot ? dotSpace - 1 : 0)
+    }
 
     // MARK: Colours
 
@@ -52,21 +62,27 @@ enum CapsuleLabel {
 
     // MARK: Drawing
 
-    /// Draws a capsule in `rect` (in the current, flipped or unflipped, context) with `text` centred in it,
-    /// truncated with "…" when it does not fit.
-    static func draw(_ text: String, in rect: NSRect, tint: NSColor, font: NSFont, padding: CGFloat,
+    /// The tinted fill behind a tag or badge: soft, with no outline.
+    static func fill(_ tint: NSColor, dark: Bool) -> NSColor { tint.withAlphaComponent(dark ? 0.24 : 0.13) }
+
+    /// Draws a tag (`dot`: a capsule led by its colour dot) or a badge (a small rounded rectangle) in `rect` (in the
+    /// current, flipped or unflipped, context) with `text` in it, truncated with "…" when it does not fit.
+    static func draw(_ text: String, in rect: NSRect, tint: NSColor, font: NSFont, padding: CGFloat, dot: Bool = false,
                      appearance: NSAppearance, flipped: Bool, scale: CGFloat) {
         let dark = isDark(appearance)
-        let pixel = 1 / max(scale, 1)
-        let capsule = rect.insetBy(dx: pixel / 2, dy: pixel / 2)
-        let path = NSBezierPath(roundedRect: capsule, xRadius: capsule.height / 2, yRadius: capsule.height / 2)
-        tint.withAlphaComponent(dark ? 0.26 : 0.16).setFill()
-        path.fill()
-        tint.withAlphaComponent(dark ? 0.50 : 0.42).setStroke()
-        path.lineWidth = pixel
-        path.stroke()
-        drawText(text, in: rect.insetBy(dx: padding, dy: 0), color: textColor(tint, dark: dark), font: font,
-                 flipped: flipped, scale: scale)
+        let radius = dot ? rect.height / 2 : min(badgeRadius, rect.height / 2)
+        fill(tint, dark: dark).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+        var textRect = rect.insetBy(dx: padding, dy: 0)
+        if dot {
+            let snap = { (value: CGFloat) in (value * scale).rounded() / scale }
+            let circle = NSRect(x: snap(rect.minX + padding - 1), y: snap(rect.midY - dotSize / 2), width: dotSize, height: dotSize)
+            tint.setFill()
+            NSBezierPath(ovalIn: circle).fill()
+            textRect.origin.x += dotSpace - 1
+            textRect.size.width -= dotSpace - 1
+        }
+        drawText(text, in: textRect, color: textColor(tint, dark: dark), font: font, flipped: flipped, scale: scale)
     }
 
     /// Draws one line of text horizontally and optically centred in `rect`.

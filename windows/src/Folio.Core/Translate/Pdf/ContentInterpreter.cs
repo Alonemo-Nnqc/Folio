@@ -15,7 +15,6 @@ public sealed class StreamPath : IEquatable<StreamPath>
     public StreamPath(IReadOnlyList<int> indexes) { Indexes = indexes; }
     public StreamPath Appending(int index) => new([.. Indexes, index]);
     public StreamPath? Parent => Indexes.Count == 0 ? null : new StreamPath(Indexes.Take(Indexes.Count - 1).ToList());
-    public bool IsRoot => Indexes.Count == 0;
     public bool Equals(StreamPath? other) => other != null && Indexes.SequenceEqual(other.Indexes);
     public override bool Equals(object? obj) => Equals(obj as StreamPath);
     public override int GetHashCode()
@@ -55,7 +54,6 @@ public sealed class TextRun
             return new Rect(minX, Math.Min(Origin.Y, End.Y) - FontSize * 0.25, Math.Max(maxX - minX, 0.1), FontSize * 1.1);
         }
     }
-    public Pt Midpoint => new((Origin.X + End.X) / 2, (Origin.Y + End.Y) / 2 + FontSize * 0.3);
 }
 
 /// <summary>One glyph drawn by a text operator: its code, font and the exact matrix it was drawn with.</summary>
@@ -143,6 +141,34 @@ public sealed class ContentInterpreter
     /// <summary>Small filled shapes: the matrix their path was drawn with.</summary>
     public Dictionary<int, Affine> Paths { get; } = [];
     readonly Dictionary<long, int> _fontCache = [];
+    readonly Dictionary<(long, string), PdfColorSpace> _colorSpaces = [];
+    List<Rect>? _grounds;
+
+    /// <summary>The colour space a cs/CS operand names, from the resources of the stream it is in.</summary>
+    PdfColorSpace ColorSpace(string? name, PDict? resources)
+    {
+        if (name == null) return PdfColorSpace.DeviceGray;
+        var key = (resources?.Key ?? 0, name);
+        if (_colorSpaces.TryGetValue(key, out var cached)) return cached;
+        return _colorSpaces[key] = PdfColorSpace.Named(name, resources);
+    }
+
+    /// <summary>Where the page has something coloured under its text (pictures, shadings, dark fills): pale words there
+    /// are meant to be; pale words anywhere else are a colour misread, and are drawn in black.</summary>
+    public List<Rect> Grounds => _grounds ??= Marks.Where(m => m.Kind switch
+    {
+        GraphicMark.MarkKind.Image or GraphicMark.MarkKind.Shading => true,
+        GraphicMark.MarkKind.Fill => !m.IsWhite && (m.Color.R + m.Color.G + m.Color.B) / 3 < 0.8,
+        _ => false,
+    }).Select(m => m.Rect).ToList();
+
+    /// <summary>A glyph's colour to draw it again in: its own, unless that would leave it invisible on the paper.</summary>
+    public RGBColor VisibleColor(Glyph glyph)
+    {
+        if (!glyph.Color.IsPale) return glyph.Color;
+        var center = new Pt(glyph.Width / 2, 0.3).Applying(glyph.Matrix);
+        return Grounds.Any(r => r.InsetBy(-0.5, -0.5).Contains(center)) ? glyph.Color : RGBColor.Black;
+    }
     int _chainCounter;
 
     sealed class GState
@@ -154,6 +180,7 @@ public sealed class ContentInterpreter
         public int? Font;
         public double FontSize;
         public RGBColor FillColor = RGBColor.Black, StrokeColor = RGBColor.Black;
+        public PdfColorSpace FillSpace = PdfColorSpace.DeviceGray, StrokeSpace = PdfColorSpace.DeviceGray;
         public double LineWidth = 1, Rise;
         public int Render;
         public GState Copy() => (GState)MemberwiseClone();
@@ -202,7 +229,7 @@ public sealed class ContentInterpreter
                     rect = clipped;
                 }
                 double scale = Math.Sqrt(Math.Abs(gs.Ctm.A * gs.Ctm.D - gs.Ctm.B * gs.Ctm.C));
-                if (kind == GraphicMark.MarkKind.Fill && rect.W < 40 && rect.H < 40) Paths[Marks.Count] = gs.Ctm;
+                if (kind is GraphicMark.MarkKind.Fill or GraphicMark.MarkKind.Stroke && rect.W < 40 && rect.H < 40) Paths[Marks.Count] = gs.Ctm;
                 Marks.Add(new GraphicMark
                 {
                     Kind = kind.Value, Rect = rect, IsWhite = kind == GraphicMark.MarkKind.Fill && gs.FillWhite,
@@ -221,23 +248,14 @@ public sealed class ContentInterpreter
             }
         }
 
-        static RGBColor ColorOf(List<ContentOperand> operands)
-        {
-            var n = operands.Select(o => o.AsNumber).Where(x => x != null).Select(x => x!.Value).ToList();
-            return n.Count switch
-            {
-                1 => new RGBColor(n[0], n[0], n[0]),
-                3 => new RGBColor(n[0], n[1], n[2]),
-                4 => new RGBColor((1 - n[0]) * (1 - n[3]), (1 - n[1]) * (1 - n[3]), (1 - n[2]) * (1 - n[3])),
-                _ => RGBColor.Black,
-            };
-        }
+        static List<double> Numbers(List<ContentOperand> operands) =>
+            operands.Select(o => o.AsNumber).Where(x => x != null).Select(x => x!.Value).ToList();
 
-        void SetFillColor(List<ContentOperand> operands)
+        void SetFillColor(IReadOnlyList<double> n, PdfColorSpace space)
         {
-            gs.FillColor = ColorOf(operands);
-            bool any = operands.Any(o => o.AsNumber != null);
-            gs.FillWhite = any && gs.FillColor.R >= 0.99 && gs.FillColor.G >= 0.99 && gs.FillColor.B >= 0.99;
+            gs.FillSpace = space;
+            gs.FillColor = space.ToRgb(n);
+            gs.FillWhite = n.Count > 0 && gs.FillColor.R >= 0.99 && gs.FillColor.G >= 0.99 && gs.FillColor.B >= 0.99;
         }
 
         void Show(int index, List<ContentOperand> elements)
@@ -319,10 +337,29 @@ public sealed class ContentInterpreter
                 case "q": stack.Push(gs.Copy()); break;
                 case "Q": if (stack.Count > 0) gs = stack.Pop(); break;
                 case "cm": gs.Ctm = new Affine(Num(0), Num(1), Num(2), Num(3), Num(4), Num(5)).Concatenating(gs.Ctm); break;
-                case "g" or "rg" or "k" or "sc" or "scn": SetFillColor(o); break;
-                case "G" or "RG" or "K" or "SC" or "SCN": gs.StrokeColor = ColorOf(o); break;
-                case "cs": gs.FillWhite = false; gs.FillColor = RGBColor.Black; break;
-                case "CS": gs.StrokeColor = RGBColor.Black; break;
+                // Colours, read in the space they are given in (1 scn is full ink in a Separation space, not white).
+                case "g": SetFillColor(Numbers(o), PdfColorSpace.DeviceGray); break;
+                case "rg": SetFillColor(Numbers(o), PdfColorSpace.DeviceRgb); break;
+                case "k": SetFillColor(Numbers(o), PdfColorSpace.DeviceCmyk); break;
+                case "sc" or "scn": SetFillColor(Numbers(o), gs.FillSpace); break;
+                case "G": gs.StrokeSpace = PdfColorSpace.DeviceGray; gs.StrokeColor = gs.StrokeSpace.ToRgb(Numbers(o)); break;
+                case "RG": gs.StrokeSpace = PdfColorSpace.DeviceRgb; gs.StrokeColor = gs.StrokeSpace.ToRgb(Numbers(o)); break;
+                case "K": gs.StrokeSpace = PdfColorSpace.DeviceCmyk; gs.StrokeColor = gs.StrokeSpace.ToRgb(Numbers(o)); break;
+                case "SC" or "SCN": gs.StrokeColor = gs.StrokeSpace.ToRgb(Numbers(o)); break;
+                case "cs":
+                    {
+                        var space = ColorSpace(o.FirstOrDefault()?.AsName, resources);
+                        SetFillColor(space.Initial, space);
+                        gs.FillWhite = false;
+                        break;
+                    }
+                case "CS":
+                    {
+                        var space = ColorSpace(o.FirstOrDefault()?.AsName, resources);
+                        gs.StrokeSpace = space;
+                        gs.StrokeColor = space.ToRgb(space.Initial);
+                        break;
+                    }
                 case "w": gs.LineWidth = Num(0); break;
                 case "m": AddPoint(Num(0), Num(1)); break;
                 case "l": AddPoint(Num(0), Num(1)); pathSegments++; break;

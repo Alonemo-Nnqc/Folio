@@ -131,6 +131,7 @@ targets:
       - path: Folio/Views/Sidebar/SidebarDragRules.swift
       - path: Folio/Views/Sidebar/SidebarNode.swift
       - path: Folio/Views/ItemList/ItemMenuBuilder.swift
+      - path: Folio/Translation/TranslationIcon.swift
       - path: Folio/Views/ItemList/ListDropRules.swift
       - path: Folio/App/CitationStyleOption.swift
       - path: Folio/Support/AppKitExtensions.swift

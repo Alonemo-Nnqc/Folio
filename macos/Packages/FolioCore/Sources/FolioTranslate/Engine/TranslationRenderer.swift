@@ -415,7 +415,14 @@ final class TranslationRenderer {
                     // A shape: its own path, in its own colour.
                     let mark = interpreter.marks[m]
                     let ops = mark.opRange.map { String(decoding: stream.source[stream.ops[$0].range], as: UTF8.self) }.joined(separator: "\n")
-                    content += "q " + matrix(ctm) + " cm \(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b)) rg\n" + ops + "\nQ\n"
+                    let color = "\(PDFValue.format(mark.color.r)) \(PDFValue.format(mark.color.g)) \(PDFValue.format(mark.color.b))"
+                    if mark.kind == .stroke {
+                        // A line: in its colour and as thick as it was (its width is known on the page, the path is in its own space).
+                        let scale = max(sqrt(abs(ctm.a * ctm.d - ctm.b * ctm.c)), 0.001)
+                        content += "q " + matrix(ctm) + " cm \(color) RG \(PDFValue.format(max(mark.lineWidth, 0.1) / scale)) w\n" + ops + "\nQ\n"
+                    } else {
+                        content += "q " + matrix(ctm) + " cm \(color) rg\n" + ops + "\nQ\n"
+                    }
                 }
             }
             content += drawing(glyphs: glyphs.sorted(), rules: rules, interpreter: interpreter) { font in
@@ -676,9 +683,10 @@ final class TranslationRenderer {
                     font = g.font
                     out += "/\(fontName(font)) 1 Tf\n"
                 }
-                if g.color != color {
-                    color = g.color
-                    let c = "\(PDFValue.format(g.color.r)) \(PDFValue.format(g.color.g)) \(PDFValue.format(g.color.b))"
+                let shown = interpreter.visibleColor(of: g)
+                if shown != color {
+                    color = shown
+                    let c = "\(PDFValue.format(shown.r)) \(PDFValue.format(shown.g)) \(PDFValue.format(shown.b))"
                     out += "\(c) rg \(c) RG\n"
                 }
                 let render = min(g.renderMode, 2)

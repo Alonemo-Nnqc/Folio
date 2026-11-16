@@ -6,6 +6,7 @@ import SwiftUI
 struct ReaderSidebarActions {
     var goToPage: (Int) -> Void
     var showAnnotation: (ObjectIdentifier) -> Void
+    var deleteAnnotation: (ObjectIdentifier) -> Void
     var showHit: (Int) -> Void
 }
 
@@ -39,7 +40,9 @@ struct ReaderSidebarView: View {
     private var content: some View {
         switch state.sidebarTab {
         case .thumbnails:
-            ThumbnailStrip(pdfView: pdfView)
+            GeometryReader { proxy in
+                ThumbnailStrip(pdfView: pdfView, width: proxy.size.width)
+            }
         case .outline:
             if state.outline.isEmpty {
                 ContentUnavailableView("没有目录", systemImage: "list.bullet.indent", description: Text("这份 PDF 没有内置目录"))
@@ -68,6 +71,10 @@ struct ReaderSidebarView: View {
                 List(state.annotations) { row in
                     Button { actions.showAnnotation(row.id) } label: { AnnotationRowView(row: row) }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("显示") { actions.showAnnotation(row.id) }
+                            Button("删除批注", role: .destructive) { actions.deleteAnnotation(row.id) }
+                        }
                 }
                 .listStyle(.sidebar)
             }
@@ -116,6 +123,12 @@ private struct AnnotationRowView: View {
                 Text("\(row.kind) · 第 \(row.pageIndex + 1) 页")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                if row.isOffPage {
+                    // It can't be seen or reached on the page: said so, and it can be deleted from here.
+                    Label("在页面范围之外，看不到；右键可删除", systemImage: "exclamationmark.triangle")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 if !row.text.isEmpty {
                     Text(row.text).font(.callout).lineLimit(4)
                 }
@@ -130,13 +143,21 @@ private struct AnnotationRowView: View {
     }
 }
 
+/// The pages, one under the other, as wide as the sidebar lets them be (in proportion to a page, room left for the
+/// selection's outline and the page number).
 private struct ThumbnailStrip: NSViewRepresentable {
     let pdfView: PDFView
+    let width: CGFloat
+
+    static func size(for width: CGFloat) -> NSSize {
+        let w = min(max(width - 52, 96), 300).rounded()
+        return NSSize(width: w, height: (w * 1.36).rounded())
+    }
 
     func makeNSView(context: Context) -> PDFThumbnailView {
         let view = PDFThumbnailView()
         view.pdfView = pdfView
-        view.thumbnailSize = NSSize(width: 110, height: 150)
+        view.thumbnailSize = Self.size(for: width)
         view.backgroundColor = .clear
         view.allowsMultipleSelection = false
         view.setAccessibilityIdentifier("readerThumbnails")
@@ -145,6 +166,9 @@ private struct ThumbnailStrip: NSViewRepresentable {
 
     func updateNSView(_ nsView: PDFThumbnailView, context: Context) {
         if nsView.pdfView !== pdfView { nsView.pdfView = pdfView }
+        let size = Self.size(for: width)
+        // Only for a real change: each change lays every thumbnail out again.
+        if abs(nsView.thumbnailSize.width - size.width) >= 4 { nsView.thumbnailSize = size }
     }
 }
 

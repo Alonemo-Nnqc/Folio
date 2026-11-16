@@ -654,91 +654,6 @@ html[data-lang="zh"] .headline {
   pointer-events: none;
 }
 
-/* ---------- Film ---------- */
-
-.film {
-  padding: clamp(100px, 14vh, 160px) 0 clamp(100px, 14vh, 160px);
-}
-
-.film-frame {
-  position: relative;
-  max-width: 1120px;
-  margin: 56px auto 0;
-  margin-inline: max(var(--gutter), calc((100% - 1120px) / 2));
-  aspect-ratio: 16 / 9;
-  border-radius: clamp(14px, 2.2vw, 28px);
-  overflow: hidden;
-  background: #efe9df;
-  box-shadow: 0 30px 80px -20px rgba(24, 28, 42, 0.28), 0 4px 14px rgba(24, 28, 42, 0.06);
-  transform: scale(var(--scale, 0.9));
-  transform-origin: 50% 30%;
-  will-change: transform;
-}
-
-.film-frame video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.film-play {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-  padding-bottom: clamp(18px, 6%, 56px);
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 55%, rgba(20, 22, 30, 0.18));
-  transition: opacity 0.6s var(--ease-out), visibility 0.6s;
-}
-
-.film-play-disc {
-  width: clamp(56px, 6vw, 76px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
-  transition: transform 0.5s var(--ease-out), background-color 0.3s ease;
-}
-
-.film-play-disc svg {
-  width: 40%;
-  margin-left: 6%;
-}
-
-.film-play:hover .film-play-disc {
-  transform: scale(1.08);
-  background: rgba(255, 255, 255, 0.86);
-}
-
-.film-play-label {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.25);
-}
-
-.film-play-label small {
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0.85;
-}
-
-.film.is-playing .film-play {
-  opacity: 0;
-  visibility: hidden;
-}
-
 /* ---------- Import (pinned) ---------- */
 
 .import {
@@ -1026,7 +941,8 @@ html[data-lang="zh"] .headline {
   animation: pulse 2.4s ease-out infinite;
 }
 
-.reader-stage.is-in .callout {
+.reader-stage.is-in .callout,
+.stage.is-in .callout {
   opacity: 1;
   transform: translate(-50%, -150%) scale(1);
 }
@@ -1051,6 +967,81 @@ html[data-lang="zh"] .headline {
     width: 7px;
     height: 7px;
     margin: 4px 0 0 -3.5px;
+  }
+}
+
+/* ---------- Feature sections: one real window under a heading ---------- */
+
+.feature {
+  padding: clamp(80px, 12vh, 140px) 0;
+}
+
+.stage {
+  position: relative;
+  max-width: 1120px;
+  margin: 64px auto 0;
+  margin-inline: max(var(--gutter), calc((100% - 1120px) / 2));
+}
+
+.stage-narrow {
+  max-width: 880px;
+  margin-inline: max(var(--gutter), calc((100% - 880px) / 2));
+}
+
+/* A page of the PDF, cut out of the reader: square corners, a paper edge. */
+.win-page {
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* The Windows window (a browser rendering of its interface) has its own square corners. */
+.win-flat {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Sheets (glossary, translate) sit side by side at their own heights. */
+.duo-sheets {
+  align-items: start;
+  max-width: calc(1040px + 2 * var(--gutter));
+}
+
+.duo-sheets .duo-item:nth-child(2) {
+  margin-top: 0;
+}
+
+.win-sheet {
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.points {
+  max-width: calc(1120px + 2 * var(--gutter));
+  margin: 72px auto 0;
+  padding: 0 var(--gutter);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(20px, 3vw, 44px);
+}
+
+.points b {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 19px;
+  margin-bottom: 6px;
+}
+
+.points span {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--sub);
+}
+
+@media (max-width: 734px) {
+  .points {
+    grid-template-columns: 1fr;
+    gap: 28px;
   }
 }
 
@@ -1748,9 +1739,6 @@ html[data-lang="zh"] .headline {
     filter: none !important;
   }
   .hero-window,
-  .film-frame {
-    transform: none !important;
-  }
 }
 
 /* Platform-specific blocks (main.js shows the one for this computer). */

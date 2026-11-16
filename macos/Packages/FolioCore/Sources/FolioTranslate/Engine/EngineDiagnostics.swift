@@ -316,6 +316,10 @@ extension EngineDiagnostics {
                 translations[segment.id] = heading
                 continue
             }
+            if segment.kind == .tableCell, let cell = StandardCells.translate(segment.source, to: "zh") {
+                translations[segment.id] = cell
+                continue
+            }
             if let hit = cache.lookup(segment.source) {
                 translations[segment.id] = hit
                 cached += 1

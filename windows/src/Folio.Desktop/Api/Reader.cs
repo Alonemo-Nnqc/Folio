@@ -266,7 +266,8 @@ public static partial class Api
             int page = a.Int("page");
             var temp = a.Str("temp");
             var color = a.Str("color");
-            return Session(a).Change(path => Resolved([temp], AnnotationWriter.Add(path, [new NewAnnotation(page, "Ink", color, Strokes: strokes, Author: Author)])));
+            double width = a.Has("width") ? a.Num("width") : 2;
+            return Session(a).Change(path => Resolved([temp], AnnotationWriter.Add(path, [new NewAnnotation(page, "Ink", color, Strokes: strokes, Author: Author, Width: width)])));
         });
         // The eraser (READER-30): the page already shows the result; the same tracks are cut out of the file, one undo step.
         Bridge.OnAsync("reader.erase", a =>
@@ -275,7 +276,13 @@ public static partial class Api
             var numbers = a.Strs("ids").Select(ObjectNumber).Distinct().ToList();
             var paths = a.Raw("paths").EnumerateArray().Select(p => p.EnumerateArray().Select(v => v.GetDouble()).ToArray()).ToList();
             double radius = a.Num("radius");
-            return Session(a).Change(path => { AnnotationWriter.EraseInk(path, numbers.Select(n => new InkErasure(page, n, paths, radius)).ToList()); return null; });
+            // What the page shows for each (the strokes left, none when erased completely): the file gets exactly that.
+            var shown = new Dictionary<long, List<double[]>>();
+            if (a.Has("results"))
+                foreach (var result in a.Raw("results").EnumerateArray())
+                    shown[ObjectNumber(result.GetProperty("id").GetString() ?? "")] =
+                        result.GetProperty("strokes").EnumerateArray().Select(s => s.EnumerateArray().Select(v => v.GetDouble()).ToArray()).ToList();
+            return Session(a).Change(path => { AnnotationWriter.EraseInk(path, numbers.Select(n => new InkErasure(page, n, paths, radius, shown.GetValueOrDefault(n))).ToList()); return null; });
         });
         // 编辑 PDF 文字 (EDIT-01): the blocks of a page, and one replaced.
         Bridge.OnAsync("reader.textBlocks", async a =>
@@ -385,7 +392,8 @@ public static partial class Api
             var temp = a.Str("temp");
             var text = a.Str("contents");
             var rect = a.Raw("rect").EnumerateArray().Select(v => v.GetDouble()).ToArray();
-            return Session(a).Change(path => Resolved([temp], AnnotationWriter.Add(path, [new NewAnnotation(page, subtype, color, Rect: rect, Contents: text, Author: Author)])));
+            double fontSize = a.Has("fontSize") ? a.Num("fontSize") : 13;
+            return Session(a).Change(path => Resolved([temp], AnnotationWriter.Add(path, [new NewAnnotation(page, subtype, color, Rect: rect, Contents: text, Author: Author, FontSize: fontSize)])));
         });
         Bridge.OnAsync("reader.modify", a =>
         {
@@ -396,7 +404,10 @@ public static partial class Api
             return Session(a).Change(path =>
             {
                 if (dx != null) AnnotationWriter.Modify(path, page, number, dx: dx.Value, dy: dy ?? 0);
-                else if (contents != null) AnnotationWriter.Modify(path, page, number, contents: contents);
+                // A text box written again: its text, its size on the page, and the colour and size chosen on its bar, in one step.
+                else if (contents != null) AnnotationWriter.Modify(path, page, number, color: color, contents: contents,
+                    rect: a.Has("rect") ? a.Raw("rect").EnumerateArray().Select(v => v.GetDouble()).ToArray() : null,
+                    fontSize: a.Has("fontSize") ? a.Num("fontSize") : null);
                 else if (color != null) AnnotationWriter.Modify(path, page, number, color: color);
                 return null;
             });

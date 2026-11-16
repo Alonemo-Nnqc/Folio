@@ -287,7 +287,9 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         case .folioTranslate:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(translateDocument(_:))
-            return configure(item, label: String(localized: "翻译"), symbol: "character.book.closed", tip: String(localized: "保留排版翻译全文"))
+            let configured = configure(item, label: String(localized: "翻译"), symbol: "character.book.closed", tip: String(localized: "保留排版翻译全文"))
+            configured.image = TranslationIcon.fullText(accessibilityDescription: String(localized: "翻译"))
+            return configured
         case .folioExport:
             let menu = NSMenu()
             let export = menu.addItem(withTitle: String(localized: "导出参考文献…"), action: #selector(exportBibTeX(_:)), keyEquivalent: "")

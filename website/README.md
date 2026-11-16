@@ -10,5 +10,6 @@ python3 -m http.server 8000 --directory website   # 本地预览：http://localh
 - `docs.html`：使用指南（简体中文，纯文字），覆盖全部功能、每个设置项和每个翻译服务需要填写的内容；样式在 `assets/css/docs.css`，目录高亮、搜索与小屏目录菜单在 `assets/js/docs.js`
 - `assets/css/style.css`：样式与动画（`prefers-reduced-motion` 时关闭动画）
 - `assets/js/main.js`：滚动驱动的动画、引用格式轮播、终端打字效果、语言切换；下载按钮通过 GitHub API 按访客的系统指向最新的 macOS 或 Windows 安装包，请求失败时指向 Releases 页面
-- `assets/img/`：Mac 截图取自宣传片素材（Folio 的真实窗口截图）；`library_windows.webp` 由 `windows/web` 的界面和模拟数据渲染；均已转为 WebP
-- `assets/video/folio-promo.mp4`：宣传片（1080p60，H.264），由宣传片成片重新编码以减小体积
+- `assets/img/`：全部是 Folio 的真实界面，已转为 WebP。
+  - Mac 截图（`library_*`、`parallel`、`selection`、`edit`、`glossary`、`translate_sheet`）由应用的 `-FolioPreviewSnapshot` 钩子在文献库副本上绘制，PDF 页面、选区和小窗由钩子按原位置补画（见 `macos/Folio/App/PreviewHooks.swift`）；`import_*`、`reader`、`translating`、`search`、`tag_mustread`、`settings_ai` 来自早先的宣传片素材
+  - Windows 截图（`library_windows`、`quicklook_windows*`）由 `windows/web` 的界面和模拟数据在无头 Chrome 中渲染，快速预览载入的是真实论文 PDF

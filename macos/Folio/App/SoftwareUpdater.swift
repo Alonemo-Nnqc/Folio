@@ -51,8 +51,6 @@ final class SoftwareUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriver
         set { withMutation(keyPath: \.automaticallyDownloads) { updater.automaticallyDownloadsUpdates = newValue } }
     }
 
-    var lastCheck: Date? { updater.lastUpdateCheckDate }
-
     /// "1.2.0 (148)"
     static var versionDescription: String {
         let info = Bundle.main.infoDictionary ?? [:]

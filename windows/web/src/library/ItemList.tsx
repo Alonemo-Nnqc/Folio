@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Languages, Plus, Search, Share, Star, X, BookText } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Languages, NotebookText, Plus, Search, Share, Star, X } from "lucide-react";
+import { FullTextTranslateIcon } from "../ui/icons";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { filesOf, getState, scopeGroupId, setSetting, setState, tagsOf, useStore, type Item, type State } from "../store";
@@ -69,8 +70,10 @@ export function TranslationProgress({ itemId }: { itemId: string }) {
  *  (双语对照 · Google …). Hidden while a translation runs, when the progress takes the room. */
 export function TranslatedBadge({ itemId }: { itemId: string }) {
   const running = useStore((s) => !!s.jobs[itemId]);
+  // 设置 ▸ 通用 ▸ 显示“已翻译”标签.
+  const shown = useStore((s) => s.settings.showTranslatedBadge !== false);
   const names = useStore((s) => filesOf(s, itemId).filter((f) => f.translationKind).map((f) => f.title).join("、"));
-  if (running || !names) return null;
+  if (!shown || running || !names) return null;
   return <span className="translated-badge" title={t("已翻译：%@", names)}>{t("已翻译")}</span>;
 }
 
@@ -88,6 +91,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   const expanded = useStore((s) => s.expanded);
   const filesByItem = useStore((s) => s.filesByItem);
   const items = useStore((s) => s.items);
+  const noted = useStore((s) => s.noted);
   const files = useStore((s) => s.files);
   const itemTags = useStore((s) => s.itemTags);
   const dark = useStore((s) => s.dark);
@@ -311,7 +315,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       return (
         <>
           {list.slice(0, 1).map((tag) => <Chip key={tag.id} label={tag.name} color={tag.color} dark={dark} />)}
-          {list.length > 1 && <span style={{ marginLeft: 4 }}><Chip label={`+${list.length - 1}`} color="#8E8E93" dark={dark} title={list.slice(1).map((x) => x.name).join("、")} /></span>}
+          {list.length > 1 && <span style={{ marginLeft: 4 }}><Chip plain label={`+${list.length - 1}`} color="#8E8E93" dark={dark} title={list.slice(1).map((x) => x.name).join("、")} /></span>}
         </>
       );
     }
@@ -331,7 +335,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
         <button className="glass-button" title={t("添加")} onClick={(e) => openMenuAt(e.currentTarget, addMenu())}><Plus size={18} /></button>
         <div className="glass-group">
           <button title={t("打开")} disabled={selection.length === 0} onClick={() => openItems(selection)}><BookOpen size={17} strokeWidth={1.7} /></button>
-          <button title={t("翻译")} disabled={selection.length === 0} onClick={() => translate(selection)}><BookText size={17} strokeWidth={1.7} /></button>
+          <button title={t("翻译")} disabled={selection.length === 0} onClick={() => translate(selection)}><FullTextTranslateIcon size={17} /></button>
           <button title={t("引用与导出")} disabled={selection.length === 0} onClick={(e) => openMenuAt(e.currentTarget, citeMenu(selection))}><Share size={16} strokeWidth={1.7} /></button>
         </div>
         <SearchBox inputRef={searchRef} value={searching} placeholder={t("搜索文献")} onChange={(v) => { typing.current = true; setSearching(v); call("library.search", { text: v }).finally(() => { typing.current = false; }); }} />
@@ -390,7 +394,9 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                   onContextMenu={(e) => { e.preventDefault(); setSelection([row.itemId], row.fileId); openMenu(scope === "trash" ? itemMenu([row.itemId]) : fileMenu(file), e.clientX, e.clientY); }}>
                   <span style={{ width: 44, flex: "none" }} />
                   <FileText size={14} className="secondary" style={{ flex: "none" }} />
-                  <span className="td ellipsis" style={{ fontSize: 12, flex: 1 }} title={file.fileName}>{file.title}</span>
+                  <span className="td ellipsis" style={{ fontSize: 12, flex: "0 1 auto" }} title={file.fileName}>{file.title}</span>
+                  {items.get(row.itemId)?.defaultFileId === file.id && <span className="default-badge" aria-label={t("（默认）")}>{t("默认")}</span>}
+                  <span style={{ flex: 1 }} />
                 </div>
               );
             }
@@ -432,6 +438,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                         <FileText size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />
                         {standalone && item.retrieving && <span className="spinner" />}
                         <span className="ellipsis" style={{ flex: "0 1 auto" }} title={item.title}>{item.title}</span>
+                        {noted.has(item.id) && <NotebookText size={13} strokeWidth={1.6} className="note-mark" aria-label={t("有笔记")} />}
                         <TranslatedBadge itemId={item.id} />
                         <span style={{ flex: 1 }} />
                         <TranslationProgress itemId={item.id} />

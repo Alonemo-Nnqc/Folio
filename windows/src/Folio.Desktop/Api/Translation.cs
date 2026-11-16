@@ -102,6 +102,9 @@ public static partial class Api
             option = f.Option, title = f.IsRequired ? f.Title : Loc.S("%@（选填）", f.Title), kind = f.Kind.ToString().ToLowerInvariant(), placeholder = f.Placeholder ?? f.DefaultValue ?? (f.IsSecret ? Loc.S("未填写") : ""),
             value = f.IsSecret ? store.Get(service.Id, f.Option) ?? "" : values.GetValueOrDefault(f.Option) ?? "",
             models = ModelListFetcher.Supports(service.Id, f.Option), remembered = ModelListFetcher.Supports(service.Id, f.Option) ? ModelListFetcher.RememberedModels(service.Id, values) : null,
+            // A saved model the service no longer offers (as on the Mac): said under the field, with what is used instead.
+            check = f.Title == TranslationServiceCatalog.ModelFieldTitle && ModelCheck.Check(service.Id, values) is { } found
+                ? new { saved = found.Saved, replacement = found.Replacement } : null,
         };
         var profiles = settings.TranslationProfiles.Where(p => p.ServiceId == service.Id).Select(p => new { id = p.Id, name = p.Name }).ToList();
         return new
@@ -193,8 +196,8 @@ public static partial class Api
             RefreshAgents();
             return new { groups = ServiceGroups(), current = M.Settings.TranslationService, options = M.Settings.TranslationOptions, languages = TranslationOptions.CommonLanguages.Select(l => new { code = l.Code, name = l.Name }), detail = ServiceDetail(M.Settings.TranslationService) };
         });
-        Bridge.On("translation.setService", a => { M.Settings.TranslationService = a.Str("id"); return ServiceDetail(a.Str("id")); });
-        Bridge.On("translation.setField", a => { SetField(a.Str("service"), a.Str("option"), a.Str("value").Trim()); return ServiceDetail(a.Str("service")); });
+        Bridge.On("translation.setService", a => { M.Settings.TranslationService = a.Str("id"); EstimateChanged(); return ServiceDetail(a.Str("id")); });
+        Bridge.On("translation.setField", a => { SetField(a.Str("service"), a.Str("option"), a.Str("value").Trim()); EstimateChanged(); return ServiceDetail(a.Str("service")); });
         Bridge.On("translation.setSecret", a =>
         {
             var service = a.Str("service");
@@ -213,6 +216,7 @@ public static partial class Api
             var fields = M.Settings.FieldsOf(service);
             ReasoningEffort.Set(a.Str("value"), service, fields);
             M.Settings.SetFields(service, fields);
+            EstimateChanged();
             return ServiceDetail(service);
         });
         Bridge.OnAsync("translation.fetchModels", async a =>
@@ -293,6 +297,7 @@ public static partial class Api
         Bridge.On("translation.setOptions", a =>
         {
             M.Settings.TranslationOptions = a.Raw("options").Deserialize<TranslationOptions>() ?? new TranslationOptions();
+            EstimateChanged();
             return null;
         });
         Bridge.On("translation.pickGlossary", _ =>
@@ -302,6 +307,39 @@ public static partial class Api
             options.GlossaryFile = path;
             M.Settings.TranslationOptions = options;
             return path;
+        });
+        // Folio's glossary (设置 ▸ 翻译 ▸ 术语表): terms the user wrote and terms models found, by language.
+        Bridge.On("glossary.list", a => GlossaryState(a.Str("language")));
+        Bridge.On("glossary.save", a =>
+        {
+            var language = a.Str("language");
+            var term = a.OptStr("id") is { } id && Guid.TryParse(id, out var guid) ? GlossaryStore.Shared.Terms().FirstOrDefault(t => t.Id == guid) : null;
+            term ??= new GlossaryTerm { Language = language };
+            // What the user changes is theirs from then on: a model's later find never replaces it.
+            if (a.OptStr("source") is { } source) { term.Source = source; term.Origin = GlossaryTerm.User; }
+            if (a.OptStr("target") is { } target) { term.Target = target; term.Origin = GlossaryTerm.User; }
+            if (a.Has("enabled")) term.IsEnabled = a.Bool("enabled");
+            GlossaryStore.Shared.Save(term);
+            return GlossaryState(language);
+        });
+        Bridge.On("glossary.remove", a =>
+        {
+            GlossaryStore.Shared.Remove(a.Strs("ids").Select(id => Guid.TryParse(id, out var guid) ? guid : Guid.Empty));
+            return GlossaryState(a.Str("language"));
+        });
+        Bridge.On("glossary.import", a =>
+        {
+            var language = a.Str("language");
+            if (Pickers.OpenFiles("CSV|*.csv", false).FirstOrDefault() is { } path) GlossaryStore.Shared.ImportCsv(path, language);
+            return GlossaryState(language);
+        });
+        Bridge.On("glossary.export", a =>
+        {
+            var language = a.Str("language");
+            if (Pickers.SaveFile(Loc.S("术语表") + $"-{language}.csv", "CSV|*.csv") is not { } path) return false;
+            // With a byte order mark: Excel reads the Chinese in it as what it is.
+            File.WriteAllText(path, GlossaryStore.Shared.ExportCsv(language), new System.Text.UTF8Encoding(true));
+            return true;
         });
         Bridge.On("translation.revealLogs", _ =>
         {
@@ -356,6 +394,26 @@ public static partial class Api
             return ServiceDetail(service.Id);
         });
 
+        // What the run is expected to take (tokens, and the cost where the model's public price is known), in a line;
+        // null for services that cost nothing. The pages are analysed for it, off the interface thread.
+        Bridge.OnAsync("translation.estimate", async a =>
+        {
+            var serviceId = M.Settings.TranslationService;
+            var fields = M.Settings.FieldsOf(serviceId);
+            var options = M.Settings.TranslationOptions;
+            var inputs = a.Strs("files").Select(id => M.Snapshot.Files.GetValueOrDefault(id)).OfType<FileRecord>().Select(M.Library.FilePath).ToList();
+            return (object?)await Task.Run(() =>
+            {
+                TranslationEstimate? sum = null;
+                foreach (var input in inputs)
+                {
+                    if (TranslationEstimator.Estimate(new TranslationRequest { Input = input, ServiceId = serviceId, FieldValues = fields, Options = options }) is not { } one) return null;
+                    sum = sum == null ? one : sum + one;
+                }
+                return sum == null ? null : TranslationEstimator.Text(sum);
+            });
+        });
+
         // Jobs.
         Bridge.OnAsync("translation.start", async a =>
         {
@@ -379,4 +437,17 @@ public static partial class Api
         foreach (var (k, v) in ShellEnvironment.Environment_()) info.Environment[k] = v;
         try { System.Diagnostics.Process.Start(info)?.Dispose(); } catch { }
     }
+
+    /// <summary>The glossary of a language, as the page lists it.</summary>
+    static object GlossaryState(string language) => new
+    {
+        language,
+        terms = GlossaryStore.Shared.Terms(language).Select(t => new
+        {
+            id = t.Id.ToString(), source = t.Source, target = t.Target, enabled = t.IsEnabled, extracted = t.Origin == GlossaryTerm.Extracted, paper = t.Paper,
+        }),
+    };
+
+    /// <summary>The service, its model or what is translated changed: an estimate on show is worked out again.</summary>
+    static void EstimateChanged() => App.Broadcast("translation.estimateChanged", null);
 }

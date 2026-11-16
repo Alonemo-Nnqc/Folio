@@ -71,8 +71,6 @@ public struct TranslationService: Sendable, Hashable, Identifiable {
 
     /// Usable without an account or key.
     public var isFree: Bool { category == .free || category == .local || category == .agent }
-    /// Runs entirely on this Mac.
-    public var isLocal: Bool { category == .local }
     /// A large language model: translates whole batches with context and a glossary.
     public var isLLM: Bool {
         switch backend {
@@ -258,7 +256,7 @@ public enum TranslationServiceCatalog {
         ]),
         .init(id: "deepseek", displayName: "DeepSeek", backend: .openAI(defaultBase: "https://api.deepseek.com"), category: .llm, fields: [
             apiKey("--deepseek-api-key"),
-            model("--deepseek-model", default: "deepseek-chat"),
+            model("--deepseek-model", default: "deepseek-flash"),
             .init(option: "--deepseek-reasoning-effort", title: String(localized: "推理强度", bundle: .module), isAdvanced: true),
         ]),
         .init(id: "aliyundashscope", displayName: String(localized: "阿里云百炼（通义千问）", bundle: .module),

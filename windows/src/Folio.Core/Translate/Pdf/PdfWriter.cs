@@ -29,7 +29,6 @@ public abstract record PdfValue
     public static PdfValue Dict(Dictionary<string, PdfValue> v) => new DictV(v);
     public static PdfValue Ref(int n) => new RefV(n);
     public static PdfValue RectValue(Rect r) => Array([Real(r.MinX), Real(r.MinY), Real(r.MaxX), Real(r.MaxY)]);
-    public static PdfValue MatrixValue(Affine t) => Array([Real(t.A), Real(t.B), Real(t.C), Real(t.D), Real(t.Tx), Real(t.Ty)]);
 
     public Dictionary<string, PdfValue>? DictValue => this is DictV d ? d.Entries : null;
 

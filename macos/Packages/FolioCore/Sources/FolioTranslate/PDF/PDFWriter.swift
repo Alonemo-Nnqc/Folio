@@ -22,11 +22,6 @@ indirect enum PDFValue: Sendable, Hashable {
         .array([.real(t.a), .real(t.b), .real(t.c), .real(t.d), .real(t.tx), .real(t.ty)])
     }
 
-    var dictValue: [String: PDFValue]? {
-        if case .dict(let d) = self { return d }
-        return nil
-    }
-
     func serialize(into out: inout Data) {
         switch self {
         case .null: out.append(contentsOf: Array("null".utf8))
@@ -134,8 +129,7 @@ final class PDFWriter {
         bodies[number - 1] = body
     }
 
-    /// Stores an already serialized body (reused between preview writes).
-    func setRaw(_ number: Int, _ body: Data) { bodies[number - 1] = body }
+    /// An object's serialized body (its stream's data is kept, to be used again between preview writes).
     func raw(_ number: Int) -> Data? { bodies[number - 1] }
 
     @discardableResult

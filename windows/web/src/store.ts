@@ -158,13 +158,11 @@ function applyTheme(settings: Record<string, any>) {
 export function veilFor(amount: number) { return amount > 0.001 ? 0.94 * Math.pow(1 - amount, 1.3) : 1; }
 
 const SURFACES = ["--window", "--sidebar", "--inspector", "--content"];
-let translucentNow = -1;
 /** 背景透明度: the window's panels let the desktop (Acrylic) show through; text and pages stay as they are. */
 export function applyTranslucency(amount: number) {
   if (!statics.translucency) amount = 0;
   const root = document.documentElement;
   for (const name of SURFACES) root.style.removeProperty(name);
-  translucentNow = amount;
   const veil = veilFor(amount);
   root.classList.toggle("translucent", veil < 1);
   root.style.setProperty("--veil", String(veil));
@@ -178,7 +176,6 @@ export function applyTranslucency(amount: number) {
   }
   if (inHostWindow) call("window.translucency", { value: amount });
 }
-export function currentTranslucency() { return translucentNow; }
 
 /** Loads everything from the app; returns once the first render can happen. */
 export async function boot(route: string) {
