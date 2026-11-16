@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-16
+
 ### 新增
 - 术语表管理（设置 ▸ 翻译 ▸ 术语 ▸ 管理…）：翻译时模型从论文中提取的术语会记入 Folio 的术语表，之后翻译其他论文时沿用同一译法。可按译文语言查看、搜索、修改、停用、删除术语，手动添加，或用 CSV 导入导出；你写的或改过的译法不会被模型之后提取的结果覆盖。“记住翻译时找到的术语”可关闭；原来的术语表 CSV 文件选项保留，并优先于术语表。
 - “显示‘已翻译’标签”开关（设置 ▸ 通用 ▸ 列表）：不想在列表里看到“已翻译”标签时可以关闭，译文文件仍列在论文下面。
@@ -197,7 +199,8 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.0.1...v1.1.0
