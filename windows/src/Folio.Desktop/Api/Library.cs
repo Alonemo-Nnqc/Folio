@@ -267,6 +267,14 @@ public static partial class Api
             App.OpenTabWindow(query, a.OptDouble("x"), a.OptDouble("y"));
             return null;
         });
+        // A dragged-out window opens tabs in the main window (it has none of its own).
+        Bridge.On("window.openInMain", a =>
+        {
+            if (a.OptStr("note") is { } note) App.Main?.Bridge.Emit("note.open", note);
+            else if (a.OptStr("file") is { } file) App.Main?.Bridge.Emit("reader.open", new { fileId = file, page = a.OptInt("page") });
+            App.BringToFront();
+            return null;
+        });
         Bridge.On("window.returnTab", a =>
         {
             var window = App.ActiveTabWindow;

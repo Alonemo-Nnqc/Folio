@@ -132,57 +132,85 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   useEffect(() => { if (!typing.current) setSearching(searchText); }, [searchText]);
 
   const columns = useMemo(() => visible.map((k) => COLUMNS.find((c) => c.key === k)).filter(Boolean) as typeof COLUMNS, [visible]);
-  const storedWidth = (key: string) => liveWidths[key] ?? widths[key] ?? COLUMNS.find((c) => c.key === key)!.width;
-  // As on macOS: the title takes what the window has left (and follows the window's width); dragging a divider moves that
-  // divider with the pointer and the columns after it along, so the table may grow wider than the window. What the user's
-  // drags added to the title's share is kept as titleExtra.
+  // As on macOS: the columns always fill the list exactly, so none is pushed out of view. Each column keeps the width it
+  // was given (its preferred width); with room to spare the title takes it, short of room every column gives way in
+  // proportion down to its minimum, and the preferred widths come back when the room does. Dragging a divider moves it
+  // with the pointer and the columns after it make room in the same frame (there is no divider at the list's right edge).
   const [viewWidth, setViewWidth] = useState(0);
-  const [liveExtra, setLiveExtra] = useState<number | null>(null);
-  const extra = liveExtra ?? widths.titleExtra ?? 0;
-  // When the window (or the space the inspector leaves) is too narrow for every column at its width, the other columns
-  // give way in proportion, down to COLUMN_MIN each, so they all stay in view; only widths the user dragged wider than the
-  // window make the table scroll sideways.
-  const storedOthers = columns.reduce((sum, c) => sum + (c.key === "title" ? 0 : storedWidth(c.key)), 0);
-  const squeeze = useMemo(() => {
-    if (viewWidth <= 0 || (widths.titleExtra ?? 0) > 0) return 1;
-    const room = viewWidth - 12 - TITLE_MIN;
-    if (storedOthers <= room || storedOthers <= 0) return 1;
-    // The column being dragged follows the pointer: only the others give way.
-    const shrinkable = columns.reduce((sum, c) => sum + (c.key === "title" || c.key in liveWidths ? 0 : Math.max(0, storedWidth(c.key) - COLUMN_MIN)), 0);
-    if (shrinkable <= 0) return 1;
-    return Math.max(0, 1 - (storedOthers - room) / shrinkable);
-  }, [viewWidth, extra, liveExtra, storedOthers, columns, widths, liveWidths]);
-  const widthOf = (key: string) => {
-    const w = storedWidth(key);
-    return squeeze >= 1 || key === "title" || key in liveWidths ? w : Math.round(COLUMN_MIN + Math.max(0, w - COLUMN_MIN) * squeeze);
-  };
-  const othersWidth = columns.reduce((sum, c) => sum + (c.key === "title" ? 0 : widthOf(c.key)), 0);
-  const titleWidth = viewWidth > 0 ? Math.max(TITLE_MIN, Math.round(viewWidth - 12 - othersWidth + extra)) : undefined;
-  const titleStyle = titleWidth ? { width: titleWidth, flex: "none" } : { minWidth: TITLE_MIN };
-  const minWidth = 12 + othersWidth + (titleWidth ?? TITLE_MIN);
+  const minOf = (key: string) => (key === "title" ? TITLE_MIN : COLUMN_MIN);
+  const preferred = (key: string) => Math.max(minOf(key), widths[key] ?? COLUMNS.find((c) => c.key === key)!.width);
+  const room = Math.max(0, viewWidth - 12);
+  const fitted = useMemo(() => {
+    const keys = columns.map((c) => c.key);
+    const out: Record<string, number> = {};
+    if (room <= 0) { for (const k of keys) out[k] = preferred(k); return out; }
+    const prefs = keys.map(preferred);
+    const total = prefs.reduce((a, b) => a + b, 0);
+    const mins = keys.map(minOf);
+    const minTotal = mins.reduce((a, b) => a + b, 0);
+    let w: number[];
+    if (total <= room) {
+      // Room to spare: the title (else the last column) takes it.
+      w = [...prefs];
+      const taker = keys.includes("title") ? keys.indexOf("title") : keys.length - 1;
+      w[taker] += room - total;
+    } else if (room <= minTotal) {
+      w = mins;
+    } else {
+      const k = (room - minTotal) / (total - minTotal);
+      w = prefs.map((p, i) => mins[i] + (p - mins[i]) * k);
+    }
+    // Whole pixels that still add up to the room: the rounding goes to the title.
+    const rounded = w.map(Math.floor);
+    const rest = Math.max(0, Math.round(Math.max(room, minTotal) - rounded.reduce((a, b) => a + b, 0)));
+    const taker = keys.includes("title") ? keys.indexOf("title") : keys.length - 1;
+    if (taker >= 0) rounded[taker] += rest;
+    keys.forEach((key, i) => { out[key] = rounded[i]; });
+    return out;
+  }, [columns, widths, room]);
+  const widthOf = (key: string) => liveWidths[key] ?? fitted[key] ?? preferred(key);
+  const titleStyle = { width: widthOf("title"), flex: "none" };
+  const minWidth = 12 + columns.reduce((sum, c) => sum + widthOf(c.key), 0);
 
+  const resizing = useRef(false);
   const resizeColumn = (e: React.PointerEvent, key: string) => {
-    const title = titleWidth ?? TITLE_MIN;
-    const extraStart = title - (viewWidth - 12 - othersWidth);
-    const start = key === "title" ? title : widthOf(key);
-    // A squeezed column is dragged from where it is shown: that width becomes its own.
-    const squeezing = squeeze < 1;
-    const shown = Object.fromEntries(columns.map((c) => [c.key, widthOf(c.key)]));
-    const min = key === "title" ? TITLE_MIN : 40;
-    let latest = start, latestExtra = extraStart;
+    const keys = columns.map((c) => c.key);
+    const index = keys.indexOf(key);
+    const start = Object.fromEntries(keys.map((k) => [k, widthOf(k)]));
+    const right = keys.slice(index + 1);
+    const rightTotal = right.reduce((sum, k) => sum + start[k], 0);
+    const rightSlack = right.reduce((sum, k) => sum + Math.max(0, start[k] - minOf(k)), 0);
+    let latest = start;
     dragPointer(e, (dx) => {
-      latest = Math.max(min, Math.round(start + dx));
-      latestExtra = extraStart + latest - start;
-      if (key !== "title") setLiveWidths({ [key]: latest });
-      setLiveExtra(latestExtra);
+      // The divider follows the pointer while the column keeps its minimum and the ones after it can still give way.
+      const d = Math.round(Math.max(minOf(key) - start[key], Math.min(rightSlack, dx)));
+      const next = { ...start, [key]: start[key] + d };
+      if (right.length && d !== 0) {
+        if (d > 0) {
+          // Narrower: in proportion to what each can still give.
+          for (const k of right) next[k] = start[k] - (rightSlack > 0 ? (Math.max(0, start[k] - minOf(k)) / rightSlack) * d : 0);
+        } else {
+          // Wider: in proportion to their widths.
+          for (const k of right) next[k] = start[k] - (start[k] / rightTotal) * d;
+        }
+        // Whole pixels, the last column taking the rounding so the total stays.
+        let sum = 0;
+        right.forEach((k, i) => {
+          if (i < right.length - 1) { next[k] = Math.round(next[k]); sum += next[k]; }
+        });
+        const lastKey = right[right.length - 1];
+        next[lastKey] = rightTotal - d - sum;
+      }
+      latest = next;
+      setLiveWidths(next);
     }, () => {
-      const stored = { ...getState().settings.columnWidths, titleExtra: latestExtra };
-      // Squeezed columns keep the width they are shown at: nothing jumps when the drag ends.
-      if (squeezing) for (const c of columns) if (c.key !== "title" && c.key !== key) stored[c.key] = shown[c.key];
-      if (key !== "title") stored[key] = latest;
-      setSetting("columnWidths", stored);
+      // The click that ends the drag over a header is not a sort.
+      resizing.current = true;
+      setTimeout(() => { resizing.current = false; }, 0);
+      // The widths shown become the preferred ones: nothing moves when the drag ends.
+      const { titleExtra: _old, ...kept } = (getState().settings.columnWidths ?? {}) as Record<string, number>;
+      setSetting("columnWidths", { ...kept, ...latest });
       setLiveWidths({});
-      setLiveExtra(null);
     });
   };
 
@@ -415,7 +443,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
           <div className="table-head" onContextMenu={columnsMenu}>
             {columns.map((c, index) => (
               <div key={c.key} className={`th${c.key === "title" ? " title" : ""}${index === columns.length - 1 ? " last" : ""}`} style={c.key === "title" ? titleStyle : { width: widthOf(c.key) }}
-                onClick={() => call("library.sort", { column: c.sort, ascending: sortColumn === c.sort ? !sortAscending : true })}>
+                onClick={() => { if (!resizing.current) call("library.sort", { column: c.sort, ascending: sortColumn === c.sort ? !sortAscending : true }); }}>
                 <span className="ellipsis">{c.title === "DOI" ? "DOI" : t(c.title)}</span>
                 {sortColumn === c.sort && (sortAscending ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
                 {/* The last column ends at the list's edge: no divider there to drag. */}

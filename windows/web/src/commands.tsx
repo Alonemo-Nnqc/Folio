@@ -14,7 +14,11 @@ const icon = (C: any) => <C size={14} />;
 
 // MARK: Opening
 
+/** A window of a dragged-out tab has no tabs of its own: what it opens in a tab goes to the main window. */
+const inTabWindow = () => location.hash.startsWith("#tab");
+
 export function openReader(fileId: string, page?: number) {
+  if (inTabWindow()) { call("window.openInMain", { file: fileId, page: page ?? null }); return; }
   const s = getState();
   const existing = s.tabs.find((tab) => tab.fileId === fileId);
   if (existing) {
@@ -28,6 +32,7 @@ export function openReader(fileId: string, page?: number) {
 
 /** An item's note as a document tab (the note is listed under the item like its files). */
 export function openNote(itemId: string) {
+  if (inTabWindow()) { call("window.openInMain", { note: itemId }); return; }
   const s = getState();
   const key = `note:${itemId}`;
   if (s.tabs.some((tab) => tab.key === key)) { setState({ activeTab: key }); return; }
