@@ -54,7 +54,7 @@ export function MarkdownTab({ fileId, noteItemId, visible }: { fileId?: string; 
     <div className="md-tab window" style={{ display: visible ? "flex" : "none" }}>
       <div className="titlebar-row drag" style={{ paddingLeft: 10, paddingRight: captionWidth + 8 }}>
         <SettingsButton />
-        <ReturnToTabsButton />
+        <ReturnToTabsButton tabKey={noteItemId ? `note:${noteItemId}` : fileId!} />
         <div className="list-title doc-title">
           {file ? <FileName fileId={file.id} name={name} /> : <div className="name ellipsis">{t("笔记")}</div>}
           {subtitle && <div className="count ellipsis" title={subtitle}>{subtitle}</div>}

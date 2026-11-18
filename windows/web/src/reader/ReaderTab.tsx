@@ -942,7 +942,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
       <div className="reader-top" style={{ left, right }}>
         <div className="reader-head drag" onContextMenu={(e) => { e.preventDefault(); openMenu([{ label: t("自定义工具栏…"), action: () => customizeToolbarRef.current() }], e.clientX, e.clientY); }} style={{ paddingLeft: sidebarVisible ? undefined : LEAD_ROOM + 2, paddingRight: notesVisible ? undefined : captionWidth + TOGGLE_ROOM + 2 }}>
-          <ReturnToTabsButton page={() => shownPage.current} />
+          <ReturnToTabsButton tabKey={tabKey} page={() => shownPage.current} />
           <div className="reader-title">
             <div className="name ellipsis" title={title}>{title}</div>
             <div className="page tabular ellipsis">{pageLabel}</div>

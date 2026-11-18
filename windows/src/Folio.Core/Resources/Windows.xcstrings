@@ -1,6 +1,7 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "放回主窗口" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Back to Main Window" } } } },
     "在标签页中打开笔记" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Note in Tab" } } } },
     "单击条目选择，按 Esc 退出" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Click items to select · Esc to leave" } } } },
     "代码块" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Code Block" } } } },

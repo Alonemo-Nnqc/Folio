@@ -24,7 +24,7 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
     switch (code) {
       case "KeyO": addFiles(); return true;
       case "KeyW": if (!library) closeTab(s.activeTab); return true;
-      case "Digit1": setState({ activeTab: "library" }); return true;
+      case "Digit1": if (!detached) setState({ activeTab: "library" }); return true;
       case "Tab": selectNextTab(false); return true;
       case "Comma": call("window.settings"); return true;
       case "KeyF": if (library) { emitLocal("focusSearch", null); return true; } return false;
@@ -38,7 +38,7 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
       case "KeyE": if (ids.length) { call("references.export", { ids, format: "bibtex" }); return true; } return false;
       case "KeyC": if (ids.length) { call("cite.copy", { ids }); return true; } return false;
       case "KeyR": if (ids.length === 1) { revealFirstFile(ids); return true; } return false;
-      case "KeyL": setState({ activeTab: "library" }); return true;
+      case "KeyL": if (!detached) setState({ activeTab: "library" }); return true;
       case "Tab": selectNextTab(true); return true;
     }
   }
@@ -77,21 +77,32 @@ function useWindowKeys() {
   useEvent(window, "drop", (e: DragEvent) => e.preventDefault());
 }
 
-/** A tab dragged out of the main window: the paper or document alone, with 放回标签页 at the toolbar's start. */
+/** A tab dragged out of the main window: its paper or document, and the tabs opened from it (a note enlarged there), each
+ *  with 放回主窗口 at the start of its toolbar; the tab bar shows once there are two. */
 export function DetachedApp() {
-  const tab = detached!;
-  const key = tab.note ? `note:${tab.note}` : tab.fileId ?? "";
-  const file = useStore((s) => (tab.fileId ? s.files.get(tab.fileId) : undefined));
-  useEffect(() => { setState({ activeTab: key, tabs: [] }); }, []);
+  const tabs = useStore((s) => s.tabs);
+  const files = useStore((s) => s.files);
+  const activeTab = useStore((s) => s.activeTab);
+  useEffect(() => {
+    const first = detached!;
+    const key = first.note ? `note:${first.note}` : first.fileId ?? "";
+    setState({ tabs: [{ key, fileId: first.note ? "" : first.fileId ?? "", note: first.note, page: first.page }], activeTab: key });
+  }, []);
   useWindowKeys();
   useEffect(() => on("app.willClose", () => {
     (document.activeElement as HTMLElement | null)?.blur?.();
     readers.forEach((r) => r.flush());
   }), []);
   useEffect(() => { setCaption(getState().dark ? "#1d1d1f" : "#fcfcfd", getState().dark ? "#ffffff" : "#000000", false); }, []);
-  if (tab.note) return <MarkdownTab noteItemId={tab.note} visible />;
-  if (!file) return null;
-  return file.isMarkdown ? <MarkdownTab fileId={file.id} visible /> : <ReaderTab tabKey={key} fileId={file.id} page={tab.page} visible />;
+  return (
+    <>
+      {tabs.map((tab) => tab.note
+        ? <MarkdownTab key={tab.key} noteItemId={tab.note} visible={activeTab === tab.key} />
+        : files.get(tab.fileId)?.isMarkdown
+        ? <MarkdownTab key={tab.key} fileId={tab.fileId} visible={activeTab === tab.key} />
+        : files.has(tab.fileId) ? <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} /> : null)}
+    </>
+  );
 }
 
 export function MainApp() {

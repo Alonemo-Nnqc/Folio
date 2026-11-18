@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { closeTab, appMenu } from "../commands";
 import { getState, setSetting, setState, useStore } from "../store";
 import { openMenu, sep } from "../ui/menu";
-import { detachTab } from "../ui/detach";
+import { detached, detachTab, returnTab } from "../ui/detach";
 import { readers } from "../reader/ReaderTab";
 import { dragPointer } from "../ui/util";
 import { SlidePanel, useMoving } from "../ui/slide";
@@ -26,7 +26,7 @@ export function TabBar() {
   const active = useStore((s) => s.activeTab);
   const files = useStore((s) => s.files);
   const items = useStore((s) => s.items);
-  if (tabs.length === 0) return null;
+  if (tabs.length === 0 || (detached && tabs.length < 2)) return null;
   // A Markdown document of its own is named by its first heading (the item's title), as on the Mac.
   const titleOf = (fileId: string, note?: string) => {
     if (note) return `${t("笔记")} · ${items.get(note)?.title ?? ""}`;
@@ -36,7 +36,7 @@ export function TabBar() {
   };
   return (
     <div className="tabbar">
-      <div className={`tab${active === "library" ? " active" : ""}`} onClick={() => setState({ activeTab: "library" })}><span className="ellipsis">{t("文献库")}</span></div>
+      {!detached && <div className={`tab${active === "library" ? " active" : ""}`} onClick={() => setState({ activeTab: "library" })}><span className="ellipsis">{t("文献库")}</span></div>}
       {tabs.map((tab) => {
         const file = files.get(tab.fileId);
         return (
@@ -71,6 +71,7 @@ export function TabBar() {
                 { label: t("关闭标签页"), key: "Ctrl+W", action: () => closeTab(tab.key) },
                 { label: t("关闭其他标签页"), action: () => getState().tabs.filter((x) => x.key !== tab.key).forEach((x) => closeTab(x.key)) },
                 sep,
+                ...(detached ? [{ label: t("放回主窗口"), action: () => returnTab(tab.key, readers.get(tab.key)?.currentPage?.()) }] : []),
                 { label: t("移到新窗口"), action: () => moveToWindow(tab.key) },
               ], e.clientX, e.clientY);
             }}>

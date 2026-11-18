@@ -267,21 +267,12 @@ public static partial class Api
             App.OpenTabWindow(query, a.OptDouble("x"), a.OptDouble("y"));
             return null;
         });
-        // A dragged-out window opens tabs in the main window (it has none of its own).
-        Bridge.On("window.openInMain", a =>
-        {
-            if (a.OptStr("note") is { } note) App.Main?.Bridge.Emit("note.open", note);
-            else if (a.OptStr("file") is { } file) App.Main?.Bridge.Emit("reader.open", new { fileId = file, page = a.OptInt("page") });
-            App.BringToFront();
-            return null;
-        });
+        // A tab of a dragged-out window back into the main window (the window closes itself with its last tab).
         Bridge.On("window.returnTab", a =>
         {
-            var window = App.ActiveTabWindow;
             if (a.OptStr("note") is { } note) App.Main?.Bridge.Emit("note.open", note);
             else if (a.OptStr("file") is { } file) App.Main?.Bridge.Emit("reader.open", new { fileId = file, page = a.OptInt("page") });
             App.BringToFront();
-            window?.Close();
             return null;
         });
         // Markdown documents (MD-01): an item of their own or a paper's attachment, edited in the inspector or a tab.

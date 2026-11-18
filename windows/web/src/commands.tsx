@@ -14,11 +14,10 @@ const icon = (C: any) => <C size={14} />;
 
 // MARK: Opening
 
-/** A window of a dragged-out tab has no tabs of its own: what it opens in a tab goes to the main window. */
+/** A window of a dragged-out tab: its tabs are its own (it has no library). */
 const inTabWindow = () => location.hash.startsWith("#tab");
 
 export function openReader(fileId: string, page?: number) {
-  if (inTabWindow()) { call("window.openInMain", { file: fileId, page: page ?? null }); return; }
   const s = getState();
   const existing = s.tabs.find((tab) => tab.fileId === fileId);
   if (existing) {
@@ -32,7 +31,6 @@ export function openReader(fileId: string, page?: number) {
 
 /** An item's note as a document tab (the note is listed under the item like its files). */
 export function openNote(itemId: string) {
-  if (inTabWindow()) { call("window.openInMain", { note: itemId }); return; }
   const s = getState();
   const key = `note:${itemId}`;
   if (s.tabs.some((tab) => tab.key === key)) { setState({ activeTab: key }); return; }
@@ -47,11 +45,13 @@ export function closeTab(key: string) {
   const neighbour = tabs[Math.min(index, tabs.length - 1)];
   setState({ tabs, activeTab: s.activeTab === key ? neighbour?.key ?? "library" : s.activeTab });
   rememberTabs();
+  // A dragged-out window closes with its last tab.
+  if (inTabWindow() && tabs.length === 0) call("window.close");
 }
 
 export function selectNextTab(back: boolean) {
   const s = getState();
-  const keys = ["library", ...s.tabs.map((tab) => tab.key)];
+  const keys = [...(inTabWindow() ? [] : ["library"]), ...s.tabs.map((tab) => tab.key)];
   const i = keys.indexOf(s.activeTab);
   setState({ activeTab: keys[(i + (back ? -1 : 1) + keys.length) % keys.length] });
 }
