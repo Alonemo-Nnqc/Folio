@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, ChevronUp, FileText, Languages, NotebookText, Plus, Search, Share, Star, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, ChevronUp, Circle, CircleCheck, FilePen, FileText, Languages, ListChecks, NotebookText, Plus, Search, Share, Star, X } from "lucide-react";
 import { FullTextTranslateIcon } from "../ui/icons";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
@@ -14,7 +14,7 @@ import { toggleQuickLook } from "./QuickLook";
 const ROW = 32;
 
 const COLUMNS: { key: string; title: string; sort: string; width: number }[] = [
-  { key: "title", title: "标题", sort: "title", width: 300 }, { key: "source", title: "来源", sort: "source", width: 140 }, { key: "authors", title: "作者", sort: "authors", width: 150 },
+  { key: "title", title: "标题", sort: "title", width: 300 }, { key: "venue", title: "出版物", sort: "venue", width: 190 }, { key: "source", title: "来源", sort: "source", width: 140 }, { key: "authors", title: "作者", sort: "authors", width: 150 },
   { key: "year", title: "年份", sort: "year", width: 56 }, { key: "tags", title: "标签", sort: "tags", width: 130 }, { key: "dateAdded", title: "添加日期", sort: "dateAdded", width: 96 },
   { key: "type", title: "类型", sort: "type", width: 80 }, { key: "dateModified", title: "修改日期", sort: "dateModified", width: 96 }, { key: "doi", title: "DOI", sort: "doi", width: 140 }, { key: "publisher", title: "出版社", sort: "publisher", width: 140 },
   { key: "volume", title: "卷", sort: "volume", width: 56 }, { key: "issue", title: "期", sort: "issue", width: 56 }, { key: "pages", title: "页码", sort: "pages", width: 80 },
@@ -77,6 +77,18 @@ export function TranslatedBadge({ itemId }: { itemId: string }) {
   return <span className="translated-badge" title={t("已翻译：%@", names)}>{t("已翻译")}</span>;
 }
 
+/** The 出版物 column: the venue as a bold capsule ("CVPR", "TPAMI"), then its ranks in the inspector's colours. Ranks that do
+ *  not fit are left out (they wrap onto a hidden line); the venue itself always shows, truncated if it must be. */
+export function VenueBadges({ item }: { item: Item }) {
+  const venue = item.venue;
+  if (!venue) return <span className="venue-none">—</span>;
+  return (
+    <span className="venue-badges" title={venue.tip}>
+      {venue.badges.map((b) => <span key={b.kind + b.text} className={`jm-badge jm-${b.kind}${b.emphasized ? " strong" : ""}`}>{b.text}</span>)}
+    </span>
+  );
+}
+
 interface FlatRow { itemId: string; fileId?: string }
 
 let anchor: string | null = null;
@@ -100,7 +112,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   const includeFulltext = useStore((s) => s.includeFulltext);
   const sortColumn = useStore((s) => s.sortColumn);
   const sortAscending = useStore((s) => s.sortAscending);
-  const visible = useStore((s) => s.settings.visibleColumns as string[] | undefined) ?? ["title", "source", "authors", "year", "tags", "dateAdded"];
+  const multi = useStore((s) => s.multiSelect);
+  const visible = useStore((s) => s.settings.visibleColumns as string[] | undefined) ?? ["title", "venue", "authors", "year", "tags", "dateAdded"];
   const widths = useStore((s) => s.settings.columnWidths as Record<string, number> | undefined) ?? {};
   const state = getState();
 
@@ -219,7 +232,12 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
     scroller.current?.focus({ preventScroll: true });
     if (row.fileId) { setSelection([row.itemId], row.fileId); return; }
     const id = row.itemId;
-    if (e.shiftKey && anchor && rows.includes(anchor)) {
+    if (getState().multiSelect && !e.shiftKey) {
+      // 多选: a click adds or removes, no Ctrl needed.
+      const current = getState().selection;
+      setSelection(current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
+      anchor = id;
+    } else if (e.shiftKey && anchor && rows.includes(anchor)) {
       const a = rows.indexOf(anchor), b = rows.indexOf(id);
       setSelection(rows.slice(Math.min(a, b), Math.max(a, b) + 1));
     } else if (e.ctrlKey) {
@@ -267,6 +285,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       case "ArrowLeft": { const next = new Set(expanded); ids.forEach((i) => next.delete(i)); setState({ expanded: next }); break; }
       case "Enter": openItems(ids); break;
       case " ": toggleQuickLook(); break;
+      case "Escape": if (getState().multiSelect) setState({ multiSelect: false }); else return; break;
       case "a": if (e.ctrlKey) setSelection(rows); else return; break;
       case "Delete": case "Backspace": {
         if (ids.length === 0) return;
@@ -319,6 +338,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
         </>
       );
     }
+    if (key === "venue") return <VenueBadges item={item} />;
     if (key === "rating") return <span style={{ color: "var(--star)", display: "inline-flex", gap: 1 }}>{Array.from({ length: item.rating }, (_, i) => <Star key={i} size={11} fill="currentColor" />)}</span>;
     return cellText(key, item, getState());
   }, [dark, itemTags]);
@@ -338,6 +358,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
           <button title={t("翻译")} disabled={selection.length === 0} onClick={() => translate(selection)}><FullTextTranslateIcon size={17} /></button>
           <button title={t("引用与导出")} disabled={selection.length === 0} onClick={(e) => openMenuAt(e.currentTarget, citeMenu(selection))}><Share size={16} strokeWidth={1.7} /></button>
         </div>
+        <button className={`glass-button${multi ? " on" : ""}`} title={multi ? t("退出多选（Esc）") : t("多选")} aria-pressed={multi}
+          onClick={() => { setState({ multiSelect: !multi, fileSelection: null }); scroller.current?.focus({ preventScroll: true }); }}><ListChecks size={17} strokeWidth={1.7} /></button>
         <SearchBox inputRef={searchRef} value={searching} placeholder={t("搜索文献")} onChange={(v) => { typing.current = true; setSearching(v); call("library.search", { text: v }).finally(() => { typing.current = false; }); }} />
       </div>
       {tabs}
@@ -393,7 +415,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                   onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }} onAuxClick={(e) => { if (e.button === 1) { setSelection([row.itemId], row.fileId); setState({ quickLook: true }); } }}
                   onContextMenu={(e) => { e.preventDefault(); setSelection([row.itemId], row.fileId); openMenu(scope === "trash" ? itemMenu([row.itemId]) : fileMenu(file), e.clientX, e.clientY); }}>
                   <span style={{ width: 44, flex: "none" }} />
-                  <FileText size={14} className="secondary" style={{ flex: "none" }} />
+                  {file.isMarkdown ? <FilePen size={14} className="secondary" style={{ flex: "none" }} /> : <FileText size={14} className="secondary" style={{ flex: "none" }} />}
                   <span className="td ellipsis" style={{ fontSize: 12, flex: "0 1 auto" }} title={file.fileName}>{file.title}</span>
                   {items.get(row.itemId)?.defaultFileId === file.id && <span className="default-badge" aria-label={t("（默认）")}>{t("默认")}</span>}
                   <span style={{ flex: 1 }} />
@@ -405,10 +427,15 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
             return (
               <div key={item.id} className={`tr${selectedSet.has(item.id) && !fileSelection ? " selected" : ""}`} style={{ top }} draggable
                 onAuxClick={(e) => { if (e.button === 1) { setSelection([item.id]); anchor = item.id; setState({ quickLook: true }); } }}
-                onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); pendingDragSelect.current = selectedSet.has(item.id) && !e.shiftKey && !e.ctrlKey && e.button === 0; if (!selectedSet.has(item.id) && e.button === 0 && !e.shiftKey && !e.ctrlKey) { setSelection([item.id]); anchor = item.id; } }}
+                onMouseDown={(e) => {
+                  if (e.button === 1) e.preventDefault();
+                  if (multi) { pendingDragSelect.current = false; return; }
+                  pendingDragSelect.current = selectedSet.has(item.id) && !e.shiftKey && !e.ctrlKey && e.button === 0;
+                  if (!selectedSet.has(item.id) && e.button === 0 && !e.shiftKey && !e.ctrlKey) { setSelection([item.id]); anchor = item.id; }
+                }}
                 onMouseUp={(e) => { if (pendingDragSelect.current && e.button === 0) { pendingDragSelect.current = false; clickRow(e, row); } }}
-                onClick={(e) => { if (e.shiftKey || e.ctrlKey) clickRow(e, row); }}
-                onDoubleClick={(e) => { if (!(e.target as Element).closest("button")) openRow(row); }}
+                onClick={(e) => { if (multi || e.shiftKey || e.ctrlKey) clickRow(e, row); }}
+                onDoubleClick={(e) => { if (!multi && !(e.target as Element).closest("button")) openRow(row); }}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   const ids = selectedSet.has(item.id) ? selection : [item.id];
@@ -435,7 +462,10 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                         {fileCount > 0 && !standalone
                           ? <button className="disc" onClick={(e) => { e.stopPropagation(); toggleExpanded(item.id); }} onDoubleClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>{expanded.has(item.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>
                           : <span className="disc-space" />}
-                        <FileText size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />
+                        {multi
+                          ? (selectedSet.has(item.id) ? <CircleCheck size={16} strokeWidth={2} className="check-on" style={{ flex: "none" }} /> : <Circle size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />)
+                          : isMarkdownItem(item, getState()) ? <FilePen size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />
+                          : <FileText size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />}
                         {standalone && item.retrieving && <span className="spinner" />}
                         <span className="ellipsis" style={{ flex: "0 1 auto" }} title={item.title}>{item.title}</span>
                         {noted.has(item.id) && <NotebookText size={13} strokeWidth={1.6} className="note-mark" aria-label={t("有笔记")} />}
@@ -445,7 +475,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                       </div>
                     );
                   }
-                  return <div key={c.key} className={`td${c.key === "dateAdded" || c.key === "dateModified" || c.key === "fileCount" || c.key === "readStatus" ? " dim" : ""}`} style={{ width: widthOf(c.key) }} title={c.key === "tags" || c.key === "rating" ? undefined : cellText(c.key, item, state)}>{renderCell(c.key, item)}</div>;
+                  return <div key={c.key} className={`td${c.key === "dateAdded" || c.key === "dateModified" || c.key === "fileCount" || c.key === "readStatus" ? " dim" : ""}`} style={{ width: widthOf(c.key) }} title={c.key === "tags" || c.key === "rating" || c.key === "venue" ? undefined : cellText(c.key, item, state)}>{renderCell(c.key, item)}</div>;
                 })}
               </div>
             );
@@ -456,6 +486,12 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       </div>
     </>
   );
+}
+
+/** A document written in Folio: a standalone item whose file is Markdown (MD-01). */
+export function isMarkdownItem(item: Item, s: State) {
+  if (item.kind !== "standalone" || !item.defaultFileId) return false;
+  return !!s.files.get(item.defaultFileId)?.isMarkdown;
 }
 
 function dragUrl(s: State, fileId: string) {

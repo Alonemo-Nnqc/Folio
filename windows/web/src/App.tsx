@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { call, emitLocal, on } from "./rpc";
-import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
+import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, newMarkdownDocument, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
 import { getState, setSetting, setState, useStore } from "./store";
 import { LibraryPage } from "./library/LibraryPage";
 import { ReaderTab, readers } from "./reader/ReaderTab";
+import { MarkdownTab } from "./notes/MarkdownTab";
 import { useEvent } from "./ui/util";
 import { setCaption } from "./ui/caption";
 
@@ -16,6 +17,7 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
   const library = s.activeTab === "library";
   const reader = readers.get(s.activeTab);
   if (code === "F11") { call("window.fullScreen"); return true; }
+  if (code === "Escape" && !ctrl && !alt && !shift && library && s.multiSelect) { setState({ multiSelect: false }); return true; }
   if (!ctrl) return false;
   if (!alt && !shift) {
     switch (code) {
@@ -45,6 +47,7 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
       case "KeyI": if (reader) reader.toggleNotes(); else setSetting("inspectorVisible", !s.settings.inspectorVisible); return true;
       case "KeyR": if (ids.length) { call("items.retrieve", { ids }); return true; } return false;
       case "KeyN": if (library) { showNotes(); return true; } return false;
+      case "KeyM": newMarkdownDocument(); return true;
       case "KeyT": if (library && ids.length) { translate(ids); return true; } return false;
     }
   }
@@ -53,6 +56,7 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
 
 export function MainApp() {
   const tabs = useStore((s) => s.tabs);
+  const files = useStore((s) => s.files);
   const activeTab = useStore((s) => s.activeTab);
   const dark = useStore((s) => s.dark);
   const panelUnderButtons = useStore((s) => (s.activeTab === "library" ? s.settings.inspectorVisible : s.readerNotes[s.activeTab] ?? false));
@@ -107,7 +111,9 @@ export function MainApp() {
   return (
     <>
       <LibraryPage visible={activeTab === "library"} />
-      {tabs.map((tab) => <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} />)}
+      {tabs.map((tab) => files.get(tab.fileId)?.isMarkdown
+        ? <MarkdownTab key={tab.key} fileId={tab.fileId} visible={activeTab === tab.key} />
+        : <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} />)}
     </>
   );
 }

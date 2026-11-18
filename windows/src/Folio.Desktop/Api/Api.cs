@@ -134,6 +134,8 @@ public static partial class Api
             ["selectionTranslationFallback"] = s.SelectionTranslationFallback,
             ["readerToolbar"] = s.ReaderToolbar,
             ["translationParallelJobs"] = s.TranslationParallelJobs,
+            ["translationParallelTotal"] = s.TranslationParallelTotal,
+            ["autoTranslateImports"] = s.AutoTranslateImports,
             ["onboardingDone"] = s.OnboardingDone,
             ["openReaderTabs"] = s.OpenReaderTabs,
             ["sidebarCollapsedGroups"] = s.SidebarCollapsedGroups,
@@ -147,6 +149,7 @@ public static partial class Api
             ["sidebarVisible"] = s.SidebarVisible,
             ["settingsPane"] = s.Raw("settingsPane")?.ToString() ?? "general",
             ["readerSidebarWidth"] = s.Raw("readerSidebarWidth")?.GetValue<double>() ?? 220.0,
+            ["readerSidebarTab"] = s.Raw("readerSidebarTab")?.ToString() ?? "thumbnails",
         };
     }
 
@@ -168,7 +171,7 @@ public static partial class Api
                 if (M.Settings.BrowserConnectorEnabled) M.Connector.Start(); else M.Connector.Stop();
             }
             if (key == "includeSubgroupItems") M.Refresh();
-            if (key == "translationParallelJobs") M.Translations.ParallelChanged();
+            if (key is "translationParallelJobs" or "translationParallelTotal") M.Translations.ParallelChanged();
             App.Broadcast("settings", AllSettings());
         });
     }

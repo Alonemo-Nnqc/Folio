@@ -111,14 +111,18 @@ public sealed partial class LayoutAnalyzer
                 double below = line.Baseline - rule.MidY;
                 return below > -0.5 && below < line.Size * 0.17 && rule.MinX >= line.MinX - 1 && rule.MaxX <= line.MaxX + 1;
             })).ToList();
-        var tables = TableFrames(rules, lines).Select(t => TrimCaptions(t, lines)).Where(t => IsTable(t, lines, marks)).ToList();
-        var figures = FigureRegions(marks, lines, tables, crop);
-        tables.RemoveAll(table => figures.Any(f => f.Intersection(table).Area > table.Area * 0.4));
-        var gutters = tables.Select(t => ColumnGutters(t, lines)).ToList();
         // The upright rules of a table drawn with a grid: two cells with a rule between them are two cells, however
         // close their words come to it.
         var uprights = marks.Where(m => m.Kind is GraphicMark.MarkKind.Fill or GraphicMark.MarkKind.Stroke && !m.IsWhite && m.Rect.W < 2.5 && m.Rect.H > BodySize * 0.8)
             .Select(m => m.Rect).ToList();
+        var frames = TableFrames(rules, lines);
+        // Tables ruled only between their columns (and under the header): no second level rule to find them by.
+        foreach (var frame in UprightTableFrames(uprights, rules, lines, BodySize))
+            if (!frames.Any(f => f.InsetBy(-2, -2).Intersects(frame))) frames.Add(frame);
+        var tables = frames.Select(t => TrimCaptions(t, lines)).Where(t => IsTable(t, lines, marks)).ToList();
+        var figures = FigureRegions(marks, lines, tables, crop);
+        tables.RemoveAll(table => figures.Any(f => f.Intersection(table).Area > table.Area * 0.4));
+        var gutters = tables.Select(t => ColumnGutters(t, lines)).ToList();
         var dividers = tables.Select(t => uprights.Where(u => t.InsetBy(-1, -2).Intersects(u)).ToList()).ToList();
         lines = BuildLines(chars, tables, gutters, crop.W, dividers).Select(MarkScripts).ToList();
         JoinWordFractions(lines, marks);

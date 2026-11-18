@@ -232,7 +232,10 @@ export function OptionsSection({ compact }: { compact: boolean }) {
         </Card>
         <Header>{t("速度")}</Header>
         <Card>
-          <ParallelRow />
+          <ParallelRows />
+          <Row title={t("自动翻译新添加的论文")} detail={t("添加还没有译文的 PDF 时（导入、浏览器保存、自动下载），用当前服务和设置开始翻译")}>
+            <AutoTranslateSwitch />
+          </Row>
           <Row title={t("同时请求数")} detail={t("遇到限流时调小")}><Select value={o.concurrency ?? 0} options={[0, 1, 2, 4, 8, 12, 16].map((n) => ({ value: n, label: n === 0 ? t("自动") : String(n) }))} onChange={(v) => update({ concurrency: v === 0 ? null : v })} /></Row>
           <Row title={t("重新翻译（不使用缓存）")}><Switch on={o.ignoreCache} onChange={(v) => update({ ignoreCache: v })} /></Row>
         </Card>
@@ -377,10 +380,26 @@ export function GlossarySheet({ language: initial, languages, close }: { languag
   );
 }
 
-/** How many papers a batch translates at once. */
-function ParallelRow() {
-  const value = useStore((x) => x.settings.translationParallelJobs ?? 2);
-  return <Row title={t("同时翻译")} detail={t("批量翻译时同时进行的论文篇数")}><Select value={value} options={[1, 2, 3, 4].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelJobs", v)} /></Row>;
+/** How many papers run at once: per service (rate limits, a local agent's load) and in all (this PC's work). */
+function ParallelRows() {
+  const perService = useStore((x) => x.settings.translationParallelJobs ?? 2);
+  const total = useStore((x) => x.settings.translationParallelTotal ?? 6);
+  return (
+    <>
+      <Row title={t("同一服务同时翻译")} detail={t("同一个服务商同时进行的论文篇数，遇到限流或本机智能体太占资源时调小")}>
+        <Select value={perService} options={[1, 2, 3, 4].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelJobs", v)} />
+      </Row>
+      <Row title={t("同时翻译总数")} detail={t("所有服务合计；用不同服务翻译的论文互不等待")}>
+        <Select value={total} options={[2, 4, 6, 8].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelTotal", v)} />
+      </Row>
+    </>
+  );
+}
+
+/** 自动翻译新添加的论文 (off by default). */
+function AutoTranslateSwitch() {
+  const on = useStore((x) => x.settings.autoTranslateImports === true);
+  return <Switch on={on} onChange={(v) => setSetting("autoTranslateImports", v)} />;
 }
 
 /** "Alt+D" for display: "Alt + D". */

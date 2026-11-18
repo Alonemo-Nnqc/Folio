@@ -608,6 +608,11 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     switch (m.type) {
       case "ready":
         pane.onReady();
+        // The sidebar opens on the page last chosen (缩略图、目录或批注).
+        if (pane === main) pane.send({ cmd: "sidebarPane", value: getState().settings.readerSidebarTab ?? "thumbnails" });
+        break;
+      case "sidebarTab":
+        if (pane === main && m.pane !== "hits") setSetting("readerSidebarTab", m.pane);
         break;
       case "error":
         if (m.fatal) call("toast.show", { message: m.name === "PasswordException" ? t("这个 PDF 需要密码") : t("无法打开这个 PDF"), icon: "warning" });

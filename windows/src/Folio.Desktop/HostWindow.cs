@@ -67,7 +67,13 @@ public sealed class HostWindow : Form
         PlaceWindow();
         DoubleBuffered = true;
         Load += async (_, _) => await Initialize();
-        Activated += (_, _) => { Bridge.Emit("window.active", true); InvalidateCaption(); };
+        Activated += (_, _) =>
+        {
+            Bridge.Emit("window.active", true);
+            InvalidateCaption();
+            // Coming back to Folio looks for an update once half an hour has passed since the last look.
+            App.Model.Updater.CheckInBackgroundIfDue(TimeSpan.FromMinutes(30));
+        };
         Deactivate += (_, _) => { Bridge.Emit("window.active", false); InvalidateCaption(); };
         Resize += (_, _) => { UpdateHole(); RememberNormalBounds(); Bridge.Emit("window.state", WindowStateName); };
         // Hidden in the notification area, the page gives back what memory it can.

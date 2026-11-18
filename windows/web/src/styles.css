@@ -166,11 +166,10 @@ input:focus-visible, textarea:focus-visible { outline: none; }
 .disc { width: 18px; height: 22px; border: 0; background: transparent; padding: 0; flex: none; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; }
 .disc-space { width: 18px; flex: none; }
 /* A tag, as on the Mac: a soft capsule led by its colour dot (the way Finder shows tags), no outline. */
-.chip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px 0 6px; border-radius: 9px; font-size: 11px; font-weight: 500; max-width: 100%; vertical-align: middle; }
-.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--dot); flex: none; }
+/* Tags: a capsule tinted with the tag's colour, no dot (as on the Mac since 1.5). */
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px; border-radius: 9px; font-size: 11px; font-weight: 500; max-width: 100%; vertical-align: middle; }
 /* "+N": the tags that did not fit, without a dot (as on the Mac). */
 .chip.plain { padding: 0 7px; }
-.chip.plain::before { display: none; }
 .chip .x { margin-left: 4px; border: 0; background: transparent; color: inherit; padding: 0; display: inline-flex; font-weight: 700; }
 .chip .ellipsis { display: block; }
 .empty { position: absolute; inset: 40px 0 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--secondary); text-align: center; pointer-events: none; padding: 20px; }
@@ -395,22 +394,18 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .dots i { width: 7px; height: 7px; border-radius: 4px; background: var(--separator-strong); display: block; }
 .dots i.on { background: var(--accent); }
 
-/* The toolbar's 更新 button */
-/* The update card at the foot of the sidebar. */
-.update-card { flex: none; margin: 4px 10px 10px; display: flex; align-items: center; gap: 9px; padding: 7px 9px; border: 0; border-radius: 12px; text-align: left; color: var(--text);
-  background: var(--popup); backdrop-filter: blur(24px) saturate(1.6); box-shadow: 0 0 0 .5px var(--separator-strong), 0 2px 8px rgba(0, 0, 0, .08);
-  animation: update-in .35s cubic-bezier(.2, .9, .3, 1.2); transition: transform .15s, box-shadow .15s; }
-.update-card:hover { transform: translateY(-1px); box-shadow: 0 0 0 .5px var(--separator-strong), 0 4px 14px rgba(0, 0, 0, .12); }
-.update-card:active { transform: scale(.98); }
-.update-card:disabled { opacity: .85; }
-.update-card .badge { width: 22px; height: 22px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #fff;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, white), var(--accent)); }
-.update-card .badge .spinner.small { width: 11px; height: 11px; border-color: rgba(255, 255, 255, .4); border-top-color: #fff; }
-.update-card .text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
-.update-card .title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.update-card .version { font-size: 11px; color: var(--secondary); }
-.update-card .chev { flex: none; color: var(--tertiary, var(--secondary)); opacity: .6; transition: opacity .15s, transform .15s; }
-.update-card:hover .chev { opacity: 1; transform: translateX(1px); }
+/* The update row at the foot of the sidebar: flat, a tinted fill, the version, and a small capsule saying what a click does. */
+.update-row { flex: none; margin: 4px 10px 10px; display: flex; align-items: center; gap: 8px; padding: 7px 7px 7px 8px; border: 0; border-radius: 10px; text-align: left; color: var(--text);
+  background: color-mix(in srgb, var(--accent) 9%, transparent); animation: update-in .3s ease-out; transition: background .12s; }
+.update-row:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.update-row:active { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.update-row:disabled { opacity: .85; }
+.update-row .icon { flex: none; color: var(--accent); }
+.update-row .spinner.small { width: 16px; height: 16px; }
+.update-row .text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.update-row .title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.update-row .detail { font-size: 11px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.update-row .action { flex: none; height: 20px; padding: 0 9px; border-radius: 10px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; }
 @keyframes update-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* Sliders (设置 ▸ 背景透明度) */
@@ -557,6 +552,12 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 .jm-cas1 { --tint: 235, 66, 61; } .jm-cas2 { --tint: 245, 140, 26; } .jm-cas3 { --tint: 140, 179, 26; } .jm-cas4 { --tint: 102, 153, 133; }
 .jm-q1 { --tint: 26, 115, 242; } .jm-q2 { --tint: 46, 158, 219; } .jm-q3 { --tint: 77, 168, 179; } .jm-q4 { --tint: 128, 143, 158; }
 .jm-if { --tint: 158, 92, 219; } .jm-if5 { --tint: 115, 107, 214; } .jm-ccf { --tint: 13, 166, 153; } .jm-index { --tint: 133, 133, 143; } .jm-warning { --tint: 224, 56, 51; }
+/* 出版物 column: the venue's capsule in a neutral ink, its ranks after it; capsules that do not fit wrap out of sight. */
+.venue-badges { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0 4px; height: 18px; overflow: hidden; min-width: 0; max-width: 100%; }
+.venue-badges .jm-badge { flex: none; }
+.venue-badges .jm-badge:first-child { flex: 0 1 auto; min-width: 24px; overflow: hidden; text-overflow: ellipsis; }
+.jm-venue { --tint: 77, 87, 204; font-weight: 600; }
+.venue-none { color: var(--tertiary, var(--secondary)); }
 .jm-refresh { width: 18px; height: 18px; border: 0; border-radius: 5px; background: transparent; color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
 .jm-row:hover .jm-refresh, .jm-refresh:focus-visible { opacity: 1; }
 .jm-refresh:hover { background: var(--hover); color: var(--text); }
@@ -667,3 +668,56 @@ textarea.field { height: auto; padding: 6px 8px; resize: none; display: block; }
 /* A saved model the service no longer offers (设置 ▸ 翻译, as on the Mac). */
 .model-check { display: inline-flex; align-items: center; gap: 6px; }
 .model-check svg { color: #e8a100; flex: none; }
+
+/* 多选 (1.5): the toolbar button, rows' check circles, and the inspector's batch panel. */
+.check-on { color: var(--accent); }
+.multi-panel { padding-top: 6px; }
+.multi-head { display: flex; gap: 12px; align-items: flex-start; padding: 6px 0 14px; }
+.multi-title { font-weight: 600; font-size: 14px; }
+.multi-sub { font-size: 12px; margin-top: 3px; }
+.multi-links { display: flex; gap: 12px; margin-top: 6px; }
+.multi-links .link-button { font-size: 12px; }
+.multi-tags { margin-bottom: 12px; }
+.multi-caption { font-size: 11.5px; font-weight: 600; color: var(--secondary); margin-bottom: 6px; }
+.multi-actions { display: flex; flex-direction: column; gap: 1px; }
+.multi-row { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font-size: 13px; text-align: left; }
+.multi-row:hover:not(:disabled) { background: var(--hover); }
+.multi-row:disabled { opacity: .45; }
+.multi-row .multi-icon { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; color: var(--secondary); }
+.multi-row.destructive, .multi-row.destructive .multi-icon { color: var(--red, #e5484d); }
+.multi-sep { height: 1px; background: var(--separator); margin: 5px 8px; }
+.multi-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; font-size: 12px; }
+.multi-empty .big { font-size: 15px; font-weight: 600; }
+
+/* Markdown documents and notes (MD-01). */
+.icon-button { width: 24px; height: 24px; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--secondary); }
+.icon-button:hover { background: var(--hover); color: var(--text); }
+.md-inspector { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 14px 14px; }
+.md-file-head { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500; padding: 2px 0 8px; border-bottom: 1px solid var(--separator); }
+.md-toggle { display: inline-flex; flex: none; background: var(--hover); border-radius: 6px; padding: 2px; gap: 2px; }
+.md-toggle button { border: 0; background: transparent; color: var(--secondary); font-size: 11px; padding: 1px 7px; border-radius: 4px; }
+.md-toggle button.on { background: var(--content); color: var(--text); box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .08); }
+:root[data-theme="dark"] .md-toggle button.on { background: #3a3a3c; }
+.md-inspector textarea.md-text, .md-tab textarea.md-text { flex: 1; min-height: 0; border: 0; background: transparent; resize: none; padding: 10px 0 0; line-height: 1.55; font-size: 13px; user-select: text; cursor: text; outline: none; }
+.md-preview { flex: 1; min-height: 0; overflow: auto; padding-top: 10px; }
+.md-view { font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.md-view h1 { font-size: 1.6em; margin: .2em 0 .5em; } .md-view h2 { font-size: 1.35em; margin: .9em 0 .4em; } .md-view h3 { font-size: 1.15em; margin: .8em 0 .3em; }
+.md-view h4, .md-view h5, .md-view h6 { font-size: 1em; margin: .7em 0 .3em; }
+.md-view p { margin: 0 0 .7em; }
+.md-view ul, .md-view ol { margin: 0 0 .7em; padding-left: 1.5em; }
+.md-view li.md-task { list-style: none; margin-left: -1.3em; display: flex; gap: 6px; align-items: baseline; }
+.md-view li.md-task .done { color: var(--secondary); text-decoration: line-through; }
+.md-view blockquote { margin: 0 0 .7em; padding-left: 10px; border-left: 3px solid var(--separator); color: var(--secondary); }
+.md-view code { font-family: "Cascadia Code", Consolas, monospace; font-size: .92em; background: var(--hover); border-radius: 4px; padding: 0 3px; }
+.md-view pre { background: var(--hover); border-radius: 6px; padding: 8px 10px; overflow: auto; margin: 0 0 .7em; }
+.md-view pre code { background: none; padding: 0; }
+.md-view hr { border: 0; border-top: 1px solid var(--separator); margin: 1em 0; }
+.md-view table { border-collapse: collapse; margin: 0 0 .7em; font-size: .95em; }
+.md-view th, .md-view td { border: 1px solid var(--separator); padding: 3px 8px; text-align: left; }
+.md-view a { color: var(--accent); text-decoration: none; cursor: pointer; } .md-view a:hover { text-decoration: underline; }
+.md-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--content); }
+.md-tab-body { flex: 1; min-height: 0; display: flex; justify-content: center; overflow: auto; }
+.md-tab-column { width: min(760px, 100%); display: flex; flex-direction: column; padding: 24px 32px; }
+.md-tab textarea.md-text, .md-tab .md-view { font-size: 15px; }
+.md-toggle { app-region: no-drag; }
+.md-tab.window { position: absolute; inset: 0; flex-direction: column; }

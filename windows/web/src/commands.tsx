@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, FilePen, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
 import { FullTextTranslateIcon } from "./ui/icons";
-import { call } from "./rpc";
+import { call, emitLocal } from "./rpc";
 import { t } from "./i18n";
 import { defaultFile, filesOf, getState, groupsForMenus, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
 import { sep, type MenuEntry } from "./ui/menu";
@@ -189,10 +189,36 @@ export function translate(ids: string[], file?: FileRec) {
 
 // MARK: Menus
 
+// MARK: Markdown documents (MD-01)
+
+/** A new Markdown document as an item of its own, in the group being shown, selected and ready to write in the inspector. */
+export async function newMarkdownDocument() {
+  const s = getState();
+  const r = await call<{ itemId: string; fileId: string }>("markdown.create", { group: scopeGroupId(s.scope), title: t("未命名文档") });
+  if (!r) return;
+  if (getState().scope === "trash") await call("library.scope", { scope: "all" });
+  setState({ activeTab: "library", selection: [r.itemId], fileSelection: null, inspectorPage: "info", multiSelect: false, markdownFocus: r.fileId });
+  call("library.select", { ids: [r.itemId] });
+  if (!getState().settings.inspectorVisible) setSetting("inspectorVisible", true);
+  requestAnimationFrame(() => emitLocal("reveal", r.itemId));
+}
+
+/** A new Markdown document attached to a paper (reading notes kept as a file), selected under it. */
+export async function newMarkdownAttachment(item: Item) {
+  const fileId = await call<string>("markdown.attach", { item: item.id, title: t("%@ 笔记", item.title) });
+  if (!fileId) return;
+  const expanded = new Set(getState().expanded);
+  expanded.add(item.id);
+  setState({ activeTab: "library", expanded, selection: [item.id], fileSelection: fileId, inspectorPage: "info", multiSelect: false, markdownFocus: fileId });
+  call("library.select", { ids: [item.id] });
+  if (!getState().settings.inspectorVisible) setSetting("inspectorVisible", true);
+}
+
 export function addMenu(): MenuEntry[] {
   return [
     { label: t("添加文件…"), icon: icon(Plus), key: "Ctrl+O", action: addFiles },
     { label: t("通过标识符添加…"), icon: icon(Link), key: "Ctrl+Shift+O", action: addByIdentifier },
+    { label: t("新建 Markdown 文档"), icon: icon(FilePen), key: "Ctrl+Alt+M", action: newMarkdownDocument },
     sep,
     { label: t("新建分组"), icon: icon(Folder), key: "Ctrl+Shift+N", action: () => newGroup() },
     { label: t("新建标签…"), icon: icon(TagIcon), action: () => newTag() },
@@ -303,14 +329,18 @@ export function itemMenu(ids: string[]): MenuEntry[] {
     entries.push(sep);
     if (single.kind === "regular") {
       entries.push({ label: t("添加文件…"), icon: icon(Paperclip), action: () => call("files.attachPick", { item: single.id }) });
+      entries.push({ label: t("新建 Markdown 附件"), icon: icon(FilePen), action: () => newMarkdownAttachment(single) });
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), key: "Ctrl+Alt+R", action: () => call("items.retrieve", { ids }) });
       if (single.hasJournal) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
     } else {
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: single.metadataState === "Pending" || !filesOf(s, single.id)[0]?.isPdf, action: () => call("items.retrieve", { ids }) });
       entries.push({ label: t("手动匹配…"), icon: icon(Search), action: () => manualMatch(single) });
     }
-  } else if (selected.some((i) => defaultFile(s, i)?.isPdf)) {
-    entries.push({ label: t("翻译全文…"), icon: icon(FullTextTranslateIcon), action: () => translate(ids) });
+  } else {
+    // Several items: the batch versions of the per-item commands above.
+    const pdfs = selected.filter((i) => defaultFile(s, i)?.isPdf);
+    if (pdfs.length > 0) entries.push({ label: t("翻译全文（%lld 篇）…", pdfs.length), icon: icon(FullTextTranslateIcon), disabled: pdfs.every((i) => s.jobs[i.id]), action: () => translate(ids) });
+    entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: selected.every((i) => i.metadataState === "Pending"), action: () => call("items.retrieve", { ids }) });
   }
   if (!single && selected.some((i) => i.hasJournal)) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
   if (selected.some((i) => defaultFile(s, i))) entries.push({ label: t("在资源管理器中显示"), icon: icon(Folder), key: "Ctrl+Shift+R", action: () => revealFirstFile(ids) });

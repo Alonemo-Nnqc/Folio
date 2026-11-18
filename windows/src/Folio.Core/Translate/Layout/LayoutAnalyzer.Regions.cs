@@ -50,6 +50,90 @@ public sealed partial class LayoutAnalyzer
         return merged;
     }
 
+    /// <summary>Tables whose columns are parted by upright rules drawn row by row (LaTeX's <c>|</c> in a tabular), with at most
+    /// one level rule (under the header): three or more short strokes stacked at one x make a column divider, and
+    /// dividers side by side over the same rows make a table. It reaches sideways to the level rule across it, or
+    /// else to the short lines (not running text) on its rows.</summary>
+    static List<Rect> UprightTableFrames(List<Rect> uprights, List<Rect> rules, List<LayoutLine> lines, double bodySize)
+    {
+        var shortStrokes = uprights.Where(u => u.H < bodySize * 3).OrderBy(u => u.MidX).ToList();
+        var columns = new List<List<Rect>>();
+        foreach (var stroke in shortStrokes)
+        {
+            var column = columns.FirstOrDefault(c => Math.Abs(c[0].MidX - stroke.MidX) < 1);
+            if (column != null) column.Add(stroke); else columns.Add([stroke]);
+        }
+        var chains = new List<Rect>();
+        foreach (var column in columns)
+        {
+            var sorted = column.OrderByDescending(r => r.MaxY).ToList();
+            var current = sorted[0];
+            int count = 1;
+            foreach (var stroke in sorted.Skip(1))
+            {
+                // A row without the rule (a "zero-shot methods:" row across the table) does not end the divider.
+                if (current.MinY - stroke.MaxY <= Math.Max(stroke.H, bodySize) * 1.6)
+                {
+                    current = current.Union(stroke);
+                    count++;
+                }
+                else
+                {
+                    if (count >= 3) chains.Add(current);
+                    current = stroke;
+                    count = 1;
+                }
+            }
+            if (count >= 3) chains.Add(current);
+        }
+        if (chains.Count == 0) return [];
+        // Dividers over (mostly) the same rows belong to one table.
+        var groups = new List<Rect>();
+        foreach (var chain in chains.OrderByDescending(c => c.H))
+        {
+            int k = groups.FindIndex(g =>
+            {
+                double overlap = Math.Min(g.MaxY, chain.MaxY) - Math.Max(g.MinY, chain.MinY);
+                return overlap > Math.Min(g.H, chain.H) * 0.6 && Math.Abs(g.MidX - chain.MidX) < 400;
+            });
+            if (k >= 0) groups[k] = groups[k].Union(chain); else groups.Add(chain);
+        }
+        var frames = new List<Rect>();
+        foreach (var group in groups)
+        {
+            var band = group.InsetBy(0, -1);
+            var frame = group;
+            var across = rules.Where(r => r.MidY > band.MinY - 2 && r.MidY < band.MaxY + 2 && r.MinX <= group.MinX + 1 && r.MaxX >= group.MaxX - 1).ToList();
+            foreach (var rule in across) frame = frame.Union(new Rect(rule.MinX, group.MinY, rule.W, group.H));
+            if (across.Count == 0)
+            {
+                // No rule to say how wide: the short lines on its rows next to it.
+                var row = lines.Where(l => l.Rect.MidY > band.MinY && l.Rect.MidY < band.MaxY && ProseWords(l) < 6 && !l.IsRotated).ToList();
+                var taken = new HashSet<int>();
+                bool grew = true;
+                while (grew)
+                {
+                    grew = false;
+                    for (int k = 0; k < row.Count; k++)
+                    {
+                        var line = row[k];
+                        if (taken.Contains(k) || !(line.MinX < frame.MaxX + bodySize * 2.5 && line.MaxX > frame.MinX - bodySize * 2.5)) continue;
+                        taken.Add(k);
+                        var wider = frame.Union(new Rect(line.MinX, frame.MinY, line.MaxX - line.MinX, frame.H));
+                        if (wider.W > frame.W + 0.01) { frame = wider; grew = true; }
+                    }
+                }
+            }
+            // A header over several columns (\multicolumn) has no divider of its own: short lines right above.
+            while (lines.FirstOrDefault(line =>
+                       line.Rect.MaxY > frame.MaxY + 0.5 && line.Rect.MinY >= frame.MaxY - 1.5 && line.Rect.MinY < frame.MaxY + bodySize * 0.8 && !line.IsRotated
+                       && line.MinX >= frame.MinX - 1 && line.MaxX <= frame.MaxX + 1 && ProseWords(line) < 6 && !IsCaptionStart(line.Text)) is { } header)
+                frame = frame.Union(new Rect(frame.MinX, frame.MinY, frame.W, header.Rect.MaxY - frame.MinY));
+            if (frame.W > group.W + bodySize && frame.H > bodySize * 2) frames.Add(frame);
+        }
+        return frames;
+    }
+
     /// <summary>A caption caught between a table's rules is not part of the table.</summary>
     static Rect TrimCaptions(Rect frame, List<LayoutLine> lines)
     {

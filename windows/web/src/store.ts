@@ -16,13 +16,16 @@ export interface Item {
   hasJournal: boolean;
   /** Its journal's ranks: null until looked up; no badges when easyScholar does not list it. */
   journalMetrics: JournalMetrics | null;
+  /** 出版物: the venue's short name and its ranks, as capsules; null when the item has no venue. */
+  venue: VenueInfo | null;
 }
+export interface VenueInfo { badges: { kind: string; text: string; emphasized?: boolean }[]; tip: string }
 export interface JournalBadge { kind: string; text: string; detail: string; emphasized: boolean }
 export interface JournalMetrics { badges: JournalBadge[]; rank?: string; impactFactor?: string; summary: string }
 /** 期刊指标's queue and key, for the inspector's hints and 设置. */
 export interface JournalMetricsState { key: string; hasKey: boolean; autoFetch: boolean; pending: number; status?: string; attention: boolean; keyPage: string }
 export interface FileRec {
-  id: string; itemId: string; fileName: string; path: string; isPdf: boolean; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
+  id: string; itemId: string; fileName: string; path: string; isPdf: boolean; isMarkdown?: boolean; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
   sha: string; dateAdded: number; title: string; tabTitle: string; tabTip: string;
 }
 export interface Group { id: string; parentId?: string; name: string; color?: string }
@@ -70,6 +73,10 @@ export interface State {
   inspectorPage: "info" | "annotations" | "notes";
   /** 快速预览 of the selection is open. */
   quickLook: boolean;
+  /** 多选 mode (the toolbar's button): a click adds or removes an item, rows show check circles, the inspector the batch panel. */
+  multiSelect: boolean;
+  /** A Markdown file just created: its editor takes the keyboard when it appears. */
+  markdownFocus: string | null;
   captionWidth: number;
   readerNotes: Record<string, boolean>; // reader tabs with their notes panel open
   windowState: string;
@@ -92,7 +99,7 @@ export interface Statics {
 let state: State = {
   items: new Map(), files: new Map(), filesByItem: {}, groups: new Map(), topGroups: [], childGroups: {}, tags: [], itemTags: {}, itemGroups: {}, noted: new Set(), counts: {}, root: "", libraryVersion: 0,
   rows: [], scope: "all", searchText: "", searchWholeLibrary: false, includeFulltext: false, sortAscending: true,
-  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false,
+  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false, multiSelect: false, markdownFocus: null,
   captionWidth: 138, readerNotes: {}, windowState: "normal", active: true, dark: false,
   statics: { version: "", channel: "", translucency: false, annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
 };

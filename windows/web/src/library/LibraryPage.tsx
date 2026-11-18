@@ -23,7 +23,14 @@ export function TabBar() {
   const tabs = useStore((s) => s.tabs);
   const active = useStore((s) => s.activeTab);
   const files = useStore((s) => s.files);
+  const items = useStore((s) => s.items);
   if (tabs.length === 0) return null;
+  // A Markdown document of its own is named by its first heading (the item's title), as on the Mac.
+  const titleOf = (fileId: string) => {
+    const file = files.get(fileId);
+    const item = file && items.get(file.itemId);
+    return file?.isMarkdown ? (item?.kind === "standalone" ? item.title : file.fileName.replace(/\.(md|markdown)$/i, "")) : file?.tabTitle ?? "";
+  };
   return (
     <div className="tabbar">
       <div className={`tab${active === "library" ? " active" : ""}`} onClick={() => setState({ activeTab: "library" })}><span className="ellipsis">{t("文献库")}</span></div>
@@ -40,7 +47,7 @@ export function TabBar() {
               ], e.clientX, e.clientY);
             }}>
             <button className="close" title={t("关闭标签页")} onClick={(e) => { e.stopPropagation(); closeTab(tab.key); }}><XSmall /></button>
-            <span className="ellipsis">{file?.tabTitle ?? ""}</span>
+            <span className="ellipsis">{titleOf(tab.fileId)}</span>
           </div>
         );
       })}

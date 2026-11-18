@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FileText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FilePen, FileText, Maximize2, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
-import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item } from "../store";
+import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type State } from "../store";
+import { MarkdownEditor, PreviewToggle } from "../notes/markdown";
+import { isMarkdownItem } from "./ItemList";
+import { MultiSelectionPanel } from "./MultiSelection";
 import { fileMenu, manualMatch, newTag, openReader, refreshJournalMetrics } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, PlainEdit, Segmented } from "../ui/controls";
@@ -115,7 +118,7 @@ function FilesSection({ item }: { item: Item }) {
         <button key={file.id} className={`file-row${file.id === item.defaultFileId && files.length > 1 ? " default" : ""}`} title={file.fileName}
           onClick={() => call("file.open", { id: file.id })}
           onContextMenu={(e) => { e.preventDefault(); openMenu(fileMenu(file), e.clientX, e.clientY); }}>
-          <FileText size={14} className="secondary" style={{ flex: "none" }} />
+          {file.isMarkdown ? <FilePen size={14} className="secondary" style={{ flex: "none" }} /> : <FileText size={14} className="secondary" style={{ flex: "none" }} />}
           <span className="ellipsis">{file.title}</span>
           {file.id === item.defaultFileId && <span className="default-badge">{t("默认")}</span>}
         </button>
@@ -228,63 +231,78 @@ function AnnotationsPage({ item }: { item: Item }) {
 
 /** An item's Markdown note; saved a moment after typing stops. */
 export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null; title?: string; inputRef?: React.MutableRefObject<HTMLTextAreaElement | null> }) {
-  const [text, setText] = useState("");
-  const saved = useRef("");
-  const shown = useRef<string | null>(null);
-  const timer = useRef(0);
-  const box = useRef<HTMLTextAreaElement | null>(null);
-  const version = useStore((s) => s.libraryVersion);
-
-  const flush = () => {
-    clearTimeout(timer.current);
-    const value = box.current?.value;
-    if (shown.current && value !== undefined && value !== saved.current) {
-      saved.current = value;
-      call("note.set", { item: shown.current, text: value });
-    }
-  };
-
-  useEffect(() => {
-    flush();
-    shown.current = itemId;
-    if (!itemId) { setText(""); saved.current = ""; return; }
-    let live = true;
-    call<string>("note.get", { item: itemId }).then((note) => { if (live) { saved.current = note; setText(note); } });
-    return () => { live = false; };
-  }, [itemId]);
-
-  // Another editor (a reader tab, an agent) changed the note; what is being typed here is not overwritten.
-  useEffect(() => {
-    if (!itemId || document.activeElement === box.current || box.current?.value !== saved.current) return;
-    call<string>("note.get", { item: itemId }).then((note) => {
-      if (note !== saved.current && document.activeElement !== box.current) { saved.current = note; setText(note); }
-    });
-  }, [version]);
-
-  useEffect(() => flush, []);
-
+  const source = useMemo(() => ({
+    key: itemId ? `note:${itemId}` : null,
+    load: () => call<string>("note.get", { item: itemId }),
+    save: (text: string) => { call("note.set", { item: itemId, text }); },
+  }), [itemId]);
   return (
     <div className="note-area">
       {title !== undefined && <><div className="note-head">{t("笔记")}</div><div className="note-sub">{title}</div></>}
-      <textarea ref={(el) => { box.current = el; if (inputRef) inputRef.current = el; }} disabled={!itemId} value={text} spellCheck={false} placeholder={t("记下想法、摘录与待办… 支持 Markdown")}
-        onChange={(e) => { setText(e.target.value); clearTimeout(timer.current); timer.current = window.setTimeout(flush, 600); }}
-        onBlur={flush} onKeyDown={(e) => e.stopPropagation()} />
+      <MarkdownEditor source={source} inputRef={inputRef} placeholder={t("记下想法、摘录与待办… 支持 Markdown")} />
     </div>
   );
+}
+
+/** A Markdown file in the inspector (MD-01): its name, a button to open it in a tab, and the editor. */
+function MarkdownFileInspector({ file }: { file: FileRec }) {
+  const focus = useStore((s) => s.markdownFocus === file.id);
+  const [preview, setPreview] = useState(false);
+  const source = useMemo(() => markdownSource(file.id), [file.id]);
+  useEffect(() => { if (focus) setState({ markdownFocus: null }); }, [focus]);
+  return (
+    <div className="md-inspector">
+      <div className="md-file-head">
+        <FilePen size={14} className="secondary" style={{ flex: "none" }} />
+        <span className="ellipsis" title={file.fileName}>{file.fileName}</span>
+        <span style={{ flex: 1 }} />
+        <PreviewToggle preview={preview} onChange={setPreview} />
+        <button className="icon-button" title={t("在标签页中打开")} onClick={() => openReader(file.id)}><Maximize2 size={13} /></button>
+      </div>
+      <MarkdownEditor source={source} focus={focus} preview={preview} className="md-text" placeholder={t("开始书写… 支持 Markdown")} />
+    </div>
+  );
+}
+
+/** Where a Markdown file's text comes from and goes to. */
+export function markdownSource(fileId: string) {
+  return {
+    key: `file:${fileId}`,
+    load: () => call<string>("markdown.get", { file: fileId }),
+    save: (text: string) => { call("markdown.set", { file: fileId, text }); },
+  };
+}
+
+/** The Markdown file the inspector shows: a selected .md file, or a document item's own file. */
+function inspectedMarkdownFile(s: State): FileRec | undefined {
+  if (s.fileSelection) {
+    const file = s.files.get(s.fileSelection);
+    return file?.isMarkdown ? file : undefined;
+  }
+  if (s.selection.length !== 1) return undefined;
+  const item = s.items.get(s.selection[0]);
+  return item && isMarkdownItem(item, s) ? s.files.get(item.defaultFileId!) : undefined;
 }
 
 export function Inspector() {
   const selection = useStore((s) => s.selection);
   const page = useStore((s) => s.inspectorPage);
   const item = useStore((s) => (s.selection.length === 1 ? s.items.get(s.selection[0]) : undefined));
+  const multi = useStore((s) => s.multiSelect);
+  const fileSelection = useStore((s) => s.fileSelection);
+  const markdown = useStore(inspectedMarkdownFile);
   const scroll = useRef<HTMLDivElement>(null);
   useEffect(() => { scroll.current?.scrollTo(0, 0); }, [item?.id, page]);
+  // Several papers (or 多选): what can be done to all of them at once.
+  if ((multi || selection.length > 1) && !fileSelection) return <MultiSelectionPanel />;
   return (
     <>
       <div className="inspector-switch">
         <Segmented value={page} onChange={(v) => setState({ inspectorPage: v })} options={[{ value: "info", label: t("信息") }, { value: "annotations", label: t("标注") }, { value: "notes", label: t("笔记") }]} />
       </div>
-      {page === "notes"
+      {page === "info" && markdown
+        ? <MarkdownFileInspector key={markdown.id} file={markdown} />
+        : page === "notes"
         ? <NoteEditor itemId={item?.id ?? null} title={item?.title ?? ""} />
         : (
           <div className="inspector-scroll" ref={scroll}>

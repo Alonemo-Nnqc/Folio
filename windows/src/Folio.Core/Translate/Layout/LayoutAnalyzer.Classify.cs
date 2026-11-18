@@ -37,6 +37,9 @@ public sealed partial class LayoutAnalyzer
         var tokens = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (cited && tokens.Length <= 3) return false;
         if (tokens.Length == 1 && Regex.IsMatch(text, @"^[A-Z0-9][A-Za-z0-9\-\.+/@%]{0,7}$") && (text.Count(char.IsUpper) >= 2 || text.Any(char.IsDigit))) return false;
+        if (Engine.StandardCells.IsKnown(text)) return true;
+        // An abbreviation alone ("freq.", "Acc.", "w/o") reads as something else to a translator: keep it.
+        if (tokens.Length == 1 && Regex.IsMatch(text, @"^[A-Za-z]{1,5}\.$|^w/o?$")) return false;
         int numeric = tokens.Count(t => Regex.IsMatch(t, @"^[\d.,±%()\-–+*†‡]+$"));
         if (numeric * 2 >= tokens.Length) return false;
         return tokens.Any(token =>

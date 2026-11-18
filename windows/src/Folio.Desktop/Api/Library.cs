@@ -22,11 +22,12 @@ public static partial class Api
         defaultFileId = i.DefaultFileId, metadataState = i.MetadataState.ToString(), dateAdded = Ms(i.DateAdded), dateModified = Ms(i.DateModified), trashed = i.IsTrashed,
         retrieving = M.Importer.IsRetrieving(i.Id),
         hasJournal = JournalMetrics.JournalName(i) != null, journalMetrics = JournalMetricsDto(i, s),
+        venue = VenueDto(i, s),
     };
 
     static object FileDto(FileRecord f, Item? item, IReadOnlyList<FileRecord> siblings) => new
     {
-        id = f.Id, itemId = f.ItemId, fileName = f.FileName, path = f.RelativePath, isPdf = f.IsPdf, translationOf = f.TranslationOf, translationKind = f.TranslationKind?.ToString().ToLowerInvariant(), translatedBy = f.TranslatedBy,
+        id = f.Id, itemId = f.ItemId, fileName = f.FileName, path = f.RelativePath, isPdf = f.IsPdf, isMarkdown = f.IsMarkdown, translationOf = f.TranslationOf, translationKind = f.TranslationKind?.ToString().ToLowerInvariant(), translatedBy = f.TranslatedBy,
         sha = f.Sha256, dateAdded = Ms(f.DateAdded),
         title = FileLabel.Title(f, siblings, item?.DefaultFileId),
         tabTitle = FileLabel.TabTitle(f, item, siblings),
@@ -258,6 +259,21 @@ public static partial class Api
         // Notes and annotations.
         Bridge.On("note.get", a => M.Library.Note(a.Str("item")));
         Bridge.On("note.set", a => { M.Perform(() => M.Library.SetNote(a.Str("text"), a.Str("item"))); return null; });
+        // Markdown documents (MD-01): an item of their own or a paper's attachment, edited in the inspector or a tab.
+        Bridge.On("markdown.create", a =>
+        {
+            (string ItemId, string FileId)? created = null;
+            M.Perform(() => created = M.Library.CreateMarkdownDocument(a.OptStr("title") ?? Loc.S("未命名文档"), a.OptStr("group")));
+            return created is { } c ? new { itemId = c.ItemId, fileId = c.FileId } : null;
+        });
+        Bridge.On("markdown.attach", a =>
+        {
+            string? fileId = null;
+            M.Perform(() => fileId = M.Library.CreateMarkdownAttachment(a.OptStr("title") ?? Loc.S("笔记"), a.Str("item")));
+            return fileId;
+        });
+        Bridge.On("markdown.get", a => M.Library.Text(a.Str("file")));
+        Bridge.On("markdown.set", a => { M.Perform(() => M.Library.WriteText(a.Str("text"), a.Str("file"))); return null; });
         Bridge.OnAsync("note.export", async a =>
         {
             if (!M.Snapshot.Items.TryGetValue(a.Str("item"), out var item)) return;

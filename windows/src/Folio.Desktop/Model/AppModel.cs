@@ -53,6 +53,7 @@ public sealed partial class AppModel : IImportUi
     public AppModel(UiQueue ui)
     {
         _ui = ui;
+        Settings.AddVenueColumnOnce();
         Toasts = new ToastCenter(ui);
         Importer = new Importer(() => Library, Settings, this);
         Updater = new Updater(this);
@@ -334,7 +335,8 @@ public sealed partial class AppModel : IImportUi
         // After the reader is up: the paper should appear first.
         if (Settings.MarkReadingOnOpen && Snapshot.Items.TryGetValue(file.ItemId, out var item) && item.Kind == ItemKind.Regular && item.ReadStatus == ReadStatus.Unread)
             _ui.TryEnqueue(() => Perform(() => Library.UpdateItem(item.Id, i => i.ReadStatus = ReadStatus.Reading)));
-        if (file.IsPdf && Settings.OpenWith == OpenWith.Folio) OpenInReaderRequested?.Invoke(file, page);
+        // A Markdown document is written in Folio: it opens in a tab of its own, whatever opens PDFs (MD-01).
+        if ((file.IsPdf && Settings.OpenWith == OpenWith.Folio) || file.IsMarkdown) OpenInReaderRequested?.Invoke(file, page);
         else if (Settings.OpenWith == OpenWith.Custom && Settings.OpenWithAppPath is { Length: > 0 } app) Shell.OpenWith(app, path);
         else Shell.OpenPath(path);
     }
@@ -394,7 +396,11 @@ public sealed partial class AppModel : IImportUi
 
     void IImportUi.Toast(string message, string icon, string? actionTitle, Action? action) => Toasts.Show(message, icon, actionTitle, action);
 
-    void IImportUi.PdfImported(string itemId) => _ui.TryEnqueue(() => Ocr.RecognizeIfScanned(itemId));
+    void IImportUi.PdfImported(string itemId) => _ui.TryEnqueue(() =>
+    {
+        Ocr.RecognizeIfScanned(itemId);
+        Translations.TranslateNewPaper(itemId);
+    });
 
     Task<bool> IImportUi.AskRestore(string title) =>
         AskOnUi(() => Dialogs.Confirm(Loc.S("「%@」在回收站中", title), Loc.S("要将它恢复到文献库吗？"), Loc.S("恢复"), Loc.S("取消")));
