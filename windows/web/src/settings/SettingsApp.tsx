@@ -73,7 +73,8 @@ function General() {
       <Header>{t("列表")}</Header>
       <Card>
         <Row title={t("父分组中显示子分组的条目")}><Switch on={s.includeSubgroupItems} onChange={(v) => setSetting("includeSubgroupItems", v)} /></Row>
-        <Row title={t("显示“已翻译”标签")} detail={t("有译文的论文，标题后显示绿色的“已翻译”标签")}><Switch on={s.showTranslatedBadge !== false} onChange={(v) => setSetting("showTranslatedBadge", v)} /></Row>
+        <Row title={t("显示“已翻译”标签")}><Switch on={s.showTranslatedBadge !== false} onChange={(v) => setSetting("showTranslatedBadge", v)} /></Row>
+        <Row title={t("显示 Markdown 文档工具栏")}><Switch on={s.markdownToolbar !== false} onChange={(v) => setSetting("markdownToolbar", v)} /></Row>
         <Row title={t("默认引用样式")}><Select value={s.citationStyle} options={statics.citationStyles.map((c) => ({ value: c.raw, label: c.name }))} onChange={(v) => setSetting("citationStyle", v)} /></Row>
       </Card>
       <Header>{t("语言")}</Header>
@@ -90,7 +91,7 @@ function General() {
       </Card>
       <Header>{t("帮助")}</Header>
       <Card>
-        <Row title={t("Folio 使用文档")} detail={t("所有功能的图文说明：添加与整理文献、阅读批注、翻译、引用、AI 接入、常见问题")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/docs.html" })}>{t("打开")}</button></Row>
+        <Row title={t("Folio 使用文档")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/docs.html" })}>{t("打开")}</button></Row>
         <Row title={t("欢迎使用 Folio…")}><button className="btn" onClick={() => call("window.onboarding")}>{t("打开")}</button></Row>
         <Row title={t("Folio 主页")}><button className="btn" onClick={() => call("shell.open", { target: "https://alonemo-nnqc.github.io/Folio/" })}>{t("打开")}</button><button className="btn" onClick={() => call("shell.open", { target: "https://github.com/Alonemo-Nnqc/Folio/issues" })}>{t("报告问题…")}</button></Row>
       </Card>
@@ -113,7 +114,7 @@ function Reader() {
         )}
         <Row title={t("打开未读的论文时，标为\"在读\"")}><Switch on={s.markReadingOnOpen} onChange={(v) => setSetting("markReadingOnOpen", v)} /></Row>
         <Row title={t("启动时重新打开上次的论文标签页")}><Switch on={s.reopenReaderTabs} onChange={(v) => setSetting("reopenReaderTabs", v)} /></Row>
-        <Row title={t("记住每篇论文的阅读位置")} detail={t("再次打开时回到上次读到的页面和缩放")}><Switch on={s.rememberReadingPosition !== false} onChange={(v) => setSetting("rememberReadingPosition", v)} /></Row>
+        <Row title={t("记住每篇论文的阅读位置")}><Switch on={s.rememberReadingPosition !== false} onChange={(v) => setSetting("rememberReadingPosition", v)} /></Row>
       </Card>
       <Header>{t("页面")}</Header>
       <Card>
@@ -125,10 +126,9 @@ function Reader() {
       <Card>
         <Row title={t("批注作者")}><Field className="set-field" value={s.annotationAuthor ?? ""} placeholder={getState().statics.userName} onCommit={(v) => setSetting("annotationAuthor", v.trim())} /></Row>
         <Row title={t("文本框字号")}><Select value={s.textBoxFontSize ?? 13} options={TEXT_SIZES.map((x) => ({ value: x.size, label: `${t(x.title)}（${x.size} pt）` }))} onChange={(v) => setSetting("textBoxFontSize", v)} /></Row>
-        <Row title={t("添加便签或文本框后回到选择工具")} detail={t("关闭后可以连续添加多个")}><Switch on={s.returnToSelectAfterPlacing !== false} onChange={(v) => setSetting("returnToSelectAfterPlacing", v)} /></Row>
+        <Row title={t("添加便签或文本框后回到选择工具")}><Switch on={s.returnToSelectAfterPlacing !== false} onChange={(v) => setSetting("returnToSelectAfterPlacing", v)} /></Row>
         <Row title={t("指针停留时显示便签和评论的内容")}><Switch on={s.showAnnotationTooltips !== false} onChange={(v) => setSetting("showAnnotationTooltips", v)} /></Row>
       </Card>
-      <Note>{t("点一下工具即可使用；再点一次已选中的工具，选择它的颜色和样式（也可以自定义颜色）。")}</Note>
       <SelectionTranslationPane />
     </>
   );
@@ -163,7 +163,6 @@ function LibraryPane() {
           {error && <div style={{ color: "var(--red)", fontSize: 12, marginTop: 6 }}>{error}</div>}
         </div>
       </Card>
-      <Note>{t("可直接打开 Mac 版的文献库文件夹，两端格式相同")}</Note>
       <Header>{t("文件")}</Header>
       <Card>
         <Row title={t("检索到元数据后按「作者_年份_标题」重命名文件")}><Switch on={s.autoRenameFiles} onChange={(v) => setSetting("autoRenameFiles", v)} /></Row>
@@ -171,7 +170,7 @@ function LibraryPane() {
       </Card>
       <Retrieval />
       <Header>{t("导入")}</Header>
-      <Card><Row title="Zotero" detail={t("不会改动 Zotero 数据")}><button className="btn" onClick={() => openSheet((close) => <ZoteroSheet close={close} />)}>{t("从 Zotero 导入…")}</button></Row></Card>
+      <Card><Row title="Zotero"><button className="btn" onClick={() => openSheet((close) => <ZoteroSheet close={close} />)}>{t("从 Zotero 导入…")}</button></Row></Card>
     </>
   );
 }
@@ -216,7 +215,7 @@ function JournalMetricsSection() {
     <>
       <Header>{t("期刊指标")}</Header>
       <Card>
-        <Row title={t("自动获取期刊分区与影响因子")} detail={t("为有期刊名的条目获取中科院分区、JCR 分区和影响因子，同一期刊只查询一次并缓存 30 天")}>
+        <Row title={t("自动获取期刊分区与影响因子")}>
           <Switch on={state.autoFetch} onChange={(on) => call("journalMetrics.setAutoFetch", { on }).then((journalMetrics) => setState({ journalMetrics }))} />
         </Row>
         <Row title={t("easyScholar 密钥")} detail={<button className="link-button" onClick={() => call("shell.open", { target: state.keyPage })}>{t("如何获取密钥…")}</button>}>
@@ -236,7 +235,6 @@ function JournalMetricsSection() {
           </div>
         )}
       </Card>
-      <Note>{t("数据由 easyScholar 开放接口免费提供：登录 easyScholar 后，在“开放接口”页面复制 SecretKey。密钥加密保存在本机。")}</Note>
     </>
   );
 }
@@ -251,7 +249,7 @@ function Browser() {
       <Card><Row title={t("允许浏览器插件保存到 Folio")}><Switch on={s.browserConnectorEnabled} onChange={(v) => setSetting("browserConnectorEnabled", v)} /></Row></Card>
       {data && <Note>{data.connector.message}</Note>}
       <Header>{t("安装浏览器插件")}</Header>
-      <Note>{t("点击“安装”会打开浏览器、拷贝扩展页面的地址，并在资源管理器中选中 Folio 插件文件夹。浏览器没有跳到扩展页面时，把地址粘贴到地址栏回车；在扩展页面打开“开发者模式”，把文件夹直接拖进去即可，也可以点“加载已解压的扩展程序”选择它。")}</Note>
+      <Note>{t("在浏览器的扩展页面打开“开发者模式”，把选中的 Folio 插件文件夹拖进去即可。")}</Note>
       <div style={{ height: 10 }} />
       {data?.browsers.length === 0 && <Note>{t("没有找到支持的浏览器")}</Note>}
       {data?.browsers.length > 0 && <Card>{data.browsers.map((b: any) => <Row key={b.id} title={b.name} detail={b.status}>
@@ -341,7 +339,7 @@ function Ai() {
     <>
       <Header>{t("Folio 的 AI 接口")}</Header>
       <Card>
-        <Row title={t("允许 AI 修改文献库")} detail={t("关闭后仅可检索、阅读与引用")}><Switch on={s.aiAllowWrites} onChange={(v) => setSetting("aiAllowWrites", v)} /></Row>
+        <Row title={t("允许 AI 修改文献库")}><Switch on={s.aiAllowWrites} onChange={(v) => setSetting("aiAllowWrites", v)} /></Row>
         <Row title={t("MCP 服务器")} detail={check && <span className={check.state === "ok" ? "status-ok" : check.state === "warn" ? "status-warn" : check.state === "bad" ? "status-bad" : ""}>{check.message}</span>}>
           <button className="btn" disabled={checking} title={t("像智能体一样启动 folio-cli，完成握手并读取文献库")} onClick={async () => {
             setChecking(true);
@@ -360,11 +358,10 @@ function Ai() {
         {agents?.length === 0 && <div className="set-row"><div><div>{t("没有在这台电脑上找到可用的智能体")}</div><div className="detail">{t("支持 %@\n安装后点\"重新检测\"", info?.catalog ?? "")}</div></div></div>}
         {agents?.map((a) => <AgentRow key={a.id} agent={a} refresh={() => detect(false)} />)}
       </Card>
-      <Note>{t("开关会写入或移除该智能体的配置（修改前自动备份），重启智能体后生效")}</Note>
       <Header>{t("手动配置")}</Header>
       <Card>
         <Row title={t("其他支持 MCP 的应用")}><button className="btn" onClick={() => call("ai.copyConfig")}>{t("拷贝 MCP 配置")}</button></Row>
-        <Row title={t("Folio 技能")} detail={t("适用于 VS Code、Zed、Windsurf 等")}><button className="btn" onClick={() => call("ai.exportFolder")}>{t("导出技能文件夹…")}</button><button className="btn" onClick={() => call("ai.exportZip")}>{t("导出技能包（.zip）…")}</button></Row>
+        <Row title={t("Folio 技能")}><button className="btn" onClick={() => call("ai.exportFolder")}>{t("导出技能文件夹…")}</button><button className="btn" onClick={() => call("ai.exportZip")}>{t("导出技能包（.zip）…")}</button></Row>
       </Card>
     </>
   );

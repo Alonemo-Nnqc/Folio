@@ -44,7 +44,7 @@ export function SelectionTranslationPane() {
           <Row title={t("翻译服务")}>
             <button className="btn service-picker" onClick={(e) => pick(e.currentTarget)}><ServiceLogo id={shown} size={17} /><span className="label">{name}</span><ChevronDown size={13} className="secondary" /></button>
           </Row>
-          <Row title={t("限流时自动换用其他免费服务")} detail={t("Google、Microsoft 互为备用")}><Switch on={s.selectionTranslationFallback !== false} onChange={(v) => setSetting("selectionTranslationFallback", v)} /></Row>
+          <Row title={t("限流时自动换用其他免费服务")}><Switch on={s.selectionTranslationFallback !== false} onChange={(v) => setSetting("selectionTranslationFallback", v)} /></Row>
         </Card>
       </div>
     </>

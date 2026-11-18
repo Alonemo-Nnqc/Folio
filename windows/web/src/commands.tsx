@@ -3,7 +3,7 @@ import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, Fil
 import { FullTextTranslateIcon } from "./ui/icons";
 import { call, emitLocal } from "./rpc";
 import { t } from "./i18n";
-import { defaultFile, filesOf, getState, groupsForMenus, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
+import { defaultFile, filesOf, getState, groupsForMenus, rememberTabs, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
 import { sep, type MenuEntry } from "./ui/menu";
 import { askText, confirm, dialog, openSheet, Sheet } from "./ui/sheet";
 import { Field } from "./ui/controls";
@@ -23,7 +23,15 @@ export function openReader(fileId: string, page?: number) {
   }
   const tabs = [...s.tabs, { key: fileId, fileId, page }];
   setState({ tabs, activeTab: fileId });
-  call("settings.set", { key: "openReaderTabs", value: tabs.map((tab) => tab.fileId) });
+  rememberTabs();
+}
+
+/** An item's note as a document tab (the note is listed under the item like its files). */
+export function openNote(itemId: string) {
+  const s = getState();
+  const key = `note:${itemId}`;
+  if (s.tabs.some((tab) => tab.key === key)) { setState({ activeTab: key }); return; }
+  setState({ tabs: [...s.tabs, { key, fileId: "", note: itemId }], activeTab: key });
 }
 
 export function closeTab(key: string) {
@@ -33,7 +41,7 @@ export function closeTab(key: string) {
   const tabs = s.tabs.filter((tab) => tab.key !== key);
   const neighbour = tabs[Math.min(index, tabs.length - 1)];
   setState({ tabs, activeTab: s.activeTab === key ? neighbour?.key ?? "library" : s.activeTab });
-  call("settings.set", { key: "openReaderTabs", value: tabs.map((tab) => tab.fileId) });
+  rememberTabs();
 }
 
 export function selectNextTab(back: boolean) {
@@ -205,7 +213,8 @@ export async function newMarkdownDocument() {
 
 /** A new Markdown document attached to a paper (reading notes kept as a file), selected under it. */
 export async function newMarkdownAttachment(item: Item) {
-  const fileId = await call<string>("markdown.attach", { item: item.id, title: t("%@ 笔记", item.title) });
+  // Named like any new document, not after the paper (it is listed under the paper anyway).
+  const fileId = await call<string>("markdown.attach", { item: item.id, title: t("未命名文档") });
   if (!fileId) return;
   const expanded = new Set(getState().expanded);
   expanded.add(item.id);

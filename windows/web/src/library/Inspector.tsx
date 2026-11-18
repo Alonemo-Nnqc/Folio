@@ -3,7 +3,7 @@ import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, File
 import { call } from "../rpc";
 import { t } from "../i18n";
 import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type State } from "../store";
-import { MarkdownEditor, PreviewToggle } from "../notes/markdown";
+import { MarkdownEditor } from "../notes/markdown";
 import { isMarkdownItem } from "./ItemList";
 import { MultiSelectionPanel } from "./MultiSelection";
 import { fileMenu, manualMatch, newTag, openReader, refreshJournalMetrics } from "../commands";
@@ -230,7 +230,7 @@ function AnnotationsPage({ item }: { item: Item }) {
 }
 
 /** An item's Markdown note; saved a moment after typing stops. */
-export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null; title?: string; inputRef?: React.MutableRefObject<HTMLTextAreaElement | null> }) {
+export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null; title?: string; inputRef?: React.MutableRefObject<{ focus: () => void } | null> }) {
   const source = useMemo(() => ({
     key: itemId ? `note:${itemId}` : null,
     load: () => call<string>("note.get", { item: itemId }),
@@ -239,7 +239,7 @@ export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null;
   return (
     <div className="note-area">
       {title !== undefined && <><div className="note-head">{t("笔记")}</div><div className="note-sub">{title}</div></>}
-      <MarkdownEditor source={source} inputRef={inputRef} placeholder={t("记下想法、摘录与待办… 支持 Markdown")} />
+      <MarkdownEditor source={source} inputRef={inputRef} className="note-text" placeholder={t("记下想法、摘录与待办… 支持 Markdown")} />
     </div>
   );
 }
@@ -247,7 +247,6 @@ export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null;
 /** A Markdown file in the inspector (MD-01): its name, a button to open it in a tab, and the editor. */
 function MarkdownFileInspector({ file }: { file: FileRec }) {
   const focus = useStore((s) => s.markdownFocus === file.id);
-  const [preview, setPreview] = useState(false);
   const source = useMemo(() => markdownSource(file.id), [file.id]);
   useEffect(() => { if (focus) setState({ markdownFocus: null }); }, [focus]);
   return (
@@ -256,10 +255,9 @@ function MarkdownFileInspector({ file }: { file: FileRec }) {
         <FilePen size={14} className="secondary" style={{ flex: "none" }} />
         <span className="ellipsis" title={file.fileName}>{file.fileName}</span>
         <span style={{ flex: 1 }} />
-        <PreviewToggle preview={preview} onChange={setPreview} />
         <button className="icon-button" title={t("在标签页中打开")} onClick={() => openReader(file.id)}><Maximize2 size={13} /></button>
       </div>
-      <MarkdownEditor source={source} focus={focus} preview={preview} className="md-text" placeholder={t("开始书写… 支持 Markdown")} />
+      <MarkdownEditor source={source} focus={focus} className="md-text" placeholder={t("开始书写… 支持 Markdown")} />
     </div>
   );
 }

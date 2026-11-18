@@ -12,13 +12,11 @@ public sealed partial class Library
 {
     static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
-    /// <summary>The text a new document starts with.</summary>
-    public static string MarkdownTemplate(string title) => $"# {title}\n\n";
-
     /// <summary>A new Markdown document as an item of its own (in groupId when given). Returns its item and file ids.</summary>
     public (string ItemId, string FileId) CreateMarkdownDocument(string title, string? groupId = null, string? text = null)
     {
-        var body = text ?? MarkdownTemplate(title);
+        // A new document starts empty: the title only names the file (and the item, until the first heading does).
+        var body = text ?? "";
         var relative = WriteNewTextFile(FileNamer.Sanitize(title), body);
         var now = DateTime.UtcNow;
         var item = new Item(ItemKind.Standalone, title, now) { MetadataState = MetadataState.None };
@@ -46,7 +44,7 @@ public sealed partial class Library
     public string CreateMarkdownAttachment(string title, string itemId, string? text = null)
     {
         if (Item(itemId) == null) throw LibraryException.NotFound();
-        var body = text ?? MarkdownTemplate(title);
+        var body = text ?? "";
         var relative = WriteNewTextFile(FileNamer.Sanitize(title), body);
         var file = TextFileRecord(relative, itemId, body, DateTime.UtcNow);
         try

@@ -1,235 +1,302 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef } from "react";
+import { Annotation, EditorSelection, EditorState, type Extension, type Range } from "@codemirror/state";
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType, keymap, placeholder as placeholderText } from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap, indentLess, indentMore, insertTab } from "@codemirror/commands";
+import { indentUnit, syntaxTree } from "@codemirror/language";
+import { deleteMarkupBackward, insertNewlineContinueMarkup, markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { call } from "../rpc";
-import { t } from "../i18n";
 import { useStore } from "../store";
 
-// Markdown for notes and documents (MD-01): the editing keys of the macOS editor (a list or quote goes on at Return, Tab
-// and Shift+Tab nest list items, Ctrl+B / Ctrl+I / Ctrl+K wrap the selection) on a plain text box, and a rendered view
-// whose task boxes can be ticked.
+// The Markdown editor of notes and documents (MD-01), as on the Mac: headings, emphasis, code, links, quotes, lists, tasks,
+// code blocks and rules show as they read, and only the lines being edited show their Markdown symbols. Return continues
+// a list or quote (an empty item ends it), Tab / Shift+Tab nest list items, Ctrl+B / Ctrl+I / Ctrl+K make bold, italic
+// and a link, and a task box ticks with a click.
 
-// MARK: Editing keys
+// MARK: Live preview
 
-const LIST = /^([ \t]*(?:>[ \t]?)*[ \t]*)(?:([-*+])([ \t]+\[[ xX]\])?|(\d{1,9})([.)]))([ \t]+)/;
-const QUOTE = /^([ \t]*(?:>[ \t]?)+)/;
+const hide = Decoration.replace({});
 
-/** Replaces [start, end) with text as if typed: the text box keeps it in its own undo. */
-function replace(box: HTMLTextAreaElement, start: number, end: number, text: string) {
-  box.focus();
-  box.setSelectionRange(start, end);
-  if (!document.execCommand("insertText", false, text)) {
-    box.setRangeText(text, start, end, "end");
-    box.dispatchEvent(new Event("input", { bubbles: true }));
+class Bullet extends WidgetType {
+  eq() { return true; }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-md-bullet";
+    span.textContent = "•";
+    return span;
   }
 }
 
-function lineStart(text: string, at: number) { return text.lastIndexOf("\n", at - 1) + 1; }
-function lineEnd(text: string, at: number) { const n = text.indexOf("\n", at); return n < 0 ? text.length : n; }
-
-/** Inside a fenced code block: Return keeps the indentation and nothing else. */
-function inCodeBlock(text: string, at: number) {
-  let open = false;
-  for (const line of text.slice(0, lineStart(text, at)).split("\n")) if (/^\s*(```|~~~)/.test(line)) open = !open;
-  return open;
+class TaskBox extends WidgetType {
+  constructor(readonly done: boolean) { super(); }
+  eq(other: TaskBox) { return other.done === this.done; }
+  toDOM(view: EditorView) {
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.className = "cm-md-task";
+    box.checked = this.done;
+    // Ticked where it is, without moving the caret there (which would show the line's symbols).
+    box.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const at = view.posAtDOM(box);
+      const line = view.state.doc.lineAt(at);
+      const mark = /\[([ xX])\]/.exec(line.text.slice(at - line.from));
+      if (!mark) return;
+      const pos = at + mark.index + 1;
+      view.dispatch({ changes: { from: pos, to: pos + 1, insert: mark[1] === " " ? "x" : " " } });
+    });
+    return box;
+  }
+  ignoreEvent() { return true; }
 }
 
-function newline(box: HTMLTextAreaElement): boolean {
-  const text = box.value;
-  const caret = box.selectionStart;
-  if (caret !== box.selectionEnd) return false;
-  const start = lineStart(text, caret), end = lineEnd(text, caret);
-  const line = text.slice(start, end);
-  if (inCodeBlock(text, caret)) {
-    replace(box, caret, caret, "\n" + (line.match(/^[ \t]*/)?.[0] ?? ""));
-    return true;
+class Rule extends WidgetType {
+  eq() { return true; }
+  toDOM() {
+    const hr = document.createElement("span");
+    hr.className = "cm-md-hr";
+    return hr;
   }
-  if (caret === start) return false;
-  const list = LIST.exec(line);
-  if (list) {
-    const marker = list[0].length;
-    // An empty item ends the list (Return on "- " leaves an empty line).
-    if (marker >= line.length) { replace(box, start, start + marker, ""); return true; }
-    if (caret < start + marker) return false;
-    const next = list[2] !== undefined
-      ? list[1] + list[2] + (list[3] !== undefined ? " [ ]" : "") + list[6]
-      : list[1] + (Number(list[4]) + 1) + list[5] + list[6];
-    replace(box, caret, caret, "\n" + next);
-    return true;
-  }
-  const quote = QUOTE.exec(line);
-  if (quote) {
-    if (quote[0].length >= line.length) { replace(box, start, start + quote[0].length, ""); return true; }
-    replace(box, caret, caret, "\n" + quote[0]);
-    return true;
-  }
-  return false;
 }
 
-/** Nests (or un-nests) the list items the selection touches. False when it touches none. */
-function indent(box: HTMLTextAreaElement, step: 1 | -1): boolean {
-  const text = box.value;
-  const from = lineStart(text, box.selectionStart), to = lineEnd(text, box.selectionEnd);
-  const lines = text.slice(from, to).split("\n");
-  if (!lines.every((l) => LIST.test(l))) return false;
-  const changed = lines.map((l) => (step > 0 ? "  " + l : l.replace(/^ {1,2}/, "")));
-  const selStart = box.selectionStart, selEnd = box.selectionEnd;
-  const firstShift = changed[0].length - lines[0].length;
-  const total = changed.join("\n").length - (to - from);
-  replace(box, from, to, changed.join("\n"));
-  box.setSelectionRange(Math.max(from, selStart + firstShift), Math.max(from, selEnd + total));
+function decorate(view: EditorView): DecorationSet {
+  const { state } = view;
+  const doc = state.doc;
+  // The lines the caret or the selection is on show their symbols, while the editor has the keyboard.
+  const active = new Set<number>();
+  if (view.hasFocus) {
+    for (const r of state.selection.ranges) {
+      for (let n = doc.lineAt(r.from).number; n <= doc.lineAt(r.to).number; n++) active.add(n);
+    }
+  }
+  const editing = (pos: number) => active.has(doc.lineAt(pos).number);
+  const out: Range<Decoration>[] = [];
+  const lineClass = (from: number, to: number, cls: string) => {
+    for (let n = doc.lineAt(from).number; n <= doc.lineAt(to).number; n++) out.push(Decoration.line({ class: cls }).range(doc.line(n).from));
+  };
+  const hideWithSpace = (from: number, to: number) => {
+    const next = doc.sliceString(to, to + 1);
+    out.push(hide.range(from, next === " " || next === "\t" ? to + 1 : to));
+  };
+  for (const { from, to } of view.visibleRanges) {
+    syntaxTree(state).iterate({
+      from, to,
+      enter: (node) => {
+        const name = node.name;
+        const heading = /^ATXHeading(\d)$/.exec(name) ?? /^SetextHeading(\d)$/.exec(name);
+        if (heading) { lineClass(node.from, node.to, `cm-md-h cm-md-h${heading[1]}`); return; }
+        switch (name) {
+          case "HeaderMark":
+            if (!editing(node.from) && node.node.parent?.name.startsWith("ATX")) {
+              if (node.from === doc.lineAt(node.from).from) hideWithSpace(node.from, node.to); else out.push(hide.range(node.from, node.to));
+            }
+            break;
+          case "Emphasis": out.push(Decoration.mark({ class: "cm-md-em" }).range(node.from, node.to)); break;
+          case "StrongEmphasis": out.push(Decoration.mark({ class: "cm-md-strong" }).range(node.from, node.to)); break;
+          case "Strikethrough": out.push(Decoration.mark({ class: "cm-md-strike" }).range(node.from, node.to)); break;
+          case "InlineCode": out.push(Decoration.mark({ class: "cm-md-code" }).range(node.from, node.to)); break;
+          case "EmphasisMark": case "StrikethroughMark":
+            if (!editing(node.from)) out.push(hide.range(node.from, node.to));
+            break;
+          case "CodeMark":
+            if (node.node.parent?.name === "InlineCode") { if (!editing(node.from)) out.push(hide.range(node.from, node.to)); }
+            else out.push(Decoration.mark({ class: "cm-md-fence" }).range(node.from, node.to));
+            break;
+          case "CodeInfo": out.push(Decoration.mark({ class: "cm-md-fence" }).range(node.from, node.to)); break;
+          case "FencedCode": case "CodeBlock": lineClass(node.from, node.to, "cm-md-codeblock"); break;
+          case "Link": {
+            const link = node.node;
+            const text = link.getChild("LinkMark");
+            const close = link.getChildren("LinkMark")[1];
+            if (text && close) out.push(Decoration.mark({ class: "cm-md-link" }).range(text.to, close.from));
+            if (!editing(node.from)) {
+              for (const part of link.getChildren("LinkMark")) out.push(hide.range(part.from, part.to));
+              for (const part of [...link.getChildren("URL"), ...link.getChildren("LinkTitle")]) out.push(hide.range(part.from, part.to));
+            }
+            return false;
+          }
+          case "URL": out.push(Decoration.mark({ class: "cm-md-link" }).range(node.from, node.to)); break;
+          case "Blockquote": lineClass(node.from, node.to, "cm-md-quote"); break;
+          case "QuoteMark": if (!editing(node.from)) hideWithSpace(node.from, node.to); break;
+          case "ListMark": {
+            if (editing(node.from)) { out.push(Decoration.mark({ class: "cm-md-listmark" }).range(node.from, node.to)); break; }
+            const item = node.node.parent;
+            const task = item?.getChild("Task");
+            if (task) hideWithSpace(node.from, node.to);
+            else if (item?.parent?.name === "BulletList") out.push(Decoration.replace({ widget: new Bullet() }).range(node.from, node.to));
+            else out.push(Decoration.mark({ class: "cm-md-listmark" }).range(node.from, node.to));
+            break;
+          }
+          case "TaskMarker": {
+            const done = /x/i.test(doc.sliceString(node.from, node.to));
+            if (!editing(node.from)) {
+              const next = doc.sliceString(node.to, node.to + 1);
+              out.push(Decoration.replace({ widget: new TaskBox(done) }).range(node.from, node.to + (next === " " ? 1 : 0)));
+            }
+            if (done) {
+              const line = doc.lineAt(node.from);
+              if (node.to < line.to) out.push(Decoration.mark({ class: "cm-md-done" }).range(node.to, line.to));
+            }
+            break;
+          }
+          case "HorizontalRule":
+            if (!editing(node.from)) out.push(Decoration.replace({ widget: new Rule() }).range(node.from, node.to));
+            break;
+        }
+      },
+    });
+  }
+  return Decoration.set(out, true);
+}
+
+const livePreview = ViewPlugin.fromClass(class {
+  decorations: DecorationSet;
+  constructor(view: EditorView) { this.decorations = decorate(view); }
+  update(update: ViewUpdate) {
+    if (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged) this.decorations = decorate(update.view);
+  }
+}, { decorations: (v) => v.decorations });
+
+// MARK: Keys
+
+/** Wraps the selection in marker (or unwraps it); with nothing selected, puts the caret between a pair. */
+function wrap(marker: string) {
+  return (view: EditorView) => {
+    const m = marker.length;
+    view.dispatch(view.state.changeByRange((range) => {
+      const doc = view.state.doc;
+      const text = doc.sliceString(range.from, range.to);
+      if (text.length >= 2 * m && text.startsWith(marker) && text.endsWith(marker)) {
+        return { changes: { from: range.from, to: range.to, insert: text.slice(m, -m) }, range: EditorSelection.range(range.from, range.to - 2 * m) };
+      }
+      if (doc.sliceString(range.from - m, range.from) === marker && doc.sliceString(range.to, range.to + m) === marker) {
+        return { changes: [{ from: range.from - m, to: range.from }, { from: range.to, to: range.to + m }], range: EditorSelection.range(range.from - m, range.to - m) };
+      }
+      return { changes: [{ from: range.from, insert: marker }, { from: range.to, insert: marker }], range: EditorSelection.range(range.from + m, range.to + m) };
+    }));
+    return true;
+  };
+}
+
+function link(view: EditorView) {
+  view.dispatch(view.state.changeByRange((range) => {
+    const text = view.state.doc.sliceString(range.from, range.to);
+    const insert = `[${text}](https://)`;
+    const selection = text ? EditorSelection.range(range.from + text.length + 3, range.from + text.length + 11) : EditorSelection.cursor(range.from + 1);
+    return { changes: { from: range.from, to: range.to, insert }, range: selection };
+  }));
   return true;
 }
 
-/** Wraps the selection in marker (or unwraps it); with nothing selected, puts the caret between a pair. */
-function wrap(box: HTMLTextAreaElement, marker: string) {
-  const text = box.value;
-  const a = box.selectionStart, b = box.selectionEnd, m = marker.length;
-  const selected = text.slice(a, b);
-  if (selected.length >= 2 * m && selected.startsWith(marker) && selected.endsWith(marker)) {
-    replace(box, a, b, selected.slice(m, -m));
-    box.setSelectionRange(a, b - 2 * m);
-  } else if (a >= m && text.slice(a - m, a) === marker && text.slice(b, b + m) === marker) {
-    replace(box, a - m, b + m, selected);
-    box.setSelectionRange(a - m, b - m);
-  } else {
-    replace(box, a, b, marker + selected + marker);
-    box.setSelectionRange(a + m, b + m);
-  }
+const LIST_LINE = /^\s*([-*+]|\d{1,9}[.)])\s/;
+/** Tab nests the list items the selection touches; elsewhere it types a tab. */
+function tab(view: EditorView) {
+  const { state } = view;
+  const lines = state.selection.ranges.flatMap((r) => [state.doc.lineAt(r.from), state.doc.lineAt(r.to)]);
+  return lines.every((l) => LIST_LINE.test(l.text)) ? indentMore(view) : insertTab(view);
 }
 
-function link(box: HTMLTextAreaElement) {
-  const a = box.selectionStart, b = box.selectionEnd;
-  const selected = box.value.slice(a, b);
-  replace(box, a, b, `[${selected}](https://)`);
-  if (selected) box.setSelectionRange(a + selected.length + 3, a + selected.length + 11);
-  else box.setSelectionRange(a + 1, a + 1);
+// MARK: Formatting (the document toolbar)
+
+/** The lines the selection touches. */
+function selectedLines(view: EditorView) {
+  const { state } = view;
+  const first = state.doc.lineAt(state.selection.main.from), last = state.doc.lineAt(state.selection.main.to);
+  const lines: string[] = [];
+  for (let n = first.number; n <= last.number; n++) lines.push(state.doc.line(n).text);
+  return { from: first.from, to: last.to, lines };
 }
 
-/** The editor's own keys; true when the key was used. */
-export function markdownKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): boolean {
-  const box = e.currentTarget;
-  if (e.nativeEvent.isComposing || e.keyCode === 229) return false;
-  let used = false;
-  if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey) used = newline(box);
-  else if (e.key === "Tab" && !e.ctrlKey && !e.altKey) used = indent(box, e.shiftKey ? -1 : 1);
-  else if (e.ctrlKey && !e.altKey && !e.shiftKey) {
-    if (e.code === "KeyB") { wrap(box, "**"); used = true; }
-    else if (e.code === "KeyI") { wrap(box, "*"); used = true; }
-    else if (e.code === "KeyK") { link(box); used = true; }
-  }
-  if (used) e.preventDefault();
-  return used;
+function replaceLines(view: EditorView, from: number, to: number, lines: string[]) {
+  const insert = lines.join("\n");
+  view.dispatch({ changes: { from, to, insert }, selection: EditorSelection.cursor(from + insert.length), scrollIntoView: true });
+  view.focus();
 }
 
-/** Ticks or unticks the task on the given line (0-based) of text. */
-export function toggleTask(text: string, line: number): string {
-  const lines = text.split("\n");
-  const match = /^([ \t]*(?:>[ \t]?)*[ \t]*[-*+][ \t]+\[)([ xX])(\])/.exec(lines[line] ?? "");
-  if (!match) return text;
-  lines[line] = match[1] + (match[2] === " " ? "x" : " ") + match[3] + lines[line].slice(match[0].length);
-  return lines.join("\n");
-}
+const LIST_PREFIX = /^([ \t]*)(?:[-*+][ \t]+\[[ xX]\][ \t]+|[-*+][ \t]+|\d{1,9}[.)][ \t]+)/;
 
-// MARK: Rendering
-
-function inline(text: string, key: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  const pattern = /(`+)([^`]+?)\1|\*\*([^*]+?)\*\*|__([^_]+?)__|\*([^*\s][^*]*?)\*|_([^_\s][^_]*?)_|~~([^~]+?)~~|!\[([^\]]*)\]\(([^)\s]+)[^)]*\)|\[([^\]]+)\]\(([^)\s]+)[^)]*\)|(https?:\/\/[^\s<>()]+)/g;
-  let last = 0, k = 0, m: RegExpExecArray | null;
-  while ((m = pattern.exec(text))) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const id = `${key}-${k++}`;
-    if (m[2] !== undefined) out.push(<code key={id}>{m[2]}</code>);
-    else if (m[3] !== undefined || m[4] !== undefined) out.push(<strong key={id}>{inline(m[3] ?? m[4], id)}</strong>);
-    else if (m[5] !== undefined || m[6] !== undefined) out.push(<em key={id}>{inline(m[5] ?? m[6], id)}</em>);
-    else if (m[7] !== undefined) out.push(<del key={id}>{inline(m[7], id)}</del>);
-    else if (m[9] !== undefined) out.push(<span key={id} className="md-image" title={m[9]}>🖼 {m[8] || m[9]}</span>);
-    else {
-      const target = m[11] ?? m[12];
-      const label = m[10] !== undefined ? inline(m[10], id) : target;
-      out.push(<a key={id} href={target} onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (/^https?:/i.test(target)) call("shell.open", { target }); }}>{label}</a>);
-    }
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
-
-/** The text as it reads: headings, emphasis, code, links, quotes, lists and tasks (clickable), tables, rules. */
-export function MarkdownView({ text, onToggleTask }: { text: string; onToggleTask?: (line: number) => void }) {
-  const lines = text.split("\n");
-  const blocks: ReactNode[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    const key = `b${i}`;
-    const fence = /^\s*(```|~~~)/.exec(line);
-    if (fence) {
-      const body: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith(fence[1])) body.push(lines[i++]);
-      i++;
-      blocks.push(<pre key={key}><code>{body.join("\n")}</code></pre>);
-      continue;
-    }
-    const heading = /^(#{1,6})[ \t]+(.*)$/.exec(line);
-    if (heading) {
-      const H = `h${heading[1].length}` as "h1";
-      blocks.push(<H key={key}>{inline(heading[2].replace(/[ \t]#+[ \t]*$/, ""), key)}</H>);
-      i++;
-      continue;
-    }
-    if (/^ {0,3}([-*_])([ \t]*\1){2,}[ \t]*$/.test(line)) { blocks.push(<hr key={key} />); i++; continue; }
-    if (/^[ \t]*\|.*\|[ \t]*$/.test(line) && i + 1 < lines.length && /^[ \t]*\|?[ \t:|-]+\|[ \t:|-]*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {
-      const cells = (l: string) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-      const head = cells(line);
-      const rows: string[][] = [];
-      i += 2;
-      while (i < lines.length && /^[ \t]*\|.*\|[ \t]*$/.test(lines[i])) rows.push(cells(lines[i++]));
-      blocks.push(
-        <table key={key}><thead><tr>{head.map((c, k) => <th key={k}>{inline(c, `${key}h${k}`)}</th>)}</tr></thead>
-          <tbody>{rows.map((r, n) => <tr key={n}>{r.map((c, k) => <td key={k}>{inline(c, `${key}r${n}c${k}`)}</td>)}</tr>)}</tbody></table>);
-      continue;
-    }
-    if (/^[ \t]*>/.test(line)) {
-      const body: string[] = [];
-      while (i < lines.length && /^[ \t]*>/.test(lines[i])) body.push(lines[i++].replace(/^[ \t]*>[ \t]?/, ""));
-      blocks.push(<blockquote key={key}><MarkdownView text={body.join("\n")} /></blockquote>);
-      continue;
-    }
-    const item = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+(.*)$/.exec(line);
-    if (item) {
-      const items: ReactNode[] = [];
-      const ordered = /\d/.test(item[2]);
-      while (i < lines.length) {
-        const m = /^([ \t]*)([-*+]|\d{1,9}[.)])[ \t]+(.*)$/.exec(lines[i]);
-        if (!m || /\d/.test(m[2]) !== ordered) break;
-        const depth = Math.floor(m[1].replace(/\t/g, "    ").length / 2);
-        const task = /^\[([ xX])\][ \t]+(.*)$/.exec(m[3]);
-        const at = i;
-        items.push(
-          <li key={at} style={depth ? { marginLeft: depth * 18 } : undefined} className={task ? "md-task" : undefined}>
-            {task ? (
-              <>
-                <input type="checkbox" checked={task[1] !== " "} readOnly={!onToggleTask} onChange={() => onToggleTask?.(at)} onClick={(e) => e.stopPropagation()} />
-                <span className={task[1] !== " " ? "done" : undefined}>{inline(task[2], `${key}t${at}`)}</span>
-              </>
-            ) : inline(m[3], `${key}i${at}`)}
-          </li>);
-        i++;
-      }
-      blocks.push(ordered ? <ol key={key} start={Number(item[2].replace(/\D/g, "")) || 1}>{items}</ol> : <ul key={key}>{items}</ul>);
-      continue;
-    }
-    if (!line.trim()) { i++; continue; }
-    const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,6})[ \t]|^\s*(```|~~~)|^[ \t]*>|^[ \t]*([-*+]|\d{1,9}[.)])[ \t]|^[ \t]*\|.*\|[ \t]*$/.test(lines[i])) para.push(lines[i++]);
-    if (para.length === 0) { blocks.push(<p key={key}>{inline(line, key)}</p>); i++; continue; }
-    blocks.push(<p key={key}>{para.map((l, k) => <Fragment key={k}>{k > 0 && <br />}{inline(l, `${key}p${k}`)}</Fragment>)}</p>);
-  }
-  return <div className="md-view selectable">{blocks}</div>;
-}
+/** What the document toolbar does to the editor. */
+export const format = {
+  /** 标题 1–3 for the lines touched; the same level again (or 0) makes them plain text. */
+  heading(view: EditorView, level: number) {
+    const { from, to, lines } = selectedLines(view);
+    const marker = "#".repeat(level) + " ";
+    const all = level > 0 && lines.every((l) => l.startsWith(marker));
+    replaceLines(view, from, to, lines.map((l) => { const body = l.replace(/^#{1,6}[ \t]+/, ""); return all || level === 0 ? body : marker + body; }));
+  },
+  wrap(view: EditorView, marker: string) { wrap(marker)(view); view.focus(); },
+  link(view: EditorView) { link(view); view.focus(); },
+  /** A list, a task list or a quote for the lines touched (plain lines again when they all are one already). */
+  lines(view: EditorView, style: "bullet" | "numbered" | "task" | "quote") {
+    const { from, to, lines } = selectedLines(view);
+    const already = lines.every((l) => style === "bullet" ? /^[ \t]*[-*+][ \t]+(?!\[[ xX]\])/.test(l)
+      : style === "numbered" ? /^[ \t]*\d{1,9}[.)][ \t]+/.test(l)
+      : style === "task" ? /^[ \t]*[-*+][ \t]+\[[ xX]\]/.test(l) : /^[ \t]*>/.test(l));
+    let n = 0;
+    replaceLines(view, from, to, lines.map((l) => {
+      if (style === "quote") { const body = l.replace(/^[ \t]*>[ \t]?/, ""); return already ? body : "> " + body; }
+      const body = l.replace(LIST_PREFIX, "$1");
+      if (already) return body;
+      const indent = /^[ \t]*/.exec(body)![0], text = body.slice(indent.length);
+      n++;
+      return indent + (style === "bullet" ? "- " : style === "numbered" ? `${n}. ` : "- [ ] ") + text;
+    }));
+  },
+  /** A block (a code block, a table, a rule) on lines of its own after the caret's line; caret offset inside it. */
+  block(view: EditorView, block: string, caret?: number) {
+    const { state } = view;
+    const line = state.doc.lineAt(state.selection.main.head);
+    const empty = !line.text.trim();
+    const insert = (empty ? "" : "\n\n") + block + "\n";
+    const at = empty ? line.from : line.to;
+    const start = at + (empty ? 0 : 2);
+    view.dispatch({ changes: { from: at, to: empty ? line.to : at, insert }, selection: EditorSelection.cursor(caret != null ? start + caret : at + insert.length), scrollIntoView: true });
+    view.focus();
+  },
+  codeBlock(view: EditorView) {
+    if (view.state.selection.main.empty) { format.block(view, "```\n\n```", 4); return; }
+    const { from, to, lines } = selectedLines(view);
+    replaceLines(view, from, to, ["```", ...lines, "```"]);
+  },
+};
 
 // MARK: Editor
+
+const loading = Annotation.define<boolean>();
+
+function extensions(placeholder: string, onChange: () => void, onBlur: () => void): Extension {
+  return [
+    history(),
+    indentUnit.of("  "),
+    EditorView.lineWrapping,
+    markdown({ base: markdownLanguage, addKeymap: false }),
+    livePreview,
+    placeholderText(placeholder),
+    keymap.of([
+      { key: "Enter", run: insertNewlineContinueMarkup },
+      { key: "Backspace", run: deleteMarkupBackward },
+      { key: "Tab", run: tab, shift: indentLess },
+      { key: "Mod-b", run: wrap("**") },
+      { key: "Mod-i", run: wrap("*") },
+      { key: "Mod-k", run: link },
+      ...historyKeymap,
+      ...defaultKeymap,
+    ]),
+    EditorView.updateListener.of((u) => { if (u.docChanged && !u.transactions.some((tr) => tr.annotation(loading))) onChange(); }),
+    EditorView.domEventHandlers({ blur: () => { onBlur(); return false; } }),
+    // Links open in the browser with Ctrl+click.
+    EditorView.domEventHandlers({
+      click: (e, view) => {
+        if (!e.ctrlKey) return false;
+        const at = view.posAtCoords({ x: e.clientX, y: e.clientY });
+        if (at == null) return false;
+        const line = view.state.doc.lineAt(at);
+        const url = /https?:\/\/[^\s)>\]]+/.exec(line.text);
+        if (url) { call("shell.open", { target: url[0] }); return true; }
+        return false;
+      },
+    }),
+  ];
+}
 
 export interface MarkdownSource {
   /** What is being edited ("note:<item>", "file:<file>"): another key loads afresh. */
@@ -238,86 +305,79 @@ export interface MarkdownSource {
   save: (text: string) => void;
 }
 
-/** A Markdown text: typed in a plain box with the Markdown keys, or read rendered (预览). Saved a moment after typing
- *  stops; when someone else (another tab, an agent) changes it, what is being typed is not overwritten. */
-export function MarkdownEditor({ source, placeholder, inputRef, focus, preview, className }: {
-  source: MarkdownSource; placeholder: string; inputRef?: React.MutableRefObject<HTMLTextAreaElement | null>; focus?: boolean;
-  preview?: boolean; className?: string;
+/** The live Markdown editor on a note or a .md file. Saved a moment after typing stops (not while a word is being
+ *  composed with an input method); when someone else changes the text, what is being typed here is not overwritten. */
+export function MarkdownEditor({ source, placeholder, inputRef, viewRef, focus, className }: {
+  source: MarkdownSource; placeholder: string; inputRef?: React.MutableRefObject<{ focus: () => void } | null>;
+  viewRef?: React.MutableRefObject<EditorView | null>; focus?: boolean; className?: string;
 }) {
-  const [text, setText] = useState("");
+  const host = useRef<HTMLDivElement>(null);
+  const view = useRef<EditorView | null>(null);
   const saved = useRef("");
   const shown = useRef<MarkdownSource | null>(null);
   const timer = useRef(0);
-  const box = useRef<HTMLTextAreaElement | null>(null);
   const version = useStore((s) => s.libraryVersion);
-  const composing = useRef(false);
 
+  const text = () => view.current?.state.doc.toString() ?? "";
   const flush = () => {
     clearTimeout(timer.current);
-    const value = box.current?.value;
     const current = shown.current;
-    if (current?.key && value !== undefined && value !== saved.current) {
+    if (!current?.key || !view.current) return;
+    const value = text();
+    if (value !== saved.current) {
       saved.current = value;
       current.save(value);
     }
   };
+  const schedule = () => {
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(function save() {
+      if (view.current?.composing) { timer.current = window.setTimeout(save, 400); return; }
+      flush();
+    }, 700);
+  };
+  const show = (value: string) => {
+    const v = view.current;
+    if (!v) return;
+    // A fresh state: the undo history belongs to the text it was typed in.
+    v.setState(EditorState.create({ doc: value, extensions: extensions(placeholder, schedule, flush) }));
+  };
+
+  useEffect(() => {
+    const v = new EditorView({ parent: host.current!, state: EditorState.create({ doc: "", extensions: extensions(placeholder, schedule, flush) }) });
+    view.current = v;
+    if (inputRef) inputRef.current = { focus: () => v.focus() };
+    if (viewRef) viewRef.current = v;
+    return () => { flush(); v.destroy(); view.current = null; if (viewRef) viewRef.current = null; };
+  }, []);
 
   useEffect(() => {
     flush();
     shown.current = source;
-    if (!source.key) { setText(""); saved.current = ""; return; }
+    if (!source.key) { saved.current = ""; show(""); return; }
     let live = true;
     source.load().then((value) => {
       if (!live) return;
       saved.current = value;
-      setText(value);
-      if (focus) requestAnimationFrame(() => { box.current?.focus(); box.current?.setSelectionRange(value.length, value.length); });
+      show(value);
+      if (focus) requestAnimationFrame(() => {
+        const v = view.current;
+        if (!v) return;
+        v.focus();
+        v.dispatch({ selection: EditorSelection.cursor(v.state.doc.length), annotations: loading.of(true) });
+      });
     });
     return () => { live = false; };
   }, [source.key]);
 
-  // Someone else changed it: what is being typed here is not overwritten.
+  // Someone else changed it (a reader tab, an agent): reloaded unless it is being typed in here.
   useEffect(() => {
-    if (!source.key || document.activeElement === box.current || box.current?.value !== saved.current) return;
+    const v = view.current;
+    if (!source.key || !v || v.hasFocus || text() !== saved.current) return;
     source.load().then((value) => {
-      if (value !== saved.current && document.activeElement !== box.current) { saved.current = value; setText(value); }
+      if (value !== saved.current && !view.current?.hasFocus) { saved.current = value; show(value); }
     });
   }, [version]);
 
-  useEffect(() => flush, []);
-
-  const changed = (value: string) => {
-    setText(value);
-    clearTimeout(timer.current);
-    // Not while a word is being composed (IME): the box would be rewritten under it.
-    timer.current = window.setTimeout(() => { if (!composing.current) flush(); }, 700);
-  };
-
-  if (preview) {
-    return (
-      <div className={`md-preview ${className ?? ""}`}>
-        {text.trim() ? <MarkdownView text={text} onToggleTask={(line) => { const next = toggleTask(text, line); changed(next); saved.current = next; source.save(next); }} />
-          : <div className="secondary">{placeholder}</div>}
-      </div>
-    );
-  }
-  return (
-    <textarea ref={(el) => { box.current = el; if (inputRef) inputRef.current = el; }} className={className} disabled={!source.key} value={text} spellCheck={false}
-      placeholder={placeholder}
-      onChange={(e) => changed(e.target.value)}
-      onCompositionStart={() => { composing.current = true; }}
-      onCompositionEnd={() => { composing.current = false; }}
-      onBlur={flush}
-      onKeyDown={(e) => { e.stopPropagation(); markdownKeyDown(e); }} />
-  );
-}
-
-/** "编辑" and "预览" side by side. */
-export function PreviewToggle({ preview, onChange }: { preview: boolean; onChange: (preview: boolean) => void }) {
-  return (
-    <div className="md-toggle" role="group">
-      <button className={!preview ? "on" : ""} onClick={() => onChange(false)}>{t("编辑")}</button>
-      <button className={preview ? "on" : ""} onClick={() => onChange(true)}>{t("预览")}</button>
-    </div>
-  );
+  return <div ref={host} className={`md-editor${className ? " " + className : ""}`} onKeyDown={(e) => e.stopPropagation()} />;
 }

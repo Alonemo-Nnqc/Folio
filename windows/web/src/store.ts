@@ -33,7 +33,8 @@ export interface Tag { id: string; name: string; color: string }
 export interface Job { fileId: string; fraction?: number; stage: string; preview?: string }
 export interface Toast { id: number; message: string; icon: string; actionTitle?: string }
 
-export interface ReaderTabState { key: string; fileId: string; page?: number }
+/** A tab beside the library: a paper (or a Markdown file) by fileId, or an item's note (note: the item id, fileId ""). */
+export interface ReaderTabState { key: string; fileId: string; page?: number; note?: string }
 
 export interface State {
   items: Map<string, Item>;
@@ -137,7 +138,7 @@ function applyRows(r: any) {
 }
 
 function closeMissingTabs() {
-  const tabs = state.tabs.filter((t) => state.files.has(t.fileId));
+  const tabs = state.tabs.filter((t) => (t.note ? state.items.has(t.note) : state.files.has(t.fileId)));
   if (tabs.length !== state.tabs.length) {
     setState({ tabs, activeTab: tabs.some((t) => t.key === state.activeTab) ? state.activeTab : "library" });
     rememberTabs();
@@ -145,7 +146,9 @@ function closeMissingTabs() {
 }
 
 export function rememberTabs() {
-  call("settings.set", { key: "openReaderTabs", value: state.tabs.map((t) => t.fileId) });
+  // A window of a dragged-out tab keeps the main window's list as it is.
+  if (location.hash.startsWith("#tab")) return;
+  call("settings.set", { key: "openReaderTabs", value: state.tabs.filter((t) => !t.note).map((t) => t.fileId) });
 }
 
 function resolveDark(settings: Record<string, any>) {

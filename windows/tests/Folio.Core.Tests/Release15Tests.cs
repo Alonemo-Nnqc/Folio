@@ -21,7 +21,9 @@ public class MarkdownDocumentTests
         Assert.True(file.IsMarkdown);
         Assert.Equal(ItemKind.Standalone, snapshot.Items[itemId].Kind);
         Assert.Equal(fileId, snapshot.Items[itemId].DefaultFileId);
-        Assert.Equal("# 阅读计划\n\n", library.Text(fileId));
+        Assert.Equal("", library.Text(fileId)); // a new document is a blank file
+        Assert.Equal(0, snapshot.Files[fileId].Size);
+        Assert.Equal("阅读计划", snapshot.Items[itemId].Title);
 
         const string text = "# 第一周\n\n- [ ] 读 **SAM** 论文\n";
         library.WriteText(text, fileId);

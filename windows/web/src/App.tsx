@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import { call, emitLocal, on } from "./rpc";
-import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, newMarkdownDocument, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
+import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, newMarkdownDocument, openNote, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
 import { getState, setSetting, setState, useStore } from "./store";
 import { LibraryPage } from "./library/LibraryPage";
 import { ReaderTab, readers } from "./reader/ReaderTab";
 import { MarkdownTab } from "./notes/MarkdownTab";
 import { useEvent } from "./ui/util";
 import { setCaption } from "./ui/caption";
+import { detached } from "./ui/detach";
 
 interface Key { key: string; code: string; ctrl: boolean; alt: boolean; shift: boolean }
 
@@ -54,6 +55,45 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
   return false;
 }
 
+/** The keys and browser behaviour every window of papers shares. */
+function useWindowKeys() {
+  const dispatch = (k: Key, e?: Event) => {
+    const reader = readers.get(getState().activeTab);
+    if (globalKey(k) || reader?.handleKey(k)) e?.preventDefault();
+  };
+  useEvent(window, "folio-key", (e: CustomEvent) => dispatch(e.detail));
+  useEvent(window, "keydown", (e: KeyboardEvent) => {
+    if (document.querySelector(".scrim") || document.querySelector(".menu")) return;
+    const typing = (e.target as Element)?.closest?.("input, textarea, select, .cm-editor");
+    if (typing && !e.ctrlKey && !e.altKey && !e.key.startsWith("F")) return;
+    if (typing && e.ctrlKey && !e.altKey && !e.shiftKey && ["KeyA", "KeyC", "KeyV", "KeyX", "KeyZ", "KeyY"].includes(e.code)) return;
+    if (e.altKey && !e.ctrlKey && (e.key === "F4" || e.key === " ")) return;
+    if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
+    dispatch({ key: e.key, code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey }, e);
+  });
+  useEvent(window, "contextmenu", (e: Event) => { if (!(e.target as Element).closest?.("input, textarea, .selectable, .cm-editor")) e.preventDefault(); });
+  useEvent(window, "wheel", (e: WheelEvent) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+  useEvent(window, "dragover", (e: DragEvent) => e.preventDefault());
+  useEvent(window, "drop", (e: DragEvent) => e.preventDefault());
+}
+
+/** A tab dragged out of the main window: the paper or document alone, with 放回标签页 at the toolbar's start. */
+export function DetachedApp() {
+  const tab = detached!;
+  const key = tab.note ? `note:${tab.note}` : tab.fileId ?? "";
+  const file = useStore((s) => (tab.fileId ? s.files.get(tab.fileId) : undefined));
+  useEffect(() => { setState({ activeTab: key, tabs: [] }); }, []);
+  useWindowKeys();
+  useEffect(() => on("app.willClose", () => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    readers.forEach((r) => r.flush());
+  }), []);
+  useEffect(() => { setCaption(getState().dark ? "#1d1d1f" : "#fcfcfd", getState().dark ? "#ffffff" : "#000000", false); }, []);
+  if (tab.note) return <MarkdownTab noteItemId={tab.note} visible />;
+  if (!file) return null;
+  return file.isMarkdown ? <MarkdownTab fileId={file.id} visible /> : <ReaderTab tabKey={key} fileId={file.id} page={tab.page} visible />;
+}
+
 export function MainApp() {
   const tabs = useStore((s) => s.tabs);
   const files = useStore((s) => s.files);
@@ -62,28 +102,10 @@ export function MainApp() {
   const panelUnderButtons = useStore((s) => (s.activeTab === "library" ? s.settings.inspectorVisible : s.readerNotes[s.activeTab] ?? false));
   const captionShown = useRef({ activeTab, dark });
 
-  const dispatch = (k: Key, e?: Event) => {
-    const reader = readers.get(getState().activeTab);
-    if (globalKey(k) || reader?.handleKey(k)) e?.preventDefault();
-  };
-  useEvent(window, "folio-key", (e: CustomEvent) => dispatch(e.detail));
-  useEvent(window, "keydown", (e: KeyboardEvent) => {
-    if (document.querySelector(".scrim") || document.querySelector(".menu")) return;
-    const typing = (e.target as Element)?.closest?.("input, textarea, select");
-    if (typing && !e.ctrlKey && !e.altKey && !e.key.startsWith("F")) return;
-    // Text boxes keep their own clipboard, undo and select-all.
-    if (typing && e.ctrlKey && !e.altKey && !e.shiftKey && ["KeyA", "KeyC", "KeyV", "KeyX", "KeyZ", "KeyY"].includes(e.code)) return;
-    if (e.altKey && !e.ctrlKey && (e.key === "F4" || e.key === " ")) return;
-    if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
-    dispatch({ key: e.key, code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey }, e);
-  });
-  // No browser behaviour: right clicks, page zoom, dropping a file on the page.
-  useEvent(window, "contextmenu", (e: Event) => { if (!(e.target as Element).closest?.("input, textarea, .selectable")) e.preventDefault(); });
-  useEvent(window, "wheel", (e: WheelEvent) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
-  useEvent(window, "dragover", (e: DragEvent) => e.preventDefault());
-  useEvent(window, "drop", (e: DragEvent) => e.preventDefault());
+  useWindowKeys();
 
   useEffect(() => on("reader.open", ({ fileId, page }) => openReader(fileId, page ?? undefined)), []);
+  useEffect(() => on("note.open", (itemId: string) => openNote(itemId)), []);
   useEffect(() => on("library.willChange", () => {
     const tabs = getState().tabs;
     tabs.forEach((tab) => closeTab(tab.key));
@@ -111,7 +133,9 @@ export function MainApp() {
   return (
     <>
       <LibraryPage visible={activeTab === "library"} />
-      {tabs.map((tab) => files.get(tab.fileId)?.isMarkdown
+      {tabs.map((tab) => tab.note
+        ? <MarkdownTab key={tab.key} noteItemId={tab.note} visible={activeTab === tab.key} />
+        : files.get(tab.fileId)?.isMarkdown
         ? <MarkdownTab key={tab.key} fileId={tab.fileId} visible={activeTab === tab.key} />
         : <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} />)}
     </>

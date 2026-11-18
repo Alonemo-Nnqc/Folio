@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, ChevronDown, ChevronRight, ChevronUp, Circle, CircleCheck, FilePen, FileText, Languages, ListChecks, NotebookText, Plus, Search, Share, Star, X } from "lucide-react";
+import { AppWindow, BookOpen, ChevronDown, ChevronRight, ChevronUp, Circle, CircleCheck, FilePen, FileText, Languages, ListChecks, NotebookText, Plus, Search, Share, Star, X } from "lucide-react";
 import { FullTextTranslateIcon } from "../ui/icons";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { filesOf, getState, scopeGroupId, setSetting, setState, tagsOf, useStore, type Item, type State } from "../store";
-import { addMenu, citeMenu, fileMenu, itemMenu, openItems, purgeItems, translate } from "../commands";
+import { addMenu, citeMenu, emptyTrash, fileMenu, itemMenu, openItems, openNote, purgeItems, translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, SearchBox, Segmented } from "../ui/controls";
 import { dragPointer, formatDate } from "../ui/util";
@@ -89,7 +89,7 @@ export function VenueBadges({ item }: { item: Item }) {
   );
 }
 
-interface FlatRow { itemId: string; fileId?: string }
+interface FlatRow { itemId: string; fileId?: string; note?: boolean }
 
 let anchor: string | null = null;
 
@@ -124,6 +124,9 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   const [insertion, setInsertion] = useState<number | null>(null);
   const [liveWidths, setLiveWidths] = useState<Record<string, number>>({});
   const [searching, setSearching] = useState(searchText);
+  /** The note row chosen: its item is the selection, the note row shows selected. */
+  const [noteRow, setNoteRow] = useState<string | null>(null);
+  const noteShown = noteRow !== null && selection.length === 1 && selection[0] === noteRow && !fileSelection;
   const typing = useRef(false);
 
   useEffect(() => { if (!typing.current) setSearching(searchText); }, [searchText]);
@@ -187,10 +190,14 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
     const out: FlatRow[] = [];
     for (const id of rows) {
       out.push({ itemId: id });
-      if (expanded.has(id)) for (const f of filesByItem[id] ?? []) out.push({ itemId: id, fileId: f });
+      if (expanded.has(id)) {
+        // A standalone file is the item itself; its note is still listed under it.
+        if (items.get(id)?.kind !== "standalone") for (const f of filesByItem[id] ?? []) out.push({ itemId: id, fileId: f });
+        if (noted.has(id)) out.push({ itemId: id, note: true });
+      }
     }
     return out;
-  }, [rows, expanded, filesByItem]);
+  }, [rows, expanded, filesByItem, noted, items]);
 
   const scopeName = scope === "all" ? t("所有文献") : scope === "unfiled" ? t("未分组") : scope === "trash" ? t("回收站")
     : scope.startsWith("group:") ? groups.get(scope.slice(6))?.name ?? "" : tags.find((tag) => `tag:${tag.id}` === scope)?.name ?? "";
@@ -230,6 +237,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
 
   const clickRow = (e: React.MouseEvent, row: FlatRow) => {
     scroller.current?.focus({ preventScroll: true });
+    if (row.note) { setSelection([row.itemId]); setNoteRow(row.itemId); setState({ inspectorPage: "notes" }); return; }
+    setNoteRow(null);
     if (row.fileId) { setSelection([row.itemId], row.fileId); return; }
     const id = row.itemId;
     if (getState().multiSelect && !e.shiftKey) {
@@ -251,7 +260,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   const pendingDragSelect = useRef(false);
 
   const openRow = (row: FlatRow) => {
-    if (row.fileId) call("file.open", { id: row.fileId });
+    if (row.note) openNote(row.itemId);
+    else if (row.fileId) call("file.open", { id: row.fileId });
     else call("item.open", { id: row.itemId });
   };
 
@@ -374,6 +384,17 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       )}
       <div ref={scroller} className="table" tabIndex={0} onKeyDown={onKeyDown} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
         onMouseDown={(e) => { if (e.target === e.currentTarget || (e.target as Element).classList.contains("table-inner")) setSelection([]); }}
+        onContextMenu={(e) => {
+          // The list's empty space: what can be added here (as the 添加 button offers), and selecting.
+          const target = e.target as Element;
+          if (target !== e.currentTarget && !target.classList.contains("table-inner") && !target.closest(".empty")) return;
+          e.preventDefault();
+          setSelection([]);
+          openMenu(scope === "trash"
+            ? [{ label: t("清空回收站"), disabled: rows.length === 0, action: emptyTrash }]
+            : [...addMenu(), sep, { label: t("全选"), key: "Ctrl+A", disabled: rows.length === 0, action: () => setSelection(rows) }, { label: t("多选"), checked: multi, action: () => setState({ multiSelect: !multi }) }],
+            e.clientX, e.clientY);
+        }}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes(ITEMS_MIME) || !canReorder) return;
           e.preventDefault();
@@ -407,6 +428,25 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
             const item = items.get(row.itemId);
             if (!item) return null;
             const top = 28 + index * ROW;
+            if (row.note) {
+              return (
+                <div key={`note:${row.itemId}`} className={`tr${noteShown && noteRow === row.itemId ? " selected" : ""}`} style={{ top, transform: "none" }}
+                  title={t("双击在标签页中打开笔记")} onClick={(e) => clickRow(e, row)} onDoubleClick={() => openRow(row)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    clickRow(e, row);
+                    openMenu([
+                      { label: t("在标签页中打开"), icon: <AppWindow size={14} />, action: () => openNote(row.itemId) },
+                      { label: t("导出笔记…"), icon: <Share size={14} />, action: () => call("note.export", { item: row.itemId }) },
+                    ], e.clientX, e.clientY);
+                  }}>
+                  <span style={{ width: 44, flex: "none" }} />
+                  <NotebookText size={14} className="secondary" style={{ flex: "none" }} />
+                  <span className="td ellipsis" style={{ fontSize: 12, flex: "0 1 auto" }}>{t("笔记")}</span>
+                  <span style={{ flex: 1 }} />
+                </div>
+              );
+            }
             if (row.fileId) {
               const file = files.get(row.fileId);
               if (!file) return null;
@@ -425,10 +465,11 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
             const fileCount = filesByItem[item.id]?.length ?? 0;
             const standalone = item.kind === "standalone";
             return (
-              <div key={item.id} className={`tr${selectedSet.has(item.id) && !fileSelection ? " selected" : ""}`} style={{ top }} draggable
+              <div key={item.id} className={`tr${selectedSet.has(item.id) && !fileSelection && !(noteShown && noteRow === item.id) ? " selected" : ""}`} style={{ top }} draggable
                 onAuxClick={(e) => { if (e.button === 1) { setSelection([item.id]); anchor = item.id; setState({ quickLook: true }); } }}
                 onMouseDown={(e) => {
                   if (e.button === 1) e.preventDefault();
+                  if (e.button === 0) setNoteRow(null);
                   if (multi) { pendingDragSelect.current = false; return; }
                   pendingDragSelect.current = selectedSet.has(item.id) && !e.shiftKey && !e.ctrlKey && e.button === 0;
                   if (!selectedSet.has(item.id) && e.button === 0 && !e.shiftKey && !e.ctrlKey) { setSelection([item.id]); anchor = item.id; }
@@ -459,7 +500,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                   if (c.key === "title") {
                     return (
                       <div key="title" className="td title" style={titleStyle}>
-                        {fileCount > 0 && !standalone
+                        {(fileCount > 0 && !standalone) || noted.has(item.id)
                           ? <button className="disc" onClick={(e) => { e.stopPropagation(); toggleExpanded(item.id); }} onDoubleClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>{expanded.has(item.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>
                           : <span className="disc-space" />}
                         {multi
