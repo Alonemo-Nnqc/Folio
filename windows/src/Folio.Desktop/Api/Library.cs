@@ -290,6 +290,7 @@ public static partial class Api
             return fileId;
         });
         Bridge.On("markdown.get", a => M.Library.Text(a.Str("file")));
+        Bridge.On("markdown.rename", a => { M.Perform(() => M.Library.RenameMarkdownFile(a.Str("file"), a.Str("name"))); return null; });
         Bridge.On("markdown.set", a => { M.Perform(() => M.Library.WriteText(a.Str("text"), a.Str("file"))); return null; });
         Bridge.OnAsync("note.export", async a =>
         {

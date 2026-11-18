@@ -58,6 +58,13 @@ public class MarkdownDocumentTests
         Assert.Equal("Segment Anything", snapshot.Items[paper].Title);
         Assert.Equal(fileId, snapshot.Items[paper].DefaultFileId);
         Assert.Equal("Two", Library.FirstHeading("text\n## Two\n"));
+        var renamed = library.RenameMarkdownFile(fileId, "精读：方法");
+        Assert.EndsWith(".md", renamed.FileName);
+        Assert.Equal("Segment Anything", library.Snapshot().Items[paper].Title); // an attachment's paper keeps its title
+        var (doc, docFile) = library.CreateMarkdownDocument("未命名文档");
+        library.RenameMarkdownFile(docFile, "第一周计划");
+        Assert.Equal("第一周计划", library.Snapshot().Items[doc].Title);
+        Assert.Equal("第一周计划.md", library.Snapshot().Files[docFile].FileName);
         Assert.Null(Library.FirstHeading("no heading\n"));
     }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, FilePen, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { AppWindow, BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, FilePen, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
 import { FullTextTranslateIcon } from "./ui/icons";
-import { call, emitLocal } from "./rpc";
+import { call } from "./rpc";
 import { t } from "./i18n";
 import { defaultFile, filesOf, getState, groupsForMenus, rememberTabs, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
 import { sep, type MenuEntry } from "./ui/menu";
@@ -199,28 +199,33 @@ export function translate(ids: string[], file?: FileRec) {
 
 // MARK: Markdown documents (MD-01)
 
-/** A new Markdown document as an item of its own, in the group being shown, selected and ready to write in the inspector. */
+/** A new Markdown document as an item of its own, in the group being shown: selected in the list and opened in a tab to
+ *  write in (the inspector stays as it is). */
 export async function newMarkdownDocument() {
   const s = getState();
   const r = await call<{ itemId: string; fileId: string }>("markdown.create", { group: scopeGroupId(s.scope), title: t("未命名文档") });
   if (!r) return;
   if (getState().scope === "trash") await call("library.scope", { scope: "all" });
-  setState({ activeTab: "library", selection: [r.itemId], fileSelection: null, inspectorPage: "info", multiSelect: false, markdownFocus: r.fileId });
+  setState({ selection: [r.itemId], fileSelection: null, multiSelect: false });
   call("library.select", { ids: [r.itemId] });
-  if (!getState().settings.inspectorVisible) setSetting("inspectorVisible", true);
-  requestAnimationFrame(() => emitLocal("reveal", r.itemId));
+  openWhenListed(r.fileId);
 }
 
-/** A new Markdown document attached to a paper (reading notes kept as a file), selected under it. */
+/** A new Markdown document attached to a paper, listed under it and opened in a tab. */
 export async function newMarkdownAttachment(item: Item) {
   // Named like any new document, not after the paper (it is listed under the paper anyway).
   const fileId = await call<string>("markdown.attach", { item: item.id, title: t("未命名文档") });
   if (!fileId) return;
   const expanded = new Set(getState().expanded);
   expanded.add(item.id);
-  setState({ activeTab: "library", expanded, selection: [item.id], fileSelection: fileId, inspectorPage: "info", multiSelect: false, markdownFocus: fileId });
-  call("library.select", { ids: [item.id] });
-  if (!getState().settings.inspectorVisible) setSetting("inspectorVisible", true);
+  setState({ expanded });
+  openWhenListed(fileId);
+}
+
+/** Opens a new file's tab once the library the page mirrors has it (a moment after it is created). */
+function openWhenListed(fileId: string, tries = 40) {
+  if (getState().files.has(fileId)) { openReader(fileId); return; }
+  if (tries > 0) setTimeout(() => openWhenListed(fileId, tries - 1), 50);
 }
 
 export function addMenu(): MenuEntry[] {
@@ -330,6 +335,8 @@ export function itemMenu(ids: string[]): MenuEntry[] {
   entries.push(sep);
   if (single) {
     entries.push({ label: t("编辑笔记"), icon: icon(StickyNote), key: "Ctrl+Alt+N", action: showNotes });
+    // The note as a document of its own, written or still empty (listed under the item once written).
+    entries.push({ label: t("在标签页中打开笔记"), icon: icon(AppWindow), action: () => openNote(single.id) });
     if (s.noted.has(single.id)) entries.push({ label: t("导出笔记…"), icon: icon(Share), action: () => call("note.export", { item: single.id }) });
     if (singleFile?.isPdf) {
       entries.push(translateEntry(single.id, () => translate([single.id])));

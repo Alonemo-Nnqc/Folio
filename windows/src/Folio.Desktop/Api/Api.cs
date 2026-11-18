@@ -150,7 +150,6 @@ public static partial class Api
             ["settingsPane"] = s.Raw("settingsPane")?.ToString() ?? "general",
             ["readerSidebarWidth"] = s.Raw("readerSidebarWidth")?.GetValue<double>() ?? 220.0,
             ["readerSidebarTab"] = s.Raw("readerSidebarTab")?.ToString() ?? "thumbnails",
-            ["markdownToolbar"] = s.Raw("markdownToolbar")?.GetValue<bool>() ?? true,
         };
     }
 

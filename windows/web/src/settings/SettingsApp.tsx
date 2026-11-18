@@ -74,7 +74,6 @@ function General() {
       <Card>
         <Row title={t("父分组中显示子分组的条目")}><Switch on={s.includeSubgroupItems} onChange={(v) => setSetting("includeSubgroupItems", v)} /></Row>
         <Row title={t("显示“已翻译”标签")}><Switch on={s.showTranslatedBadge !== false} onChange={(v) => setSetting("showTranslatedBadge", v)} /></Row>
-        <Row title={t("显示 Markdown 文档工具栏")}><Switch on={s.markdownToolbar !== false} onChange={(v) => setSetting("markdownToolbar", v)} /></Row>
         <Row title={t("默认引用样式")}><Select value={s.citationStyle} options={statics.citationStyles.map((c) => ({ value: c.raw, label: c.name }))} onChange={(v) => setSetting("citationStyle", v)} /></Row>
       </Card>
       <Header>{t("语言")}</Header>

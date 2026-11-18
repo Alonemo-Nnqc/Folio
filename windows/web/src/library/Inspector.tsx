@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FilePen, FileText, Maximize2, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
+import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FilePen, FileText, Maximize2, NotebookText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
 import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type State } from "../store";
 import { MarkdownEditor } from "../notes/markdown";
 import { isMarkdownItem } from "./ItemList";
 import { MultiSelectionPanel } from "./MultiSelection";
-import { fileMenu, manualMatch, newTag, openReader, refreshJournalMetrics } from "../commands";
+import { fileMenu, manualMatch, newTag, openNote, openReader, refreshJournalMetrics } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, PlainEdit, Segmented } from "../ui/controls";
 import { formatDateTime } from "../ui/util";
@@ -229,17 +229,48 @@ function AnnotationsPage({ item }: { item: Item }) {
   );
 }
 
-/** An item's Markdown note; saved a moment after typing stops. */
+/** An item's documents where its note is edited (the inspector's 笔记, the reader's notes panel): the note, or one of
+ *  the item's Markdown attachments, chosen from the title's menu (which can also add one), and a button to open the one
+ *  shown in a tab. The note and the attachments are written in the same editor, here or in a tab. */
 export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null; title?: string; inputRef?: React.MutableRefObject<{ focus: () => void } | null> }) {
-  const source = useMemo(() => ({
+  const [chosen, setChosen] = useState("");
+  useStore((s) => (itemId ? s.filesByItem[itemId] : undefined));
+  useStore((s) => s.files);
+  const documents = itemId ? filesOf(getState(), itemId).filter((f) => f.isMarkdown) : [];
+  const current = documents.find((f) => f.id === chosen);
+  useEffect(() => { setChosen(""); }, [itemId]);
+  const noteSource = useMemo(() => ({
     key: itemId ? `note:${itemId}` : null,
     load: () => call<string>("note.get", { item: itemId }),
     save: (text: string) => { call("note.set", { item: itemId, text }); },
   }), [itemId]);
+  const fileSource = useMemo(() => (current ? markdownSource(current.id) : null), [current?.id]);
+  const name = (f: FileRec) => f.fileName.replace(/\.(md|markdown)$/i, "");
+  const menu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!itemId) return;
+    openMenuAt(e.currentTarget, [
+      { label: t("笔记"), icon: <NotebookText size={14} />, checked: !current, action: () => setChosen("") },
+      ...documents.map((f): MenuEntry => ({ label: name(f), icon: <FilePen size={14} />, checked: current?.id === f.id, action: () => setChosen(f.id) })),
+      sep,
+      { label: t("新建 Markdown 附件"), icon: <Plus size={14} />, action: async () => {
+        const id = await call<string>("markdown.attach", { item: itemId, title: t("未命名文档") });
+        if (id) setChosen(id);
+      } },
+    ]);
+  };
   return (
     <div className="note-area">
-      {title !== undefined && <><div className="note-head">{t("笔记")}</div><div className="note-sub">{title}</div></>}
-      <MarkdownEditor source={source} inputRef={inputRef} className="note-text" placeholder={t("记下想法、摘录与待办… 支持 Markdown")} />
+      <div className="note-header">
+        <button className="note-switch" disabled={!itemId} onClick={menu}>
+          <span className="ellipsis">{current ? name(current) : t("笔记")}</span><ChevronDown size={11} />
+        </button>
+        <span style={{ flex: 1 }} />
+        {itemId && <button className="icon-button" title={t("在标签页中打开")} onClick={() => (current ? openReader(current.id) : openNote(itemId))}><Maximize2 size={13} /></button>}
+      </div>
+      {title !== undefined && title && <div className="note-sub">{title}</div>}
+      {current && fileSource
+        ? <MarkdownEditor key={current.id} source={fileSource} className="note-text" placeholder="" />
+        : <MarkdownEditor source={noteSource} inputRef={inputRef} className="note-text" placeholder="" />}
     </div>
   );
 }
@@ -257,7 +288,7 @@ function MarkdownFileInspector({ file }: { file: FileRec }) {
         <span style={{ flex: 1 }} />
         <button className="icon-button" title={t("在标签页中打开")} onClick={() => openReader(file.id)}><Maximize2 size={13} /></button>
       </div>
-      <MarkdownEditor source={source} focus={focus} className="md-text" placeholder={t("开始书写… 支持 Markdown")} />
+      <MarkdownEditor source={source} focus={focus} className="md-text" placeholder="" />
     </div>
   );
 }
@@ -301,7 +332,7 @@ export function Inspector() {
       {page === "info" && markdown
         ? <MarkdownFileInspector key={markdown.id} file={markdown} />
         : page === "notes"
-        ? <NoteEditor itemId={item?.id ?? null} title={item?.title ?? ""} />
+        ? <NoteEditor itemId={item?.id ?? null} />
         : (
           <div className="inspector-scroll" ref={scroll}>
             {!item && <div className="ins-empty">{selection.length > 1 ? t("已选择 %lld 项", selection.length) : t("未选择文献")}</div>}

@@ -46,7 +46,7 @@ export function MultiSelectionPanel() {
       <div className="multi-empty">
         <ListChecks size={34} strokeWidth={1.4} className="secondary" />
         <div className="big">{t("多选")}</div>
-        <div className="secondary">{t("点按条目即可选中或取消，选好后在这里批量添加标签、翻译、删除等。按 Esc 或再点一次“多选”退出。")}</div>
+        <div className="secondary">{t("单击条目选择，按 Esc 退出")}</div>
         <button className="btn small" onClick={selectAll}>{t("全选")}</button>
       </div>
     );

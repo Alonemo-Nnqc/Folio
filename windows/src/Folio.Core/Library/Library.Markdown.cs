@@ -101,6 +101,28 @@ public sealed partial class Library
         });
     }
 
+    /// <summary>Renames a Markdown file to name.md (a number added if taken); a document that is an item of its own takes
+    /// the name as its title too.</summary>
+    public FileRecord RenameMarkdownFile(string fileId, string name)
+    {
+        var file = File(fileId) ?? throw LibraryException.NotFound();
+        var title = name.Trim();
+        var @base = FileNamer.Sanitize(title);
+        if (@base.Length == 0) return file;
+        file.RelativePath = Store.Rename(file.RelativePath, @base);
+        Database.Write((c, tx) =>
+        {
+            Update(c, tx, file);
+            if (FetchItem(c, tx, file.ItemId) is { Kind: ItemKind.Standalone } item && item.DefaultFileId == file.Id)
+            {
+                item.Title = title;
+                item.DateModified = DateTime.UtcNow;
+                Update(c, tx, item);
+            }
+        });
+        return file;
+    }
+
     /// <summary>The text of the document's first <c>#</c> heading.</summary>
     public static string? FirstHeading(string text)
     {
