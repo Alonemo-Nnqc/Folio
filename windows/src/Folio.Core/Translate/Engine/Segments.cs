@@ -276,7 +276,14 @@ public static class StandardCells
         ["setting"] = "设置", ["settings"] = "设置", ["baseline"] = "基线", ["model"] = "模型", ["models"] = "模型", ["year"] = "年份",
         ["venue"] = "来源", ["source"] = "源域", ["target"] = "目标域", ["time"] = "时间", ["memory"] = "显存", ["accuracy"] = "准确率",
         ["total"] = "总计", ["type"] = "类型", ["input"] = "输入", ["output"] = "输出", ["training"] = "训练", ["inference"] = "推理",
+        // Size and frequency groups of detection benchmarks (COCO, LVIS): a single word gets the wrong sense alone.
+        ["all"] = "全部", ["small"] = "小", ["medium"] = "中", ["med."] = "中", ["large"] = "大", ["none"] = "无",
+        ["frequent"] = "高频", ["freq."] = "高频", ["common"] = "常见", ["com."] = "常见", ["rare"] = "稀有",
+        ["mean ± std"] = "均值 ± 标准差", ["std"] = "标准差", ["std."] = "标准差", ["min"] = "最小", ["max"] = "最大",
     };
+
+    /// <summary>Whether a short header is one of the words above.</summary>
+    public static bool IsKnown(string text) => Chinese.ContainsKey(text.Trim().ToLowerInvariant());
 
     public static string? Translate(string text, string language) =>
         language.ToLowerInvariant().StartsWith("zh") ? Chinese.GetValueOrDefault(text.Trim().ToLowerInvariant()) : null;

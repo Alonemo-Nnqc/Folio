@@ -17,7 +17,7 @@ public static partial class Api
             return null;
         });
         Bridge.On("ocr.cancel", a => { M.Ocr.Cancel(a.Str("file")); return null; });
-        M.Ocr.Changed += () => App.Main?.Bridge.Emit("ocr", OcrState());
-        M.Ocr.FileRecognized += id => App.Main?.Bridge.Emit("ocr.recognized", id);
+        M.Ocr.Changed += () => App.EmitToDocuments("ocr", OcrState());
+        M.Ocr.FileRecognized += id => App.EmitToDocuments("ocr.recognized", id);
     }
 }

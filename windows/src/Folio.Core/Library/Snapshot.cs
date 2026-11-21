@@ -264,6 +264,7 @@ public static class SortComparators
         SortColumn.Tags => s.TagsOf(item.Id).FirstOrDefault()?.Name,
         SortColumn.JournalRank => s.JournalMetricsOf(item)?.RankSortKey,
         SortColumn.ImpactFactor => s.JournalMetricsOf(item)?.ImpactFactor,
+        SortColumn.Venue => VenueCatalog.Of(item)?.Abbreviation,
         _ => null,
     };
 

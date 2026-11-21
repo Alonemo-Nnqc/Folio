@@ -263,7 +263,11 @@ public sealed class ConnectorServer(AppModel model)
             try
             {
                 var file = await OpenAccessPdf.Download(url, model.Settings.CrossrefMailto);
-                if (model.Library.AddFiles([file], id, model.Settings.AutoRenameFiles).FirstOrDefault() is AddFileOutcome.Added) attached++;
+                if (model.Library.AddFiles([file], id, model.Settings.AutoRenameFiles).FirstOrDefault() is AddFileOutcome.Added)
+                {
+                    attached++;
+                    model.RunOnUi(() => model.Translations.TranslateNewPaper(id));
+                }
                 try { Directory.Delete(Path.GetDirectoryName(file)!, true); } catch { }
             }
             catch { }
@@ -304,6 +308,7 @@ public sealed class ConnectorServer(AppModel model)
             switch (outcome)
             {
                 case AddFileOutcome.Added:
+                    model.RunOnUi(() => model.Translations.TranslateNewPaper(itemId));
                     model.Toasts.Show(Loc.S("已为「%@」附加 PDF", model.Library.Item(itemId)?.Title ?? Loc.S("条目")), "attach");
                     return Response.Json(new JsonObject { ["status"] = "added" });
                 case AddFileOutcome.Duplicate: return Response.Json(new JsonObject { ["status"] = "duplicate" });

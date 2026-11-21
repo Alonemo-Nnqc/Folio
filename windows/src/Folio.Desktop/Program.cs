@@ -160,6 +160,37 @@ public static class App
         foreach (var w in Windows) w.Bridge.Emit(name, data);
     }
 
+    static readonly List<HostWindow> TabWindows = [];
+
+    /// <summary>A reader or document tab dragged out of the main window: a window of its own showing it (query: file,
+    /// note, page), near where it was dropped (screen point in page pixels).</summary>
+    public static void OpenTabWindow(string query, double? x, double? y)
+    {
+        var window = new HostWindow("tab?" + query, new HostWindow.Options(Width: 1100, Height: 780, MinWidth: 640, MinHeight: 420, CaptionHeight: 52));
+        TabWindows.Add(window);
+        window.FormClosed += (_, _) => TabWindows.Remove(window);
+        if (x is { } px && y is { } py)
+        {
+            window.StartPosition = FormStartPosition.Manual;
+            double scale = window.DeviceDpi / 96.0;
+            var area = Screen.FromPoint(new System.Drawing.Point((int)(px * scale), (int)(py * scale))).WorkingArea;
+            int left = Math.Clamp((int)(px * scale) - (int)(160 * scale), area.Left, Math.Max(area.Left, area.Right - window.Width));
+            int top = Math.Clamp((int)(py * scale) - (int)(20 * scale), area.Top, Math.Max(area.Top, area.Bottom - window.Height));
+            window.Location = new System.Drawing.Point(left, top);
+        }
+        Add(window);
+    }
+
+    /// <summary>The window the page asking runs in, when it is a tab window.</summary>
+    public static HostWindow? ActiveTabWindow => TabWindows.FirstOrDefault(w => w.ContainsFocus || Form.ActiveForm == w) ?? TabWindows.LastOrDefault();
+
+    /// <summary>Events for every window that shows papers and documents: the main window and the tab windows.</summary>
+    public static void EmitToDocuments(string name, object? data)
+    {
+        Main?.Bridge.Emit(name, data);
+        foreach (var w in TabWindows) w.Bridge.Emit(name, data);
+    }
+
     public static void BringToFront() => Main.BringForward();
 
     /// <summary>Set once Folio is really going: the main window then closes instead of hiding.</summary>

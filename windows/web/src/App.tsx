@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { call, emitLocal, on } from "./rpc";
-import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
+import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, newMarkdownDocument, openNote, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
 import { getState, setSetting, setState, useStore } from "./store";
 import { LibraryPage } from "./library/LibraryPage";
 import { ReaderTab, readers } from "./reader/ReaderTab";
+import { MarkdownTab } from "./notes/MarkdownTab";
 import { useEvent } from "./ui/util";
 import { setCaption } from "./ui/caption";
+import { detached } from "./ui/detach";
 
 interface Key { key: string; code: string; ctrl: boolean; alt: boolean; shift: boolean }
 
@@ -16,12 +18,13 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
   const library = s.activeTab === "library";
   const reader = readers.get(s.activeTab);
   if (code === "F11") { call("window.fullScreen"); return true; }
+  if (code === "Escape" && !ctrl && !alt && !shift && library && s.multiSelect) { setState({ multiSelect: false }); return true; }
   if (!ctrl) return false;
   if (!alt && !shift) {
     switch (code) {
       case "KeyO": addFiles(); return true;
       case "KeyW": if (!library) closeTab(s.activeTab); return true;
-      case "Digit1": setState({ activeTab: "library" }); return true;
+      case "Digit1": if (!detached) setState({ activeTab: "library" }); return true;
       case "Tab": selectNextTab(false); return true;
       case "Comma": call("window.settings"); return true;
       case "KeyF": if (library) { emitLocal("focusSearch", null); return true; } return false;
@@ -35,7 +38,7 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
       case "KeyE": if (ids.length) { call("references.export", { ids, format: "bibtex" }); return true; } return false;
       case "KeyC": if (ids.length) { call("cite.copy", { ids }); return true; } return false;
       case "KeyR": if (ids.length === 1) { revealFirstFile(ids); return true; } return false;
-      case "KeyL": setState({ activeTab: "library" }); return true;
+      case "KeyL": if (!detached) setState({ activeTab: "library" }); return true;
       case "Tab": selectNextTab(true); return true;
     }
   }
@@ -45,19 +48,15 @@ function globalKey({ code, ctrl, alt, shift }: Key): boolean {
       case "KeyI": if (reader) reader.toggleNotes(); else setSetting("inspectorVisible", !s.settings.inspectorVisible); return true;
       case "KeyR": if (ids.length) { call("items.retrieve", { ids }); return true; } return false;
       case "KeyN": if (library) { showNotes(); return true; } return false;
+      case "KeyM": newMarkdownDocument(); return true;
       case "KeyT": if (library && ids.length) { translate(ids); return true; } return false;
     }
   }
   return false;
 }
 
-export function MainApp() {
-  const tabs = useStore((s) => s.tabs);
-  const activeTab = useStore((s) => s.activeTab);
-  const dark = useStore((s) => s.dark);
-  const panelUnderButtons = useStore((s) => (s.activeTab === "library" ? s.settings.inspectorVisible : s.readerNotes[s.activeTab] ?? false));
-  const captionShown = useRef({ activeTab, dark });
-
+/** The keys and browser behaviour every window of papers shares. */
+function useWindowKeys() {
   const dispatch = (k: Key, e?: Event) => {
     const reader = readers.get(getState().activeTab);
     if (globalKey(k) || reader?.handleKey(k)) e?.preventDefault();
@@ -65,21 +64,59 @@ export function MainApp() {
   useEvent(window, "folio-key", (e: CustomEvent) => dispatch(e.detail));
   useEvent(window, "keydown", (e: KeyboardEvent) => {
     if (document.querySelector(".scrim") || document.querySelector(".menu")) return;
-    const typing = (e.target as Element)?.closest?.("input, textarea, select");
+    const typing = (e.target as Element)?.closest?.("input, textarea, select, .cm-editor");
     if (typing && !e.ctrlKey && !e.altKey && !e.key.startsWith("F")) return;
-    // Text boxes keep their own clipboard, undo and select-all.
     if (typing && e.ctrlKey && !e.altKey && !e.shiftKey && ["KeyA", "KeyC", "KeyV", "KeyX", "KeyZ", "KeyY"].includes(e.code)) return;
     if (e.altKey && !e.ctrlKey && (e.key === "F4" || e.key === " ")) return;
     if (["Control", "Alt", "Shift", "Meta"].includes(e.key)) return;
     dispatch({ key: e.key, code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey }, e);
   });
-  // No browser behaviour: right clicks, page zoom, dropping a file on the page.
-  useEvent(window, "contextmenu", (e: Event) => { if (!(e.target as Element).closest?.("input, textarea, .selectable")) e.preventDefault(); });
+  useEvent(window, "contextmenu", (e: Event) => { if (!(e.target as Element).closest?.("input, textarea, .selectable, .cm-editor")) e.preventDefault(); });
   useEvent(window, "wheel", (e: WheelEvent) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
   useEvent(window, "dragover", (e: DragEvent) => e.preventDefault());
   useEvent(window, "drop", (e: DragEvent) => e.preventDefault());
+}
+
+/** A tab dragged out of the main window: its paper or document, and the tabs opened from it (a note enlarged there), each
+ *  with 放回主窗口 at the start of its toolbar; the tab bar shows once there are two. */
+export function DetachedApp() {
+  const tabs = useStore((s) => s.tabs);
+  const files = useStore((s) => s.files);
+  const activeTab = useStore((s) => s.activeTab);
+  useEffect(() => {
+    const first = detached!;
+    const key = first.note ? `note:${first.note}` : first.fileId ?? "";
+    setState({ tabs: [{ key, fileId: first.note ? "" : first.fileId ?? "", note: first.note, page: first.page }], activeTab: key });
+  }, []);
+  useWindowKeys();
+  useEffect(() => on("app.willClose", () => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    readers.forEach((r) => r.flush());
+  }), []);
+  useEffect(() => { setCaption(getState().dark ? "#1d1d1f" : "#fcfcfd", getState().dark ? "#ffffff" : "#000000", false); }, []);
+  return (
+    <>
+      {tabs.map((tab) => tab.note
+        ? <MarkdownTab key={tab.key} noteItemId={tab.note} visible={activeTab === tab.key} />
+        : files.get(tab.fileId)?.isMarkdown
+        ? <MarkdownTab key={tab.key} fileId={tab.fileId} visible={activeTab === tab.key} />
+        : files.has(tab.fileId) ? <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} /> : null)}
+    </>
+  );
+}
+
+export function MainApp() {
+  const tabs = useStore((s) => s.tabs);
+  const files = useStore((s) => s.files);
+  const activeTab = useStore((s) => s.activeTab);
+  const dark = useStore((s) => s.dark);
+  const panelUnderButtons = useStore((s) => (s.activeTab === "library" ? s.settings.inspectorVisible : s.readerNotes[s.activeTab] ?? false));
+  const captionShown = useRef({ activeTab, dark });
+
+  useWindowKeys();
 
   useEffect(() => on("reader.open", ({ fileId, page }) => openReader(fileId, page ?? undefined)), []);
+  useEffect(() => on("note.open", (itemId: string) => openNote(itemId)), []);
   useEffect(() => on("library.willChange", () => {
     const tabs = getState().tabs;
     tabs.forEach((tab) => closeTab(tab.key));
@@ -107,7 +144,11 @@ export function MainApp() {
   return (
     <>
       <LibraryPage visible={activeTab === "library"} />
-      {tabs.map((tab) => <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} />)}
+      {tabs.map((tab) => tab.note
+        ? <MarkdownTab key={tab.key} noteItemId={tab.note} visible={activeTab === tab.key} />
+        : files.get(tab.fileId)?.isMarkdown
+        ? <MarkdownTab key={tab.key} fileId={tab.fileId} visible={activeTab === tab.key} />
+        : <ReaderTab key={tab.key} tabKey={tab.key} fileId={tab.fileId} page={tab.page} visible={activeTab === tab.key} />)}
     </>
   );
 }

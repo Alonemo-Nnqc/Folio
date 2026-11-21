@@ -4,8 +4,8 @@ using Folio.Core.Translate.Services;
 
 namespace Folio.App;
 
-/// <summary>Queues whole-document translations (one at a time), shows their progress in the list and files the
-/// results under their items. The engine is built in: nothing to install. (The macOS TranslationCoordinator.)</summary>
+/// <summary>Queues whole-document translations, shows their progress in the list and files the results under their
+/// items. The engine is built in: nothing to install. (The macOS TranslationCoordinator.)</summary>
 public sealed class TranslationCoordinator(AppModel model)
 {
     public sealed class JobState
@@ -18,17 +18,28 @@ public sealed class TranslationCoordinator(AppModel model)
     }
 
     readonly Dictionary<string, JobState> _jobs = [];
-    readonly Queue<(string ItemId, string FileId, string? Pages)> _queue = new();
-    sealed class Running(string itemId)
+    /// <summary>A paper waiting its turn, with the service and settings it was queued with (changing them in 设置 later
+    /// does not change what a queued paper uses).</summary>
+    sealed record Queued(string ItemId, string FileId, string ServiceId, Dictionary<string, string> Fields, TranslationOptions Options, string? ProfileName);
+    readonly List<Queued> _queue = [];
+    sealed class Running(string itemId, string serviceId)
     {
         public string ItemId = itemId;
+        public string ServiceId = serviceId;
         public TranslationJob? Job;
         public bool Cancelled;
         public void Cancel() { Cancelled = true; Job?.Cancel(); }
     }
-    /// <summary>Translations running now, by item; up to 设置 ▸ 翻译 ▸ 同时翻译 at once.</summary>
+    /// <summary>Translations running now, by item.</summary>
     readonly Dictionary<string, Running> _running = [];
-    int Parallel => Math.Clamp(model.Settings.TranslationParallelJobs, 1, 6);
+    /// <summary>Papers of one service at the same time (设置 ▸ 翻译 ▸ 同一服务同时翻译): what a service's rate limits and a
+    /// local model's or agent's machine can take.</summary>
+    int PerService => Math.Clamp(model.Settings.TranslationParallelJobs, 1, 4);
+    /// <summary>Papers at the same time across all services (设置 ▸ 翻译 ▸ 同时翻译总数): what this PC can lay out and
+    /// typeset at once.</summary>
+    int Total => Math.Max(PerService, Math.Clamp(model.Settings.TranslationParallelTotal, 1, 8));
+
+    int RunningCount(string serviceId) => _running.Values.Count(r => r.ServiceId == serviceId);
 
     public SecretStore Secrets => SecretStore.Shared;
 
@@ -64,11 +75,56 @@ public sealed class TranslationCoordinator(AppModel model)
         Enqueue(file.ItemId, fileId, pages);
     }
 
+    // MARK: New papers (设置 ▸ 翻译 ▸ 自动翻译新添加的论文)
+
+    bool _toldNotConfigured;
+
+    /// <summary>A paper just added (a PDF imported, saved from the browser, or downloaded for it): translated with the
+    /// current settings when 自动翻译新添加的论文 is on and it has no translation yet. Waits for metadata retrieval, which
+    /// may rename the file, and lets a scan be recognised first (the queue does that).</summary>
+    public async void TranslateNewPaper(string itemId)
+    {
+        if (!model.Settings.AutoTranslateImports) return;
+        // The new item reaches the snapshot a moment after it is added (a few seconds at most); then up to a minute for
+        // retrieval to settle.
+        for (int k = 0; k < 70; k++)
+        {
+            if (model.Snapshot.Items.TryGetValue(itemId, out var item))
+            {
+                if (item.MetadataState != MetadataState.Pending) break;
+            }
+            else if (k >= 10) return;
+            await Task.Delay(1000);
+        }
+        if (!model.Settings.AutoTranslateImports || _jobs.ContainsKey(itemId) || UntranslatedPdf(itemId, model.Snapshot) is not { } file) return;
+        if (ConfigurationProblem(model.Settings.TranslationService) is { } problem)
+        {
+            // Said once, not at every import.
+            if (!_toldNotConfigured)
+            {
+                _toldNotConfigured = true;
+                model.Toasts.Show(Loc.S("没有自动翻译新论文：%@", problem), "warning");
+            }
+            return;
+        }
+        Enqueue(file.ItemId, file.Id, null);
+    }
+
+    /// <summary>The paper's PDF to translate: an original (not a translation, not named like one) when the paper has no
+    /// translation yet.</summary>
+    public static FileRecord? UntranslatedPdf(string itemId, LibrarySnapshot snapshot)
+    {
+        var files = snapshot.FilesOf(itemId);
+        if (files.Any(f => f.TranslationKind != null || f.TranslationOf != null)) return null;
+        string[] marks = ["双语对照", "译文", ".dual", ".mono", "-dual", "-mono", "_dual", "_mono"];
+        var originals = files.Where(f => f.IsPdf && !marks.Any(m => f.FileName.Contains(m, StringComparison.OrdinalIgnoreCase))).ToList();
+        var defaultId = snapshot.Items.GetValueOrDefault(itemId)?.DefaultFileId;
+        return originals.FirstOrDefault(f => f.Id == defaultId) ?? originals.FirstOrDefault();
+    }
+
     public void Cancel(string itemId)
     {
-        var remaining = _queue.Where(q => q.ItemId != itemId).ToList();
-        _queue.Clear();
-        foreach (var q in remaining) _queue.Enqueue(q);
+        _queue.RemoveAll(q => q.ItemId == itemId);
         if (_running.TryGetValue(itemId, out var running))
         {
             running.Cancel();
@@ -110,39 +166,60 @@ public sealed class TranslationCoordinator(AppModel model)
     void Enqueue(string itemId, string fileId, string? pages)
     {
         if (_jobs.ContainsKey(itemId)) return;
-        _jobs[itemId] = new JobState { FileId = fileId, Stage = _running.Count < Parallel ? Loc.S("正在启动翻译") : Loc.S("等待翻译") };
+        var settings = model.Settings;
+        var serviceId = settings.TranslationService;
+        // Who translates and how, taken now: the settings may change while the paper waits or runs.
+        var profileName = settings.SelectedTranslationProfiles.GetValueOrDefault(serviceId) is { } id ? settings.TranslationProfiles.FirstOrDefault(p => p.Id == id)?.Name : null;
+        _queue.Add(new Queued(itemId, fileId, serviceId, settings.FieldsOf(serviceId), OptionsFor(settings.TranslationOptions, pages), profileName));
+        _jobs[itemId] = new JobState { FileId = fileId, Stage = Loc.S("等待翻译") };
         JobsChanged?.Invoke();
-        _queue.Enqueue((itemId, fileId, pages));
         Pump();
     }
 
     /// <summary>More papers may run at once now: starts the waiting ones.</summary>
     public void ParallelChanged() => Pump();
 
+    /// <summary>Starts waiting papers, in the order they were queued, while there is room: in all (Total) and for their
+    /// service (PerService). A paper whose service is busy waits without holding up papers for other services.</summary>
     void Pump()
     {
-        while (_running.Count < Parallel && _queue.Count > 0) StartNext();
+        while (TranslationScheduler.Next(_queue.Select(q => q.ServiceId).ToList(), _running.Values.Select(r => r.ServiceId).ToList(), PerService, Total) is { } index)
+        {
+            var next = _queue[index];
+            _queue.RemoveAt(index);
+            StartNext(next);
+        }
+        // What the waiting ones are waiting for.
+        foreach (var waiting in _queue)
+        {
+            if (!_jobs.TryGetValue(waiting.ItemId, out var job)) continue;
+            bool busy = RunningCount(waiting.ServiceId) >= PerService;
+            var name = TranslationServiceCatalog.Service(waiting.ServiceId)?.DisplayName ?? waiting.ServiceId;
+            var stage = busy ? Loc.S("等待翻译（%@ 已有 %lld 篇在翻译）", name, PerService) : Loc.S("等待翻译");
+            if (job.Stage != stage)
+            {
+                job.Stage = stage;
+                ProgressChanged?.Invoke(waiting.ItemId);
+            }
+        }
     }
 
-    void StartNext()
+    void StartNext(Queued next)
     {
-        var (itemId, fileId, pages) = _queue.Dequeue();
+        var (itemId, fileId, pages) = (next.ItemId, next.FileId, next.Options.Pages);
         if (!model.Snapshot.Files.TryGetValue(fileId, out var file))
         {
             Remove(itemId);
             return;
         }
-        var settings = model.Settings;
-        var serviceId = settings.TranslationService;
-        // Who translates, for the file names, taken now: settings may change while the engine runs.
-        var profileName = settings.SelectedTranslationProfiles.GetValueOrDefault(serviceId) is { } id ? settings.TranslationProfiles.FirstOrDefault(p => p.Id == id)?.Name : null;
-        var fields = settings.FieldsOf(serviceId);
-        var provider = TranslationServiceCatalog.Service(serviceId) is { } svc ? TranslationNaming.Provider.Of(svc, fields, profileName) : new TranslationNaming.Provider(serviceId, null);
+        var serviceId = next.ServiceId;
+        var fields = next.Fields;
+        var provider = TranslationServiceCatalog.Service(serviceId) is { } svc ? TranslationNaming.Provider.Of(svc, fields, next.ProfileName) : new TranslationNaming.Provider(serviceId, null);
         var output = Path.Combine(TranslationJob.SupportDirectory, "output", Guid.NewGuid().ToString());
-        var options = OptionsFor(settings.TranslationOptions, pages);
+        var options = next.Options;
         _jobs[itemId] = new JobState { FileId = fileId, Stage = Loc.S("正在启动翻译") };
         ProgressChanged?.Invoke(itemId);
-        var current = new Running(itemId);
+        var current = new Running(itemId, serviceId);
         _running[itemId] = current;
         var source = model.Library.FilePath(file);
         _ = RecognizeThenTranslate();

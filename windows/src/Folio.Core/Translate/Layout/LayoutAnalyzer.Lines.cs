@@ -61,6 +61,9 @@ public sealed partial class LayoutAnalyzer
                     var lowerPeers = Peers(lower);
                     var upperPeers = Peers(upper);
                     if (lowerPeers.Any(p => IsNumeric(p.Text))) break;
+                    // A line reaching under another cell of the row above spans columns: a row of its own
+                    // ("zero-shot transfer methods:"), not the rest of this cell.
+                    if (upperPeers.Any(p => p.MinX < lower.MaxX - 1 && p.MaxX > lower.MinX + 1)) break;
                     bool startsLow = StartsLower(lower.Text.Trim());
                     bool endsOpen = Regex.IsMatch(upper.Text, @"(-|,|\b(and|or|of|the|for|to|with|in|on|by|a|an))\s*$");
                     if (!(startsLow || endsOpen || (lowerPeers.Count == 0 && upperPeers.Count > 0))) break;

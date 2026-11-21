@@ -15,6 +15,35 @@ public static partial class Api
             }
             : null;
 
+    /// <summary>The 出版物 column: where the paper appeared as a capsule ("CVPR", "TPAMI"), then its ranks (CCF class from
+    /// easyScholar or the built-in list, 中科院 zone, JCR quartile, impact factor), as on the Mac (VenueBadgesView).</summary>
+    static object? VenueDto(Item i, LibrarySnapshot s)
+    {
+        var venue = VenueCatalog.Of(i);
+        var metrics = s.JournalMetricsOf(i);
+        var badges = new List<object>();
+        var tips = new List<string>();
+        if (venue != null)
+        {
+            badges.Add(new { kind = "venue", text = venue.Abbreviation });
+            tips.Add(venue.FullName ?? venue.Abbreviation);
+        }
+        if ((metrics?.Ccf ?? venue?.Ccf) is { } ccf)
+        {
+            badges.Add(new { kind = "ccf", text = $"CCF-{ccf}" });
+            tips.Add(Loc.S("中国计算机学会推荐：%@ 类", ccf));
+        }
+        if (metrics != null)
+        {
+            if ((metrics.CasZone ?? metrics.CasBaseZone) is { } zone)
+                badges.Add(new { kind = $"cas{zone}", text = Loc.S("中科院%lld区", zone) + (metrics.CasTop ? " Top" : ""), emphasized = metrics.CasTop });
+            if (metrics.JcrQuartile is { } q) badges.Add(new { kind = $"q{q}", text = $"Q{q}" });
+            if (metrics.ImpactFactor is { } f) badges.Add(new { kind = "if", text = $"IF {JournalMetrics.Format(f)}" });
+            if (metrics.Summary.Length > 0) tips.Add(metrics.Summary);
+        }
+        return badges.Count == 0 ? null : new { badges, tip = string.Join("\n", tips) };
+    }
+
     static object JournalMetricsState()
     {
         var c = M.JournalMetrics;

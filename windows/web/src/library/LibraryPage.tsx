@@ -5,7 +5,9 @@ import { call, droppedPaths } from "../rpc";
 import { t } from "../i18n";
 import { closeTab, appMenu } from "../commands";
 import { getState, setSetting, setState, useStore } from "../store";
-import { openMenu } from "../ui/menu";
+import { openMenu, sep } from "../ui/menu";
+import { detached, detachTab, returnTab } from "../ui/detach";
+import { readers } from "../reader/ReaderTab";
 import { dragPointer } from "../ui/util";
 import { SlidePanel, useMoving } from "../ui/slide";
 import { Sidebar } from "./Sidebar";
@@ -23,29 +25,74 @@ export function TabBar() {
   const tabs = useStore((s) => s.tabs);
   const active = useStore((s) => s.activeTab);
   const files = useStore((s) => s.files);
-  if (tabs.length === 0) return null;
+  const items = useStore((s) => s.items);
+  if (tabs.length === 0 || (detached && tabs.length < 2)) return null;
+  // A Markdown document of its own is named by its first heading (the item's title), as on the Mac.
+  const titleOf = (fileId: string, note?: string) => {
+    if (note) return `${t("笔记")} · ${items.get(note)?.title ?? ""}`;
+    const file = files.get(fileId);
+    const item = file && items.get(file.itemId);
+    return file?.isMarkdown ? (item?.kind === "standalone" ? item.title : file.fileName.replace(/\.(md|markdown)$/i, "")) : file?.tabTitle ?? "";
+  };
   return (
     <div className="tabbar">
-      <div className={`tab${active === "library" ? " active" : ""}`} onClick={() => setState({ activeTab: "library" })}><span className="ellipsis">{t("文献库")}</span></div>
+      {!detached && <div className={`tab${active === "library" ? " active" : ""}`} onClick={() => setState({ activeTab: "library" })}><span className="ellipsis">{t("文献库")}</span></div>}
       {tabs.map((tab) => {
         const file = files.get(tab.fileId);
         return (
-          <div key={tab.key} className={`tab${active === tab.key ? " active" : ""}`} title={file?.tabTip} onClick={() => setState({ activeTab: tab.key })}
+          <div key={tab.key} className={`tab${active === tab.key ? " active" : ""}`} title={tab.note ? undefined : file?.tabTip} onClick={() => setState({ activeTab: tab.key })}
             onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); closeTab(tab.key); } }}
+            onPointerDown={(e) => {
+              // Dragged out of the window, the tab becomes a window of its own (as browsers' tabs do).
+              if (e.button !== 0 || (e.target as Element).closest(".close")) return;
+              const el = e.currentTarget;
+              const start = { x: e.clientX, y: e.clientY };
+              let moved = false;
+              el.setPointerCapture(e.pointerId);
+              const move = (m: PointerEvent) => {
+                if (!moved && Math.hypot(m.clientX - start.x, m.clientY - start.y) > 6) { moved = true; el.classList.add("dragging"); }
+                if (moved) el.style.transform = `translate(${m.clientX - start.x}px, ${m.clientY - start.y}px)`;
+              };
+              const up = (u: PointerEvent) => {
+                el.removeEventListener("pointermove", move);
+                el.removeEventListener("pointerup", up);
+                el.classList.remove("dragging");
+                el.style.transform = "";
+                const outside = u.clientX < 0 || u.clientY < 0 || u.clientX > window.innerWidth || u.clientY > window.innerHeight
+                  || (moved && Math.abs(u.clientY - start.y) > 90);
+                if (moved && outside) moveToWindow(tab.key, u.screenX, u.screenY);
+              };
+              el.addEventListener("pointermove", move);
+              el.addEventListener("pointerup", up);
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               openMenu([
                 { label: t("关闭标签页"), key: "Ctrl+W", action: () => closeTab(tab.key) },
                 { label: t("关闭其他标签页"), action: () => getState().tabs.filter((x) => x.key !== tab.key).forEach((x) => closeTab(x.key)) },
+                sep,
+                ...(detached ? [{ label: t("放回主窗口"), action: () => returnTab(tab.key, readers.get(tab.key)?.currentPage?.()) }] : []),
+                { label: t("移到新窗口"), action: () => moveToWindow(tab.key) },
               ], e.clientX, e.clientY);
             }}>
             <button className="close" title={t("关闭标签页")} onClick={(e) => { e.stopPropagation(); closeTab(tab.key); }}><XSmall /></button>
-            <span className="ellipsis">{file?.tabTitle ?? ""}</span>
+            <span className="ellipsis">{titleOf(tab.fileId, tab.note)}</span>
           </div>
         );
       })}
     </div>
   );
+}
+
+/** A tab out of this window into a window of its own (put back with its 放回标签页 button). */
+function moveToWindow(key: string, x?: number, y?: number) {
+  const tab = getState().tabs.find((t) => t.key === key);
+  if (!tab) return;
+  // The reader saves where it is first, so the new window opens at the same page.
+  readers.get(key)?.flush();
+  const page = readers.get(key)?.currentPage?.() ?? tab.page;
+  closeTab(key);
+  detachTab({ ...tab, page }, x, y);
 }
 
 function XSmall() { return <svg width="9" height="9" viewBox="0 0 9 9"><path d="M1 1l7 7M8 1L1 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" /></svg>; }

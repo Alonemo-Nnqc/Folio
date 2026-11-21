@@ -220,7 +220,7 @@ export function OptionsSection({ compact, pages }: { compact: boolean; pages?: R
         <Header>{t("翻译内容")}</Header>
         <Card>
           <ContentRows o={o} update={update} />
-          <Row title={t("术语表文件（选填）")} detail={t("CSV：原文, 译文；仅用于当前设置，优先于下面的术语表")}>
+          <Row title={t("术语表文件（选填）")}>
             <span className="secondary ellipsis" style={{ maxWidth: 160 }}>{o.glossaryFile ? o.glossaryFile.split(/[\\/]/).pop() : t("未选择")}</span>
             {o.glossaryFile && <button className="btn" onClick={() => update({ glossaryFile: null })}>{t("清除")}</button>}
             <button className="btn" onClick={async () => { const path = await call<string | null>("translation.pickGlossary"); if (path) setData({ ...data, options: { ...o, glossaryFile: path } }); }}>{t("选择…")}</button>
@@ -229,14 +229,17 @@ export function OptionsSection({ compact, pages }: { compact: boolean; pages?: R
         <Header>{t("术语")}</Header>
         <Card>
           <GlossaryRow language={o.langOut} languages={languages} />
-          <Row title={t("记住翻译时找到的术语")} detail={t("模型从论文中提取的术语会加入术语表，之后翻译其他论文时沿用；你修改过的译法不会被覆盖")}>
+          <Row title={t("记住翻译时找到的术语")}>
             <Switch on={o.rememberTerms !== false} onChange={(v) => update({ rememberTerms: v })} />
           </Row>
         </Card>
         <Header>{t("速度")}</Header>
         <Card>
-          <ParallelRow />
-          <Row title={t("同时请求数")} detail={t("遇到限流时调小")}><Select value={o.concurrency ?? 0} options={[0, 1, 2, 4, 8, 12, 16].map((n) => ({ value: n, label: n === 0 ? t("自动") : String(n) }))} onChange={(v) => update({ concurrency: v === 0 ? null : v })} /></Row>
+          <ParallelRows />
+          <Row title={t("自动翻译新添加的论文")}>
+            <AutoTranslateSwitch />
+          </Row>
+          <Row title={t("同时请求数")}><Select value={o.concurrency ?? 0} options={[0, 1, 2, 4, 8, 12, 16].map((n) => ({ value: n, label: n === 0 ? t("自动") : String(n) }))} onChange={(v) => update({ concurrency: v === 0 ? null : v })} /></Row>
           <Row title={t("重新翻译（不使用缓存）")}><Switch on={o.ignoreCache} onChange={(v) => update({ ignoreCache: v })} /></Row>
         </Card>
       </>}
@@ -249,7 +252,7 @@ function OutputRows({ o, update, compact, pages }: { o: any; update: (p: Record<
     <>
       <Row title={t("生成")}><Select value={o.outputs} options={[{ value: "both", label: t("纯译文和双语对照") }, { value: "mono", label: t("仅纯译文") }, { value: "dual", label: t("仅双语对照") }]} onChange={(v) => update({ outputs: v })} /></Row>
       {o.outputs !== "mono" && <Row title={t("双语排版")}><Select value={o.dualLayout} options={[{ value: "sideBySide", label: t("原文与译文左右并排") }, { value: "alternatingPages", label: t("原文页与译文页交替") }]} onChange={(v) => update({ dualLayout: v })} /></Row>}
-      {!compact && <Row title={t("再次翻译")} detail={t("同一服务与模型重复翻译时")}><Select value={o.duplicates} options={[{ value: "keepBoth", label: t("保留两者") }, { value: "replace", label: t("替换旧的译文") }]} onChange={(v) => update({ duplicates: v })} /></Row>}
+      {!compact && <Row title={t("再次翻译")}><Select value={o.duplicates} options={[{ value: "keepBoth", label: t("保留两者") }, { value: "replace", label: t("替换旧的译文") }]} onChange={(v) => update({ duplicates: v })} /></Row>}
       {pages && <Row title={t("页码范围（选填）")} detail={pages.problem && <span className="status-bad">{pages.problem}</span>}>
         <input className="field set-field" value={pages.value} placeholder={t("全部，例如 1-3,5")} spellCheck={false}
           onChange={(e) => pages.onChange(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
@@ -268,12 +271,12 @@ function ContentRows({ o, update }: { o: any; update: (p: Record<string, unknown
   return (
     <>
       <Row title={t("翻译表格")}><Switch on={o.translateTables} onChange={(v) => update({ translateTables: v })} /></Row>
-      <Row title={t("翻译图片中的文字")} detail={t("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")}>
+      <Row title={t("翻译图片中的文字")}>
         <Switch on={!!o.translateImageText} onChange={(v) => update({ translateImageText: v })} />
       </Row>
       {o.translateImageText && ocr?.missing && (
         <Row title={<span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><AlertTriangle size={14} color="var(--orange)" />{t("Windows 没有安装%@的文字识别", ocr.language)}</span>}
-          detail={ocrMessage || t("图片里的%@文字会用其他语言的识别读取，小字和斜体容易读错。安装后重新启动 Folio 生效。", ocr.language)}>
+          detail={ocrMessage || undefined}>
           <button className="btn" disabled={installing} onClick={async () => {
             setInstalling(true);
             const r = await call("translation.installOcr").catch((e: any) => ({ ok: false, message: e.message }));
@@ -308,7 +311,7 @@ function GlossaryRow({ language, languages }: { language: string; languages: Lan
   const load = () => { call("glossary.list", { language }).then((g) => setCount(g.terms.length)).catch(() => setCount(null)); };
   useEffect(load, [language]);
   return (
-    <Row title={t("术语表")} detail={t("专业术语的固定译法，翻译每篇论文时都会使用")}>
+    <Row title={t("术语表")}>
       {count !== null && <span className="secondary" style={{ fontVariantNumeric: "tabular-nums" }}>{t("%lld 条术语", count)}</span>}
       <button className="btn" onClick={() => openSheet((close) => <GlossarySheet language={language} languages={languages} close={close} />).then(load)}>{t("管理…")}</button>
     </Row>
@@ -383,10 +386,26 @@ export function GlossarySheet({ language: initial, languages, close }: { languag
   );
 }
 
-/** How many papers a batch translates at once. */
-function ParallelRow() {
-  const value = useStore((x) => x.settings.translationParallelJobs ?? 2);
-  return <Row title={t("同时翻译")} detail={t("批量翻译时同时进行的论文篇数")}><Select value={value} options={[1, 2, 3, 4].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelJobs", v)} /></Row>;
+/** How many papers run at once: per service (rate limits, a local agent's load) and in all (this PC's work). */
+function ParallelRows() {
+  const perService = useStore((x) => x.settings.translationParallelJobs ?? 2);
+  const total = useStore((x) => x.settings.translationParallelTotal ?? 6);
+  return (
+    <>
+      <Row title={t("同一服务同时翻译")}>
+        <Select value={perService} options={[1, 2, 3, 4].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelJobs", v)} />
+      </Row>
+      <Row title={t("同时翻译总数")}>
+        <Select value={total} options={[2, 4, 6, 8].map((n) => ({ value: n, label: t("%lld 篇", n) }))} onChange={(v) => setSetting("translationParallelTotal", v)} />
+      </Row>
+    </>
+  );
+}
+
+/** 自动翻译新添加的论文 (off by default). */
+function AutoTranslateSwitch() {
+  const on = useStore((x) => x.settings.autoTranslateImports === true);
+  return <Switch on={on} onChange={(v) => setSetting("autoTranslateImports", v)} />;
 }
 
 /** "Alt+D" for display: "Alt + D". */
@@ -457,7 +476,6 @@ export function TranslateSheet({ files, close }: { files: FileRec[]; close: () =
         <ServiceSection compact />
         <OptionsSection compact pages={{ value: pages, problem, onChange: changePages }} />
         <EstimateLine files={files} pages={pages} />
-        <Note>{t("保留版面、公式与图表，译文将作为附件加入该条目")}</Note>
       </div>
     </Sheet>
   );
