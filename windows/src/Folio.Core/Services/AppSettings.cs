@@ -156,8 +156,26 @@ public sealed class AppSettings
     /// <summary>Sidebar groups the user collapsed, at any level (SIDE-05/17).</summary>
     public List<string> SidebarCollapsedGroups { get => Get<List<string>>("sidebarCollapsedGroups", []); set => Set("sidebarCollapsedGroups", value); }
     public Dictionary<string, double> ColumnWidths { get => Get<Dictionary<string, double>>("columnWidths", []); set => Set("columnWidths", value); }
-    public List<string> VisibleColumns { get => Get<List<string>>("visibleColumns", ["title", "source", "authors", "year", "tags", "dateAdded"]); set => Set("visibleColumns", value); }
+    public List<string> VisibleColumns { get => Get<List<string>>("visibleColumns", ["title", "venue", "authors", "year", "tags", "dateAdded"]); set => Set("visibleColumns", value); }
     public bool InspectorVisible { get => Get("inspectorVisible", true); set => Set("inspectorVisible", value); }
+
+    /// <summary>The 出版物 column (1.5) shows once for lists whose columns were chosen before it existed, after the title
+    /// (as on the Mac, where a new column is visible by default); hiding it afterwards is kept.</summary>
+    public void AddVenueColumnOnce()
+    {
+        if (Get("venueColumnAdded", false)) return;
+        if (Raw("visibleColumns") != null)
+        {
+            var columns = VisibleColumns;
+            if (!columns.Contains("venue"))
+            {
+                int title = columns.IndexOf("title");
+                columns.Insert(title < 0 ? 0 : title + 1, "venue");
+                VisibleColumns = columns;
+            }
+        }
+        Set("venueColumnAdded", true);
+    }
     public bool SidebarVisible { get => Get("sidebarVisible", true); set => Set("sidebarVisible", value); }
 
     // Translation (same keys and shapes as the macOS app).
@@ -177,8 +195,12 @@ public sealed class AppSettings
     }
     public Translate.TranslationOptions TranslationOptions { get => Get("translationOptions", new Translate.TranslationOptions()); set => Set("translationOptions", value); }
     public List<Translate.Services.TranslationProfile> TranslationProfiles { get => Get<List<Translate.Services.TranslationProfile>>("translationProfiles", []); set => Set("translationProfiles", value); }
-    /// <summary>Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.</summary>
+    /// <summary>Papers of one service translated at the same time (设置 ▸ 翻译 ▸ 同一服务同时翻译); the rest wait their turn.</summary>
     public int TranslationParallelJobs { get => Get("translationParallelJobs", 2); set => Set("translationParallelJobs", value); }
+    /// <summary>Papers translated at the same time across all services (设置 ▸ 翻译 ▸ 同时翻译总数).</summary>
+    public int TranslationParallelTotal { get => Get("translationParallelTotal", 6); set => Set("translationParallelTotal", value); }
+    /// <summary>New PDFs that have no translation yet are translated as they are added (设置 ▸ 翻译 ▸ 自动翻译新论文).</summary>
+    public bool AutoTranslateImports { get => Get("autoTranslateImports", false); set => Set("autoTranslateImports", value); }
     /// <summary>The configuration in use per service: service id → profile id.</summary>
     public Dictionary<string, string> SelectedTranslationProfiles { get => Get<Dictionary<string, string>>("selectedTranslationProfiles", []); set => Set("selectedTranslationProfiles", value); }
 }

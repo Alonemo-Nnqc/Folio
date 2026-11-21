@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { call, inHost, setMock } from "./rpc";
 import { boot, useStore } from "./store";
-import { MainApp } from "./App";
+import { DetachedApp, MainApp } from "./App";
 import { SettingsApp } from "./settings/SettingsApp";
 import { Onboarding } from "./onboarding/Onboarding";
 import { MenuHost } from "./ui/menu";
@@ -13,6 +13,7 @@ function Root({ route }: { route: string }) {
   return (
     <>
       {route === "main" && <MainApp />}
+      {route === "tab" && <DetachedApp />}
       {route === "settings" && <SettingsApp />}
       {route === "onboarding" && <Onboarding />}
       {state === "normal" && route !== "onboarding" && <div className="top-resize" onPointerDown={(e) => { if (e.button === 0) { e.preventDefault(); call("window.resize", { edge: "top" }); } }} />}
@@ -24,7 +25,7 @@ function Root({ route }: { route: string }) {
 }
 
 async function start() {
-  const route = location.hash.replace("#", "") || "main";
+  const route = location.hash.replace("#", "").split("?")[0] || "main";
   if (!inHost) setMock((await import("./mock")).mockCall);
   await boot(route);
   createRoot(document.getElementById("root")!).render(<Root route={route} />);

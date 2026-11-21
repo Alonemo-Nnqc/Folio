@@ -161,7 +161,8 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     var frame = Frame(segment.Block, layout);
                     planned.Add((segment, frame, typesetter.MakePlan(text, layout.Blocks[segment.Block], segment.Formulas, frame), text));
                 }
-                // The cells of a table share one size: the size most of them fit at.
+                // The cells of a table share one size: the size the tightest of them fits at, unless one cell would
+                // shrink all the others a lot (then it alone goes smaller).
                 foreach (var table in layout.Tables)
                 {
                     var cells = Enumerable.Range(0, planned.Count).Where(k =>
@@ -169,9 +170,9 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                         var block = layout.Blocks[planned[k].Segment.Block];
                         return block.Kind == BlockKind.TableCell && table.InsetBy(-1, -2).Contains(block.Rect.Center);
                     }).ToList();
-                    if (cells.Count < 3) continue;
+                    if (cells.Count < 2) continue;
                     var scales = cells.Select(k => planned[k].Plan.Scale).OrderBy(s => s).ToList();
-                    double common = scales[scales.Count / 2];
+                    double common = Math.Max(scales[0], scales[scales.Count / 2] * 0.8);
                     foreach (var k in cells.Where(k => planned[k].Plan.Scale > common + 0.001))
                     {
                         var entry = planned[k];

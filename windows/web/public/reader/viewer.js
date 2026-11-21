@@ -1447,6 +1447,9 @@ async function buildOutline() {
   const doc = pdf;
   const outline = await doc.getOutline();
   if (doc !== pdf) return;
+  const wasEmpty = outlineEmpty;
+  outlineEmpty = !outline?.length;
+  if (preferredPane === "outline" && outlineEmpty !== wasEmpty && !document.getElementById("hits").classList.contains("active")) showPreferredPane();
   if (!outline?.length) { placeholder(pane, label("noOutline"), label("noOutlineDetail")); return; }
   const render = async (items, parent) => {
     for (const item of items) {
@@ -1628,14 +1631,27 @@ function restoreScrollTops(values) {
   for (const [id, top] of values) document.getElementById(id).scrollTop = top;
 }
 
-function showSidebarTab(pane) {
+// The sidebar's page: the one last chosen in any paper (search results are not remembered: they belong to a search).
+// A paper without an outline shows its thumbnails instead, without changing what is remembered.
+let preferredPane = "thumbnails";
+let outlineEmpty = false;
+
+function showSidebarTab(pane, chosen = false) {
   document.querySelectorAll("#sidebarTabs button, .pane").forEach((el) => el.classList.remove("active"));
   document.querySelector(`#sidebarTabs button[data-pane="${pane}"]`)?.classList.add("active");
   document.getElementById(pane)?.classList.add("active");
+  if (chosen && pane !== "hits" && pane !== preferredPane) {
+    preferredPane = pane;
+    post({ type: "sidebarTab", pane });
+  }
+}
+
+function showPreferredPane() {
+  showSidebarTab(preferredPane === "outline" && outlineEmpty ? "thumbnails" : preferredPane);
 }
 
 document.querySelectorAll("#sidebarTabs button").forEach((button) => {
-  button.onclick = () => showSidebarTab(button.dataset.pane);
+  button.onclick = () => showSidebarTab(button.dataset.pane, true);
 });
 
 // The sidebar's width follows its divider.
@@ -2568,7 +2584,8 @@ host.addEventListener("message", async (e) => {
       document.body.classList.toggle("no-sidebar", !m.visible);
       break;
     case "hold": holdFit(); break;
-    case "sidebarTab": showSidebarTab(m.value); break;
+    case "sidebarTab": showSidebarTab(m.value, true); break;
+    case "sidebarPane": preferredPane = m.value || "thumbnails"; showPreferredPane(); break;
     case "scrollTo": {
       const view = viewer.getPageView((m.page ?? 1) - 1);
       if (!view?.div) break;

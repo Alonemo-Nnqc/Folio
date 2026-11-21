@@ -1,9 +1,12 @@
-import { Fragment, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FileText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FilePen, FileText, Maximize2, NotebookText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
-import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type ItemFieldRow as ItemFieldRowData } from "../store";
-import { fileMenu, manualMatch, newTag, openReader, refreshJournalMetrics } from "../commands";
+import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type ItemFieldRow as ItemFieldRowData, type State } from "../store";
+import { MarkdownEditor } from "../notes/markdown";
+import { isMarkdownItem } from "./ItemList";
+import { MultiSelectionPanel } from "./MultiSelection";
+import { fileMenu, manualMatch, newTag, openNote, openReader, refreshJournalMetrics } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, PlainEdit, Segmented } from "../ui/controls";
 import { formatDateTime } from "../ui/util";
@@ -115,7 +118,7 @@ function FilesSection({ item }: { item: Item }) {
         <button key={file.id} className={`file-row${file.id === item.defaultFileId && files.length > 1 ? " default" : ""}`} title={file.fileName}
           onClick={() => call("file.open", { id: file.id })}
           onContextMenu={(e) => { e.preventDefault(); openMenu(fileMenu(file), e.clientX, e.clientY); }}>
-          <FileText size={14} className="secondary" style={{ flex: "none" }} />
+          {file.isMarkdown ? <FilePen size={14} className="secondary" style={{ flex: "none" }} /> : <FileText size={14} className="secondary" style={{ flex: "none" }} />}
           <span className="ellipsis">{file.title}</span>
           {file.id === item.defaultFileId && <span className="default-badge">{t("默认")}</span>}
         </button>
@@ -239,66 +242,110 @@ function AnnotationsPage({ item }: { item: Item }) {
   );
 }
 
-/** An item's Markdown note; saved a moment after typing stops. */
-export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null; title?: string; inputRef?: React.MutableRefObject<HTMLTextAreaElement | null> }) {
-  const [text, setText] = useState("");
-  const saved = useRef("");
-  const shown = useRef<string | null>(null);
-  const timer = useRef(0);
-  const box = useRef<HTMLTextAreaElement | null>(null);
-  const version = useStore((s) => s.libraryVersion);
-
-  const flush = () => {
-    clearTimeout(timer.current);
-    const value = box.current?.value;
-    if (shown.current && value !== undefined && value !== saved.current) {
-      saved.current = value;
-      call("note.set", { item: shown.current, text: value });
-    }
+/** An item's documents where its note is edited (the inspector's 笔记, the reader's notes panel): the note, or one of
+ *  the item's Markdown attachments, chosen from the title's menu (which can also add one), and a button to open the one
+ *  shown in a tab. The note and the attachments are written in the same editor, here or in a tab. */
+export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null; title?: string; inputRef?: React.MutableRefObject<{ focus: () => void } | null> }) {
+  const [chosen, setChosen] = useState("");
+  useStore((s) => (itemId ? s.filesByItem[itemId] : undefined));
+  useStore((s) => s.files);
+  const documents = itemId ? filesOf(getState(), itemId).filter((f) => f.isMarkdown) : [];
+  const current = documents.find((f) => f.id === chosen);
+  useEffect(() => { setChosen(""); }, [itemId]);
+  const noteSource = useMemo(() => ({
+    key: itemId ? `note:${itemId}` : null,
+    load: () => call<string>("note.get", { item: itemId }),
+    save: (text: string) => { call("note.set", { item: itemId, text }); },
+  }), [itemId]);
+  const fileSource = useMemo(() => (current ? markdownSource(current.id) : null), [current?.id]);
+  const name = (f: FileRec) => f.fileName.replace(/\.(md|markdown)$/i, "");
+  const menu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!itemId) return;
+    openMenuAt(e.currentTarget, [
+      { label: t("笔记"), icon: <NotebookText size={14} />, checked: !current, action: () => setChosen("") },
+      ...documents.map((f): MenuEntry => ({ label: name(f), icon: <FilePen size={14} />, checked: current?.id === f.id, action: () => setChosen(f.id) })),
+      sep,
+      { label: t("新建 Markdown 附件"), icon: <Plus size={14} />, action: async () => {
+        const id = await call<string>("markdown.attach", { item: itemId, title: t("未命名文档") });
+        if (id) setChosen(id);
+      } },
+    ]);
   };
-
-  useEffect(() => {
-    flush();
-    shown.current = itemId;
-    if (!itemId) { setText(""); saved.current = ""; return; }
-    let live = true;
-    call<string>("note.get", { item: itemId }).then((note) => { if (live) { saved.current = note; setText(note); } });
-    return () => { live = false; };
-  }, [itemId]);
-
-  // Another editor (a reader tab, an agent) changed the note; what is being typed here is not overwritten.
-  useEffect(() => {
-    if (!itemId || document.activeElement === box.current || box.current?.value !== saved.current) return;
-    call<string>("note.get", { item: itemId }).then((note) => {
-      if (note !== saved.current && document.activeElement !== box.current) { saved.current = note; setText(note); }
-    });
-  }, [version]);
-
-  useEffect(() => flush, []);
-
   return (
     <div className="note-area">
-      {title !== undefined && <><div className="note-head">{t("笔记")}</div><div className="note-sub">{title}</div></>}
-      <textarea ref={(el) => { box.current = el; if (inputRef) inputRef.current = el; }} disabled={!itemId} value={text} spellCheck={false} placeholder={t("记下想法、摘录与待办… 支持 Markdown")}
-        onChange={(e) => { setText(e.target.value); clearTimeout(timer.current); timer.current = window.setTimeout(flush, 600); }}
-        onBlur={flush} onKeyDown={(e) => e.stopPropagation()} />
+      <div className="note-header">
+        <button className="note-switch" disabled={!itemId} onClick={menu}>
+          <span className="ellipsis">{current ? name(current) : t("笔记")}</span><ChevronDown size={11} />
+        </button>
+        <span style={{ flex: 1 }} />
+        {itemId && <button className="icon-button" title={t("在标签页中打开")} onClick={() => (current ? openReader(current.id) : openNote(itemId))}><Maximize2 size={13} /></button>}
+      </div>
+      {title !== undefined && title && <div className="note-sub">{title}</div>}
+      {current && fileSource
+        ? <MarkdownEditor key={current.id} source={fileSource} className="note-text" placeholder="" />
+        : <MarkdownEditor source={noteSource} inputRef={inputRef} className="note-text" placeholder="" />}
     </div>
   );
+}
+
+/** A Markdown file in the inspector (MD-01): its name, a button to open it in a tab, and the editor. */
+function MarkdownFileInspector({ file }: { file: FileRec }) {
+  const focus = useStore((s) => s.markdownFocus === file.id);
+  const source = useMemo(() => markdownSource(file.id), [file.id]);
+  useEffect(() => { if (focus) setState({ markdownFocus: null }); }, [focus]);
+  return (
+    <div className="md-inspector">
+      <div className="md-file-head">
+        <FilePen size={14} className="secondary" style={{ flex: "none" }} />
+        <span className="ellipsis" title={file.fileName}>{file.fileName}</span>
+        <span style={{ flex: 1 }} />
+        <button className="icon-button" title={t("在标签页中打开")} onClick={() => openReader(file.id)}><Maximize2 size={13} /></button>
+      </div>
+      <MarkdownEditor source={source} focus={focus} className="md-text" placeholder="" />
+    </div>
+  );
+}
+
+/** Where a Markdown file's text comes from and goes to. */
+export function markdownSource(fileId: string) {
+  return {
+    key: `file:${fileId}`,
+    load: () => call<string>("markdown.get", { file: fileId }),
+    save: (text: string) => { call("markdown.set", { file: fileId, text }); },
+  };
+}
+
+/** The Markdown file the inspector shows: a selected .md file, or a document item's own file. */
+function inspectedMarkdownFile(s: State): FileRec | undefined {
+  if (s.fileSelection) {
+    const file = s.files.get(s.fileSelection);
+    return file?.isMarkdown ? file : undefined;
+  }
+  if (s.selection.length !== 1) return undefined;
+  const item = s.items.get(s.selection[0]);
+  return item && isMarkdownItem(item, s) ? s.files.get(item.defaultFileId!) : undefined;
 }
 
 export function Inspector() {
   const selection = useStore((s) => s.selection);
   const page = useStore((s) => s.inspectorPage);
   const item = useStore((s) => (s.selection.length === 1 ? s.items.get(s.selection[0]) : undefined));
+  const multi = useStore((s) => s.multiSelect);
+  const fileSelection = useStore((s) => s.fileSelection);
+  const markdown = useStore(inspectedMarkdownFile);
   const scroll = useRef<HTMLDivElement>(null);
   useEffect(() => { scroll.current?.scrollTo(0, 0); }, [item?.id, page]);
+  // Several papers (or 多选): what can be done to all of them at once.
+  if ((multi || selection.length > 1) && !fileSelection) return <MultiSelectionPanel />;
   return (
     <>
       <div className="inspector-switch">
         <Segmented value={page} onChange={(v) => setState({ inspectorPage: v })} options={[{ value: "info", label: t("信息") }, { value: "annotations", label: t("标注") }, { value: "notes", label: t("笔记") }]} />
       </div>
-      {page === "notes"
-        ? <NoteEditor itemId={item?.id ?? null} title={item?.title ?? ""} />
+      {page === "info" && markdown
+        ? <MarkdownFileInspector key={markdown.id} file={markdown} />
+        : page === "notes"
+        ? <NoteEditor itemId={item?.id ?? null} />
         : (
           <div className="inspector-scroll" ref={scroll}>
             {!item && <div className="ins-empty">{selection.length > 1 ? t("已选择 %lld 项", selection.length) : t("未选择文献")}</div>}

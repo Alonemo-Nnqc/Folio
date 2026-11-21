@@ -22,6 +22,7 @@ public static partial class Api
         defaultFileId = i.DefaultFileId, metadataState = i.MetadataState.ToString(), dateAdded = Ms(i.DateAdded), dateModified = Ms(i.DateModified), trashed = i.IsTrashed,
         retrieving = M.Importer.IsRetrieving(i.Id),
         hasJournal = JournalMetrics.JournalName(i) != null, journalMetrics = JournalMetricsDto(i, s),
+        venue = VenueDto(i, s),
         // The inspector's fields for this type, named for it, then the rest folded away (#19).
         fields = FieldsDto(i, true), moreFields = FieldsDto(i, false),
     };
@@ -36,7 +37,7 @@ public static partial class Api
 
     static object FileDto(FileRecord f, Item? item, IReadOnlyList<FileRecord> siblings) => new
     {
-        id = f.Id, itemId = f.ItemId, fileName = f.FileName, path = f.RelativePath, isPdf = f.IsPdf, translationOf = f.TranslationOf, translationKind = f.TranslationKind?.ToString().ToLowerInvariant(), translatedBy = f.TranslatedBy,
+        id = f.Id, itemId = f.ItemId, fileName = f.FileName, path = f.RelativePath, isPdf = f.IsPdf, isMarkdown = f.IsMarkdown, translationOf = f.TranslationOf, translationKind = f.TranslationKind?.ToString().ToLowerInvariant(), translatedBy = f.TranslatedBy,
         sha = f.Sha256, dateAdded = Ms(f.DateAdded),
         title = FileLabel.Title(f, siblings, item?.DefaultFileId),
         tabTitle = FileLabel.TabTitle(f, item, siblings),
@@ -273,6 +274,38 @@ public static partial class Api
         // Notes and annotations.
         Bridge.On("note.get", a => M.Library.Note(a.Str("item")));
         Bridge.On("note.set", a => { M.Perform(() => M.Library.SetNote(a.Str("text"), a.Str("item"))); return null; });
+        // Tabs dragged out of the main window, and put back.
+        Bridge.On("window.detach", a =>
+        {
+            var query = string.Join("&", new[] { ("file", a.OptStr("file")), ("note", a.OptStr("note")), ("page", a.OptInt("page")?.ToString()) }
+                .Where(p => !string.IsNullOrEmpty(p.Item2)).Select(p => $"{p.Item1}={Uri.EscapeDataString(p.Item2!)}"));
+            App.OpenTabWindow(query, a.OptDouble("x"), a.OptDouble("y"));
+            return null;
+        });
+        // A tab of a dragged-out window back into the main window (the window closes itself with its last tab).
+        Bridge.On("window.returnTab", a =>
+        {
+            if (a.OptStr("note") is { } note) App.Main?.Bridge.Emit("note.open", note);
+            else if (a.OptStr("file") is { } file) App.Main?.Bridge.Emit("reader.open", new { fileId = file, page = a.OptInt("page") });
+            App.BringToFront();
+            return null;
+        });
+        // Markdown documents (MD-01): an item of their own or a paper's attachment, edited in the inspector or a tab.
+        Bridge.On("markdown.create", a =>
+        {
+            (string ItemId, string FileId)? created = null;
+            M.Perform(() => created = M.Library.CreateMarkdownDocument(a.OptStr("title") ?? Loc.S("未命名文档"), a.OptStr("group")));
+            return created is { } c ? new { itemId = c.ItemId, fileId = c.FileId } : null;
+        });
+        Bridge.On("markdown.attach", a =>
+        {
+            string? fileId = null;
+            M.Perform(() => fileId = M.Library.CreateMarkdownAttachment(a.OptStr("title") ?? Loc.S("笔记"), a.Str("item")));
+            return fileId;
+        });
+        Bridge.On("markdown.get", a => M.Library.Text(a.Str("file")));
+        Bridge.On("markdown.rename", a => { M.Perform(() => M.Library.RenameMarkdownFile(a.Str("file"), a.Str("name"))); return null; });
+        Bridge.On("markdown.set", a => { M.Perform(() => M.Library.WriteText(a.Str("text"), a.Str("file"))); return null; });
         Bridge.OnAsync("note.export", async a =>
         {
             if (!M.Snapshot.Items.TryGetValue(a.Str("item"), out var item)) return;

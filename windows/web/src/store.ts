@@ -16,17 +16,20 @@ export interface Item {
   hasJournal: boolean;
   /** Its journal's ranks: null until looked up; no badges when easyScholar does not list it. */
   journalMetrics: JournalMetrics | null;
+  /** 出版物: the venue's short name and its ranks, as capsules; null when the item has no venue. */
+  venue: VenueInfo | null;
   /** The inspector's fields for its type, named for it, and the others (#19). */
   fields: ItemFieldRow[];
   moreFields: ItemFieldRow[];
 }
+export interface VenueInfo { badges: { kind: string; text: string; emphasized?: boolean }[]; tip: string }
 export interface ItemFieldRow { key: string; label: string; value?: string | null }
 export interface JournalBadge { kind: string; text: string; detail: string; emphasized: boolean }
 export interface JournalMetrics { badges: JournalBadge[]; rank?: string; impactFactor?: string; summary: string }
 /** 期刊指标's queue and key, for the inspector's hints and 设置. */
 export interface JournalMetricsState { key: string; hasKey: boolean; autoFetch: boolean; pending: number; status?: string; attention: boolean; keyPage: string }
 export interface FileRec {
-  id: string; itemId: string; fileName: string; path: string; isPdf: boolean; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
+  id: string; itemId: string; fileName: string; path: string; isPdf: boolean; isMarkdown?: boolean; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
   sha: string; dateAdded: number; title: string; tabTitle: string; tabTip: string;
 }
 export interface Group { id: string; parentId?: string; name: string; color?: string }
@@ -34,7 +37,8 @@ export interface Tag { id: string; name: string; color: string }
 export interface Job { fileId: string; fraction?: number; stage: string; preview?: string }
 export interface Toast { id: number; message: string; icon: string; actionTitle?: string }
 
-export interface ReaderTabState { key: string; fileId: string; page?: number }
+/** A tab beside the library: a paper (or a Markdown file) by fileId, or an item's note (note: the item id, fileId ""). */
+export interface ReaderTabState { key: string; fileId: string; page?: number; note?: string }
 
 export interface State {
   items: Map<string, Item>;
@@ -74,6 +78,10 @@ export interface State {
   inspectorPage: "info" | "annotations" | "notes";
   /** 快速预览 of the selection is open. */
   quickLook: boolean;
+  /** 多选 mode (the toolbar's button): a click adds or removes an item, rows show check circles, the inspector the batch panel. */
+  multiSelect: boolean;
+  /** A Markdown file just created: its editor takes the keyboard when it appears. */
+  markdownFocus: string | null;
   captionWidth: number;
   readerNotes: Record<string, boolean>; // reader tabs with their notes panel open
   windowState: string;
@@ -96,7 +104,7 @@ export interface Statics {
 let state: State = {
   items: new Map(), files: new Map(), filesByItem: {}, groups: new Map(), topGroups: [], childGroups: {}, tags: [], itemTags: {}, itemGroups: {}, noted: new Set(), counts: {}, root: "", libraryVersion: 0,
   rows: [], scope: "all", searchText: "", searchWholeLibrary: false, includeFulltext: false, sortAscending: true,
-  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false,
+  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false, multiSelect: false, markdownFocus: null,
   captionWidth: 138, readerNotes: {}, windowState: "normal", active: true, dark: false,
   statics: { version: "", channel: "", translucency: false, annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
 };
@@ -134,7 +142,7 @@ function applyRows(r: any) {
 }
 
 function closeMissingTabs() {
-  const tabs = state.tabs.filter((t) => state.files.has(t.fileId));
+  const tabs = state.tabs.filter((t) => (t.note ? state.items.has(t.note) : state.files.has(t.fileId)));
   if (tabs.length !== state.tabs.length) {
     setState({ tabs, activeTab: tabs.some((t) => t.key === state.activeTab) ? state.activeTab : "library" });
     rememberTabs();
@@ -142,7 +150,9 @@ function closeMissingTabs() {
 }
 
 export function rememberTabs() {
-  call("settings.set", { key: "openReaderTabs", value: state.tabs.map((t) => t.fileId) });
+  // A window of a dragged-out tab keeps the main window's list as it is.
+  if (location.hash.startsWith("#tab")) return;
+  call("settings.set", { key: "openReaderTabs", value: state.tabs.filter((t) => !t.note).map((t) => t.fileId) });
 }
 
 function resolveDark(settings: Record<string, any>) {

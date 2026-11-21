@@ -134,6 +134,8 @@ public static partial class Api
             ["selectionTranslationFallback"] = s.SelectionTranslationFallback,
             ["readerToolbar"] = s.ReaderToolbar,
             ["translationParallelJobs"] = s.TranslationParallelJobs,
+            ["translationParallelTotal"] = s.TranslationParallelTotal,
+            ["autoTranslateImports"] = s.AutoTranslateImports,
             ["onboardingDone"] = s.OnboardingDone,
             ["openReaderTabs"] = s.OpenReaderTabs,
             ["sidebarCollapsedGroups"] = s.SidebarCollapsedGroups,
@@ -147,19 +149,20 @@ public static partial class Api
             ["sidebarVisible"] = s.SidebarVisible,
             ["settingsPane"] = s.Raw("settingsPane")?.ToString() ?? "general",
             ["readerSidebarWidth"] = s.Raw("readerSidebarWidth")?.GetValue<double>() ?? 220.0,
+            ["readerSidebarTab"] = s.Raw("readerSidebarTab")?.ToString() ?? "thumbnails",
         };
     }
 
     static void WireEvents()
     {
-        M.SnapshotChanged += () => App.Main?.Bridge.Emit("library", LibraryState(full: false));
+        M.SnapshotChanged += () => App.EmitToDocuments("library", LibraryState(full: false));
         M.RowsChanged += () => App.Main?.Bridge.Emit("rows", RowsState());
         M.RevealRequested += id => App.Main?.Bridge.Emit("reveal", id);
         M.OpenInReaderRequested += (file, page) => App.Main?.Bridge.Emit("reader.open", new { fileId = file.Id, page });
         M.LibraryWillChange += () => App.Main?.Bridge.Emit("library.willChange", null);
         M.Updater.StateChanged += () => App.Ui.TryEnqueue(() => App.Main?.Bridge.Emit("update", M.Updater.State));
-        M.Translations.JobsChanged += () => App.Main?.Bridge.Emit("translation.jobs", JobsState());
-        M.Translations.ProgressChanged += _ => App.Main?.Bridge.Emit("translation.jobs", JobsState());
+        M.Translations.JobsChanged += () => App.EmitToDocuments("translation.jobs", JobsState());
+        M.Translations.ProgressChanged += _ => App.EmitToDocuments("translation.jobs", JobsState());
         M.Connector.StateChanged += () => App.Broadcast("connector", ConnectorState());
         M.Settings.Changed += key => App.Ui.TryEnqueue(() =>
         {
@@ -168,7 +171,7 @@ public static partial class Api
                 if (M.Settings.BrowserConnectorEnabled) M.Connector.Start(); else M.Connector.Stop();
             }
             if (key == "includeSubgroupItems") M.Refresh();
-            if (key == "translationParallelJobs") M.Translations.ParallelChanged();
+            if (key is "translationParallelJobs" or "translationParallelTotal") M.Translations.ParallelChanged();
             App.Broadcast("settings", AllSettings());
         });
     }

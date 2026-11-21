@@ -11,6 +11,7 @@ import { askText, openSheet, Sheet } from "../ui/sheet";
 import { LEAD_ROOM, PanelToggle, SidebarButtons, Splitter, TabBar, TOGGLE_ROOM } from "../library/LibraryPage";
 import { isEntering, useMoving, usePanelPhase } from "../ui/slide";
 import { NoteEditor } from "../library/Inspector";
+import { ReturnToTabsButton } from "../ui/detach";
 import { TranslationProgress } from "../library/ItemList";
 import { TranslateBadge, TranslatePopover, type Anchor, type Pinned } from "./SelectionTranslate";
 import { NoteCard, pickColor, TextBoxField, type CardColor } from "./AnnotationEditors";
@@ -95,6 +96,8 @@ export interface ReaderApi {
   checkForChanges(): void;
   focusPage(): void;
   flush(): void;
+  /** The page shown (1-based), once known. */
+  currentPage?(): number | undefined;
 }
 export const readers = new Map<string, ReaderApi>();
 
@@ -180,11 +183,12 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   const [notesVisible, setNotesVisible] = useState(false);
   const [notesWidth, setNotesWidth] = useState(300);
   const [pageLabel, setPageLabel] = useState("");
+  const shownPage = useRef<number | undefined>(undefined);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [findCount, setFindCount] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const noteBox = useRef<HTMLTextAreaElement | null>(null);
+  const noteBox = useRef<{ focus: () => void } | null>(null);
   const selection = useRef<any>(null);
   const pageCount = useRef(0);
   const [editor, setEditorState] = useState<EditorState | null>(null);
@@ -608,6 +612,11 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
     switch (m.type) {
       case "ready":
         pane.onReady();
+        // The sidebar opens on the page last chosen (缩略图、目录或批注).
+        if (pane === main) pane.send({ cmd: "sidebarPane", value: getState().settings.readerSidebarTab ?? "thumbnails" });
+        break;
+      case "sidebarTab":
+        if (pane === main && m.pane !== "hits") setSetting("readerSidebarTab", m.pane);
         break;
       case "error":
         if (m.fatal) call("toast.show", { message: m.name === "PasswordException" ? t("这个 PDF 需要密码") : t("无法打开这个 PDF"), icon: "warning" });
@@ -618,7 +627,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         break;
       }
       case "loaded": if (pane === main) pageCount.current = m.pages; break;
-      case "page": if (pane === main && m.pages > 0) setPageLabel(t("第 %lld / %lld 页", m.page, m.pages)); break;
+      case "page": if (pane === main && m.pages > 0) { shownPage.current = m.page; setPageLabel(t("第 %lld / %lld 页", m.page, m.pages)); } break;
       case "position":
         if (pane === main && pane.fileId) call("reader.savePosition", { file: pane.fileId, page: m.page, left: m.left ?? 0, top: m.top ?? 0, scale: m.scale ?? 1, autoScale: m.autoScale ?? true });
         break;
@@ -860,7 +869,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   const toggleNotes = () => setNotesVisible((v) => !v);
   useEffect(() => {
-    readers.set(tabKey, { handleKey: (e) => handleKeyRef.current(e), toggleSidebar: () => toggleSidebarRef.current(), toggleNotes, checkForChanges: () => checkRef.current(), focusPage: () => main.frame?.contentWindow?.focus(), flush: () => main.send({ cmd: "flushPosition" }) });
+    readers.set(tabKey, { handleKey: (e) => handleKeyRef.current(e), toggleSidebar: () => toggleSidebarRef.current(), toggleNotes, checkForChanges: () => checkRef.current(), focusPage: () => main.frame?.contentWindow?.focus(), flush: () => main.send({ cmd: "flushPosition" }), currentPage: () => shownPage.current });
     return () => { readers.delete(tabKey); };
   }, [tabKey]);
   const customizeToolbarRef = useRef(() => {});
@@ -933,6 +942,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
       <div className="reader-top" style={{ left, right }}>
         <div className="reader-head drag" onContextMenu={(e) => { e.preventDefault(); openMenu([{ label: t("自定义工具栏…"), action: () => customizeToolbarRef.current() }], e.clientX, e.clientY); }} style={{ paddingLeft: sidebarVisible ? undefined : LEAD_ROOM + 2, paddingRight: notesVisible ? undefined : captionWidth + TOGGLE_ROOM + 2 }}>
+          <ReturnToTabsButton tabKey={tabKey} page={() => shownPage.current} />
           <div className="reader-title">
             <div className="name ellipsis" title={title}>{title}</div>
             <div className="page tabular ellipsis">{pageLabel}</div>

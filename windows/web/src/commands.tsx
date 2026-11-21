@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { AppWindow, BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, FilePen, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
 import { FullTextTranslateIcon } from "./ui/icons";
 import { call } from "./rpc";
 import { t } from "./i18n";
-import { defaultFile, filesOf, getState, groupsForMenus, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
+import { defaultFile, filesOf, getState, groupsForMenus, rememberTabs, scopeGroupId, setSetting, setState, type FileRec, type Group, type Item, type Tag } from "./store";
 import { sep, type MenuEntry } from "./ui/menu";
 import { askText, confirm, dialog, openSheet, Sheet } from "./ui/sheet";
 import { Field } from "./ui/controls";
@@ -14,6 +14,9 @@ const icon = (C: any) => <C size={14} />;
 
 // MARK: Opening
 
+/** A window of a dragged-out tab: its tabs are its own (it has no library). */
+const inTabWindow = () => location.hash.startsWith("#tab");
+
 export function openReader(fileId: string, page?: number) {
   const s = getState();
   const existing = s.tabs.find((tab) => tab.fileId === fileId);
@@ -23,7 +26,15 @@ export function openReader(fileId: string, page?: number) {
   }
   const tabs = [...s.tabs, { key: fileId, fileId, page }];
   setState({ tabs, activeTab: fileId });
-  call("settings.set", { key: "openReaderTabs", value: tabs.map((tab) => tab.fileId) });
+  rememberTabs();
+}
+
+/** An item's note as a document tab (the note is listed under the item like its files). */
+export function openNote(itemId: string) {
+  const s = getState();
+  const key = `note:${itemId}`;
+  if (s.tabs.some((tab) => tab.key === key)) { setState({ activeTab: key }); return; }
+  setState({ tabs: [...s.tabs, { key, fileId: "", note: itemId }], activeTab: key });
 }
 
 export function closeTab(key: string) {
@@ -33,12 +44,14 @@ export function closeTab(key: string) {
   const tabs = s.tabs.filter((tab) => tab.key !== key);
   const neighbour = tabs[Math.min(index, tabs.length - 1)];
   setState({ tabs, activeTab: s.activeTab === key ? neighbour?.key ?? "library" : s.activeTab });
-  call("settings.set", { key: "openReaderTabs", value: tabs.map((tab) => tab.fileId) });
+  rememberTabs();
+  // A dragged-out window closes with its last tab.
+  if (inTabWindow() && tabs.length === 0) call("window.close");
 }
 
 export function selectNextTab(back: boolean) {
   const s = getState();
-  const keys = ["library", ...s.tabs.map((tab) => tab.key)];
+  const keys = [...(inTabWindow() ? [] : ["library"]), ...s.tabs.map((tab) => tab.key)];
   const i = keys.indexOf(s.activeTab);
   setState({ activeTab: keys[(i + (back ? -1 : 1) + keys.length) % keys.length] });
 }
@@ -189,10 +202,42 @@ export function translate(ids: string[], file?: FileRec) {
 
 // MARK: Menus
 
+// MARK: Markdown documents (MD-01)
+
+/** A new Markdown document as an item of its own, in the group being shown: selected in the list and opened in a tab to
+ *  write in (the inspector stays as it is). */
+export async function newMarkdownDocument() {
+  const s = getState();
+  const r = await call<{ itemId: string; fileId: string }>("markdown.create", { group: scopeGroupId(s.scope), title: t("未命名文档") });
+  if (!r) return;
+  if (getState().scope === "trash") await call("library.scope", { scope: "all" });
+  setState({ selection: [r.itemId], fileSelection: null, multiSelect: false });
+  call("library.select", { ids: [r.itemId] });
+  openWhenListed(r.fileId);
+}
+
+/** A new Markdown document attached to a paper, listed under it and opened in a tab. */
+export async function newMarkdownAttachment(item: Item) {
+  // Named like any new document, not after the paper (it is listed under the paper anyway).
+  const fileId = await call<string>("markdown.attach", { item: item.id, title: t("未命名文档") });
+  if (!fileId) return;
+  const expanded = new Set(getState().expanded);
+  expanded.add(item.id);
+  setState({ expanded });
+  openWhenListed(fileId);
+}
+
+/** Opens a new file's tab once the library the page mirrors has it (a moment after it is created). */
+function openWhenListed(fileId: string, tries = 40) {
+  if (getState().files.has(fileId)) { openReader(fileId); return; }
+  if (tries > 0) setTimeout(() => openWhenListed(fileId, tries - 1), 50);
+}
+
 export function addMenu(): MenuEntry[] {
   return [
     { label: t("添加文件…"), icon: icon(Plus), key: "Ctrl+O", action: addFiles },
     { label: t("通过标识符添加…"), icon: icon(Link), key: "Ctrl+Shift+O", action: addByIdentifier },
+    { label: t("新建 Markdown 文档"), icon: icon(FilePen), key: "Ctrl+Alt+M", action: newMarkdownDocument },
     sep,
     { label: t("新建分组"), icon: icon(Folder), key: "Ctrl+Shift+N", action: () => newGroup() },
     { label: t("新建标签…"), icon: icon(TagIcon), action: () => newTag() },
@@ -295,6 +340,8 @@ export function itemMenu(ids: string[]): MenuEntry[] {
   entries.push(sep);
   if (single) {
     entries.push({ label: t("编辑笔记"), icon: icon(StickyNote), key: "Ctrl+Alt+N", action: showNotes });
+    // The note as a document of its own, written or still empty (listed under the item once written).
+    entries.push({ label: t("在标签页中打开笔记"), icon: icon(AppWindow), action: () => openNote(single.id) });
     if (s.noted.has(single.id)) entries.push({ label: t("导出笔记…"), icon: icon(Share), action: () => call("note.export", { item: single.id }) });
     if (singleFile?.isPdf) {
       entries.push(translateEntry(single.id, () => translate([single.id])));
@@ -303,14 +350,18 @@ export function itemMenu(ids: string[]): MenuEntry[] {
     entries.push(sep);
     if (single.kind === "regular") {
       entries.push({ label: t("添加文件…"), icon: icon(Paperclip), action: () => call("files.attachPick", { item: single.id }) });
+      entries.push({ label: t("新建 Markdown 附件"), icon: icon(FilePen), action: () => newMarkdownAttachment(single) });
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), key: "Ctrl+Alt+R", action: () => call("items.retrieve", { ids }) });
       if (single.hasJournal) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
     } else {
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: single.metadataState === "Pending" || !filesOf(s, single.id)[0]?.isPdf, action: () => call("items.retrieve", { ids }) });
       entries.push({ label: t("手动匹配…"), icon: icon(Search), action: () => manualMatch(single) });
     }
-  } else if (selected.some((i) => defaultFile(s, i)?.isPdf)) {
-    entries.push({ label: t("翻译全文…"), icon: icon(FullTextTranslateIcon), action: () => translate(ids) });
+  } else {
+    // Several items: the batch versions of the per-item commands above.
+    const pdfs = selected.filter((i) => defaultFile(s, i)?.isPdf);
+    if (pdfs.length > 0) entries.push({ label: t("翻译全文（%lld 篇）…", pdfs.length), icon: icon(FullTextTranslateIcon), disabled: pdfs.every((i) => s.jobs[i.id]), action: () => translate(ids) });
+    entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: selected.every((i) => i.metadataState === "Pending"), action: () => call("items.retrieve", { ids }) });
   }
   if (!single && selected.some((i) => i.hasJournal)) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
   if (selected.some((i) => defaultFile(s, i))) entries.push({ label: t("在资源管理器中显示"), icon: icon(Folder), key: "Ctrl+Shift+R", action: () => revealFirstFile(ids) });

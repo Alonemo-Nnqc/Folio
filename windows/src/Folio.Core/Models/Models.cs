@@ -226,6 +226,8 @@ public sealed class FileRecord
 
     public string FileName => RelativePath.Split('/').Last();
     public bool IsPdf => Path.GetExtension(RelativePath).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+    /// <summary>A Markdown document Folio edits itself (MD-01).</summary>
+    public bool IsMarkdown => Path.GetExtension(RelativePath).ToLowerInvariant() is ".md" or ".markdown";
     public FileRecord Clone() => (FileRecord)MemberwiseClone();
 }
 
@@ -309,6 +311,8 @@ public enum SortColumn
     Volume, Issue, Pages, ReadStatus, Rating, FileCount, CitationKey, Tags,
     /// <summary>期刊分区 and 影响因子 (META-30).</summary>
     JournalRank, ImpactFactor,
+    /// <summary>出版物: the venue's short name (CVPR, TPAMI).</summary>
+    Venue,
 }
 
 public static class SortColumns

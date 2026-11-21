@@ -60,13 +60,25 @@ public sealed class Updater
         return http;
     }
 
+    DateTime _lastCheck = DateTime.MinValue;
+
+    /// <summary>While Folio stays open (for days, often), updates are looked for as it is used, not only at launch: every
+    /// hour, and when coming back to Folio once half an hour has passed since the last look (as the Mac app does).</summary>
     public void StartAutomaticChecks()
     {
         if (!_model.Settings.AutoCheckUpdates || !IsInstalled) return;
-        Check(userInitiated: false).Fire();
-        _timer = new System.Windows.Forms.Timer { Interval = 24 * 60 * 60 * 1000 };
-        _timer.Tick += (_, _) => { if (_model.Settings.AutoCheckUpdates && _installer == null && !_downloading) Check(userInitiated: false).Fire(); };
+        CheckInBackgroundIfDue(TimeSpan.Zero);
+        _timer = new System.Windows.Forms.Timer { Interval = 60 * 60 * 1000 };
+        _timer.Tick += (_, _) => CheckInBackgroundIfDue(TimeSpan.FromMinutes(55));
         _timer.Start();
+    }
+
+    /// <summary>A quiet check (the result shows in the sidebar, never as a dialog) when the last one is old enough.</summary>
+    public void CheckInBackgroundIfDue(TimeSpan minimumInterval)
+    {
+        if (!_model.Settings.AutoCheckUpdates || !IsInstalled || _installer != null || _downloading) return;
+        if (DateTime.UtcNow - _lastCheck < minimumInterval) return;
+        Check(userInitiated: false).Fire();
     }
 
     public sealed record Release(string Version, Version Parsed, string Url, string? Sha256);
@@ -107,6 +119,7 @@ public sealed class Updater
             if (userInitiated) await OfferRestart();
             return;
         }
+        _lastCheck = DateTime.UtcNow;
         try
         {
             var latest = await LatestRelease(_model.Settings.UpdatePrereleases);

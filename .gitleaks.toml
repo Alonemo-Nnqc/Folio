@@ -2,6 +2,7 @@
 [extend]
 useDefault = true
 
-[[allowlists]]
+# `[allowlist]`, not `[[allowlists]]`: CI's gitleaks (8.24) ignores the newer table, and newer versions still read this one.
+[allowlist]
 description = "Chrome extension public key: pins the unpacked extension's ID, not a secret"
 paths = ['''BrowserExtension/chromium/manifest\.json''']

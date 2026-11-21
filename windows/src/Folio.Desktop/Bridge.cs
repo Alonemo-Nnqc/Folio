@@ -20,6 +20,7 @@ public sealed class Args(JsonElement? value, IReadOnlyList<string>? droppedPaths
     public string? OptStr(string name) => Get(name).ValueKind == JsonValueKind.String ? Get(name).GetString() : null;
     public int Int(string name) => Get(name).GetInt32();
     public int? OptInt(string name) => Get(name).ValueKind == JsonValueKind.Number ? Get(name).GetInt32() : null;
+    public double? OptDouble(string name) => Get(name).ValueKind == JsonValueKind.Number ? Get(name).GetDouble() : null;
     public double Num(string name) => Get(name).GetDouble();
     public bool Bool(string name, bool fallback = false) => Get(name).ValueKind switch { JsonValueKind.True => true, JsonValueKind.False => false, _ => fallback };
     public List<string> Strs(string name) => Get(name).ValueKind == JsonValueKind.Array ? Get(name).EnumerateArray().Select(e => e.GetString()!).ToList() : [];
