@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-20
+
 ### 新增
 - Markdown 文档：文件 ▸ 新建 Markdown 文档（⌃⌘N，工具栏“添加”菜单里也有）在当前分组新建一篇 `.md` 文档，条目右键 ▸ 新建 Markdown 附件 给论文挂一篇笔记文件。文档在右侧检查器里直接编辑和显示，也可以在标签页中打开；标题跟随第一个标题行，内容可全文搜索，文件存在文献库的 Files 文件夹里，随时可用其他编辑器打开。
 - 条目列表新增“出版物”列：期刊、会议的简称（CVPR、TPAMI、NeurIPS……）以徽标显示，后面跟 CCF 等级、中科院分区、JCR 分区和影响因子；常见会议和期刊的 CCF 等级内置识别，其余指标来自 easyScholar。
@@ -230,7 +232,8 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.1.0...v1.2.0
