@@ -17,6 +17,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private var sidebarItem: NSSplitViewItem!
     private var notesItem: NSSplitViewItem!
     private var notesHost: NSHostingController<ReaderNotesPanel>!
+    /// The document the notes panel shows (the note or a Markdown attachment), chosen from the toolbar above it.
+    private let notesChoice = ItemDocumentChoice()
+    private var notesMenuHost: NSHostingView<ItemDocumentsMenu>?
+    private var notesCollapseObservation: NSKeyValueObservation?
     private var notesFocusRequest = 0
     private var observers: [ObservationLoop] = []
     private var selectionTranslation: SelectionTranslationController!
@@ -269,9 +273,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         sidebarItem.canCollapse = true
         let main = NSSplitViewItem(viewController: content)
         main.minimumThickness = 360
-        notesHost = NSHostingController(rootView: ReaderNotesPanel(model: model, itemId: itemId, focusRequest: 0))
+        notesHost = NSHostingController(rootView: ReaderNotesPanel(model: model, itemId: itemId, focusRequest: 0, choice: notesChoice))
         notesPane = PaneContainerController(child: notesHost, edge: .trailing)
         notesPane.backdrop.baseColor = .windowBackgroundColor
+        notesPane.backdrop.drawsBlur = false
         notesItem = NSSplitViewItem(inspectorWithViewController: notesPane)
         notesItem.minimumThickness = 260
         notesItem.maximumThickness = 480
@@ -279,6 +284,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         split.addSplitViewItem(sidebarItem)
         split.addSplitViewItem(main)
         split.addSplitViewItem(notesItem)
+        // The panel's document menu and its 在标签页中打开 button are in the toolbar above it, there while it is open.
+        notesCollapseObservation = notesItem.observe(\.isCollapsed, options: [.new]) { [weak self] _, _ in
+            MainActor.assumeIsolated { self?.updateNotesToolbarItems() }
+        }
         // The pages keep their scale while the panes beside them slide, and fit the new width at the end.
         split.onAnimationBegan = { [weak self] in self?.content.holdScale() }
         split.onAnimationEnded = { [weak self] in self?.content.releaseScale() }
@@ -309,7 +318,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             }
             if file.itemId != self.itemId {
                 self.itemId = file.itemId
-                self.notesHost.rootView = ReaderNotesPanel(model: self.model, itemId: file.itemId, focusRequest: self.notesFocusRequest)
+                self.notesChoice.fileId = ""
+                self.notesHost.rootView = ReaderNotesPanel(model: self.model, itemId: file.itemId, focusRequest: self.notesFocusRequest, choice: self.notesChoice)
+                self.notesMenuHost?.rootView = ItemDocumentsMenu(model: self.model, itemId: file.itemId, choice: self.notesChoice, titleFont: Self.notesMenuFont)
             }
             let job = self.model.translations.jobs[file.itemId]
             self.followTranslation(job, finished: self.translationFile)
@@ -337,6 +348,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             let amount = self.model.settings.backgroundTranslucency
+            self.split.translucency = amount
             self.notesPane.backdrop.amount = amount
             self.content.setTranslucency(amount)
         })
@@ -356,7 +368,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         knownModificationDate = Self.modificationDate(fileURL)
         state.pageCount = document.pageCount
         state.outline = Self.outlineRows(document.outlineRoot)
-        if state.outline.isEmpty == false && state.sidebarTab == .thumbnails { state.sidebarTab = .outline }
+        // The page last used; a paper without a table of contents shows its pages instead (not remembered as a choice).
+        if state.outline.isEmpty, state.sidebarTab == .outline {
+            let remembered = ReaderSidebarTab.remembered
+            state.sidebarTab = .thumbnails
+            ReaderSidebarTab.remembered = remembered
+        }
         refreshAnnotationRows()
         // Notes, text boxes and ink an earlier build saved with an empty picture: drawn anew into the file at once.
         if AppearanceRepair.repair(document) > 0 { documentChanged() }
@@ -372,6 +389,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         if UserDefaults.standard.object(forKey: "NSSplitView Subview Frames FolioReaderSplit") == nil {
             notesItem.isCollapsed = true
         }
+        DispatchQueue.main.async { [weak self] in self?.updateNotesToolbarItems() }
         if document.isLocked { unlockDocument() }
         let settings = model.settings
         // 设置 ▸ 阅读 ▸ 记住每篇论文的阅读位置 off: every paper opens at its top, at the usual zoom.
@@ -927,7 +945,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     private func showNotes() {
         if notesItem.isCollapsed { split.setCollapsed(notesItem, false) }
         notesFocusRequest += 1
-        notesHost.rootView = ReaderNotesPanel(model: model, itemId: itemId, focusRequest: notesFocusRequest)
+        notesHost.rootView = ReaderNotesPanel(model: model, itemId: itemId, focusRequest: notesFocusRequest, choice: notesChoice)
     }
 
     override func editNote(itemId: String) { showNotes() }
@@ -1437,6 +1455,37 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     /// The notes title was a toolbar item for a while (macOS 26 drew it as a button): it goes from saved toolbars.
     private func removeNotesTitleFromSavedToolbar(_ toolbar: NSToolbar) {
         if let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == .readerNotesTitle }) { toolbar.removeItem(at: index) }
+        // 放回标签页 belongs to a window standing apart, put in and taken out as that changes; so do the notes panel's
+        // menu and button, there while the panel is open.
+        for id in [NSToolbarItem.Identifier.folioReturnToTabs, .readerNotesDocument, .readerNotesOpen] {
+            if let index = toolbar.items.firstIndex(where: { $0.itemIdentifier == id }) { toolbar.removeItem(at: index) }
+        }
+    }
+
+    static let notesMenuFont = Font.system(size: 15, weight: .bold)
+
+    /// The notes panel's menu (after the panel's tracking separator) and 在标签页中打开 (before the panel's button), while
+    /// the panel is open.
+    func updateNotesToolbarItems() {
+        guard let toolbar = window?.toolbar, let notesItem else { return }
+        let open = !notesItem.isCollapsed
+        for id in [NSToolbarItem.Identifier.readerNotesOpen, .readerNotesDocument] {
+            let index = toolbar.items.firstIndex { $0.itemIdentifier == id }
+            if !open, let index { toolbar.removeItem(at: index) }
+        }
+        guard open else { return }
+        if !toolbar.items.contains(where: { $0.itemIdentifier == .readerNotesDocument }) {
+            let at = toolbar.items.firstIndex { $0.itemIdentifier == .inspectorTrackingSeparator }.map { $0 + 1 } ?? toolbar.items.count
+            toolbar.insertItem(withItemIdentifier: .readerNotesDocument, at: at)
+        }
+        if !toolbar.items.contains(where: { $0.itemIdentifier == .readerNotesOpen }) {
+            let at = toolbar.items.firstIndex { $0.itemIdentifier == .toggleInspector } ?? toolbar.items.count
+            toolbar.insertItem(withItemIdentifier: .readerNotesOpen, at: at)
+        }
+    }
+
+    @objc private func openNotesDocumentInTab(_ sender: Any?) {
+        ItemDocumentsMenu.openInTab(model: model, itemId: itemId, choice: notesChoice)
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -1445,12 +1494,32 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar) + [.readerPrint, .folioReveal, .space, .flexibleSpace]
+        toolbarDefaultItemIdentifiers(toolbar) + [.readerPrint, .folioReveal, .folioReturnToTabs, .readerNotesDocument, .readerNotesOpen, .space, .flexibleSpace]
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch id {
+        case .folioReturnToTabs:
+            return makeReturnToTabsItem()
+        case .readerNotesDocument:
+            let host = NSHostingView(rootView: ItemDocumentsMenu(model: model, itemId: itemId, choice: notesChoice, titleFont: Self.notesMenuFont))
+            notesMenuHost = host
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.view = host
+            item.label = String(localized: "笔记")
+            item.paletteLabel = String(localized: "笔记与文档")
+            item.toolTip = String(localized: "选择要编辑的笔记或文档")
+            if #available(macOS 26.0, *) { item.isBordered = false }
+            return item
+        case .readerNotesOpen:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: String(localized: "在标签页中打开"))
+            item.label = String(localized: "在标签页中打开")
+            item.toolTip = String(localized: "在标签页中打开")
+            item.target = self
+            item.action = #selector(openNotesDocumentInTab(_:))
+            return item
         case .readerZoom:
             let group = NSToolbarItemGroup(itemIdentifier: id,
                                            images: [NSImage(systemSymbolName: "minus.magnifyingglass", accessibilityDescription: String(localized: "缩小"))!,
@@ -1546,6 +1615,9 @@ extension NSToolbarItem.Identifier {
     static let readerPrint = NSToolbarItem.Identifier("ReaderPrint")
     static let readerEditText = NSToolbarItem.Identifier("ReaderEditText")
     static let readerNotesTitle = NSToolbarItem.Identifier("ReaderNotesTitle")
+    /// The notes panel's document menu and 在标签页中打开, over the panel while it is open (never saved in layouts).
+    static let readerNotesDocument = NSToolbarItem.Identifier("ReaderNotesDocument")
+    static let readerNotesOpen = NSToolbarItem.Identifier("ReaderNotesOpen")
 }
 
 /// The PDF, plus the translation beside it while 对照阅读 is on (READER-10).
@@ -1567,7 +1639,11 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
     /// 扫描件: the offer to recognise its text, then the progress (OCR-01).
     let scanBanner = ScanBannerState()
     private lazy var scanBannerHost = ScanBannerHost(rootView: ScanBanner(state: scanBanner))
-    private let backdrop = TranslucentBackdrop()
+    private let backdrop: TranslucentBackdrop = {
+        let backdrop = TranslucentBackdrop()
+        backdrop.drawsBlur = false
+        return backdrop
+    }()
     private var opaqueBackground: NSColor?
     /// Views whose automatic scale is held while the panes around them move.
     private var heldAutoScale: [PDFView] = []

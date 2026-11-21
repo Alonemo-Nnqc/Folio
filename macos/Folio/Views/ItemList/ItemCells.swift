@@ -182,6 +182,17 @@ final class TitleCell: NSTableCellView {
                               } ?? ""))
     }
 
+    /// 多选: the icon becomes a check circle, filled when the row is selected (nil: the usual icon).
+    func showCheck(_ checked: Bool?) {
+        guard let checked else { return }
+        spinner.stopAnimation(nil)
+        icon.isHidden = false
+        icon.image = NSImage(systemSymbolName: checked ? "checkmark.circle.fill" : "circle",
+                             accessibilityDescription: checked ? String(localized: "已选中") : String(localized: "未选中"))?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
+        icon.contentTintColor = checked ? .controlAccentColor : .tertiaryLabelColor
+    }
+
     /// `label` says what the file is (原文, 双语对照 · Google …), so a translation needs no badge of its own.
     func configureFile(_ file: FileRecord, label text: String, url: URL, isDefault: Bool) {
         spinner.stopAnimation(nil)
@@ -201,6 +212,28 @@ final class TitleCell: NSTableCellView {
         translatedBadge.isHidden = true
         badge.setAccessibilityIdentifier("defaultFileBadge")
         setAccessibilityLabel(text + (isDefault ? String(localized: "（默认）") : ""))
+    }
+
+    /// An item's note, listed under it like a document: 笔记 and its first words.
+    func configureNote(preview: String) {
+        spinner.stopAnimation(nil)
+        progress.isHidden = true
+        stageLabel.isHidden = true
+        progressLabel.isHidden = true
+        labelBeforeProgress.isActive = false
+        titleRoom.isActive = false
+        icon.isHidden = false
+        icon.image = NSImage(systemSymbolName: "note.text", accessibilityDescription: String(localized: "笔记"))
+        icon.contentTintColor = .secondaryLabelColor
+        let text = NSMutableAttributedString(string: String(localized: "笔记"), attributes: [.font: ItemListMetrics.bodyFont, .foregroundColor: NSColor.labelColor])
+        if !preview.isEmpty {
+            text.append(NSAttributedString(string: "  " + preview, attributes: [.font: ItemListMetrics.bodyFont, .foregroundColor: NSColor.secondaryLabelColor]))
+        }
+        label.attributedStringValue = text
+        toolTip = String(localized: "双击在标签页中打开笔记")
+        badge.isHidden = true
+        translatedBadge.isHidden = true
+        setAccessibilityLabel(String(localized: "笔记"))
     }
 
     /// Title followed by a small symbol (e.g. the note indicator, NOTE-03).

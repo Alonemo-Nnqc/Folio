@@ -149,15 +149,35 @@ private struct ThumbnailStrip: NSViewRepresentable {
     let pdfView: PDFView
     let width: CGFloat
 
-    static func size(for width: CGFloat) -> NSSize {
+    /// The cell for a page of the document's shape: a portrait page as before; a wide page (a side-by-side
+    /// translation, slides) as wide as the sidebar allows and only as tall as it is, so the strip has no tall gaps.
+    static func size(for width: CGFloat, aspect: CGFloat = 1.36) -> NSSize {
+        if aspect < 1 {
+            let w = min(max(width - 30, 110), 420).rounded()
+            return NSSize(width: w, height: (w * aspect + 6).rounded())
+        }
         let w = min(max(width - 52, 96), 300).rounded()
-        return NSSize(width: w, height: (w * 1.36).rounded())
+        return NSSize(width: w, height: (w * max(aspect, 1.0)).rounded())
+    }
+
+    /// Height over width of the document's pages (the most common shape among the first few).
+    static func aspect(of document: PDFDocument?) -> CGFloat {
+        guard let document, document.pageCount > 0 else { return 1.36 }
+        let ratios = (0..<min(document.pageCount, 5)).compactMap { index -> CGFloat? in
+            guard let page = document.page(at: index) else { return nil }
+            let box = page.bounds(for: .cropBox)
+            guard box.width > 1 else { return nil }
+            let rotated = page.rotation % 180 != 0
+            return rotated ? box.width / box.height : box.height / box.width
+        }.sorted()
+        guard !ratios.isEmpty else { return 1.36 }
+        return min(max(ratios[ratios.count / 2], 0.3), 2)
     }
 
     func makeNSView(context: Context) -> PDFThumbnailView {
         let view = PDFThumbnailView()
         view.pdfView = pdfView
-        view.thumbnailSize = Self.size(for: width)
+        view.thumbnailSize = Self.size(for: width, aspect: Self.aspect(of: pdfView.document))
         view.backgroundColor = .clear
         view.allowsMultipleSelection = false
         view.setAccessibilityIdentifier("readerThumbnails")
@@ -166,9 +186,11 @@ private struct ThumbnailStrip: NSViewRepresentable {
 
     func updateNSView(_ nsView: PDFThumbnailView, context: Context) {
         if nsView.pdfView !== pdfView { nsView.pdfView = pdfView }
-        let size = Self.size(for: width)
+        let size = Self.size(for: width, aspect: Self.aspect(of: pdfView.document))
         // Only for a real change: each change lays every thumbnail out again.
-        if abs(nsView.thumbnailSize.width - size.width) >= 4 { nsView.thumbnailSize = size }
+        if abs(nsView.thumbnailSize.width - size.width) >= 4 || abs(nsView.thumbnailSize.height - size.height) >= 4 {
+            nsView.thumbnailSize = size
+        }
     }
 }
 
@@ -177,30 +199,13 @@ struct ReaderNotesPanel: View {
     let model: AppModel
     let itemId: String
     var focusRequest: Int
+    /// The document shown, chosen from the menu in the reader's toolbar above the panel.
+    let choice: ItemDocumentChoice
 
     var body: some View {
-        GeometryReader { proxy in
-            // The title sits in the toolbar's band, level with the panel's button, as plain text.
-            let band = max(proxy.safeAreaInsets.top, 38)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("笔记")
-                    .font(.system(size: 15, weight: .bold))
-                    .frame(height: band)
-                    .padding(.horizontal, 16)
-                    .accessibilityAddTraits(.isHeader)
-                if let title = model.snapshot.items[itemId]?.title {
-                    Text(title)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.horizontal, 16)
-                }
-                Divider().padding(.top, 4)
-                NoteEditor(model: model, itemId: itemId, focusRequest: focusRequest)
-                    .padding(.horizontal, 6)
-            }
+        ItemDocumentsPanel(model: model, itemId: itemId, focusRequest: focusRequest, choice: choice, showsHeader: false, showsItemTitle: true)
+            .id(itemId)
+            .padding(.top, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .ignoresSafeArea(.container, edges: .top)
-        }
     }
 }

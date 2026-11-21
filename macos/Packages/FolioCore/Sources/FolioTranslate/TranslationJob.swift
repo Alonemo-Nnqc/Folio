@@ -110,11 +110,18 @@ public final class TranslationJob: @unchecked Sendable {
         }
         if cg.isEncrypted && !cg.isUnlocked { throw EngineError.encrypted }
         let started = Date()
-        let selected = options.pageNumbers(count: cg.numberOfPages)
+        let selection = PageSelection(options.pages)
+        let selected = selection.pages(count: cg.numberOfPages)
+        if selected.isEmpty {
+            // Said as it is: no pages is not a PDF without text.
+            log.write("pages \"\(options.pages ?? "")\" select none of \(cg.numberOfPages)")
+            let typed = (options.pages ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            throw selection == .unreadable ? EngineError.unreadablePages(typed) : EngineError.pagesOutOfRange(typed, cg.numberOfPages)
+        }
         var analyzer = LayoutAnalyzer(options: .init(translateTables: options.translateTables, translateReferences: options.translateReferences))
         let analysed = analyzer.analyze(document: document, cgDocument: cg, pages: selected)
         try Task.checkCancellation()
-        let output = options.onlyIncludeTranslatedPages || options.pages == nil ? selected : Array(1...cg.numberOfPages)
+        let output = options.onlyIncludeTranslatedPages || selection == .all ? selected : Array(1...cg.numberOfPages)
         let byNumber = Dictionary(uniqueKeysWithValues: analysed.map { ($0.number, $0) })
         let layouts = output.compactMap { byNumber[$0] ?? PageLayout.untouched(cg, number: $0) }
         let segments = SegmentBuilder.segments(for: analysed, target: options.langOut)
@@ -702,6 +709,10 @@ public final class TranslationJob: @unchecked Sendable {
 
 enum EngineError: Error, LocalizedError {
     case unreadable, encrypted, noText
+    /// The page range typed is not page numbers.
+    case unreadablePages(String)
+    /// The page range typed has none of the document's pages (it has this many).
+    case pagesOutOfRange(String, Int)
     /// Everything there is to translate is already in this language.
     case alreadyInTarget(String)
     /// The service refused this many paragraphs: more than a few, so something else is wrong.
@@ -714,6 +725,9 @@ enum EngineError: Error, LocalizedError {
         case .unreadable: String(localized: "无法读取这个 PDF 文件。", bundle: .module)
         case .encrypted: String(localized: "PDF 已加密或受密码保护，无法翻译。", bundle: .module)
         case .noText: String(localized: "这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。", bundle: .module)
+        case .unreadablePages(let typed): PageSelection.unreadableMessage(typed)
+        case .pagesOutOfRange(let typed, let count):
+            String(localized: "这篇 PDF 共 \(count) 页，页码范围「\(typed)」里没有其中的页。", bundle: .module)
         case .alreadyInTarget(let language):
             String(localized: "这篇论文已经是\(language)，不需要翻译成\(language)。可以在翻译设置里换一种译文语言。", bundle: .module)
         case .tooManyRefused(let count):

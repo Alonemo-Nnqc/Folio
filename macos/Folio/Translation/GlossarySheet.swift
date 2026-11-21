@@ -19,7 +19,6 @@ struct GlossarySettingsRows: View {
             }
         } label: {
             Text("术语表")
-            Text("专业术语的固定译法，翻译每篇论文时都会使用")
         }
         .onAppear {
             refresh()
@@ -33,7 +32,6 @@ struct GlossarySettingsRows: View {
         }
         Toggle(isOn: Binding(get: { settings.translationOptions.rememberTerms }, set: { settings.translationOptions.rememberTerms = $0 })) {
             Text("记住翻译时找到的术语")
-            Text("模型从论文中提取的术语会加入术语表，之后翻译其他论文时沿用；你修改过的译法不会被覆盖")
         }
     }
 

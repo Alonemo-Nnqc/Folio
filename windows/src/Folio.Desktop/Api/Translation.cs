@@ -296,7 +296,8 @@ public static partial class Api
         });
         Bridge.On("translation.setOptions", a =>
         {
-            M.Settings.TranslationOptions = a.Raw("options").Deserialize<TranslationOptions>() ?? new TranslationOptions();
+            // Pages are chosen for each run in the 翻译全文 sheet, never kept for every later paper.
+            M.Settings.TranslationOptions = TranslationCoordinator.OptionsFor(a.Raw("options").Deserialize<TranslationOptions>() ?? new TranslationOptions(), null);
             EstimateChanged();
             return null;
         });
@@ -400,7 +401,7 @@ public static partial class Api
         {
             var serviceId = M.Settings.TranslationService;
             var fields = M.Settings.FieldsOf(serviceId);
-            var options = M.Settings.TranslationOptions;
+            var options = TranslationCoordinator.OptionsFor(M.Settings.TranslationOptions, a.OptStr("pages"));
             var inputs = a.Strs("files").Select(id => M.Snapshot.Files.GetValueOrDefault(id)).OfType<FileRecord>().Select(M.Library.FilePath).ToList();
             return (object?)await Task.Run(() =>
             {
@@ -417,8 +418,11 @@ public static partial class Api
         // Jobs.
         Bridge.OnAsync("translation.start", async a =>
         {
-            foreach (var id in a.Strs("files")) await M.Translations.Start(id);
+            var pages = a.OptStr("pages");
+            foreach (var id in a.Strs("files")) await M.Translations.Start(id, pages);
         });
+        // What is wrong with the pages typed in the 翻译全文 sheet, said under the field; null when they can be used.
+        Bridge.On("translation.checkPages", a => PageSelection.Problem(a.OptStr("pages")));
         Bridge.On("translation.cancel", a => { M.Translations.Cancel(a.Str("item")); return null; });
     }
 

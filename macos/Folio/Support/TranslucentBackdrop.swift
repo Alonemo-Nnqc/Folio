@@ -10,6 +10,10 @@ final class TranslucentBackdrop: NSView {
     var amount: Double = 0 { didSet { update() } }
     /// The colour the pane has when opaque.
     var baseColor: NSColor = .controlBackgroundColor { didSet { veil.color = baseColor } }
+    /// False: only the veil; the blur comes from one view behind the whole window (`SmoothSplitViewController`), which
+    /// keeps its size while panes slide. A blur view resized at every frame made WindowServer blur the desktop
+    /// again at every frame.
+    var drawsBlur = true { didSet { update() } }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -32,6 +36,7 @@ final class TranslucentBackdrop: NSView {
 
     private func update() {
         isHidden = !isActive
+        effect.isHidden = !drawsBlur
         // A gentle curve: the first steps already show the desktop, the last ones leave little veil.
         veil.alphaValue = isActive ? CGFloat(0.94 * pow(1 - amount, 1.3)) : 1
     }

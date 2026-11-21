@@ -1,17 +1,11 @@
 import AppKit
 
-/// A side pane's content in a box of its own. While the pane slides open or closed its content keeps its width and is
-/// uncovered or covered from the window's edge, instead of being laid out again at every frame of the animation —
-/// what made the sidebars stutter, especially SwiftUI ones (thumbnails, the inspector's forms).
+/// A side pane's content over its 背景透明度 veil.
 final class PaneContainerController: NSViewController {
     enum Edge { case leading, trailing }
 
     let child: NSViewController
     private let edge: Edge
-    private var fill: NSLayoutConstraint!
-    private var fixed: NSLayoutConstraint!
-    private(set) var lastWidth: CGFloat = 0
-    private var frozen = false
     let backdrop = TranslucentBackdrop()
 
     init(child: NSViewController, edge: Edge) {
@@ -31,8 +25,6 @@ final class PaneContainerController: NSViewController {
             view.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(view)
         }
-        fill = content.widthAnchor.constraint(equalTo: container.widthAnchor)
-        fixed = content.widthAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
             backdrop.topAnchor.constraint(equalTo: container.topAnchor),
             backdrop.bottomAnchor.constraint(equalTo: container.bottomAnchor),
@@ -40,43 +32,86 @@ final class PaneContainerController: NSViewController {
             backdrop.trailingAnchor.constraint(equalTo: container.trailingAnchor),
             content.topAnchor.constraint(equalTo: container.topAnchor),
             content.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            edge == .leading ? content.leadingAnchor.constraint(equalTo: container.leadingAnchor)
-                             : content.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            fill,
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor),
         ])
         view = container
+    }
+}
+
+/// A split view controller with one frosted layer behind all its panes, that tells its owner when panes start and
+/// stop sliding.
+class SmoothSplitViewController: NSSplitViewController {
+    /// 背景透明度: one frosted layer behind every pane, the size of the window. Panes lay their tinted veils over it
+    /// (`TranslucentBackdrop.drawsBlur = false`), so sliding a pane moves only plain colour layers.
+    private let windowBlur = NSVisualEffectView()
+    /// What the sidebar's glass sits on, as before the blur was shared: the window's own colour.
+    private(set) var sidebarUnderlay = PlainColorView()
+
+    var translucency: Double = 0 {
+        didSet {
+            let active = translucency > 0.001
+            windowBlur.isHidden = !active
+            sidebarUnderlay.isHidden = !active
+            placeSidebarUnderlay()
+        }
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        windowBlur.material = .underWindowBackground
+        windowBlur.blendingMode = .behindWindow
+        windowBlur.state = .followsWindowActiveState
+        windowBlur.isHidden = true
+        sidebarUnderlay.isHidden = true
+        // Not arranged by the split view (`arrangesAllSubviews` is off for split view controllers): behind the panes.
+        for view in [sidebarUnderlay, windowBlur] as [NSView] {
+            view.frame = splitView.bounds
+            view.autoresizingMask = [.width, .height]
+            splitView.addSubview(view, positioned: .below, relativeTo: nil)
+        }
     }
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        if !frozen, view.bounds.width > 1 { lastWidth = view.bounds.width }
+        followContentEdge()
     }
 
-    /// Holds the content at its open width until `thaw()`. `minimum`: the width when it was never open.
-    func freeze(minimum: CGFloat) {
-        guard !frozen else { return }
-        frozen = true
-        fixed.constant = max(lastWidth, view.bounds.width, minimum)
-        fill.isActive = false
-        fixed.isActive = true
+    override func splitViewDidResizeSubviews(_ notification: Notification) {
+        super.splitViewDidResizeSubviews(notification)
+        followContentEdge()
     }
 
-    func thaw() {
-        guard frozen else { return }
-        frozen = false
-        fixed.isActive = false
-        fill.isActive = true
-    }
-}
+    private var observedContent: NSView?
 
-/// A split view controller whose sidebar and inspector slide smoothly (see `PaneContainerController`), and that tells
-/// its owner when panes start and stop moving (the reader holds the PDF's scale meanwhile).
-class SmoothSplitViewController: NSSplitViewController {
+    /// The underlay reaches exactly to the content's left edge at every frame of a slide (it used to take the
+    /// sidebar's final width at the first frame: a block of window colour showed under the list before the sidebar
+    /// arrived, and vanished while it was still leaving).
+    private func followContentEdge() {
+        guard let content = splitViewItems.first(where: { $0.behavior != .sidebar && $0.behavior != .inspector })?.viewController.view else { return }
+        if observedContent !== content {
+            observedContent = content
+            content.postsFrameChangedNotifications = true
+            NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: content, queue: nil) { [weak self] _ in
+                MainActor.assumeIsolated { self?.placeSidebarUnderlay() }
+            }
+        }
+        placeSidebarUnderlay()
+    }
+
+    private func placeSidebarUnderlay() {
+        guard !sidebarUnderlay.isHidden, let content = observedContent else { return }
+        // The content's edge in the split view's coordinates (it may sit in a wrapper of AppKit's).
+        let edge = content.convert(content.bounds, to: splitView).minX
+        sidebarUnderlay.autoresizingMask = [.height]
+        let frame = NSRect(x: 0, y: 0, width: max(edge, 0), height: splitView.bounds.height)
+        if sidebarUnderlay.frame != frame { sidebarUnderlay.frame = frame }
+    }
+
+    /// Told when a pane starts and stops sliding (the reader holds the PDF's scale meanwhile).
     var onAnimationBegan: () -> Void = {}
     var onAnimationEnded: () -> Void = {}
     private var running = 0
-
-    static let duration: TimeInterval = 0.26
 
     override func toggleSidebar(_ sender: Any?) {
         guard let item = splitViewItems.first(where: { $0.behavior == .sidebar }) else { return super.toggleSidebar(sender) }
@@ -88,31 +123,36 @@ class SmoothSplitViewController: NSSplitViewController {
         setCollapsed(item, !item.isCollapsed)
     }
 
-    /// Opens or closes a pane with the animation.
+    /// Opens or closes a pane with AppKit's own slide (its timing, and the glass of a sidebar moving with it, as in
+    /// Finder and Mail); only told before and after.
     func setCollapsed(_ item: NSSplitViewItem, _ collapsed: Bool) {
         guard item.isCollapsed != collapsed else { return }
-        guard view.window?.isVisible == true, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+        guard view.window?.isVisible == true else {
             item.isCollapsed = collapsed
             return
         }
-        let panes = splitViewItems.compactMap { side -> (PaneContainerController, CGFloat)? in
-            guard let pane = side.viewController as? PaneContainerController else { return nil }
-            return (pane, side.minimumThickness)
-        }
-        panes.forEach { $0.0.freeze(minimum: $0.1) }
         running += 1
         if running == 1 { onAnimationBegan() }
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = Self.duration
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.32, 0.72, 0, 1)
-            context.allowsImplicitAnimation = true
+        NSAnimationContext.runAnimationGroup({ _ in
             item.animator().isCollapsed = collapsed
         }, completionHandler: { [weak self] in
             guard let self else { return }
             self.running -= 1
-            guard self.running == 0 else { return }
-            panes.forEach { $0.0.thaw() }
-            self.onAnimationEnded()
+            if self.running == 0 { self.onAnimationEnded() }
         })
     }
+}
+
+/// A plain layer in the window's background colour.
+final class PlainColorView: NSView {
+    override var wantsUpdateLayer: Bool { true }
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance { layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor }
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

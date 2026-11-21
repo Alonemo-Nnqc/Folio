@@ -279,7 +279,14 @@ enum StandardCells {
         "setting": "设置", "settings": "设置", "baseline": "基线", "model": "模型", "models": "模型", "year": "年份",
         "venue": "来源", "source": "源域", "target": "目标域", "time": "时间", "memory": "显存", "accuracy": "准确率",
         "total": "总计", "type": "类型", "input": "输入", "output": "输出", "training": "训练", "inference": "推理",
+        // Size and frequency groups of detection benchmarks (COCO, LVIS): a single word gets the wrong sense alone.
+        "all": "全部", "small": "小", "medium": "中", "med.": "中", "large": "大", "none": "无",
+        "frequent": "高频", "freq.": "高频", "common": "常见", "com.": "常见", "rare": "稀有",
+        "mean ± std": "均值 ± 标准差", "std": "标准差", "std.": "标准差", "min": "最小", "max": "最大",
     ]
+
+    /// Whether a short header is one of the words above.
+    static func isKnown(_ text: String) -> Bool { chinese[text.trimmingCharacters(in: .whitespaces).lowercased()] != nil }
 
     static func translate(_ text: String, to language: String) -> String? {
         guard language.lowercased().hasPrefix("zh") else { return nil }

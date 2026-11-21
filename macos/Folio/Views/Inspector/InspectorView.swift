@@ -26,7 +26,20 @@ struct InspectorView: View {
 
     @ViewBuilder
     private var content: some View {
-        if let item = model.inspectedItem {
+        if model.multiSelectMode, model.selectedItemIDs.isEmpty {
+            ContentUnavailableView {
+                Label("多选", systemImage: "checklist")
+            } description: {
+                Text("单击条目选择，按 Esc 退出")
+            } actions: {
+                Button("全选") { model.selectedItemIDs = Set(model.rows) }
+            }
+        } else if model.multiSelectMode || model.selectedItemIDs.count > 1, !model.selectedItemIDs.isEmpty, model.selectedFileIDs.isEmpty {
+            MultiSelectionInspector(model: model)
+        } else if model.inspectorTab == .metadata, let file = model.inspectedMarkdownFile {
+            MarkdownFileInspector(model: model, file: file)
+                .id(file.id)
+        } else if let item = model.inspectedItem {
             switch model.inspectorTab {
             case .metadata:
                 if item.kind == .standalone {
@@ -39,8 +52,8 @@ struct InspectorView: View {
                 AnnotationsInspector(model: model, item: item)
                     .id(item.id)
             case .notes:
-                NoteEditor(model: model, itemId: item.id, focusRequest: model.noteFocusRequest)
-                    .padding(.horizontal, 8)
+                ItemDocumentsPanel(model: model, itemId: item.id, focusRequest: model.noteFocusRequest)
+                    .id(item.id)
             }
         } else if model.selectionCount > 1 {
             ContentUnavailableView("已选择 \(model.selectionCount) 项", systemImage: "square.stack.3d.up")

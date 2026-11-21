@@ -54,4 +54,6 @@ public struct FileRecord: Codable, Sendable, Hashable, Identifiable, FetchableRe
 
     public var fileName: String { (relativePath as NSString).lastPathComponent }
     public var isPDF: Bool { (relativePath as NSString).pathExtension.lowercased() == "pdf" }
+    /// A Markdown document Folio edits itself (MD-01).
+    public var isMarkdown: Bool { ["md", "markdown"].contains((relativePath as NSString).pathExtension.lowercased()) }
 }

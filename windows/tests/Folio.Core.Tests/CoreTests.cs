@@ -720,6 +720,66 @@ public class TranslationEngineTests
         using var dual = UglyToad.PdfPig.PdfDocument.Open(output.Dual!);
         Assert.Equal(1224, (int)dual.GetPage(1).Width);
     }
+
+    /// <summary>Page ranges as people type them, with a Chinese input method on or off (pageRangesAsTyped on the Mac).</summary>
+    [Fact]
+    public void PageRangesAsTyped()
+    {
+        static List<int> Pages(string? text, int count = 10) => Folio.Core.Translate.PageSelection.Parse(text).Pages(count);
+        foreach (var all in new[] { null, "", "  ", "全部", "全部页", "all", "ALL", "所有" })
+            Assert.Equal(Folio.Core.Translate.PageSelection.Kinds.All, Folio.Core.Translate.PageSelection.Parse(all).Kind);
+        Assert.Equal([1, 3], Pages("1，3"));
+        Assert.Equal([1, 3, 5], Pages("1、3；5"));
+        Assert.Equal([1, 2, 3, 5], Pages("１－３，５"));
+        Assert.Equal([1, 2, 3], Pages("1~3"));
+        Assert.Equal([1, 2, 3], Pages("1～3"));
+        Assert.Equal([1, 2, 3], Pages("1–3"));
+        Assert.Equal([1, 2, 3], Pages("1 — 3"));
+        Assert.Equal([2, 3, 4], Pages("2至4"));
+        Assert.Equal([3], Pages("第3页"));
+        Assert.Equal([1, 2, 5], Pages("第1-2页, 第5页"));
+        Assert.Equal([1, 3, 5], Pages("1 3 5"));
+        Assert.Equal([3, 4, 5], Pages("5-3"));
+        Assert.Equal([1, 2], Pages("-2"));
+        Assert.Equal([8, 9, 10], Pages("8-"));
+        Assert.Equal([8, 9, 10], Pages("8-20"));
+        Assert.Empty(Pages("12-20"));
+        Assert.Equal(Folio.Core.Translate.PageSelection.Kinds.Ranges, Folio.Core.Translate.PageSelection.Parse("12-20").Kind);
+        foreach (var unreadable in new[] { "x", "abc", "0", "1-3,x", "-", "1-2-3", "p3", "全部,1" })
+        {
+            Assert.Equal(Folio.Core.Translate.PageSelection.Kinds.Unreadable, Folio.Core.Translate.PageSelection.Parse(unreadable).Kind);
+            Assert.NotNull(Folio.Core.Translate.PageSelection.Problem(unreadable));
+        }
+        Assert.Null(Folio.Core.Translate.PageSelection.Problem("1，3"));
+        Assert.Null(Folio.Core.Translate.PageSelection.Problem(null));
+        Assert.Equal([1, 3, 4, 5], new Folio.Core.Translate.TranslationOptions { Pages = "1, 3-5,9" }.PageNumbers(6));
+    }
+
+    /// <summary>Pages that select nothing are said as such, not as a PDF without text (a scan).</summary>
+    [Theory]
+    [InlineData("全部页码", "全部页码")]
+    [InlineData("5-9", "5-9")]
+    public async Task PageRangesThatSelectNothingAreExplained(string typed, string expected)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "folio-pages-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var input = Path.Combine(dir, "paper.pdf");
+            File.WriteAllBytes(input, TestPdfs.OnePage());
+            var request = new Folio.Core.Translate.TranslationRequest
+            {
+                Input = input, OutputDirectory = Path.Combine(dir, "out"), ServiceId = "google",
+                Options = new Folio.Core.Translate.TranslationOptions { Pages = typed },
+            };
+            var last = await new Folio.Core.Translate.TranslationJob(request, Path.Combine(dir, "job.log")).Run(_ => { });
+            var failed = Assert.IsType<Folio.Core.Translate.TranslationEvent.Failed>(last);
+            Assert.Contains(expected, failed.Message);
+            Assert.DoesNotContain("扫描", failed.Message);
+            Assert.DoesNotContain("scan", failed.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
 }
 
 public class AgentTests

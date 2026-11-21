@@ -5,7 +5,8 @@ enum ItemMenuCommand: Hashable {
     case open, quickLook, revealInFinder
     case openInReader, openWithPreview, openWithApp(URL), openWithOtherApp
     case translate, cancelTranslation
-    case editNote, exportNote
+    case editNote, exportNote, openNoteTab
+    case newMarkdownAttachment
     case addToGroup(String)
     case toggleTag(String), newTag
     case setReadStatus(ReadStatus), setRating(Int)
@@ -107,6 +108,8 @@ enum ItemMenuBuilder {
         entries.append(.separator)
         if let single {
             entries.append(.action(title: String(localized: "编辑笔记"), symbol: "note.text", command: .editNote))
+            // The note as a document of its own, written or still empty (it is listed under the item once written).
+            entries.append(.action(title: String(localized: "在标签页中打开笔记"), symbol: "macwindow", command: .openNoteTab))
             if snapshot.notedItems.contains(single.id) {
                 entries.append(.action(title: String(localized: "导出笔记…"), symbol: "square.and.arrow.up", command: .exportNote))
             }
@@ -117,12 +120,23 @@ enum ItemMenuBuilder {
             entries.append(.separator)
             if single.kind == .regular {
                 entries.append(.action(title: String(localized: "添加文件…"), symbol: "paperclip", command: .addFiles))
+                entries.append(.action(title: String(localized: "新建 Markdown 附件"), symbol: "doc.richtext", command: .newMarkdownAttachment))
                 entries.append(.action(title: String(localized: "重新检索元数据"), symbol: "arrow.clockwise", command: .retrieve))
             } else {
                 entries.append(.action(title: String(localized: "重新检索元数据"), symbol: "arrow.clockwise", command: .retrieve,
                                        enabled: single.metadataState != .pending && isPDF(single, snapshot)))
                 entries.append(.action(title: String(localized: "手动匹配…"), symbol: "magnifyingglass", command: .manualMatch))
             }
+        }
+        if single == nil {
+            // Several items: the batch versions of the per-item commands above.
+            let pdfs = items.filter { defaultFile(of: $0, snapshot)?.isPDF == true }
+            if !pdfs.isEmpty {
+                entries.append(.action(title: String(localized: "翻译全文（\(pdfs.count) 篇）…"), symbol: TranslationIcon.fullTextSymbol, command: .translate,
+                                       enabled: !pdfs.allSatisfy { context.translatingItemIds.contains($0.id) }))
+            }
+            entries.append(.action(title: String(localized: "重新检索元数据"), symbol: "arrow.clockwise", command: .retrieve,
+                                   enabled: items.contains { $0.metadataState != .pending }))
         }
         if items.contains(where: { JournalMetrics.journalName(of: $0) != nil }) {
             entries.append(.action(title: String(localized: "刷新期刊指标"), symbol: "chart.bar.xaxis", command: .refreshJournalMetrics))

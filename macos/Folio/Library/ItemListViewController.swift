@@ -8,7 +8,11 @@ final class ItemListViewController: NSViewController {
     private let model: AppModel
     private var observers: [ObservationLoop] = []
     private let scroll = NSScrollView()
-    private let backdrop = TranslucentBackdrop()
+    private let backdrop: TranslucentBackdrop = {
+        let backdrop = TranslucentBackdrop()
+        backdrop.drawsBlur = false
+        return backdrop
+    }()
     private var opaqueListColor: NSColor?
     private var scopeBar: NSView!
     private var scrollTopToView: NSLayoutConstraint!
@@ -26,7 +30,8 @@ final class ItemListViewController: NSViewController {
     override func loadView() {
         let root = NSView()
         scroll.hasVerticalScroller = true
-        scroll.hasHorizontalScroller = true
+        // The columns always fit the list's width (ItemListController.fitColumns).
+        scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
         scroll.drawsBackground = false
         scroll.documentView = controller.outline
@@ -75,7 +80,7 @@ final class ItemListViewController: NSViewController {
             guard let self else { return }
             _ = (self.model.rows, self.model.snapshot, self.model.selectedItemIDs, self.model.selectedFileIDs,
                  self.model.currentSort, self.model.previewExpandRequest, self.model.translations.jobIDs,
-                 self.model.settings.showTranslatedBadge)
+                 self.model.settings.showTranslatedBadge, self.model.multiSelectMode)
             self.controller.update()
         })
         // Progress moves several times a second: only the bars of the rows it concerns follow it.

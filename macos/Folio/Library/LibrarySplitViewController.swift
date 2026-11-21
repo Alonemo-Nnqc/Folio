@@ -36,6 +36,7 @@ final class LibrarySplitViewController: SmoothSplitViewController {
 
         inspectorPane = PaneContainerController(child: inspector, edge: .trailing)
         inspectorPane.backdrop.baseColor = .windowBackgroundColor
+        inspectorPane.backdrop.drawsBlur = false
         inspectorItem = NSSplitViewItem(inspectorWithViewController: inspectorPane)
         inspectorItem.minimumThickness = 270
         inspectorItem.maximumThickness = 520
@@ -52,6 +53,7 @@ final class LibrarySplitViewController: SmoothSplitViewController {
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             let amount = self.model.settings.backgroundTranslucency
+            self.translucency = amount
             self.inspectorPane.backdrop.amount = amount
             self.itemList.setTranslucency(amount)
         })

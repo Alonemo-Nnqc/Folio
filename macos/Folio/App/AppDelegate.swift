@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        model.markdownTabs.saveAll()
         guard model.readers.saveAll() else {
             let alert = NSAlert()
             alert.messageText = String(localized: "部分批注无法保存")
