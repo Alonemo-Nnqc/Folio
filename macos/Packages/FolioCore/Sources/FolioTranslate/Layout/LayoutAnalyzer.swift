@@ -90,13 +90,19 @@ struct LayoutAnalyzer {
                 return below > -0.5 && below < line.size * 0.17 && rule.minX >= line.minX - 1 && rule.maxX <= line.maxX + 1
             }
         }
-        var tables = Self.tableFrames(rules: rules, lines: lines).map { Self.trimCaptions($0, lines: lines) }.filter { isTable($0, lines: lines, marks: marks) }
-        let figures = figureRegions(marks: marks, lines: lines, tables: tables, page: crop)
-        tables.removeAll { table in figures.contains { $0.intersection(table).area > table.area * 0.4 } }
-        let gutters = tables.map { Self.columnGutters(in: $0, lines: lines) }
         // The upright rules of a table drawn with a grid: two cells with a rule between them are two cells, however
         // close their words come to it.
         let uprights = marks.filter { ($0.kind == .fill || $0.kind == .stroke) && !$0.isWhite && $0.rect.width < 2.5 && $0.rect.height > bodySize * 0.8 }.map(\.rect)
+        var frames = Self.tableFrames(rules: rules, lines: lines)
+        // Tables ruled only between their columns (and under the header): no second level rule to find them by.
+        for frame in Self.uprightTableFrames(uprights: uprights, rules: rules, lines: lines, bodySize: bodySize)
+            where !frames.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(frame) }) {
+            frames.append(frame)
+        }
+        var tables = frames.map { Self.trimCaptions($0, lines: lines) }.filter { isTable($0, lines: lines, marks: marks) }
+        let figures = figureRegions(marks: marks, lines: lines, tables: tables, page: crop)
+        tables.removeAll { table in figures.contains { $0.intersection(table).area > table.area * 0.4 } }
+        let gutters = tables.map { Self.columnGutters(in: $0, lines: lines) }
         let dividers = tables.map { table in uprights.filter { table.insetBy(dx: -1, dy: -2).intersects($0) } }
         lines = buildLines(chars, tables: tables, gutters: gutters, dividers: dividers, pageWidth: crop.width).map(Self.markScripts)
         Self.joinWordFractions(&lines, marks: marks)
@@ -505,6 +511,9 @@ struct LayoutAnalyzer {
                     }
                     let lowerPeers = peers(lower), upperPeers = peers(upper)
                     if lowerPeers.contains(where: { isNumeric($0.text) }) { break }
+                    // A line reaching under another cell of the row above spans columns: a row of its own
+                    // ("zero-shot transfer methods:"), not the rest of this cell.
+                    if upperPeers.contains(where: { $0.minX < lower.maxX - 1 && $0.maxX > lower.minX + 1 }) { break }
                     let startsLow = lower.text.trimmingCharacters(in: .whitespaces).first?.isLowercase == true
                     let endsOpen = upper.text.range(of: #"(-|,|\b(and|or|of|the|for|to|with|in|on|by|a|an))\s*$"#, options: .regularExpression) != nil
                     guard startsLow || endsOpen || (lowerPeers.isEmpty && !upperPeers.isEmpty) else { break }
@@ -1336,6 +1345,76 @@ struct LayoutAnalyzer {
         return merged
     }
 
+    /// Tables whose columns are parted by upright rules drawn row by row (LaTeX's `|` in a tabular), with at most
+    /// one level rule (under the header): three or more short strokes stacked at one x make a column divider, and
+    /// dividers side by side over the same rows make a table. It reaches sideways to the level rule across it, or
+    /// else to the short lines (not running text) on its rows.
+    static func uprightTableFrames(uprights: [CGRect], rules: [CGRect], lines: [LayoutLine], bodySize: Double) -> [CGRect] {
+        let short = uprights.filter { $0.height < bodySize * 3 }
+        var columns: [[CGRect]] = []
+        for stroke in short.sorted(by: { $0.midX < $1.midX }) {
+            if let k = columns.firstIndex(where: { abs($0[0].midX - stroke.midX) < 1 }) { columns[k].append(stroke) } else { columns.append([stroke]) }
+        }
+        var chains: [CGRect] = []
+        for column in columns {
+            let sorted = column.sorted { $0.maxY > $1.maxY }
+            var current = sorted[0], count = 1
+            func close() { if count >= 3 { chains.append(current) } }
+            for stroke in sorted.dropFirst() {
+                // A row without the rule (a "zero-shot methods:" row across the table) does not end the divider.
+                if current.minY - stroke.maxY <= max(stroke.height, bodySize) * 1.6 {
+                    current = current.union(stroke); count += 1
+                } else {
+                    close(); current = stroke; count = 1
+                }
+            }
+            close()
+        }
+        guard !chains.isEmpty else { return [] }
+        // Dividers over (mostly) the same rows belong to one table.
+        var groups: [CGRect] = []
+        for chain in chains.sorted(by: { $0.height > $1.height }) {
+            if let k = groups.firstIndex(where: { g in
+                let overlap = min(g.maxY, chain.maxY) - max(g.minY, chain.minY)
+                return overlap > min(g.height, chain.height) * 0.6 && abs(g.midX - chain.midX) < 400
+            }) {
+                groups[k] = groups[k].union(chain)
+            } else {
+                groups.append(chain)
+            }
+        }
+        var frames: [CGRect] = []
+        for group in groups {
+            let band = group.insetBy(dx: 0, dy: -1)
+            var frame = group
+            let across = rules.filter { $0.midY > band.minY - 2 && $0.midY < band.maxY + 2 && $0.minX <= group.minX + 1 && $0.maxX >= group.maxX - 1 }
+            for rule in across { frame = frame.union(CGRect(x: rule.minX, y: group.minY, width: rule.width, height: group.height)) }
+            if across.isEmpty {
+                // No rule to say how wide: the short lines on its rows next to it.
+                let row = lines.filter { $0.rect.midY > band.minY && $0.rect.midY < band.maxY && proseWords($0) < 6 && !$0.isRotated }
+                var taken = Set<Int>()
+                var grew = true
+                while grew {
+                    grew = false
+                    for (k, line) in row.enumerated() where !taken.contains(k) && line.minX < frame.maxX + bodySize * 2.5 && line.maxX > frame.minX - bodySize * 2.5 {
+                        taken.insert(k)
+                        let wider = frame.union(CGRect(x: line.minX, y: frame.minY, width: line.maxX - line.minX, height: frame.height))
+                        if wider.width > frame.width + 0.01 { frame = wider; grew = true }
+                    }
+                }
+            }
+            // A header over several columns (\multicolumn) has no divider of its own: short lines right above.
+            while let header = lines.first(where: { line in
+                line.rect.maxY > frame.maxY + 0.5 && line.rect.minY >= frame.maxY - 1.5 && line.rect.minY < frame.maxY + bodySize * 0.8 && !line.isRotated
+                    && line.minX >= frame.minX - 1 && line.maxX <= frame.maxX + 1 && proseWords(line) < 6 && !isCaptionStart(line.text)
+            }) {
+                frame = frame.union(CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: header.rect.maxY - frame.minY))
+            }
+            if frame.width > group.width + bodySize, frame.height > bodySize * 2 { frames.append(frame) }
+        }
+        return frames
+    }
+
     /// A caption caught between a table's rules (a rule under the caption) is not part of the table.
     static func trimCaptions(_ frame: CGRect, lines: [LayoutLine]) -> CGRect {
         var frame = frame
@@ -1745,6 +1824,9 @@ struct LayoutAnalyzer {
            text.filter(\.isUppercase).count >= 2 || text.contains(where: \.isNumber) {
             return false
         }
+        if StandardCells.isKnown(text) { return true }
+        // An abbreviation alone ("freq.", "Acc.", "w/o") reads as something else to a translator: keep it.
+        if tokens.count == 1, text.range(of: #"^[A-Za-z]{1,5}\.$|^w/o?$"#, options: .regularExpression) != nil { return false }
         let numeric = tokens.filter { $0.range(of: #"^[\d.,±%()\-–+*†‡]+$"#, options: .regularExpression) != nil }.count
         guard numeric * 2 < tokens.count else { return false }
         // Names of models, datasets and venues (ResNet, EVA02-L [18], DINOv2, CVPR22) stay: something must read as a word.

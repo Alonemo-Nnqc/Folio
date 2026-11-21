@@ -84,6 +84,36 @@ import Testing
         #expect(try lib.files(ofItem: id).first?.relativePath == "Files/keep.pdf")
     }
 
+    /// Issue #21: author, year and title entered by hand rename the files as retrieved metadata does.
+    @Test func handEditedNamingFieldsRenameTheFiles() throws {
+        let lib = try Library.temporary()
+        let id = try lib.importOne(try Fixture.pdf(named: "scan0001.pdf", lines: ["S"]))
+        _ = try lib.applyMetadata(Fixture.metadata("Draft"), toStandalone: id, autoRename: false)
+        #expect(try lib.files(ofItem: id).first?.relativePath == "Files/scan0001.pdf")
+        // Not a field of the name: the file stays as it is.
+        try lib.updateItem(id, autoRename: true) { $0.rating = 3; $0.volume = "12" }
+        #expect(try lib.files(ofItem: id).first?.relativePath == "Files/scan0001.pdf")
+        // Renaming off: nothing is renamed.
+        try lib.updateItem(id, autoRename: false) { $0.title = "Lecture Notes on Optics" }
+        #expect(try lib.files(ofItem: id).first?.relativePath == "Files/scan0001.pdf")
+        // A field of the name, renaming on.
+        try lib.updateItem(id, autoRename: true) { $0.authors = [Author(family: "Born", given: "Max")]; $0.year = 1959 }
+        #expect(try lib.files(ofItem: id).first?.relativePath == "Files/Born_1959_Lecture Notes on Optics.pdf")
+    }
+
+    /// The AI tools give a standalone file its title: it becomes a paper, and its file is named after it.
+    @Test func standaloneGivenATitleByHandIsRenamed() throws {
+        let lib = try Library.temporary()
+        let id = try lib.importOne(try Fixture.pdf(named: "download (3).pdf", lines: ["D"]))
+        try lib.updateItem(id, autoRename: true) { item in
+            item.title = "Thesis on Graphs"
+            item.authors = [Author(family: "Li", given: "Wei")]
+            item.year = 2024
+            item.kind = .regular
+        }
+        #expect(try lib.files(ofItem: id).first?.relativePath == "Files/Li_2024_Thesis on Graphs.pdf")
+    }
+
     @Test func sameDOIIsDuplicateAndNothingChanges() throws {
         let lib = try Library.temporary()
         let existing = try lib.importItem("Paper", doi: "10.1/x")

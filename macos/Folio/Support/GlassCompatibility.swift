@@ -18,4 +18,10 @@ extension View {
                 .overlay(shape.stroke(.separator, lineWidth: 0.5))
         }
     }
+
+    /// A plain edge where content scrolls under the toolbar: the soft (blurred) edge is redrawn at every step of a
+    /// scroll, which made long forms (设置) stutter.
+    @ViewBuilder func hardScrollEdge() -> some View {
+        if #available(macOS 26, *) { scrollEdgeEffectStyle(.hard, for: .all) } else { self }
+    }
 }

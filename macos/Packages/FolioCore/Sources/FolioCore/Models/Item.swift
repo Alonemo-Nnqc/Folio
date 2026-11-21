@@ -45,6 +45,12 @@ public struct Item: Codable, Sendable, Hashable, Identifiable, FetchableRecord, 
     public var isbn: String?
     public var url: String?
     public var abstract: String?
+    public var place: String?
+    public var edition: String?
+    public var editors: [Author]
+    public var translators: [Author]
+    public var series: String?
+    public var genre: String?
     public var citationKey: String?
     public var rating: Int
     public var readStatus: ReadStatus
@@ -63,6 +69,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable, FetchableRecord, 
         self.type = kind == .standalone ? .other : .journalArticle
         self.title = title
         self.authors = []
+        self.editors = []
+        self.translators = []
         self.rating = 0
         self.readStatus = .unread
         self.metadataState = .none
@@ -79,6 +87,7 @@ public struct Item: Codable, Sendable, Hashable, Identifiable, FetchableRecord, 
             m.type = type; m.authors = authors; m.year = year; m.date = date; m.source = source
             m.volume = volume; m.issue = issue; m.pages = pages; m.publisher = publisher
             m.doi = doi; m.arxivId = arxivId; m.isbn = isbn; m.url = url; m.abstract = abstract
+            m.place = place; m.edition = edition; m.editors = editors; m.translators = translators; m.series = series; m.genre = genre
             return m
         }
         set {
@@ -86,6 +95,8 @@ public struct Item: Codable, Sendable, Hashable, Identifiable, FetchableRecord, 
             date = newValue.date; source = newValue.source; volume = newValue.volume; issue = newValue.issue
             pages = newValue.pages; publisher = newValue.publisher; doi = newValue.doi?.lowercased()
             arxivId = newValue.arxivId; isbn = newValue.isbn; url = newValue.url; abstract = newValue.abstract
+            place = newValue.place; edition = newValue.edition; editors = newValue.editors; translators = newValue.translators
+            series = newValue.series; genre = newValue.genre
         }
     }
 }

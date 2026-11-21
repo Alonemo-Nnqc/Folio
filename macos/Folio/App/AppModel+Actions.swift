@@ -196,6 +196,11 @@ extension AppModel {
             case .system, .custom: break
             }
         }
+        // Markdown documents open in a Folio tab, where they are edited (MD-01).
+        if file.isMarkdown, mode == .reader || (mode == .setting && settings.openWith == .folio) {
+            openMarkdown(fileId: fileId)
+            return
+        }
         switch resolved {
         case .reader: readers.open(fileId: fileId, inBackground: inBackground)
         case .preview: FileOpener.open(url, withApp: FileOpener.previewApp)

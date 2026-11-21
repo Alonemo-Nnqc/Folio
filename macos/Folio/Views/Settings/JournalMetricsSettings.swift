@@ -13,7 +13,6 @@ struct JournalMetricsSettingsSection: View {
         Section {
             Toggle(isOn: $settings.journalMetricsAutoFetch) {
                 Text("自动获取期刊分区与影响因子")
-                Text("为有期刊名的条目获取中科院分区、JCR 分区和影响因子，同一期刊只查询一次并缓存 30 天")
             }
             .onChange(of: settings.journalMetricsAutoFetch) { coordinator.autoFetchDidChange() }
 
@@ -62,10 +61,6 @@ struct JournalMetricsSettingsSection: View {
             }
         } header: {
             Text("期刊指标")
-        } footer: {
-            Text("数据由 easyScholar 开放接口免费提供：登录 easyScholar 后，在“开放接口”页面复制 SecretKey。密钥保存在钥匙串中。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .animation(.smooth(duration: 0.2), value: coordinator.testState)
         .animation(.smooth(duration: 0.2), value: coordinator.status)

@@ -7,6 +7,8 @@ enum ItemColumn: String, CaseIterable {
     case volume, issue, pages, readStatus, rating, fileCount, citationKey
     /// 分区 and 影响因子 from easyScholar (META-30).
     case journalRank, impactFactor
+    /// 出版物: the venue's short name with its ranks as capsules.
+    case venue
 
     var header: String {
         switch self {
@@ -29,6 +31,7 @@ enum ItemColumn: String, CaseIterable {
         case .citationKey: String(localized: "引用键")
         case .journalRank: String(localized: "分区")
         case .impactFactor: String(localized: "影响因子")
+        case .venue: String(localized: "出版物")
         }
     }
 
@@ -46,6 +49,7 @@ enum ItemColumn: String, CaseIterable {
         case .type, .pages: 80
         case .journalRank: 76
         case .impactFactor: 70
+        case .venue: 190
         }
     }
 
@@ -58,12 +62,13 @@ enum ItemColumn: String, CaseIterable {
         case .rating: 76
         case .readStatus: 40
         case .tags: 70
+        case .venue: 80
         default: 60
         }
     }
 
     var visibleByDefault: Bool {
-        [.title, .source, .authors, .year, .tags, .dateAdded].contains(self)
+        [.title, .venue, .authors, .year, .tags, .dateAdded].contains(self)
     }
 
     var sortColumn: SortColumn {
@@ -87,6 +92,7 @@ enum ItemColumn: String, CaseIterable {
         case .citationKey: .citationKey
         case .journalRank: .journalRank
         case .impactFactor: .impactFactor
+        case .venue: .venue
         }
     }
 
@@ -117,6 +123,7 @@ enum ItemColumn: String, CaseIterable {
         case .citationKey: item.citationKey
         case .impactFactor: snapshot.journalMetrics(for: item)?.impactFactor.map(JournalMetrics.format)
         case .journalRank: snapshot.journalMetrics(for: item)?.rankText
+        case .venue: VenueCatalog.venue(of: item)?.abbreviation
         case .readStatus, .rating, .tags: nil
         }
         guard let value, !value.trimmingCharacters(in: .whitespaces).isEmpty else { return "—" }

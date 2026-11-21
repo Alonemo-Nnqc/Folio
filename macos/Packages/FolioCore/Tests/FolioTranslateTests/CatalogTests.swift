@@ -91,6 +91,56 @@ import Testing
         #expect(TranslationOptions(pages: "4-").pageNumbers(count: 6) == [4, 5, 6])
         #expect(TranslationOptions(pages: "x").pageNumbers(count: 6) == [])
     }
+
+    /// Page ranges as people type them, with a Chinese input method on or off.
+    @Test func pageRangesAsTyped() {
+        func pages(_ text: String?, _ count: Int = 10) -> [Int] { PageSelection(text).pages(count: count) }
+        for all in [nil, "", "  ", "全部", "全部页", "all", "ALL", "所有"] {
+            #expect(PageSelection(all) == .all, "\(all ?? "nil")")
+        }
+        #expect(pages("1，3") == [1, 3])
+        #expect(pages("1、3；5") == [1, 3, 5])
+        #expect(pages("１－３，５") == [1, 2, 3, 5])
+        #expect(pages("1~3") == [1, 2, 3])
+        #expect(pages("1～3") == [1, 2, 3])
+        #expect(pages("1–3") == [1, 2, 3])
+        #expect(pages("1 — 3") == [1, 2, 3])
+        #expect(pages("2至4") == [2, 3, 4])
+        #expect(pages("第3页") == [3])
+        #expect(pages("第1-2页, 第5页") == [1, 2, 5])
+        #expect(pages("1 3 5") == [1, 3, 5], "spaces between numbers part them")
+        #expect(pages("5-3") == [3, 4, 5], "either way round")
+        #expect(pages("-2") == [1, 2])
+        #expect(pages("8-") == [8, 9, 10])
+        #expect(pages("8-20") == [8, 9, 10], "cut at the last page")
+        #expect(pages("12-20").isEmpty && PageSelection("12-20") != .unreadable, "readable, beyond the document")
+        for unreadable in ["x", "abc", "0", "1-3,x", "-", "1-2-3", "p3", "全部,1"] {
+            #expect(PageSelection(unreadable) == .unreadable, "\(unreadable)")
+            #expect(PageSelection.problem(with: unreadable) != nil)
+        }
+        #expect(PageSelection.problem(with: "1，3") == nil && PageSelection.problem(with: nil) == nil)
+    }
+
+    /// Pages that select nothing are said as such, not as a PDF without text (a scan).
+    @Test func pageRangesThatSelectNothingAreExplained() async throws {
+        let folder = TemporaryDirectory()
+        let input = folder.url.appending(path: "paper.pdf")
+        let page = TestPDF.paragraph(["Domain generalization aims to train models that work well on unseen target domains."], top: 700)
+        try TestPDF.make([page, page]).write(to: input)
+        // In either language: the range as typed (and the page count), never a scan.
+        for (typed, expected) in [("全部页码", ["全部页码"]), ("5-9", ["5-9", "2"])] {
+            let request = TranslationRequest(input: input, outputDirectory: folder.url.appending(path: "out"), serviceID: "clitranslator",
+                                             fieldValues: ["--clitranslator-command": "/usr/bin/false"],
+                                             options: TranslationOptions(langOut: "fr", pages: typed))
+            let events = await collect(TranslationJob(request: request, supportDirectory: folder.url.appending(path: "support")).start())
+            guard case .failed(let message, _) = events.last else {
+                Issue.record("expected a failure for \(typed): \(events)")
+                continue
+            }
+            #expect(expected.allSatisfy { message.contains($0) }, "\(message)")
+            #expect(!message.contains("扫描") && !message.lowercased().contains("scan"), "\(message)")
+        }
+    }
 }
 
 @Suite struct BatchProtocolTests {

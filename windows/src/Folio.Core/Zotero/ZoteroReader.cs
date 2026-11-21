@@ -147,7 +147,8 @@ public sealed class ZoteroReader : IDisposable
 
     sealed record RawItem(long ItemId, long TypeId, DateTime DateAdded, DateTime DateModified);
     sealed record RawAttachment(long ItemId, string Key, long? ParentItemId, int LinkMode, string? Path, string? ContentType, DateTime DateAdded, DateTime DateModified);
-    sealed record RawCreator(int OrderIndex, string? FirstName, string? LastName, int FieldMode);
+    /// <summary>An author, editor or translator (Zotero's creator type, Role).</summary>
+    sealed record RawCreator(int OrderIndex, string? FirstName, string? LastName, int FieldMode, string Role = "author");
     sealed record RawCollection(long Id, string Key, string Name, long? ParentId);
 
     sealed class RawLibrary
@@ -203,17 +204,17 @@ public sealed class ZoteroReader : IDisposable
                 if (!raw.Fields.TryGetValue(itemId, out var fields)) raw.Fields[itemId] = fields = [];
                 fields[field] = value;
             }
-            var author = Rows(c, "SELECT creatorTypeID FROM creatorTypes WHERE creatorType = 'author'", r => r.GetInt64(0));
-            if (author.Count > 0)
-                foreach (var (itemId, creator) in Rows(c, """
-                    SELECT ic.itemID AS itemID, ic.orderIndex AS orderIndex, c.firstName AS firstName, c.lastName AS lastName, c.fieldMode AS fieldMode
-                    FROM itemCreators ic JOIN creators c ON c.creatorID = ic.creatorID JOIN items i ON i.itemID = ic.itemID
-                    WHERE i.libraryID = $p0 AND ic.creatorTypeID = $p1
-                    """, r => (L(r, "itemID"), new RawCreator((int)L(r, "orderIndex"), S(r, "firstName"), S(r, "lastName"), (int)L(r, "fieldMode"))), id, author[0]))
-                {
-                    if (!raw.Creators.TryGetValue(itemId, out var list)) raw.Creators[itemId] = list = [];
-                    list.Add(creator);
-                }
+            // Authors, and the editors and translators of books and chapters (#19).
+            foreach (var (itemId, creator) in Rows(c, """
+                SELECT ic.itemID AS itemID, ic.orderIndex AS orderIndex, ct.creatorType AS role, c.firstName AS firstName, c.lastName AS lastName, c.fieldMode AS fieldMode
+                FROM itemCreators ic JOIN creators c ON c.creatorID = ic.creatorID JOIN creatorTypes ct ON ct.creatorTypeID = ic.creatorTypeID
+                JOIN items i ON i.itemID = ic.itemID
+                WHERE i.libraryID = $p0 AND ct.creatorType IN ('author', 'editor', 'translator')
+                """, r => (L(r, "itemID"), new RawCreator((int)L(r, "orderIndex"), S(r, "firstName"), S(r, "lastName"), (int)L(r, "fieldMode"), S(r, "role") ?? "author")), id))
+            {
+                if (!raw.Creators.TryGetValue(itemId, out var list)) raw.Creators[itemId] = list = [];
+                list.Add(creator);
+            }
             foreach (var a in Rows(c, """
                 SELECT ia.itemID AS itemID, i.key AS key, ia.parentItemID AS parentItemID, ia.linkMode AS linkMode, ia.path AS path,
                        ia.contentType AS contentType, i.dateAdded AS dateAdded, i.dateModified AS dateModified
@@ -399,8 +400,13 @@ public sealed class ZoteroReader : IDisposable
                 "webpage" => ItemType.Webpage, "dataset" => ItemType.Dataset, _ => ItemType.Other,
             };
             var metadata = new Metadata(fields.GetValueOrDefault("title") ?? "") { Type = type };
-            metadata.Authors = creators.OrderBy(c => c.OrderIndex)
+            List<Author> People(string role) => creators.Where(c => c.Role == role).OrderBy(c => c.OrderIndex)
                 .Select(c => c.FieldMode == 1 ? new Author(c.LastName ?? c.FirstName ?? "") : new Author(c.LastName ?? "", c.FirstName ?? "")).ToList();
+            metadata.Authors = People("author");
+            metadata.Editors = People("editor");
+            metadata.Translators = People("translator");
+            // A book of edited chapters may have no author: its editors are who it is by.
+            if (metadata.Authors.Count == 0 && type == ItemType.Book) { metadata.Authors = metadata.Editors; metadata.Editors = []; }
             if (fields.GetValueOrDefault("date") is { } date)
             {
                 var (year, normalized) = ZoteroDate.ParseFieldValue(date);
@@ -414,6 +420,12 @@ public sealed class ZoteroReader : IDisposable
             metadata.Issue = fields.GetValueOrDefault("issue");
             metadata.Pages = fields.GetValueOrDefault("pages");
             metadata.Publisher = fields.GetValueOrDefault("publisher");
+            metadata.Place = fields.GetValueOrDefault("place");
+            metadata.Edition = fields.GetValueOrDefault("edition");
+            metadata.Series = fields.GetValueOrDefault("series");
+            // Thesis type ("PhD thesis", "硕士学位论文"), report type: one Zotero field, "type".
+            metadata.Genre = fields.GetValueOrDefault("thesisType") ?? fields.GetValueOrDefault("reportType") ?? fields.GetValueOrDefault("type");
+            if (type == ItemType.Report && metadata.Issue == null) metadata.Issue = fields.GetValueOrDefault("reportNumber") ?? fields.GetValueOrDefault("number");
             metadata.Doi = Doi(fields.GetValueOrDefault("DOI"));
             metadata.ArxivId = ArxivId(fields.GetValueOrDefault("archiveID"), fields.GetValueOrDefault("extra"), fields.GetValueOrDefault("url"));
             metadata.Isbn = fields.GetValueOrDefault("ISBN");

@@ -24,11 +24,14 @@ struct TranslationSettingsPane: View {
     static func abbreviatedPath(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
 }
 
-/// "翻译全文…": confirm service, languages and outputs for this run (they become the new defaults).
+/// "翻译全文…": confirm service, languages and outputs for this run (they become the new defaults; the pages do not).
 struct TranslateSheet: View {
     let model: AppModel
     let fileIds: [String]
     @Environment(\.sheetDismiss) private var dismiss
+    /// This run's pages only: a range typed for one paper is not every later paper's. (`-FolioPreviewTranslatePages`
+    /// fills it in for screenshots.)
+    @State private var pages = UserDefaults.standard.string(forKey: "FolioPreviewTranslatePages") ?? ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,23 +51,21 @@ struct TranslateSheet: View {
             .padding([.horizontal, .top], 20)
             Form {
                 ServiceSection(model: model, compact: true)
-                OptionsSection(settings: model.settings, compact: true)
+                OptionsSection(settings: model.settings, compact: true, pages: $pages)
             }
             .formStyle(.grouped)
             .frame(minHeight: 360)
-            TranslationEstimateLine(model: model, fileIds: fileIds)
+            TranslationEstimateLine(model: model, fileIds: fileIds, pages: pages)
             HStack {
-                Text("保留版面、公式与图表，译文将作为附件加入该条目")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 Spacer()
                 Button("取消", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("开始翻译") {
                     dismiss()
-                    model.translations.start(fileIds: fileIds)
+                    model.translations.start(fileIds: fileIds, pages: pages)
                 }
                 .keyboardShortcut(.defaultAction)
+                .disabled(PageSelection.problem(with: pages) != nil)
                 .glassProminentButtonStyle()
             }
             .padding([.horizontal, .bottom], 20)
@@ -78,14 +79,16 @@ struct TranslateSheet: View {
 private struct TranslationEstimateLine: View {
     let model: AppModel
     let fileIds: [String]
+    let pages: String
     @State private var text: String?
 
     var body: some View {
         let settings = model.settings
         let service = settings.translationService
+        let options = TranslationCoordinator.options(settings.translationOptions, pages: pages)
         let requests = fileIds.compactMap { model.snapshot.files[$0] }.map {
             TranslationRequest(input: model.fileURL($0), outputDirectory: URL(filePath: "/dev/null"), serviceID: service,
-                               fieldValues: settings.translationFields[service] ?? [:], options: settings.translationOptions)
+                               fieldValues: settings.translationFields[service] ?? [:], options: options)
         }
         // A stack, not a Group: with nothing in it yet a Group has no view for the task to run on.
         VStack(spacing: 0) {
@@ -540,6 +543,8 @@ private struct FieldRow: View {
 private struct OptionsSection: View {
     @Bindable var settings: AppSettings
     var compact = false
+    /// The pages of the run the sheet starts (not a setting: see `TranslateSheet`).
+    var pages: Binding<String>?
 
     var body: some View {
         if compact {
@@ -564,7 +569,6 @@ private struct OptionsSection: View {
                     }
                 } label: {
                     Text("术语表文件（选填）")
-                    Text("CSV：原文, 译文；仅用于当前设置，优先于下面的术语表")
                 }
             }
             Section("术语") { GlossarySettingsRows(settings: settings) }
@@ -575,15 +579,23 @@ private struct OptionsSection: View {
                     ForEach([1, 2, 4, 8, 12, 16], id: \.self) { Text("\($0)").tag($0) }
                 } label: {
                     Text("同时请求数")
-                    Text("遇到限流时调小")
                 }
                 Picker(selection: $settings.translationParallelJobs) {
                     ForEach(1...4, id: \.self) { Text("\($0) 篇").tag($0) }
                 } label: {
-                    Text("同时翻译")
-                    Text("批量翻译时同时进行的论文篇数")
+                    Text("同一服务同时翻译")
                 }
                 .onChange(of: settings.translationParallelJobs) { AppDelegate.shared.model.translations.parallelChanged() }
+                Picker(selection: $settings.translationParallelTotal) {
+                    ForEach([2, 4, 6, 8], id: \.self) { Text("\($0) 篇").tag($0) }
+                } label: {
+                    Text("同时翻译总数")
+                }
+                .onChange(of: settings.translationParallelTotal) { AppDelegate.shared.model.translations.parallelChanged() }
+                Toggle(isOn: $settings.autoTranslateImports) {
+                    Text("自动翻译新添加的论文")
+                }
+                .accessibilityIdentifier("autoTranslateImports")
                 Toggle(isOn: $settings.translationOptions.ignoreCache) {
                     Text("重新翻译（不使用缓存）")
                 }
@@ -620,12 +632,16 @@ private struct OptionsSection: View {
                 Text("替换旧的译文").tag(TranslationOptions.Duplicates.replace)
             } label: {
                 Text("再次翻译")
-                Text("同一服务与模型重复翻译时")
             }
         }
-        TextField("页码范围（选填）", text: Binding(get: { settings.translationOptions.pages ?? "" },
-                                            set: { settings.translationOptions.pages = $0.isEmpty ? nil : $0 }),
-                  prompt: Text("全部，例如 1-3,5"))
+        if let pages {
+            TextField("页码范围（选填）", text: pages, prompt: Text("全部，例如 1-3,5"))
+            if let problem = PageSelection.problem(with: pages.wrappedValue) {
+                Text(problem)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
     }
 
     @ViewBuilder
@@ -635,7 +651,6 @@ private struct OptionsSection: View {
         }
         Toggle(isOn: $settings.translationOptions.translateImageText) {
             Text("翻译图片中的文字")
-            Text("识别插图里的文字并在原位置换成译文，图片其余部分保持不变；会多花一些时间")
         }
         Toggle(isOn: $settings.translationOptions.translateReferences) {
             Text("翻译参考文献")
@@ -1022,7 +1037,6 @@ struct SelectionTranslationSettingsSections: View {
                 }
                 Toggle(isOn: $settings.selectionTranslationFallback) {
                     Text("限流时自动换用其他免费服务")
-                    Text("Google、Microsoft\(AppleSystemTranslator.isSupportedOnThisSystem ? String(localized: "、Apple 离线翻译") : "")互为备用")
                 }
             } header: {
                 Text("划词翻译服务")

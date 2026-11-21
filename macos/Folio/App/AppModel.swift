@@ -65,6 +65,12 @@ final class AppModel {
     var searchFocusRequest = 0
     /// Bumped to put the keyboard focus into the inspector's note editor.
     var noteFocusRequest = 0
+    /// 多选: clicks in the list add or remove rows from the selection, rows show check circles (toolbar ▸ 多选).
+    var multiSelectMode = false
+    /// Bumped to slide the library's inspector open (a new Markdown document is written there).
+    var showInspectorRequest = 0
+    /// A Markdown file whose editor takes the keyboard focus when it appears.
+    var markdownFocusFileId: String?
     var activeSheet: ActiveSheet?
     // Screenshot hooks (see PreviewHooks).
     var previewExpandRequest: String?
@@ -80,6 +86,7 @@ final class AppModel {
     @ObservationIgnored lazy var importer = ImportCoordinator(model: self)
     @ObservationIgnored let citations = CitationService()
     @ObservationIgnored lazy var readers = ReaderCoordinator(model: self)
+    @ObservationIgnored lazy var markdownTabs = MarkdownTabCoordinator(model: self)
     @ObservationIgnored lazy var translations = TranslationCoordinator(model: self)
     @ObservationIgnored lazy var connector = ConnectorServer(model: self)
     /// 期刊分区与影响因子 (META-30). Observable itself: the inspector and 设置 read its state.
@@ -145,6 +152,7 @@ final class AppModel {
         }
         // Open papers hold paths inside the library: save and close them first.
         readers.saveAll()
+        markdownTabs.saveAll()
         readers.closeAll()
         observationTask?.cancel()
         try library.close()

@@ -101,17 +101,75 @@ public struct TranslationOptions: Sendable, Hashable, Codable {
 
     /// Page numbers (1-based) selected by `pages` within a document of `count` pages; all pages when unset.
     public func pageNumbers(count: Int) -> [Int] {
-        guard let pages = pages?.replacingOccurrences(of: " ", with: ""), !pages.isEmpty else { return Array(1...max(count, 1)) }
-        var result: Set<Int> = []
-        for part in pages.split(separator: ",") {
-            let bounds = part.split(separator: "-", omittingEmptySubsequences: false).map { Int($0) }
-            if bounds.count == 1, let n = bounds[0] { result.insert(n) }
-            else if bounds.count == 2 {
-                let lo = bounds[0] ?? 1, hi = bounds[1] ?? count
-                if lo <= hi { result.formUnion(lo...hi) }
+        PageSelection(pages).pages(count: count)
+    }
+}
+
+/// A page range as people type it: "1-3,5", "4-" (to the end), and the same with full-width digits, Chinese
+/// punctuation and other dashes ("１－３，５", "1~3、5", "第3页"); empty or "全部" for every page.
+public enum PageSelection: Sendable, Equatable {
+    case all
+    /// Inclusive ranges as typed; an open end is 1 or `Int.max`.
+    case ranges([ClosedRange<Int>])
+    /// Not page numbers: nothing can be selected by it.
+    case unreadable
+
+    public init(_ text: String?) {
+        // Full-width digits and punctuation (１２，－～；) as their ASCII forms.
+        var s = (text ?? "").precomposedStringWithCompatibilityMapping.lowercased()
+        for dash in ["–", "—", "−", "‐", "‑", "‒", "―", "~", "〜", "至", "到"] { s = s.replacingOccurrences(of: dash, with: "-") }
+        for comma in ["、", ";"] { s = s.replacingOccurrences(of: comma, with: ",") }
+        for word in ["第", "页", "頁"] { s = s.replacingOccurrences(of: word, with: "") }
+        s = s.replacingOccurrences(of: #"\s*-\s*"#, with: "-", options: .regularExpression)
+        let parts = s.split { $0 == "," || $0.isWhitespace }.map(String.init)
+        if parts.isEmpty || parts.count == 1 && ["全部", "所有", "全文", "all"].contains(parts[0]) {
+            self = .all
+            return
+        }
+        var ranges: [ClosedRange<Int>] = []
+        for part in parts {
+            let bounds = part.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
+            func number(_ text: String, open: Int) -> Int? { text.isEmpty ? open : Int(text).flatMap { $0 >= 1 ? $0 : nil } }
+            switch bounds.count {
+            case 1:
+                guard let n = number(bounds[0], open: 0), n >= 1 else { self = .unreadable; return }
+                ranges.append(n...n)
+            case 2:
+                guard bounds[0].count + bounds[1].count > 0, let lo = number(bounds[0], open: 1), let hi = number(bounds[1], open: .max) else {
+                    self = .unreadable
+                    return
+                }
+                ranges.append(min(lo, hi)...max(lo, hi))
+            default:
+                self = .unreadable
+                return
             }
         }
-        return result.filter { $0 >= 1 && $0 <= count }.sorted()
+        self = .ranges(ranges)
+    }
+
+    /// The pages (1-based) selected in a document of `count` pages.
+    public func pages(count: Int) -> [Int] {
+        switch self {
+        case .all:
+            return Array(1...max(count, 1))
+        case .ranges(let ranges):
+            var result: Set<Int> = []
+            for range in ranges where range.lowerBound <= count { result.formUnion(range.lowerBound...min(range.upperBound, count)) }
+            return result.sorted()
+        case .unreadable:
+            return []
+        }
+    }
+
+    /// What is wrong with a page range typed by the user, in words for them; nil when it can be used.
+    public static func problem(with text: String?) -> String? {
+        guard PageSelection(text) == .unreadable else { return nil }
+        return unreadableMessage((text ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    static func unreadableMessage(_ typed: String) -> String {
+        String(localized: "无法识别页码范围「\(typed)」。请填写如 1-3,5 的页码，或留空以翻译全部页。", bundle: .module)
     }
 }
 

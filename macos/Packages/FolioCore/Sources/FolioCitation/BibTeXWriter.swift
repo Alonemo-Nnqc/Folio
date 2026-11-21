@@ -7,12 +7,12 @@ public enum BibTeXWriter {
     public static func entry(_ entry: CitationEntry) -> String {
         let m = entry.metadata
         var fields: [(String, String)] = []
-        fields.append(("author", authorField(m.authors)))
+        if !m.authors.isEmpty || m.editors.isEmpty { fields.append(("author", authorField(m.authors))) }
         fields.append(("title", titleField(m.title)))
         fields.append(contentsOf: extraFields(for: m))
 
         let body = fields.map { "  \($0.0) = {\($0.1)}" }.joined(separator: ",\n")
-        return "@\(kind(for: m.type)){\(entry.citationKey),\n\(body)\n}"
+        return "@\(m.type == .thesis && isMasters(m.genre) ? "mastersthesis" : kind(for: m.type)){\(entry.citationKey),\n\(body)\n}"
     }
 
     /// All entries, separated by a blank line, terminated with a trailing newline.
@@ -29,7 +29,7 @@ public enum BibTeXWriter {
         case .preprint: "misc"
         case .book: "book"
         case .bookChapter: "incollection"
-        case .thesis: "phdthesis"
+        case .thesis: "phdthesis"  // or mastersthesis, by its genre: see `entry`
         case .report: "techreport"
         case .webpage, .dataset, .other: "misc"
         }
@@ -44,6 +44,10 @@ public enum BibTeXWriter {
             fields.append((name, escape(value)))
         }
 
+        func people(_ name: String, _ list: [Author]) {
+            if !list.isEmpty { fields.append((name, authorField(list))) }
+        }
+
         switch m.type {
         case .journalArticle:
             add("journal", m.source)
@@ -54,9 +58,12 @@ public enum BibTeXWriter {
             add("doi", m.doi)
         case .conferencePaper:
             add("booktitle", m.source)
+            people("editor", m.editors)
             add("year", yearField(m))
             add("volume", m.volume)
             add("pages", pagesField(m.pages))
+            add("publisher", m.publisher)
+            add("address", m.place)
             add("doi", m.doi)
         case .preprint:
             add("year", yearField(m))
@@ -67,24 +74,41 @@ public enum BibTeXWriter {
             add("doi", m.doi)
             add("url", m.url)
         case .book:
-            add("publisher", m.publisher)
+            people("editor", m.editors)
+            people("translator", m.translators)
+            add("publisher", m.publisher ?? m.source)
+            add("address", m.place)
+            add("edition", m.edition)
+            add("series", m.series)
             add("year", yearField(m))
             add("isbn", m.isbn)
             add("doi", m.doi)
             add("url", m.url)
         case .bookChapter:
             add("booktitle", m.source)
+            people("editor", m.editors)
+            people("translator", m.translators)
             add("publisher", m.publisher)
+            add("address", m.place)
+            add("edition", m.edition)
+            add("series", m.series)
             add("year", yearField(m))
             add("pages", pagesField(m.pages))
+            add("isbn", m.isbn)
             add("doi", m.doi)
         case .thesis:
-            add("school", m.source)
+            add("school", m.source ?? m.publisher)
+            add("address", m.place)
+            add("type", m.genre)
             add("year", yearField(m))
             add("doi", m.doi)
             add("url", m.url)
         case .report:
-            add("institution", m.source)
+            add("institution", m.source ?? m.publisher)
+            add("address", m.place)
+            add("type", m.genre)
+            add("number", m.issue)
+            add("series", m.series)
             add("year", yearField(m))
             add("doi", m.doi)
             add("url", m.url)
@@ -95,6 +119,12 @@ public enum BibTeXWriter {
             add("doi", m.doi)
         }
         return fields
+    }
+
+    /// A master's thesis rather than a doctoral one ("硕士学位论文", "Master's thesis", "MSc").
+    static func isMasters(_ genre: String?) -> Bool {
+        guard let genre = genre?.lowercased() else { return false }
+        return ["硕士", "master", "msc", "m.sc", "m.a.", "mphil"].contains { genre.contains($0) }
     }
 
     private static func yearField(_ m: Metadata) -> String? {

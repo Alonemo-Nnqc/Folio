@@ -197,15 +197,14 @@ static class CslJsonMapper
             ["title"] = m.Title,
             ["language"] = ContainsCjk(m.Title) ? "zh" : "en",
         };
-        if (m.Authors.Count > 0)
-            item["author"] = new JsonArray(m.Authors.Select(a => (JsonNode)(a.Given.Trim().Length == 0
-                ? new JsonObject { ["literal"] = a.Family }
-                : new JsonObject { ["family"] = a.Family, ["given"] = a.Given.Trim() })).ToArray());
+        if (m.Authors.Count > 0) item["author"] = Names(m.Authors);
         var parts = m.Date?.Split('-').Select(p => int.TryParse(p, out var n) ? (int?)n : null).Where(n => n != null).Select(n => n!.Value).ToList();
         if (parts is { Count: > 0 }) item["issued"] = new JsonObject { ["date-parts"] = new JsonArray(new JsonArray(parts.Select(p => (JsonNode)p).ToArray())) };
         else if (m.Year is { } y) item["issued"] = new JsonObject { ["date-parts"] = new JsonArray(new JsonArray(y)) };
         bool repositoryPreprint = m.Type == ItemType.Preprint && m.ArxivId != null;
-        if (!string.IsNullOrEmpty(m.Source) && !(repositoryPreprint && m.Source.Equals("arxiv", StringComparison.OrdinalIgnoreCase))) item["container-title"] = m.Source;
+        // Books, theses and reports are not in a container: what Source holds for them is the publisher, university or institution (#19).
+        bool publishedBy = m.Type is ItemType.Book or ItemType.Thesis or ItemType.Report;
+        if (!string.IsNullOrEmpty(m.Source) && !publishedBy && !(repositoryPreprint && m.Source.Equals("arxiv", StringComparison.OrdinalIgnoreCase))) item["container-title"] = m.Source;
         if (repositoryPreprint)
         {
             item["publisher"] = "arXiv";
@@ -214,14 +213,33 @@ static class CslJsonMapper
             if (string.IsNullOrEmpty(m.Url)) item["URL"] = $"https://arxiv.org/abs/{m.ArxivId}";
         }
         if (!string.IsNullOrEmpty(m.Volume)) item["volume"] = m.Volume;
-        if (!string.IsNullOrEmpty(m.Issue)) item["issue"] = m.Issue;
+        // A report's number is its "issue".
+        if (!string.IsNullOrEmpty(m.Issue)) item[m.Type == ItemType.Report ? "number" : "issue"] = m.Issue;
         if (!string.IsNullOrEmpty(m.Pages)) item["page"] = m.Pages;
-        if (!string.IsNullOrEmpty(m.Publisher) && !repositoryPreprint) item["publisher"] = m.Publisher;
+        var institution = m.Type is ItemType.Thesis or ItemType.Report ? NonEmpty(m.Source) ?? NonEmpty(m.Publisher) : null;
+        if ((institution ?? NonEmpty(m.Publisher) ?? (m.Type == ItemType.Book ? NonEmpty(m.Source) : null)) is { } publisher && !repositoryPreprint) item["publisher"] = publisher;
+        if (NonEmpty(m.Place) is { } place)
+        {
+            item["publisher-place"] = place;
+            if (m.Type == ItemType.ConferencePaper) item["event-place"] = place;
+        }
+        if (NonEmpty(m.Edition) is { } edition) item["edition"] = edition;
+        if (m.Editors.Count > 0) item["editor"] = Names(m.Editors);
+        if (m.Translators.Count > 0) item["translator"] = Names(m.Translators);
+        if (NonEmpty(m.Series) is { } series) item["collection-title"] = series;
+        if (NonEmpty(m.Genre) is { } genre) item["genre"] = genre;
         if (!string.IsNullOrEmpty(m.Doi)) item["DOI"] = m.Doi;
         if (!string.IsNullOrEmpty(m.Url)) item["URL"] = m.Url;
         if (!string.IsNullOrEmpty(m.Abstract)) item["abstract"] = m.Abstract;
         return item;
     }
+
+    static string? NonEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
+
+    /// <summary>Organisations (no given name) as a CSL literal, so citeproc does not invert them.</summary>
+    static JsonArray Names(List<Author> people) => new(people.Select(a => (JsonNode)(a.Given.Trim().Length == 0
+        ? new JsonObject { ["literal"] = a.Family }
+        : new JsonObject { ["family"] = a.Family, ["given"] = a.Given.Trim() })).ToArray());
 
     public static string CslType(ItemType t) => t switch
     {
@@ -245,9 +263,12 @@ public static class BibTeXWriter
     public static string Entry(CitationEntry entry)
     {
         var m = entry.Metadata;
-        var fields = new List<(string, string)> { ("author", string.Join(" and ", m.Authors.Select(a => Escape(AuthorFormatter.Full(a))))), ("title", ProtectAcronyms(Escape(m.Title))) };
+        var fields = new List<(string, string)>();
+        if (m.Authors.Count > 0 || m.Editors.Count == 0) fields.Add(("author", People(m.Authors)));
+        fields.Add(("title", ProtectAcronyms(Escape(m.Title))));
         fields.AddRange(ExtraFields(m));
-        return $"@{Kind(m.Type)}{{{entry.CitationKey},\n{string.Join(",\n", fields.Select(f => $"  {f.Item1} = {{{f.Item2}}}"))}\n}}";
+        var kind = m.Type == ItemType.Thesis && IsMasters(m.Genre) ? "mastersthesis" : Kind(m.Type);
+        return $"@{kind}{{{entry.CitationKey},\n{string.Join(",\n", fields.Select(f => $"  {f.Item1} = {{{f.Item2}}}"))}\n}}";
     }
 
     public static string Document(IEnumerable<CitationEntry> entries) => string.Join("\n\n", entries.Select(Entry)) + "\n";
@@ -263,10 +284,17 @@ public static class BibTeXWriter
         _ => "misc",
     };
 
+    static string People(List<Author> people) => string.Join(" and ", people.Select(a => Escape(AuthorFormatter.Full(a))));
+
+    /// <summary>A master's thesis rather than a doctoral one ("硕士学位论文", "Master's thesis", "MSc").</summary>
+    public static bool IsMasters(string? genre) =>
+        genre?.ToLowerInvariant() is { } g && new[] { "硕士", "master", "msc", "m.sc", "m.a.", "mphil" }.Any(g.Contains);
+
     static List<(string, string)> ExtraFields(Metadata m)
     {
         var fields = new List<(string, string)>();
         void Add(string name, string? value) { if (!string.IsNullOrEmpty(value)) fields.Add((name, Escape(value))); }
+        void AddPeople(string name, List<Author> people) { if (people.Count > 0) fields.Add((name, People(people))); }
         var year = m.Year?.ToString(CultureInfo.InvariantCulture) ?? (m.Date is { Length: >= 4 } d ? d[..4] : null);
         var pages = string.IsNullOrEmpty(m.Pages) ? null : m.Pages.Contains("--") ? m.Pages : m.Pages.Replace("-", "--");
         switch (m.Type)
@@ -274,19 +302,23 @@ public static class BibTeXWriter
             case ItemType.JournalArticle:
                 Add("journal", m.Source); Add("year", year); Add("volume", m.Volume); Add("number", m.Issue); Add("pages", pages); Add("doi", m.Doi); break;
             case ItemType.ConferencePaper:
-                Add("booktitle", m.Source); Add("year", year); Add("volume", m.Volume); Add("pages", pages); Add("doi", m.Doi); break;
+                Add("booktitle", m.Source); AddPeople("editor", m.Editors); Add("year", year); Add("volume", m.Volume); Add("pages", pages);
+                Add("publisher", m.Publisher); Add("address", m.Place); Add("doi", m.Doi); break;
             case ItemType.Preprint:
                 Add("year", year);
                 if (!string.IsNullOrEmpty(m.ArxivId)) { fields.Add(("eprint", Escape(m.ArxivId))); fields.Add(("archivePrefix", "arXiv")); }
                 Add("doi", m.Doi); Add("url", m.Url); break;
             case ItemType.Book:
-                Add("publisher", m.Publisher); Add("year", year); Add("isbn", m.Isbn); Add("doi", m.Doi); Add("url", m.Url); break;
+                AddPeople("editor", m.Editors); AddPeople("translator", m.Translators); Add("publisher", m.Publisher ?? m.Source); Add("address", m.Place);
+                Add("edition", m.Edition); Add("series", m.Series); Add("year", year); Add("isbn", m.Isbn); Add("doi", m.Doi); Add("url", m.Url); break;
             case ItemType.BookChapter:
-                Add("booktitle", m.Source); Add("publisher", m.Publisher); Add("year", year); Add("pages", pages); Add("doi", m.Doi); break;
+                Add("booktitle", m.Source); AddPeople("editor", m.Editors); AddPeople("translator", m.Translators); Add("publisher", m.Publisher);
+                Add("address", m.Place); Add("edition", m.Edition); Add("series", m.Series); Add("year", year); Add("pages", pages); Add("isbn", m.Isbn); Add("doi", m.Doi); break;
             case ItemType.Thesis:
-                Add("school", m.Source); Add("year", year); Add("doi", m.Doi); Add("url", m.Url); break;
+                Add("school", m.Source ?? m.Publisher); Add("address", m.Place); Add("type", m.Genre); Add("year", year); Add("doi", m.Doi); Add("url", m.Url); break;
             case ItemType.Report:
-                Add("institution", m.Source); Add("year", year); Add("doi", m.Doi); Add("url", m.Url); break;
+                Add("institution", m.Source ?? m.Publisher); Add("address", m.Place); Add("type", m.Genre); Add("number", m.Issue); Add("series", m.Series);
+                Add("year", year); Add("doi", m.Doi); Add("url", m.Url); break;
             default:
                 Add("year", year); Add("note", m.Source); Add("url", m.Url); Add("doi", m.Doi); break;
         }
@@ -397,6 +429,12 @@ static class BibTeXReader
         if (fields.GetValueOrDefault("title") is not { } rawTitle || Clean(rawTitle) is not { Length: > 0 } title) return null;
         var m = new Metadata(title) { Type = TypeFor(kind, fields) };
         m.Authors = (fields.GetValueOrDefault("author") ?? fields.GetValueOrDefault("editor")) is { } a ? Authors(a) : [];
+        if (fields.ContainsKey("author")) m.Editors = fields.GetValueOrDefault("editor") is { } ed ? Authors(ed) : [];
+        m.Translators = fields.GetValueOrDefault("translator") is { } tr ? Authors(tr) : [];
+        m.Place = (fields.GetValueOrDefault("address") ?? fields.GetValueOrDefault("location")) is { } place ? Clean(place) : null;
+        m.Edition = fields.GetValueOrDefault("edition") is { } edition ? Clean(edition) : null;
+        m.Series = fields.GetValueOrDefault("series") is { } series ? Clean(series) : null;
+        m.Genre = fields.GetValueOrDefault("type") is { } type ? Clean(type) : kind == "mastersthesis" ? "Master's thesis" : null;
         if (fields.GetValueOrDefault("year") is { } y && int.TryParse(new string(Clean(y).Take(4).ToArray()), out var year)) m.Year = year;
         if (fields.GetValueOrDefault("date") is { } dt && Clean(dt) is { Length: > 0 } date)
         {
@@ -572,13 +610,24 @@ static class RisReader
                 _ => ItemType.Other,
             },
         };
-        m.Authors = tags.Where(t => t.Tag is "AU" or "A1" or "A2").Take(200).SelectMany(t => BibTeXReader.Authors(t.Value)).ToList();
+        List<Author> People(params string[] names) => tags.Where(t => names.Contains(t.Tag)).Take(200).SelectMany(t => BibTeXReader.Authors(t.Value)).ToList();
+        m.Authors = People("AU", "A1");
+        // A2 / ED are the book's or proceedings' editors, A4 the translators (Zotero's RIS).
+        m.Editors = People("A2", "ED");
+        if (m.Authors.Count == 0) { m.Authors = m.Editors; m.Editors = []; }
+        m.Translators = People("A4");
+        m.Place = First("CY", "PP");
+        m.Edition = First("ET");
+        m.Series = First("T3");
+        m.Genre = First("M3");
         if (First("PY", "Y1", "DA") is { } date && int.TryParse(new string(date.Take(4).ToArray()), out var y)) m.Year = y;
-        m.Source = First("T2", "JO", "JF", "JA", "T3");
+        bool institutional = m.Type is ItemType.Thesis or ItemType.Report;
+        m.Source = First("T2", "JO", "JF", "JA") ?? (institutional ? First("PB") : null);
         m.Volume = First("VL");
         m.Issue = First("IS");
         if (First("SP") is { } start) m.Pages = First("EP") is { } end ? $"{start}-{end}" : start;
-        m.Publisher = First("PB");
+        // A thesis's university and a report's institution come as the publisher (Zotero): they are its source here.
+        m.Publisher = institutional ? null : First("PB");
         m.Doi = First("DO")?.ToLowerInvariant().Replace("https://doi.org/", "");
         m.Url = First("UR");
         m.Isbn = First("SN");
@@ -611,10 +660,18 @@ static class RisWriter
         });
         Add("ID", e.CitationKey);
         Add("TI", m.Title);
-        foreach (var a in m.Authors) Add("AU", a.Given.Length == 0 ? a.Family : $"{a.Family}, {a.Given}");
+        static string Person(Author a) => a.Given.Length == 0 ? a.Family : $"{a.Family}, {a.Given}";
+        foreach (var a in m.Authors) Add("AU", Person(a));
+        foreach (var a in m.Editors) Add("A2", Person(a));
+        foreach (var a in m.Translators) Add("A4", Person(a));
         Add("PY", m.Year?.ToString(CultureInfo.InvariantCulture));
         Add("DA", m.Date);
-        Add("T2", m.Source);
+        // A book's, thesis's or report's source is who published it (the publisher, university or institution).
+        if (m.Type is not (ItemType.Book or ItemType.Thesis or ItemType.Report)) Add("T2", m.Source);
+        Add("T3", m.Series);
+        Add("ET", m.Edition);
+        Add("M3", m.Genre);
+        Add("CY", m.Place);
         Add("VL", m.Volume);
         Add("IS", m.Issue);
         if (m.Pages != null)
@@ -623,7 +680,7 @@ static class RisWriter
             Add("SP", parts[0]);
             if (parts.Length > 1) Add("EP", parts[1]);
         }
-        Add("PB", m.Publisher);
+        Add("PB", m.Type is ItemType.Thesis or ItemType.Report ? m.Source ?? m.Publisher : m.Publisher ?? (m.Type == ItemType.Book ? m.Source : null));
         Add("DO", m.Doi);
         Add("UR", m.Url);
         Add("SN", m.Isbn);
@@ -646,6 +703,10 @@ static class CslJsonWriter
 
 static class CslJsonReader
 {
+    static List<Author> People(JsonNode? names) => (names as JsonArray ?? []).OfType<JsonObject>().Select(n =>
+        n["literal"] is { } lit ? new Author(lit.ToString()) : n["family"] is { } fam ? new Author(fam.ToString(), n["given"]?.ToString() ?? "") : null)
+        .OfType<Author>().ToList();
+
     public static List<ReferenceRecord> Parse(string text)
     {
         JsonNode? root;
@@ -670,18 +731,24 @@ static class CslJsonReader
                     "dataset" => ItemType.Dataset,
                     _ => ItemType.Other,
                 },
-                Authors = (item["author"] as JsonArray ?? []).OfType<JsonObject>().Select(n =>
-                    n["literal"] is { } lit ? new Author(lit.ToString()) : n["family"] is { } fam ? new Author(fam.ToString(), n["given"]?.ToString() ?? "") : null)
-                    .OfType<Author>().ToList(),
+                Authors = People(item["author"]),
+                Editors = People(item["editor"]),
+                Translators = People(item["translator"]),
+                Place = (item["publisher-place"] ?? item["event-place"])?.ToString(),
+                Edition = item["edition"]?.ToString(),
+                Series = item["collection-title"]?.ToString(),
+                Genre = item["genre"]?.ToString(),
                 Source = item["container-title"]?.ToString(),
                 Volume = item["volume"]?.ToString(),
-                Issue = item["issue"]?.ToString(),
+                Issue = (item["issue"] ?? (item["type"]?.ToString() == "report" ? item["number"] : null))?.ToString(),
                 Pages = item["page"]?.ToString(),
                 Publisher = item["publisher"]?.ToString(),
                 Doi = item["DOI"]?.ToString().ToLowerInvariant(),
                 Url = item["URL"]?.ToString(),
                 Abstract = item["abstract"]?.ToString(),
             };
+            // A thesis's university and a report's institution are their source here.
+            if (m.Type is ItemType.Thesis or ItemType.Report && m.Source == null) { m.Source = m.Publisher; m.Publisher = null; }
             if (item["issued"]?["date-parts"] is JsonArray { Count: > 0 } dp && dp[0] is JsonArray first)
             {
                 var numbers = first.Select(x => int.TryParse(x?.ToString(), out var n) ? (int?)n : null).Where(n => n != null).Select(n => n!.Value).ToList();

@@ -35,6 +35,7 @@ enum SortComparators {
         case .tags: .text(snapshot.tags(of: item.id).first?.name)
         case .journalRank: .number(snapshot.journalMetrics(for: item)?.rankSortKey)
         case .impactFactor: .number(snapshot.journalMetrics(for: item)?.impactFactor)
+        case .venue: .text(VenueCatalog.venue(of: item)?.abbreviation)
         }
     }
 

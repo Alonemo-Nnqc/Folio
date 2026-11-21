@@ -11252,6 +11252,36 @@
           }
         }
       }
+    },
+    "更多字段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More Fields"
+          }
+        }
+      }
+    },
+    "姓, 名; 姓, 名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Family, Given; Family, Given"
+          }
+        }
+      }
+    },
+    "博士学位论文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Doctoral dissertation"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

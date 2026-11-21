@@ -153,15 +153,16 @@ final class TranslationRenderer {
                     let frame = Self.frame(for: segment.block, in: layout)
                     planned.append((segment, frame, typesetter.plan(text, block: layout.blocks[segment.block], formulas: segment.formulas, frame: frame), text))
                 }
-                // The cells of a table share one size: the size most of them fit at.
+                // The cells of a table share one size: the size the tightest of them fits at, unless one cell would
+                // shrink all the others a lot (then it alone goes smaller).
                 for table in layout.tables {
                     let cells = planned.indices.filter { k in
                         let block = layout.blocks[planned[k].segment.block]
                         return block.kind == .tableCell && table.insetBy(dx: -1, dy: -2).contains(block.rect.center)
                     }
-                    guard cells.count >= 3 else { continue }
+                    guard cells.count >= 2 else { continue }
                     let scales = cells.map { planned[$0].plan.scale }.sorted()
-                    let common = scales[scales.count / 2]
+                    let common = max(scales[0], scales[scales.count / 2] * 0.8)
                     for k in cells where planned[k].plan.scale > common + 0.001 {
                         let entry = planned[k]
                         planned[k].plan = typesetter.plan(entry.text, block: layout.blocks[entry.segment.block],

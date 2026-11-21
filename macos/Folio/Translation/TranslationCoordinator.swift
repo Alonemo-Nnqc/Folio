@@ -44,13 +44,27 @@ final class TranslationCoordinator {
     /// installed app would otherwise make the Keychain ask the user about every key it reads.
     @ObservationIgnored let secrets = UserDefaults.standard.bool(forKey: "FolioUITesting")
         ? SecretStore(service: SecretStore.defaultService + ".uitesting") : SecretStore()
-    @ObservationIgnored private var queue: [(itemId: String, fileId: String)] = []
+    /// A paper waiting its turn, with the service and settings it was queued with (changing them in 设置 later does
+    /// not change what a queued paper uses).
+    private struct Queued {
+        let itemId: String
+        let fileId: String
+        let serviceID: String
+        let fields: [String: String]
+        let options: TranslationOptions
+        let profileName: String?
+    }
+    @ObservationIgnored private var queue: [Queued] = []
     private final class Running {
         let itemId: String
+        let serviceID: String
         var job: TranslationJob?
         var task: Task<Void, Never>?
         var cancelled = false
-        init(itemId: String) { self.itemId = itemId }
+        init(itemId: String, serviceID: String) {
+            self.itemId = itemId
+            self.serviceID = serviceID
+        }
 
         func cancel() {
             cancelled = true
@@ -60,7 +74,13 @@ final class TranslationCoordinator {
 
     /// Translations running now, by item.
     @ObservationIgnored private var running: [String: Running] = [:]
-    private var parallel: Int { min(6, max(1, model?.settings.translationParallelJobs ?? 2)) }
+    /// Papers of one service at the same time (设置 ▸ 翻译 ▸ 同一服务): what a service's rate limits and a local
+    /// model's or agent's machine can take.
+    private var perService: Int { min(4, max(1, model?.settings.translationParallelJobs ?? 2)) }
+    /// Papers at the same time across all services (设置 ▸ 翻译 ▸ 总数): what this Mac can lay out and typeset at once.
+    private var total: Int { max(perService, min(8, max(1, model?.settings.translationParallelTotal ?? 6))) }
+
+    private func runningCount(of serviceID: String) -> Int { running.values.filter { $0.serviceID == serviceID }.count }
 
     init(model: AppModel) {
         self.model = model
@@ -88,16 +108,25 @@ final class TranslationCoordinator {
         model.activeSheet = .translate(fileIds: waiting.map(\.id))
     }
 
-    /// Starts (or queues) translations of several papers with the current settings.
-    func start(fileIds: [String]) {
-        for id in fileIds { start(fileId: id) }
+    /// Starts (or queues) translations of several papers with the current settings, and the pages typed for this run.
+    func start(fileIds: [String], pages: String? = nil) {
+        for id in fileIds { start(fileId: id, pages: pages) }
+    }
+
+    /// The settings' options for a run of `pages` (empty: all). Pages are never a setting: a range saved by an earlier
+    /// version stays out of every later paper.
+    static func options(_ saved: TranslationOptions, pages: String?) -> TranslationOptions {
+        var options = saved
+        let typed = pages?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        options.pages = typed.isEmpty ? nil : typed
+        return options
     }
 
     /// More papers may run at once now: starts the waiting ones.
     func parallelChanged() { pump() }
 
     /// Starts (or queues) a translation with the current settings — called by the options sheet.
-    func start(fileId: String) {
+    func start(fileId: String, pages: String? = nil) {
         guard let model, let file = model.snapshot.files[fileId] else { return }
         let service = model.settings.translationService
         if let problem = configurationProblem(serviceID: service) {
@@ -108,7 +137,7 @@ final class TranslationCoordinator {
             let options = model.settings.translationOptions
             Task {
                 switch await AppleSystemTranslator.availability(from: options.langIn, to: options.langOut) {
-                case .installed: self.enqueue(itemId: file.itemId, fileId: fileId)
+                case .installed: self.enqueue(itemId: file.itemId, fileId: fileId, pages: pages)
                 case .needsDownload:
                     self.alert(String(localized: "需要先下载语言包"), String(localized: "Apple 系统翻译需要先下载所选语言的离线语言包。可以在 设置 ▸ 翻译 中点击\"下载语言包\"。"),
                                primary: String(localized: "打开设置")) { self.openSettings() }
@@ -118,7 +147,49 @@ final class TranslationCoordinator {
             }
             return
         }
-        enqueue(itemId: file.itemId, fileId: fileId)
+        enqueue(itemId: file.itemId, fileId: fileId, pages: pages)
+    }
+
+    // MARK: New papers (设置 ▸ 翻译 ▸ 自动翻译新添加的论文)
+
+    @ObservationIgnored private var toldNotConfigured = false
+
+    /// A paper just added (a PDF imported, saved from the browser, or downloaded for it): translated with the current
+    /// settings when 自动翻译新添加的论文 is on and it has no translation yet. Waits for metadata retrieval, which may
+    /// rename the file, and lets a scan be recognised first (the queue does that).
+    func translateNewPaper(itemId: String) {
+        guard let model, model.settings.autoTranslateImports else { return }
+        Task { [weak self] in
+            // Up to a minute for retrieval to settle.
+            for _ in 0..<60 {
+                guard let item = model.snapshot.items[itemId] else { return }
+                if item.metadataState != .pending { break }
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard let self, model.settings.autoTranslateImports, self.jobs[itemId] == nil,
+                  let file = Self.untranslatedPDF(of: itemId, snapshot: model.snapshot) else { return }
+            if let problem = self.configurationProblem(serviceID: model.settings.translationService) {
+                // Said once, not at every import.
+                if !self.toldNotConfigured {
+                    self.toldNotConfigured = true
+                    model.toasts.show(String(localized: "没有自动翻译新论文：\(problem)"), systemImage: "exclamationmark.triangle")
+                }
+                return
+            }
+            self.start(fileId: file.id)
+        }
+    }
+
+    /// The paper's PDF to translate: an original (not a translation, not named like one) when the paper has no
+    /// translation yet.
+    static func untranslatedPDF(of itemId: String, snapshot: LibrarySnapshot) -> FileRecord? {
+        let files = snapshot.files(of: itemId)
+        guard !files.contains(where: { $0.translationKind != nil || $0.translationOf != nil }) else { return nil }
+        let originals = files.filter { file in
+            file.isPDF && !["双语对照", "译文", ".dual", ".mono", "-dual", "-mono", "_dual", "_mono"].contains { file.fileName.localizedCaseInsensitiveContains($0) }
+        }
+        let item = snapshot.items[itemId]
+        return originals.first { $0.id == item?.defaultFileId } ?? originals.first
     }
 
     func cancel(itemId: String) {
@@ -173,35 +244,48 @@ final class TranslationCoordinator {
 
     // MARK: Queue
 
-    private func enqueue(itemId: String, fileId: String) {
-        guard jobs[itemId] == nil else { return }
-        jobs[itemId] = JobState(fileId: fileId, fraction: nil, stage: running.count < parallel ? String(localized: "正在启动翻译") : String(localized: "等待翻译"))
-        queue.append((itemId, fileId))
+    private func enqueue(itemId: String, fileId: String, pages: String?) {
+        guard jobs[itemId] == nil, let model else { return }
+        let settings = model.settings
+        let serviceID = settings.translationService
+        // Who translates and how, taken now: the settings may change while the paper waits or runs.
+        let profileName = settings.selectedTranslationProfiles[serviceID].flatMap { id in settings.translationProfiles.first { $0.id == id }?.name }
+        queue.append(Queued(itemId: itemId, fileId: fileId, serviceID: serviceID, fields: settings.translationFields[serviceID] ?? [:],
+                            options: Self.options(settings.translationOptions, pages: pages), profileName: profileName))
+        jobs[itemId] = JobState(fileId: fileId, fraction: nil, stage: String(localized: "等待翻译"))
         pump()
     }
 
+    /// Starts waiting papers, in the order they were queued, while there is room: in all (`total`) and for their
+    /// service (`perService`). A paper whose service is busy waits without holding up papers for other services.
     private func pump() {
-        while running.count < parallel, !queue.isEmpty { startNext() }
+        while let index = TranslationScheduler.next(waiting: queue.map(\.serviceID), running: running.values.map(\.serviceID),
+                                                     perService: perService, total: total) {
+            startNext(queue.remove(at: index))
+        }
+        // What the waiting ones are waiting for.
+        for waiting in queue where jobs[waiting.itemId]?.stage != nil {
+            let busy = runningCount(of: waiting.serviceID) >= perService
+            let name = TranslationServiceCatalog.service(id: waiting.serviceID)?.displayName ?? waiting.serviceID
+            let stage = busy ? String(localized: "等待翻译（\(name) 已有 \(perService) 篇在翻译）") : String(localized: "等待翻译")
+            if jobs[waiting.itemId]?.stage != stage { jobs[waiting.itemId]?.stage = stage }
+        }
     }
 
-    private func startNext() {
-        guard !queue.isEmpty, let model else { return }
-        let next = queue.removeFirst()
+    private func startNext(_ next: Queued) {
+        guard let model else { return }
         guard let file = model.snapshot.files[next.fileId] else {
             jobs[next.itemId] = nil
             return
         }
-        let settings = model.settings
-        let serviceID = settings.translationService
-        // Who translates, for the file names, taken now: settings may change while the engine runs.
-        let profileName = settings.selectedTranslationProfiles[serviceID].flatMap { id in settings.translationProfiles.first { $0.id == id }?.name }
+        let serviceID = next.serviceID
         let provider = TranslationServiceCatalog.service(id: serviceID).map {
-            TranslationNaming.Provider(service: $0, fields: settings.translationFields[serviceID] ?? [:], profileName: profileName)
+            TranslationNaming.Provider(service: $0, fields: next.fields, profileName: next.profileName)
         } ?? TranslationNaming.Provider(name: serviceID, model: nil)
         let source = model.fileURL(file)
         let output = TranslationJob.supportDirectory.appending(path: "output/\(UUID().uuidString)", directoryHint: .isDirectory)
         jobs[next.itemId] = JobState(fileId: next.fileId, fraction: nil, stage: String(localized: "正在启动翻译"))
-        let current = Running(itemId: next.itemId)
+        let current = Running(itemId: next.itemId, serviceID: serviceID)
         running[next.itemId] = current
         current.task = Task { [weak self] in
             guard let self else { return }
@@ -219,18 +303,20 @@ final class TranslationCoordinator {
                 let service = TranslationServiceCatalog.service(id: serviceID)
                 let request = TranslationRequest(
                     input: source, outputDirectory: output, serviceID: serviceID,
-                    fieldValues: settings.translationFields[serviceID] ?? [:],
+                    fieldValues: next.fields,
                     secrets: service.map { (try? self.secrets.secrets(for: $0)) ?? [:] } ?? [:],
-                    options: settings.translationOptions)
+                    options: next.options)
                 if !current.cancelled {
                     let job = TranslationJob(request: request)
                     current.job = job
                     for await event in job.start() {
-                        self.handle(event, itemId: next.itemId, fileId: next.fileId, provider: provider)
+                        self.handle(event, itemId: next.itemId, fileId: next.fileId, provider: provider, options: next.options)
                     }
                 }
             } catch {
-                if !current.cancelled { self.fail(itemId: next.itemId, fileId: next.fileId, message: error.localizedDescription, log: nil) }
+                if !current.cancelled {
+                    self.fail(itemId: next.itemId, fileId: next.fileId, pages: next.options.pages, message: error.localizedDescription, log: nil)
+                }
             }
             if current.cancelled { self.jobs[next.itemId] = nil }
             try? FileManager.default.removeItem(at: output)
@@ -239,7 +325,8 @@ final class TranslationCoordinator {
         }
     }
 
-    private func handle(_ event: TranslationEvent, itemId: String, fileId: String, provider: TranslationNaming.Provider) {
+    private func handle(_ event: TranslationEvent, itemId: String, fileId: String, provider: TranslationNaming.Provider,
+                        options: TranslationOptions) {
         switch event {
         case .stage(let stage):
             jobs[itemId]?.stage = stage
@@ -257,9 +344,9 @@ final class TranslationCoordinator {
         case .finished(let mono, let dual):
             let notices = jobs[itemId]?.notices ?? []
             jobs[itemId] = nil
-            file(mono: mono, dual: dual, of: fileId, provider: provider, notices: notices)
+            file(mono: mono, dual: dual, of: fileId, provider: provider, options: options, notices: notices)
         case .failed(let message, let logURL):
-            fail(itemId: itemId, fileId: fileId, message: message, log: logURL)
+            fail(itemId: itemId, fileId: fileId, pages: options.pages, message: message, log: logURL)
         case .cancelled:
             jobs[itemId] = nil
             model?.toasts.show(String(localized: "已取消翻译"), systemImage: "xmark.circle")
@@ -268,16 +355,17 @@ final class TranslationCoordinator {
 
     /// Copies the results into the library next to the original (TRANS-05), named by language, provider and
     /// model ("论文（简体中文译文 · DeepSeek · deepseek-chat）.pdf").
-    private func file(mono: URL?, dual: URL?, of fileId: String, provider: TranslationNaming.Provider, notices: [String] = []) {
+    private func file(mono: URL?, dual: URL?, of fileId: String, provider: TranslationNaming.Provider, options: TranslationOptions,
+                      notices: [String] = []) {
         guard let model, let source = model.snapshot.files[fileId] else { return }
         let base = (source.fileName as NSString).deletingPathExtension
-        let language = TranslationOptions.commonLanguages.first { $0.code == model.settings.translationOptions.langOut }?.name ?? ""
+        let language = TranslationOptions.commonLanguages.first { $0.code == options.langOut }?.name ?? ""
         let existing = Set(model.snapshot.files(of: source.itemId).map { ($0.fileName as NSString).deletingPathExtension })
         func name(_ kind: TranslationNaming.TranslationKindName) -> String {
             TranslationNaming.baseName(original: base, kind: kind, language: language, provider: provider, existing: existing)
         }
         // The same paper by the same service and model before: replaced, if that is what the user chose.
-        let earlier = model.settings.translationOptions.duplicates == .replace
+        let earlier = options.duplicates == .replace
             ? model.snapshot.files.values.filter { $0.translationOf == fileId && $0.translatedBy == provider.label }.map(\.id) : []
         var added: [FileRecord] = []
         model.perform(String(localized: "无法保存译文")) {
@@ -298,7 +386,8 @@ final class TranslationCoordinator {
         }
     }
 
-    private func fail(itemId: String, fileId: String, message: String, log: URL?) {
+    /// Says why a translation failed; 重试 runs it again as it was (the same pages).
+    private func fail(itemId: String, fileId: String, pages: String?, message: String, log: URL?) {
         jobs[itemId] = nil
         let title = model?.snapshot.items[itemId]?.title ?? ""
         let alert = NSAlert()
@@ -309,7 +398,7 @@ final class TranslationCoordinator {
         if log != nil { alert.addButton(withTitle: String(localized: "查看日志")) }
         present(alert) { [weak self] response in
             switch response {
-            case .alertFirstButtonReturn: self?.start(fileId: fileId)
+            case .alertFirstButtonReturn: self?.start(fileId: fileId, pages: pages)
             case .alertThirdButtonReturn: if let log { NSWorkspace.shared.activateFileViewerSelecting([log]) }
             default: break
             }

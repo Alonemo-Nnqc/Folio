@@ -76,6 +76,11 @@ enum PreviewHooks {
                 TranslationSelfTest.run(model: model, itemId: id, log: log)
             }
         }
+        // `-FolioPreviewSelectCount <n>`: the first n papers of the list, selected together.
+        let count = defaults.integer(forKey: "FolioPreviewSelectCount")
+        if count > 1 {
+            model.selectedItemIDs = Set(model.rows.filter { s.items[$0]?.kind == .regular }.prefix(count))
+        }
         if let prefix = defaults.string(forKey: "FolioPreviewTranslating"),
            let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
             model.translations.previewJob(itemId: item.id, fileId: file.id, stage: "翻译段落 34/120", fraction: 0.42)
@@ -115,6 +120,26 @@ enum PreviewHooks {
         }
         if defaults.bool(forKey: "FolioPreviewHideInspector") {
             AppDelegate.shared.libraryWindowController.splitViewController.toggleInspector(nil)
+        }
+        // `-FolioPreviewOpenNote YES`: the selected item's note in a document tab; `-FolioPreviewDetach YES` takes that tab out
+        // into a window of its own (放回标签页 shows).
+        // `-FolioPreviewOpenDocument YES`: the selected item's first Markdown file in a document tab.
+        if defaults.bool(forKey: "FolioPreviewOpenDocument"), let id = model.selectedItemIDs.first,
+           let file = s.files(of: id).first(where: \.isMarkdown) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { model.openMarkdown(fileId: file.id) }
+        }
+        if defaults.bool(forKey: "FolioPreviewOpenNote"), let id = model.selectedItemIDs.first {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                model.openNote(itemId: id)
+                if defaults.bool(forKey: "FolioPreviewDetach") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        let window = NSApp.windows.first { $0.windowController is MarkdownWindowController && $0.isVisible }
+                        window?.moveTabToNewWindow(nil)
+                        window?.makeKeyAndOrderFront(nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { FolioWindowController.updateAllReturnButtons() }
+                    }
+                }
+            }
         }
         if let pane = defaults.string(forKey: "FolioPreviewSettings") {
             AppDelegate.shared.showSettings(nil)
@@ -219,9 +244,31 @@ enum PreviewHooks {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                         model.readers.reader(for: file.id)?.editNote(itemId: item.id)
                     }
+                    // `-FolioPreviewHitLog <path>`: which view takes a click on the notes panel's document menu (its header
+                    // at the top of the panel, below the toolbar).
+                    if let log = defaults.string(forKey: "FolioPreviewHitLog") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            guard let window = NSApp.windows.first(where: { $0.windowController is ReaderWindowController && $0.isVisible }),
+                                  let frame = window.contentView?.superview else { return }
+                            let top = window.contentLayoutRect.maxY
+                            var lines: [String] = []
+                            for (fromTop, fromRight) in [(26.0, 240.0), (26.0, 200.0), (26.0, 150.0), (26.0, 80.0), (26.0, 40.0), (70.0, 200.0)] {
+                                let point = NSPoint(x: window.frame.width - fromRight, y: window.frame.height - fromTop)
+                                let hit = frame.hitTest(point)
+                                var chain: [String] = []
+                                var view = hit
+                                while let v = view, chain.count < 6 { chain.append(String(describing: type(of: v))); view = v.superview }
+                                lines.append("top \(fromTop) right \(fromRight): " + chain.joined(separator: " < "))
+                            }
+                            lines.append("toolbar band to y \(top), window height \(window.frame.height)")
+                            try? lines.joined(separator: "\n").write(toFile: log, atomically: true, encoding: .utf8)
+                        }
+                    }
                 }
             }
         }
+        if let log = defaults.string(forKey: "FolioPerfProbe") { PerfProbe.start(log: log) }
+        if let log = defaults.string(forKey: "FolioFeature14SelfTest") { Feature14SelfTest.run(model: model, log: log) }
         if let log = defaults.string(forKey: "FolioFeatureSelfTest"), let sample = defaults.string(forKey: "FolioFeatureSample") {
             FeatureSelfTest.run(model: model, log: log, sample: URL(fileURLWithPath: sample))
         }
@@ -239,7 +286,9 @@ enum PreviewHooks {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + (delay > 0 ? delay : 3)) {
                 let reader = NSApp.windows.first { $0.windowController is ReaderWindowController && $0.isVisible }
+                let document = NSApp.windows.first { $0.windowController is MarkdownWindowController && $0.isVisible }
                 let window = defaults.string(forKey: "FolioPreviewSettings") != nil ? AppDelegate.shared.settingsWindow?.window
+                    : defaults.bool(forKey: "FolioPreviewOpenNote") || defaults.bool(forKey: "FolioPreviewOpenDocument") ? document
                     : defaults.string(forKey: "FolioPreviewOpenReader") != nil ? reader : AppDelegate.shared.libraryWindowController.window
                 // An open sheet (e.g. 编辑配置…, and a sheet on top of it) is what the window shows.
                 var shown = window

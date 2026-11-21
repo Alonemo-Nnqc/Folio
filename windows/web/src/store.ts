@@ -16,7 +16,11 @@ export interface Item {
   hasJournal: boolean;
   /** Its journal's ranks: null until looked up; no badges when easyScholar does not list it. */
   journalMetrics: JournalMetrics | null;
+  /** The inspector's fields for its type, named for it, and the others (#19). */
+  fields: ItemFieldRow[];
+  moreFields: ItemFieldRow[];
 }
+export interface ItemFieldRow { key: string; label: string; value?: string | null }
 export interface JournalBadge { kind: string; text: string; detail: string; emphasized: boolean }
 export interface JournalMetrics { badges: JournalBadge[]; rank?: string; impactFactor?: string; summary: string }
 /** 期刊指标's queue and key, for the inspector's hints and 设置. */

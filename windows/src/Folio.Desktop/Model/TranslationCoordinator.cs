@@ -18,7 +18,7 @@ public sealed class TranslationCoordinator(AppModel model)
     }
 
     readonly Dictionary<string, JobState> _jobs = [];
-    readonly Queue<(string ItemId, string FileId)> _queue = new();
+    readonly Queue<(string ItemId, string FileId, string? Pages)> _queue = new();
     sealed class Running(string itemId)
     {
         public string ItemId = itemId;
@@ -42,8 +42,17 @@ public sealed class TranslationCoordinator(AppModel model)
 
     public static string LogsDirectory => Path.Combine(TranslationJob.SupportDirectory, "logs");
 
-    /// <summary>Starts (or queues) a translation with the current settings.</summary>
-    public async Task Start(string fileId)
+    /// <summary>The settings' options for a run of <paramref name="pages"/> (empty: all). Pages are never a setting: a
+    /// range saved by an earlier version stays out of every later paper.</summary>
+    public static TranslationOptions OptionsFor(TranslationOptions saved, string? pages)
+    {
+        var options = saved.Copy();
+        options.Pages = string.IsNullOrWhiteSpace(pages) ? null : pages.Trim();
+        return options;
+    }
+
+    /// <summary>Starts (or queues) a translation with the current settings, and the pages typed for this run.</summary>
+    public async Task Start(string fileId, string? pages = null)
     {
         if (!model.Snapshot.Files.TryGetValue(fileId, out var file)) return;
         if (ConfigurationProblem(model.Settings.TranslationService) is { } problem)
@@ -52,7 +61,7 @@ public sealed class TranslationCoordinator(AppModel model)
                 App.OpenSettings("translation");
             return;
         }
-        Enqueue(file.ItemId, fileId);
+        Enqueue(file.ItemId, fileId, pages);
     }
 
     public void Cancel(string itemId)
@@ -98,12 +107,12 @@ public sealed class TranslationCoordinator(AppModel model)
         if (_jobs.Remove(itemId)) JobsChanged?.Invoke();
     }
 
-    void Enqueue(string itemId, string fileId)
+    void Enqueue(string itemId, string fileId, string? pages)
     {
         if (_jobs.ContainsKey(itemId)) return;
         _jobs[itemId] = new JobState { FileId = fileId, Stage = _running.Count < Parallel ? Loc.S("正在启动翻译") : Loc.S("等待翻译") };
         JobsChanged?.Invoke();
-        _queue.Enqueue((itemId, fileId));
+        _queue.Enqueue((itemId, fileId, pages));
         Pump();
     }
 
@@ -117,7 +126,7 @@ public sealed class TranslationCoordinator(AppModel model)
 
     void StartNext()
     {
-        var (itemId, fileId) = _queue.Dequeue();
+        var (itemId, fileId, pages) = _queue.Dequeue();
         if (!model.Snapshot.Files.TryGetValue(fileId, out var file))
         {
             Remove(itemId);
@@ -130,7 +139,7 @@ public sealed class TranslationCoordinator(AppModel model)
         var fields = settings.FieldsOf(serviceId);
         var provider = TranslationServiceCatalog.Service(serviceId) is { } svc ? TranslationNaming.Provider.Of(svc, fields, profileName) : new TranslationNaming.Provider(serviceId, null);
         var output = Path.Combine(TranslationJob.SupportDirectory, "output", Guid.NewGuid().ToString());
-        var options = settings.TranslationOptions;
+        var options = OptionsFor(settings.TranslationOptions, pages);
         _jobs[itemId] = new JobState { FileId = fileId, Stage = Loc.S("正在启动翻译") };
         ProgressChanged?.Invoke(itemId);
         var current = new Running(itemId);
@@ -152,7 +161,7 @@ public sealed class TranslationCoordinator(AppModel model)
             }
             catch (Exception e)
             {
-                if (!current.Cancelled) _ = Fail(itemId, fileId, e.Message, null);
+                if (!current.Cancelled) _ = Fail(itemId, fileId, pages, e.Message, null);
                 if (current.Cancelled) Remove(itemId);
                 _running.Remove(itemId);
                 Pump();
@@ -188,7 +197,7 @@ public sealed class TranslationCoordinator(AppModel model)
             }
             catch (Exception e)
             {
-                if (!current.Cancelled) model.RunOnUi(() => _ = Fail(itemId, fileId, e.Message, null));
+                if (!current.Cancelled) model.RunOnUi(() => _ = Fail(itemId, fileId, pages, e.Message, null));
             }
             // Give the last events their turn on the UI thread before the output folder goes.
             await Task.Delay(500);
@@ -237,7 +246,7 @@ public sealed class TranslationCoordinator(AppModel model)
                 break;
             }
             case TranslationEvent.Failed failed:
-                Fail(itemId, fileId, failed.Message, failed.LogPath).Fire();
+                Fail(itemId, fileId, options.Pages, failed.Message, failed.LogPath).Fire();
                 break;
             case TranslationEvent.Cancelled:
                 Remove(itemId);
@@ -284,13 +293,14 @@ public sealed class TranslationCoordinator(AppModel model)
         });
     }
 
-    async Task Fail(string itemId, string fileId, string message, string? log)
+    /// <summary>Says why a translation failed; 重试 runs it again as it was (the same pages).</summary>
+    async Task Fail(string itemId, string fileId, string? pages, string message, string? log)
     {
         Remove(itemId);
         var title = model.Snapshot.Items.TryGetValue(itemId, out var item) ? item.Title : "";
         switch (await Dialogs.Choose(Loc.S("「%@」翻译失败", title), message, Loc.S("重试"), log != null ? Loc.S("查看日志") : "", Loc.S("取消")))
         {
-            case ContentDialogResult.Primary: await Start(fileId); break;
+            case ContentDialogResult.Primary: await Start(fileId, pages); break;
             case ContentDialogResult.Secondary when log != null: Shell.Reveal(log); break;
         }
     }

@@ -16,6 +16,8 @@ final class SettingsWindowController: NSWindowController {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.toolbarStyle = .unified
         window.setContentSize(Self.defaultSize)
+        // Never a tab (合并所有窗口 gathers the library, papers and documents only).
+        window.tabbingMode = .disallowed
         window.minSize = NSSize(width: 640, height: 420)
         window.setFrameAutosaveName(Self.autosaveName)
         window.setAccessibilityIdentifier("settingsWindow")
@@ -132,6 +134,7 @@ struct SettingsRootView: View {
         } detail: {
             detail
                 .navigationTitle(navigation.pane.title)
+                .hardScrollEdge()
         }
     }
 
@@ -247,8 +250,8 @@ struct GeneralSettings: View {
                 .onChange(of: settings.includeSubgroupItems) { model.recompute() }
                 Toggle(isOn: $settings.showTranslatedBadge) {
                     Text("显示“已翻译”标签")
-                    Text("有译文的论文，标题后显示绿色的“已翻译”标签")
                 }
+                Toggle("显示 Markdown 文档工具栏", isOn: $settings.markdownToolbar)
             }
             LanguageSettingsSection()
             UpdateSettingsSection(updater: AppDelegate.shared.updater)
@@ -358,7 +361,6 @@ struct ReadingSettings: View {
                 Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
                 Toggle(isOn: $settings.rememberReadingPosition) {
                     Text("记住每篇论文的阅读位置")
-                    Text("再次打开时回到上次读到的页面和缩放")
                 }
             }
             Section("页面") {
@@ -377,13 +379,10 @@ struct ReadingSettings: View {
                 }
                 Toggle(isOn: $settings.returnToSelectAfterPlacing) {
                     Text("添加便签或文本框后回到选择工具")
-                    Text("关闭后可以连续添加多个")
                 }
                 Toggle("指针停留时显示便签和评论的内容", isOn: $settings.showAnnotationTooltips)
             } header: {
                 Text("批注")
-            } footer: {
-                Text("点一下工具即可使用；再点一次已选中的工具，选择它的颜色和样式（也可以自定义颜色）。")
             }
             SelectionTranslationSettingsSections(model: model)
         }
@@ -440,8 +439,6 @@ struct LibrarySettings: View {
                 }
             } header: {
                 Text("导入")
-            } footer: {
-                Text("不会改动 Zotero 数据")
             }
         }
         .formStyle(.grouped)

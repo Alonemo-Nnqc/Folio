@@ -82,5 +82,17 @@ enum Migrations {
               name TEXT PRIMARY KEY, json TEXT NOT NULL, fetchedAt DATETIME NOT NULL);
             """)
         }
+        // v1.5 (#19): fields of books, chapters, theses and reports. Older versions read and write libraries with them
+        // (they leave the new columns alone). Windows registers the same migration.
+        migrator.registerMigration("v1.5-itemFields") { db in
+            try db.execute(sql: """
+            ALTER TABLE item ADD COLUMN place TEXT;
+            ALTER TABLE item ADD COLUMN edition TEXT;
+            ALTER TABLE item ADD COLUMN editors TEXT NOT NULL DEFAULT '[]';
+            ALTER TABLE item ADD COLUMN translators TEXT NOT NULL DEFAULT '[]';
+            ALTER TABLE item ADD COLUMN series TEXT;
+            ALTER TABLE item ADD COLUMN genre TEXT;
+            """)
+        }
     }
 }

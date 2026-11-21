@@ -13,6 +13,63 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         self.model = model
         super.init(window: window)
         window.delegate = self
+        // A tab dragged out of the window becomes a window of its own: it gets a way back (see `updateReturnButton`).
+        for name in [NSWindow.didBecomeKeyNotification, NSWindow.didMoveNotification, NSWindow.didBecomeMainNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { FolioWindowController.updateAllReturnButtons(); _ = self }
+            }
+        }
+    }
+
+    // MARK: Back into the library's tabs
+
+    /// A paper or document shown in a window of its own (its tab dragged out of the library's window).
+    var isDetachedFromLibrary: Bool {
+        guard !(self is LibraryWindowController), let window, window.isVisible,
+              let library = model.libraryWindow, library.isVisible else { return false }
+        return !(window.tabGroup?.windows.contains(library) ?? false)
+    }
+
+    /// Puts this window back as a tab next to the library (窗口 ▸ 移回文献库窗口, the 放回标签页 button).
+    @objc func moveBackToLibraryTabs(_ sender: Any?) {
+        guard isDetachedFromLibrary, let window, let library = model.libraryWindow else { return }
+        let anchor = library.tabGroup?.windows.last ?? library
+        anchor.addTabbedWindow(window, ordered: .above)
+        window.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { FolioWindowController.updateAllReturnButtons() }
+    }
+
+    /// While the window stands apart from the library, its toolbar leads with a 放回标签页 button: an icon like the
+    /// toolbar's others, at the leading edge beside the window controls, where tabs are dealt with.
+    func updateReturnButton() {
+        guard let toolbar = window?.toolbar else { return }
+        let detached = isDetachedFromLibrary
+        let index = toolbar.items.firstIndex { $0.itemIdentifier == .folioReturnToTabs }
+        if detached, index == nil {
+            toolbar.insertItem(withItemIdentifier: .folioReturnToTabs, at: 0)
+        } else if !detached, let index {
+            toolbar.removeItem(at: index)
+        }
+    }
+
+    /// The 放回标签页 toolbar item, for the toolbars of windows that can stand apart (readers, documents).
+    func makeReturnToTabsItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .folioReturnToTabs)
+        item.image = NSImage(systemSymbolName: "rectangle.stack.badge.plus", accessibilityDescription: String(localized: "放回标签页"))
+        item.label = String(localized: "放回标签页")
+        item.paletteLabel = String(localized: "放回标签页")
+        item.toolTip = String(localized: "放回文献库窗口的标签页")
+        item.target = self
+        item.action = #selector(moveBackToLibraryTabs(_:))
+        item.isNavigational = true
+        item.visibilityPriority = .high
+        return item
+    }
+
+    static func updateAllReturnButtons() {
+        for window in NSApp.windows {
+            (window.windowController as? FolioWindowController)?.updateReturnButton()
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
@@ -24,31 +81,40 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
     /// A single file the file commands act on (a file row, or the paper open in a reader).
     var targetFileId: String? { nil }
 
-    /// The context the item menus are built from.
-    func menuContext() -> ItemMenuContext {
+    /// The context the item menus are built from. `withApps`: also the apps that can open the file, for the
+    /// 打开方式 submenu — only when a menu is shown: menu and toolbar validation (after every event) must stay cheap.
+    func menuContext(withApps: Bool = false) -> ItemMenuContext {
         var context = ItemMenuContext(scope: model.sidebarSelection, itemIds: targetItemIds, fileId: targetFileId)
-        let fileId = targetFileId ?? targetItemIds.first.flatMap { model.defaultFile(of: $0)?.id }
-        if let fileId, let file = model.snapshot.files[fileId] {
-            context.openWithApps = Self.apps(toOpen: model.fileURL(file))
+        if withApps {
+            let fileId = targetFileId ?? targetItemIds.first.flatMap { model.defaultFile(of: $0)?.id }
+            if let fileId, let file = model.snapshot.files[fileId] {
+                context.openWithApps = Self.apps(toOpen: model.fileURL(file))
+            }
         }
         context.translatingItemIds = model.translations.activeItemIds
         return context
     }
 
+    /// Apps that open files like this one: the default first, the rest by name, at most 12 (Folio left out).
+    /// Asked of Launch Services once a minute per kind of file, and each app's name once, not at every comparison.
     static func apps(toOpen url: URL) -> [(name: String, url: URL)] {
+        let key = url.pathExtension.lowercased()
+        if let cached = appsCache[key], Date().timeIntervalSince(cached.date) < 60 { return cached.apps }
         let defaultApp = NSWorkspace.shared.urlForApplication(toOpen: url)
-        var apps = NSWorkspace.shared.urlsForApplications(toOpen: url)
-        // The default app first, the rest alphabetically; at most 12 so the menu stays short.
-        apps.sort { lhs, rhs in
-            if lhs == defaultApp { return true }
-            if rhs == defaultApp { return false }
-            return FileManager.default.displayName(atPath: lhs.path)
-                .localizedStandardCompare(FileManager.default.displayName(atPath: rhs.path)) == .orderedAscending
+        let named = NSWorkspace.shared.urlsForApplications(toOpen: url)
+            .filter { $0.lastPathComponent != "Folio.app" }
+            .map { (name: (FileManager.default.displayName(atPath: $0.path) as NSString).deletingPathExtension, url: $0) }
+        let sorted = named.sorted { lhs, rhs in
+            if lhs.url == defaultApp { return true }
+            if rhs.url == defaultApp { return false }
+            return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
         }
-        return apps.filter { $0.lastPathComponent != "Folio.app" }.prefix(12).map {
-            ((FileManager.default.displayName(atPath: $0.path) as NSString).deletingPathExtension, $0)
-        }
+        let apps = Array(sorted.prefix(12))
+        appsCache[key] = (Date(), apps)
+        return apps
     }
+
+    private static var appsCache: [String: (date: Date, apps: [(name: String, url: URL)])] = [:]
 
     // MARK: Command dispatch (context menus and dynamic submenus)
 
@@ -95,6 +161,8 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
             if let itemId { model.translations.cancel(itemId: itemId) }
         case .editNote: if let id = ids.first ?? context.fileId.flatMap({ model.snapshot.files[$0]?.itemId }) { editNote(itemId: id) }
         case .exportNote: if let id = ids.first { model.exportNote(itemId: id) }
+        case .openNoteTab: if let id = ids.first ?? context.fileId.flatMap({ model.snapshot.files[$0]?.itemId }) { model.openNote(itemId: id) }
+        case .newMarkdownAttachment: if let id = ids.first { model.newMarkdownAttachment(itemId: id) }
         }
     }
 
@@ -204,8 +272,10 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
             return (single != nil || file != nil) && !inTrash
         case #selector(exportNote(_:)):
             return single.map { model.snapshot.notedItems.contains($0.id) } ?? false
+        case #selector(moveBackToLibraryTabs(_:)):
+            return isDetachedFromLibrary
         case #selector(copyCitation(_:)), #selector(exportBibTeX(_:)):
-            return !model.citationEntries(citableIds).isEmpty
+            return model.hasCitationEntries(citableIds)
         default:
             return true
         }

@@ -45,23 +45,67 @@ public sealed class TranslationOptions
     ];
 
     /// <summary>Page numbers (1-based) selected by <see cref="Pages"/> within a document of <paramref name="count"/> pages.</summary>
-    public List<int> PageNumbers(int count)
+    public List<int> PageNumbers(int count) => PageSelection.Parse(Pages).Pages(count);
+}
+
+/// <summary>A page range as people type it: "1-3,5", "4-" (to the end), and the same with full-width digits, Chinese
+/// punctuation and other dashes ("１－３，５", "1~3、5", "第3页"); empty or "全部" for every page. (PageSelection in
+/// the macOS TranslationOptions.swift.)</summary>
+public sealed record PageSelection
+{
+    public enum Kinds { All, Ranges, Unreadable }
+    public Kinds Kind { get; private init; }
+    /// <summary>Inclusive ranges as typed; an open end is 1 or <see cref="int.MaxValue"/>.</summary>
+    public IReadOnlyList<(int Lo, int Hi)> Ranges { get; private init; } = [];
+
+    public static readonly PageSelection All = new() { Kind = Kinds.All };
+    public static readonly PageSelection Unreadable = new() { Kind = Kinds.Unreadable };
+
+    public static PageSelection Parse(string? text)
     {
-        var pages = Pages?.Replace(" ", "");
-        if (string.IsNullOrEmpty(pages)) return Enumerable.Range(1, Math.Max(count, 1)).ToList();
-        var result = new HashSet<int>();
-        foreach (var part in pages.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        // Full-width digits and punctuation (１２，－～；) as their ASCII forms.
+        var s = (text ?? "").Normalize(System.Text.NormalizationForm.FormKC).ToLowerInvariant();
+        foreach (var dash in new[] { "–", "—", "−", "‐", "‑", "‒", "―", "~", "〜", "至", "到" }) s = s.Replace(dash, "-");
+        foreach (var comma in new[] { "、", ";" }) s = s.Replace(comma, ",");
+        foreach (var word in new[] { "第", "页", "頁" }) s = s.Replace(word, "");
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s*-\s*", "-");
+        var parts = System.Text.RegularExpressions.Regex.Split(s, @"[,\s]+").Where(p => p.Length > 0).ToList();
+        if (parts.Count == 0 || parts.Count == 1 && parts[0] is "全部" or "所有" or "全文" or "all") return All;
+        var ranges = new List<(int, int)>();
+        static int? Number(string text, int open) =>
+            text.Length == 0 ? open : int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n >= 1 ? n : null;
+        foreach (var part in parts)
         {
-            var bounds = part.Split('-').Select(b => int.TryParse(b, out var n) ? n : (int?)null).ToList();
-            if (bounds.Count == 1 && bounds[0] is { } single) result.Add(single);
-            else if (bounds.Count == 2)
+            var bounds = part.Split('-');
+            switch (bounds.Length)
             {
-                int lo = bounds[0] ?? 1, hi = bounds[1] ?? count;
-                for (int n = lo; n <= hi; n++) result.Add(n);
+                case 1:
+                    if (Number(bounds[0], 0) is not { } single || single < 1) return Unreadable;
+                    ranges.Add((single, single));
+                    break;
+                case 2:
+                    if (bounds[0].Length + bounds[1].Length == 0 || Number(bounds[0], 1) is not { } lo || Number(bounds[1], int.MaxValue) is not { } hi) return Unreadable;
+                    ranges.Add((Math.Min(lo, hi), Math.Max(lo, hi)));
+                    break;
+                default:
+                    return Unreadable;
             }
         }
-        return result.Where(n => n >= 1 && n <= count).OrderBy(n => n).ToList();
+        return new PageSelection { Kind = Kinds.Ranges, Ranges = ranges };
     }
+
+    /// <summary>The pages (1-based) selected in a document of <paramref name="count"/> pages.</summary>
+    public List<int> Pages(int count) => Kind switch
+    {
+        Kinds.All => Enumerable.Range(1, Math.Max(count, 1)).ToList(),
+        Kinds.Ranges => Ranges.Where(r => r.Lo <= count).SelectMany(r => Enumerable.Range(r.Lo, Math.Min(r.Hi, count) - r.Lo + 1)).Distinct().Order().ToList(),
+        _ => [],
+    };
+
+    /// <summary>What is wrong with a page range typed by the user, in words for them; null when it can be used.</summary>
+    public static string? Problem(string? text) => Parse(text).Kind == Kinds.Unreadable ? UnreadableMessage((text ?? "").Trim()) : null;
+
+    internal static string UnreadableMessage(string typed) => Loc.S("无法识别页码范围「%@」。请填写如 1-3,5 的页码，或留空以翻译全部页。", typed);
 }
 
 /// <summary>Everything needed to translate one PDF.</summary>

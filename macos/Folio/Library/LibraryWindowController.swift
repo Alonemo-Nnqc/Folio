@@ -42,12 +42,16 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         toolbar.autosavesConfiguration = !UserDefaults.standard.bool(forKey: "FolioUITesting")
         window.toolbar = toolbar
         addInspectorTabsToSavedToolbar(toolbar)
+        addSelectToSavedToolbar(toolbar)
 
         if !window.setFrameUsingName("FolioLibraryWindow") {
             window.setContentSize(NSSize(width: 1320, height: 820))
             window.center()
         }
         window.setFrameAutosaveName("FolioLibraryWindow")
+        // Focus starts in the list: left to AppKit, the toolbar's search field took it and its caret kept blinking
+        // in the title bar while nobody was searching.
+        window.initialFirstResponder = splitViewController.itemList.controller.outline
         startObserving()
     }
 
@@ -76,6 +80,22 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             self.syncSheet(self.model.activeSheet)
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let on = self.model.multiSelectMode
+            guard let item = self.window?.toolbar?.items.first(where: { $0.itemIdentifier == .folioSelect }) else { return }
+            item.image = NSImage(systemSymbolName: on ? "checklist.checked" : "checklist", accessibilityDescription: String(localized: "多选"))
+            item.label = on ? String(localized: "完成") : String(localized: "多选")
+            if #available(macOS 26, *) { item.style = on ? .prominent : .plain }
+        })
+        var lastInspectorRequest = model.showInspectorRequest
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let request = self.model.showInspectorRequest
+            guard request != lastInspectorRequest else { return }
+            lastInspectorRequest = request
+            self.splitViewController.showInspector()
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -170,6 +190,14 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         return false
     }
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        // The search field holds the focus only while it is being used.
+        if let field = searchItem?.searchField, window?.firstResponder === field.currentEditor(), field.stringValue.isEmpty,
+           !model.search.isActive {
+            window?.makeFirstResponder(splitViewController.itemList.controller.outline)
+        }
+    }
+
     func windowWillClose(_ notification: Notification) {
         // Quick Look follows the list; it should not outlive the window.
         if QLPreviewPanel.sharedPreviewPanelExists(), QLPreviewPanel.shared().isVisible {
@@ -211,7 +239,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         // The flexible space before the sidebar button pins it to the sidebar's trailing edge; when the
         // sidebar collapses, AppKit moves it next to the window controls.
         [.flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .flexibleSpace, .folioAdd, .space, .folioRead,
-         .folioTranslate, .folioExport, .space, .folioSearch, .inspectorTrackingSeparator, .flexibleSpace, .folioInspectorTabs,
+         .folioTranslate, .folioExport, .folioSelect, .space, .folioSearch, .inspectorTrackingSeparator, .flexibleSpace, .folioInspectorTabs,
          .flexibleSpace, .toggleInspector]
     }
 
@@ -229,6 +257,21 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             toolbar.insertItem(withItemIdentifier: .folioInspectorTabs, at: separator + 2)
         } else {
             toolbar.insertItem(withItemIdentifier: .folioInspectorTabs, at: separator + 1)
+        }
+    }
+
+    /// Toolbars saved before 多选 existed get it once, after the export button (or before the search field).
+    private func addSelectToSavedToolbar(_ toolbar: NSToolbar) {
+        let defaults = UserDefaults.standard
+        let key = "FolioSelectInToolbar"
+        guard !defaults.bool(forKey: key) else { return }
+        if !defaults.bool(forKey: "FolioUITesting") { defaults.set(true, forKey: key) }
+        let ids = toolbar.items.map(\.itemIdentifier)
+        guard !ids.contains(.folioSelect) else { return }
+        if let export = ids.firstIndex(of: .folioExport) {
+            toolbar.insertItem(withItemIdentifier: .folioSelect, at: export + 1)
+        } else if let search = ids.firstIndex(of: .folioSearch) {
+            toolbar.insertItem(withItemIdentifier: .folioSelect, at: search)
         }
     }
 
@@ -273,13 +316,21 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             let menu = NSMenu()
             menu.addItem(withTitle: String(localized: "添加文件…"), action: #selector(addFiles(_:)), keyEquivalent: "")
             menu.addItem(withTitle: String(localized: "通过标识符添加…"), action: #selector(addByIdentifier(_:)), keyEquivalent: "")
+            menu.addItem(.separator())
+            menu.addItem(withTitle: String(localized: "新建 Markdown 文档"), action: #selector(newMarkdownDocument(_:)), keyEquivalent: "")
             menu.items[0].image = NSImage(systemSymbolName: "doc.badge.plus", accessibilityDescription: nil)
             menu.items[1].image = NSImage(systemSymbolName: "number", accessibilityDescription: nil)
+            menu.items[3].image = NSImage(systemSymbolName: "doc.richtext", accessibilityDescription: nil)
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
             item.showsIndicator = false
             item.action = #selector(addFiles(_:))
             return configure(item, label: String(localized: "添加"), symbol: "plus", tip: String(localized: "添加文献（按住可选择添加方式）"))
+        case .folioSelect:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.action = #selector(toggleMultiSelect(_:))
+            return configure(item, label: String(localized: "多选"), symbol: "checklist",
+                             tip: String(localized: "多选模式：点按条目即可选中或取消，再在右侧批量处理（Esc 退出）"))
         case .folioRead:
             let item = NSToolbarItem(itemIdentifier: id)
             item.action = #selector(openInReader(_:))
@@ -361,6 +412,17 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     @objc func addFiles(_ sender: Any?) { model.chooseFilesToImport() }
     @objc func addByIdentifier(_ sender: Any?) { model.activeSheet = .identifierAdd }
     @objc func newGroup(_ sender: Any?) { model.createGroup() }
+    @objc func toggleMultiSelect(_ sender: Any?) {
+        model.multiSelectMode.toggle()
+        if model.multiSelectMode {
+            splitViewController.showInspector()
+            window?.makeFirstResponder(splitViewController.itemList.controller.outline)
+        }
+    }
+    @objc func newMarkdownDocument(_ sender: Any?) {
+        window?.makeKeyAndOrderFront(nil)
+        model.newMarkdownDocument()
+    }
     @objc func newSubgroup(_ sender: Any?) {
         // Inside the selected group; from a group on the last level, next to it.
         if case .group(let id) = model.sidebarSelection {
@@ -452,6 +514,9 @@ extension NSToolbarItem.Identifier {
     static let folioSearch = NSToolbarItem.Identifier("FolioSearch")
     static let folioNote = NSToolbarItem.Identifier("FolioNote")
     static let folioReveal = NSToolbarItem.Identifier("FolioReveal")
+    /// 放回标签页: only in a reader or document window that stands apart from the library (never saved in layouts).
+    static let folioReturnToTabs = NSToolbarItem.Identifier("FolioReturnToTabs")
     static let folioRetrieve = NSToolbarItem.Identifier("FolioRetrieve")
     static let folioInspectorTabs = NSToolbarItem.Identifier("FolioInspectorTabs")
+    static let folioSelect = NSToolbarItem.Identifier("FolioSelect")
 }

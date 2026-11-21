@@ -14,15 +14,13 @@ enum CapsuleLabel {
     static let badgeHeight: CGFloat = 16
     static let tagPadding: CGFloat = 7
     static let badgePadding: CGFloat = 5
-    /// A tag's colour dot (as Finder shows tags) and the gap after it, before its name.
-    static let dotSize: CGFloat = 6
-    static let dotSpace: CGFloat = 10
     /// Badges ("已翻译", "默认", journal ranks) are small rounded rectangles; tags are capsules.
     static let badgeRadius: CGFloat = 4.5
 
     /// How wide a capsule for `text` is.
+    /// (`capsule`: a tag's round ends; tags carry their colour in the fill, with no dot taking room before the name.)
     static func width(_ text: String, font: NSFont, padding: CGFloat, dot: Bool) -> CGFloat {
-        textWidth(text, font: font) + padding * 2 + (dot ? dotSpace - 1 : 0)
+        textWidth(text, font: font) + padding * 2
     }
 
     // MARK: Colours
@@ -51,10 +49,26 @@ enum CapsuleLabel {
     nonisolated(unsafe) private static let centerCache = NSCache<NSString, NSNumber>()
 
     static func line(_ text: String, font: NSFont) -> CTLine {
+        // Set once per text and font: list cells and headers draw the same few texts again and again.
+        let key = "\(font.fontName)|\(font.pointSize)|\(text)" as NSString
+        if let cached = lineCache.object(forKey: key) { return cached.line }
         // The colour comes from the context's fill colour (`drawText`), not from the string.
-        CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             .font: font, NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true]))
+        lineCache.setObject(LineBox(line: line), forKey: key)
+        return line
     }
+
+    private final class LineBox {
+        let line: CTLine
+        init(line: CTLine) { self.line = line }
+    }
+
+    nonisolated(unsafe) private static let lineCache: NSCache<NSString, LineBox> = {
+        let cache = NSCache<NSString, LineBox>()
+        cache.countLimit = 4000
+        return cache
+    }()
 
     static func textWidth(_ text: String, font: NSFont) -> CGFloat {
         ceil(CTLineGetTypographicBounds(line(text, font: font), nil, nil, nil))
@@ -65,28 +79,24 @@ enum CapsuleLabel {
     /// The tinted fill behind a tag or badge: soft, with no outline.
     static func fill(_ tint: NSColor, dark: Bool) -> NSColor { tint.withAlphaComponent(dark ? 0.24 : 0.13) }
 
-    /// Draws a tag (`dot`: a capsule led by its colour dot) or a badge (a small rounded rectangle) in `rect` (in the
+    /// A tag's fill: a little stronger than a badge's, since it alone shows the tag's colour.
+    static func tagFill(_ tint: NSColor, dark: Bool) -> NSColor { tint.withAlphaComponent(dark ? 0.3 : 0.17) }
+
+    /// Draws a tag (`dot`: a capsule tinted with its colour) or a badge (a small rounded rectangle) in `rect` (in the
     /// current, flipped or unflipped, context) with `text` in it, truncated with "…" when it does not fit.
     static func draw(_ text: String, in rect: NSRect, tint: NSColor, font: NSFont, padding: CGFloat, dot: Bool = false,
                      appearance: NSAppearance, flipped: Bool, scale: CGFloat) {
         let dark = isDark(appearance)
         let radius = dot ? rect.height / 2 : min(badgeRadius, rect.height / 2)
-        fill(tint, dark: dark).setFill()
+        (dot ? tagFill(tint, dark: dark) : fill(tint, dark: dark)).setFill()
         NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-        var textRect = rect.insetBy(dx: padding, dy: 0)
-        if dot {
-            let snap = { (value: CGFloat) in (value * scale).rounded() / scale }
-            let circle = NSRect(x: snap(rect.minX + padding - 1), y: snap(rect.midY - dotSize / 2), width: dotSize, height: dotSize)
-            tint.setFill()
-            NSBezierPath(ovalIn: circle).fill()
-            textRect.origin.x += dotSpace - 1
-            textRect.size.width -= dotSpace - 1
-        }
+        let textRect = rect.insetBy(dx: padding, dy: 0)
         drawText(text, in: textRect, color: textColor(tint, dark: dark), font: font, flipped: flipped, scale: scale)
     }
 
     /// Draws one line of text horizontally and optically centred in `rect`.
-    static func drawText(_ text: String, in rect: NSRect, color: NSColor, font: NSFont, flipped: Bool, scale: CGFloat) {
+    static func drawText(_ text: String, in rect: NSRect, color: NSColor, font: NSFont, flipped: Bool, scale: CGFloat,
+                         centered: Bool = true) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         var line = line(text, font: font)
         var width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
@@ -98,7 +108,7 @@ enum CapsuleLabel {
             }
         }
         let snap = { (value: CGFloat) in (value * scale).rounded() / scale }
-        let x = snap(rect.minX + max(0, (rect.width - width) / 2))
+        let x = snap(rect.minX + (centered ? max(0, (rect.width - width) / 2) : 0))
         let center = opticalCenter(font)
         let baseline = snap(flipped ? rect.midY + center : rect.midY - center)
         context.saveGState()

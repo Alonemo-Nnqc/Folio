@@ -7,6 +7,7 @@ struct MetadataInspector: View {
     let item: Item
     @State private var showTagPicker = false
     @State private var abstractExpanded = true
+    @State private var moreFields = false
     @State private var titleDraft = ""
     @FocusState private var titleFocused: Bool
 
@@ -25,7 +26,8 @@ struct MetadataInspector: View {
     }
 
     private func update(_ change: @escaping (inout Item) -> Void) {
-        model.perform(String(localized: "无法保存")) { try model.library.updateItem(item.id, change) }
+        // Author, year or title typed by hand rename the files, like retrieved metadata does (when 自动重命名 is on).
+        model.perform(String(localized: "无法保存")) { try model.library.updateItem(item.id, autoRename: model.settings.autoRenameFiles, change) }
     }
 
     // MARK: Header: type, title, authors, key
@@ -79,27 +81,58 @@ struct MetadataInspector: View {
             EditableField(label: String(localized: "年份"), value: item.year.map(String.init)) { value in
                 update { $0.year = Int(value) }
             }
-            EditableField(label: String(localized: "来源"), value: item.source) { value in update { $0.source = value.nilIfEmpty } }
-            JournalMetricsRow(model: model, item: item)
-            EditableField(label: String(localized: "卷"), value: item.volume) { value in update { $0.volume = value.nilIfEmpty } }
-            EditableField(label: String(localized: "期"), value: item.issue) { value in update { $0.issue = value.nilIfEmpty } }
-            EditableField(label: String(localized: "页码"), value: item.pages) { value in update { $0.pages = value.nilIfEmpty } }
-            EditableField(label: String(localized: "出版社"), value: item.publisher) { value in update { $0.publisher = value.nilIfEmpty } }
-            EditableField(label: "DOI", value: item.doi, monospaced: true,
-                          link: item.doi.flatMap { $0.isEmpty ? nil : URL(string: "https://doi.org/\($0)") }) { value in
-                update { $0.doi = value.nilIfEmpty }
+            // The fields of this type of work, named for it ("期刊", "所属图书", "授予单位"…), and any other with a value (#19).
+            ForEach(ItemField.shown(for: item.metadata), id: \.self) { field in
+                fieldRow(field)
+                if field == .source { JournalMetricsRow(model: model, item: item) }
             }
-            EditableField(label: "arXiv", value: item.arxivId, monospaced: true,
-                          link: item.arxivId.flatMap { $0.isEmpty ? nil : URL(string: "https://arxiv.org/abs/\($0)") }) { value in
-                update { $0.arxivId = value.nilIfEmpty }
-            }
-            EditableField(label: "ISBN", value: item.isbn, monospaced: true) { value in update { $0.isbn = value.nilIfEmpty } }
-            EditableField(label: "URL", value: item.url, link: item.url.flatMap(URL.init(string:))) { value in
-                update { $0.url = value.nilIfEmpty }
+            // The rest, folded away: not usual for this type, but there to fill in.
+            let others = ItemField.allCases.filter { !ItemField.shown(for: item.metadata).contains($0) }
+            if !others.isEmpty {
+                DisclosureGroup("更多字段", isExpanded: $moreFields) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(others, id: \.self) { fieldRow($0) }
+                    }
+                    .padding(.top, 4)
+                }
+                .font(.callout)
             }
             EditableField(label: String(localized: "引用键"), value: item.citationKey, monospaced: true) { value in
                 update { $0.citationKey = value.nilIfEmpty }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func fieldRow(_ field: ItemField) -> some View {
+        let value = field.text(in: item.metadata)
+        switch field {
+        case .doi:
+            EditableField(label: "DOI", value: value, monospaced: true,
+                          link: value.flatMap { $0.isEmpty ? nil : URL(string: "https://doi.org/\($0)") }) { text in set(field, text) }
+        case .arxivId:
+            EditableField(label: "arXiv", value: value, monospaced: true,
+                          link: value.flatMap { $0.isEmpty ? nil : URL(string: "https://arxiv.org/abs/\($0)") }) { text in set(field, text) }
+        case .isbn:
+            EditableField(label: "ISBN", value: value, monospaced: true) { text in set(field, text) }
+        case .url:
+            EditableField(label: "URL", value: value, link: value.flatMap(URL.init(string:))) { text in set(field, text) }
+        case .editors, .translators:
+            EditableField(label: field.label(for: item.type), value: value, placeholder: String(localized: "姓, 名; 姓, 名")) { text in set(field, text) }
+        case .genre:
+            EditableField(label: field.label(for: item.type), value: value,
+                          placeholder: item.type == .thesis ? String(localized: "博士学位论文") : "—") { text in set(field, text) }
+        default:
+            EditableField(label: field.label(for: item.type), value: value) { text in set(field, text) }
+        }
+    }
+
+    private func set(_ field: ItemField, _ text: String) {
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines) != (field.text(in: item.metadata) ?? "") else { return }
+        update { item in
+            var metadata = item.metadata
+            field.set(text, in: &metadata)
+            item.metadata = metadata
         }
     }
 

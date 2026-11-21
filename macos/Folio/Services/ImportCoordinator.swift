@@ -102,6 +102,7 @@ final class ImportCoordinator {
                     indexFulltext()
                     // A scan gets its text recognised; its metadata is looked for again afterwards (OCR-01).
                     model.ocr.recognizeIfScanned(itemId: id)
+                    model.translations.translateNewPaper(itemId: id)
                 }
             case .duplicateFile(let existing, let addedToGroup):
                 let title = model.snapshot.items[existing]?.title ?? ""

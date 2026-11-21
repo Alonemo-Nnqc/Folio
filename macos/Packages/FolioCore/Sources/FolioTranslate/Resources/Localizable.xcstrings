@@ -1393,6 +1393,16 @@
         }
       }
     },
+    "无法识别页码范围「%@」。请填写如 1-3,5 的页码，或留空以翻译全部页。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't read the page range “%@”. Enter pages like 1-3,5, or leave it empty to translate every page."
+          }
+        }
+      }
+    },
     "无法读取 uv 的校验值" : {
       "localizations" : {
         "en" : {
@@ -2655,6 +2665,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This PDF has no text to translate (it may be a scan that needs text recognition first)."
+          }
+        }
+      }
+    },
+    "这篇 PDF 共 %lld 页，页码范围「%@」里没有其中的页。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF has %lld pages, and the page range “%@” includes none of them."
           }
         }
       }
