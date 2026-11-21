@@ -303,6 +303,17 @@ public sealed partial class Library : IDisposable
         Update(c, tx, item);
     });
 
+    /// <summary>An edit by hand (inspector fields, the AI tools). With <paramref name="autoRename"/>, the item's files are
+    /// renamed to Family_Year_Title when the edit changes what that name is made of, as retrieved metadata does; other
+    /// edits (rating, a field the name does not use) leave the files, and a name given by hand, as they are.
+    /// (updateItem(_:autoRename:_:) on the Mac.)</summary>
+    public void UpdateItem(string itemId, bool autoRename, Action<Item> change)
+    {
+        string? before = Item(itemId) is { Kind: ItemKind.Regular } old ? FileNamer.BaseName(old.Metadata) : null;
+        UpdateItem(itemId, change);
+        if (autoRename && Item(itemId) is { Kind: ItemKind.Regular } item && FileNamer.BaseName(item.Metadata) != before) RenameFiles(itemId);
+    }
+
     public void UpdateItems(IEnumerable<string> itemIds, Action<Item> change) => Database.Write((c, tx) =>
     {
         foreach (var id in itemIds)

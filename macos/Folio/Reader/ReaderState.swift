@@ -178,6 +178,8 @@ struct OutlineRow: Identifiable {
     let id: Int
     let title: String
     let pageIndex: Int?
+    /// Where on the page the entry leads (an `/XYZ` destination's left and top); nil for a page-level one.
+    var point: CGPoint?
     let children: [OutlineRow]?
 }
 

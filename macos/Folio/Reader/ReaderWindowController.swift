@@ -298,9 +298,9 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     private var sidebarActions: ReaderSidebarActions {
         ReaderSidebarActions(
-            goToPage: { [weak self] index in
+            goToPage: { [weak self] index, point in
                 guard let self, let page = self.pdfView.document?.page(at: index) else { return }
-                self.pdfView.go(to: page)
+                if let point { self.pdfView.go(to: PDFDestination(page: page, at: point)) } else { self.pdfView.go(to: page) }
             },
             showAnnotation: { [weak self] id in self?.showAnnotation(id) },
             deleteAnnotation: { [weak self] id in self?.deleteAnnotation(id) },
@@ -625,6 +625,17 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         }
     }
 
+    /// The place on the page a bookmark leads to: its top (and left, when given), as `/XYZ` destinations say.
+    /// Nil for destinations of a whole page (`/Fit`, `/XYZ` without a top), which go to the page as before.
+    static func outlinePoint(_ destination: PDFDestination) -> CGPoint? {
+        let unspecified = CGFloat(kPDFDestinationUnspecifiedValue)
+        let point = destination.point
+        guard point.y != unspecified, point.y.isFinite, let page = destination.page else { return nil }
+        let bounds = page.bounds(for: .cropBox)
+        let x = point.x == unspecified || !point.x.isFinite ? bounds.minX : point.x
+        return CGPoint(x: x, y: point.y)
+    }
+
     private static func outlineRows(_ outline: PDFOutline?) -> [OutlineRow] {
         guard let outline else { return [] }
         var counter = 0
@@ -632,9 +643,12 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             (0..<node.numberOfChildren).compactMap { index in
                 guard let child = node.child(at: index) else { return nil }
                 counter += 1
-                let page = child.destination?.page.flatMap { $0.document?.index(for: $0) }
+                // A bookmark's target is its destination, or the destination of its GoTo action.
+                let destination = child.destination ?? (child.action as? PDFActionGoTo)?.destination
+                let page = destination?.page.flatMap { $0.document?.index(for: $0) }
                 let children = rows(child)
-                return OutlineRow(id: counter, title: child.label ?? "—", pageIndex: page, children: children.isEmpty ? nil : children)
+                return OutlineRow(id: counter, title: child.label ?? "—", pageIndex: page,
+                                  point: destination.flatMap(Self.outlinePoint), children: children.isEmpty ? nil : children)
             }
         }
         return rows(outline)

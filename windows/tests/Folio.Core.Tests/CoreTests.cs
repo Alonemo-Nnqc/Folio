@@ -343,6 +343,25 @@ public class LibraryTests
         Assert.True(File.Exists(library.FilePath(file)));
     }
 
+    /// <summary>Issue #21: author, year and title entered by hand rename the files; other edits leave them (and a
+    /// name given by hand) as they are.</summary>
+    [Fact]
+    public void HandEditedNamingFieldsRenameTheFiles()
+    {
+        using var library = Library.Temporary();
+        var source = Path.Combine(Path.GetTempPath(), $"scan-{Guid.NewGuid():N}.pdf");
+        File.WriteAllText(source, "%PDF-1.4 hand " + Guid.NewGuid());
+        var id = Assert.IsType<ImportOutcome.Imported>(library.ImportFiles([source]).Single()).ItemId;
+        Assert.IsType<ApplyOutcome.Created>(library.ApplyMetadata(Paper(), id, autoRename: false));
+        var original = library.Files(id).Single().RelativePath;
+        library.UpdateItem(id, true, i => { i.Rating = 3; i.Volume = "12"; });
+        Assert.Equal(original, library.Files(id).Single().RelativePath);
+        library.UpdateItem(id, false, i => i.Title = "Lecture Notes on Optics");
+        Assert.Equal(original, library.Files(id).Single().RelativePath);
+        library.UpdateItem(id, true, i => { i.Authors = [new Author("Born", "Max")]; i.Year = 1959; });
+        Assert.Equal("Files/Born_1959_Lecture Notes on Optics.pdf", library.Files(id).Single().RelativePath);
+    }
+
     [Fact]
     public void SearchesMetadataAndFulltext()
     {

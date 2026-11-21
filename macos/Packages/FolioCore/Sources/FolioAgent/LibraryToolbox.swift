@@ -854,7 +854,7 @@ public actor LibraryToolbox {
         let item = try resolveItem(args["item"]?.stringValue, in: try snapshot())
         var problems: [String] = []
         let status = try args["read_status"]?.stringValue.map(Self.readStatus)
-        try library.updateItem(item.id) { item in
+        try library.updateItem(item.id, autoRename: configuration.autoRenameFiles) { item in
             func text(_ key: String) -> String?? {
                 guard let value = args[key] else { return nil }
                 let string = value.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)

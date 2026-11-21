@@ -25,7 +25,8 @@ struct MetadataInspector: View {
     }
 
     private func update(_ change: @escaping (inout Item) -> Void) {
-        model.perform(String(localized: "无法保存")) { try model.library.updateItem(item.id, change) }
+        // Author, year or title typed by hand rename the files, like retrieved metadata does (when 自动重命名 is on).
+        model.perform(String(localized: "无法保存")) { try model.library.updateItem(item.id, autoRename: model.settings.autoRenameFiles, change) }
     }
 
     // MARK: Header: type, title, authors, key

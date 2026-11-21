@@ -4,7 +4,8 @@ import SwiftUI
 
 /// What the sidebar asks the reader to do.
 struct ReaderSidebarActions {
-    var goToPage: (Int) -> Void
+    /// A page, and the place on it when there is one (page space, the top-left corner of what is shown).
+    var goToPage: (Int, CGPoint?) -> Void
     var showAnnotation: (ObjectIdentifier) -> Void
     var deleteAnnotation: (ObjectIdentifier) -> Void
     var showHit: (Int) -> Void
@@ -49,7 +50,7 @@ struct ReaderSidebarView: View {
             } else {
                 List(state.outline, children: \.children) { row in
                     Button {
-                        if let page = row.pageIndex { actions.goToPage(page) }
+                        if let page = row.pageIndex { actions.goToPage(page, row.point) }
                     } label: {
                         HStack {
                             Text(row.title).lineLimit(2)

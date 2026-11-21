@@ -883,7 +883,7 @@ public sealed class LibraryToolbox
         var item = ResolveItem(args["item"].Str(), Snap());
         var problems = new List<string>();
         ReadStatus? status = args["read_status"].Str() is { } st ? ParseStatus(st) : null;
-        Lib.UpdateItem(item.Id, i =>
+        Lib.UpdateItem(item.Id, Configuration.AutoRenameFiles, i =>
         {
             bool Has(string key) => args.ContainsKey(key);
             string? Text(string key) => args[key].Str()?.Trim() is { Length: > 0 } v ? v : null;

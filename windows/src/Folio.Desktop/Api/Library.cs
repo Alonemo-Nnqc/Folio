@@ -174,8 +174,7 @@ public static partial class Api
             var patch = a.Raw("patch").Clone();
             M.Perform(() =>
             {
-                M.Library.UpdateItem(id, i => ApplyPatch(i, patch));
-                if (M.Settings.AutoRenameFiles) M.Library.RenameFiles(id);
+                M.Library.UpdateItem(id, M.Settings.AutoRenameFiles, i => ApplyPatch(i, patch));
             });
             return null;
         });
