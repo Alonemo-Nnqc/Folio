@@ -22,7 +22,17 @@ public static partial class Api
         defaultFileId = i.DefaultFileId, metadataState = i.MetadataState.ToString(), dateAdded = Ms(i.DateAdded), dateModified = Ms(i.DateModified), trashed = i.IsTrashed,
         retrieving = M.Importer.IsRetrieving(i.Id),
         hasJournal = JournalMetrics.JournalName(i) != null, journalMetrics = JournalMetricsDto(i, s),
+        // The inspector's fields for this type, named for it, then the rest folded away (#19).
+        fields = FieldsDto(i, true), moreFields = FieldsDto(i, false),
     };
+
+    static IEnumerable<object> FieldsDto(Item i, bool shown)
+    {
+        var m = i.Metadata;
+        var list = ItemFields.Shown(m);
+        return (shown ? list : Enum.GetValues<ItemField>().Where(f => !list.Contains(f)))
+            .Select(f => new { key = f.Key(), label = f.Label(i.Type), value = f.Text(m) });
+    }
 
     static object FileDto(FileRecord f, Item? item, IReadOnlyList<FileRecord> siblings) => new
     {
@@ -121,6 +131,12 @@ public static partial class Api
                 case "issue": i.Issue = text; break;
                 case "pages": i.Pages = text; break;
                 case "publisher": i.Publisher = text; break;
+                case "place": i.Place = text; break;
+                case "edition": i.Edition = text; break;
+                case "series": i.Series = text; break;
+                case "genre": i.Genre = text; break;
+                case "editors": i.Editors = AuthorFormatter.People(p.Value.GetString() ?? ""); break;
+                case "translators": i.Translators = AuthorFormatter.People(p.Value.GetString() ?? ""); break;
                 case "doi": i.Doi = text; break;
                 case "arxivId": i.ArxivId = text; break;
                 case "isbn": i.Isbn = text; break;

@@ -20,7 +20,10 @@ enum CSLJSONMapper {
         // A repository is not a container: preprints cite it as the publisher with the identifier as
         // the number (the CSL / Zotero convention), so styles print "arXiv:2401.12345" and a link.
         let isRepositoryPreprint = m.type == .preprint && m.arxivId != nil
-        if let source = m.source, !source.isEmpty, !(isRepositoryPreprint && source.lowercased() == "arxiv") {
+        // Books, theses and reports are not in a container: what `source` holds for them is the publisher, university or
+        // institution (#19).
+        let publishedBy = [.book, .thesis, .report].contains(m.type)
+        if let source = m.source, !source.isEmpty, !publishedBy, !(isRepositoryPreprint && source.lowercased() == "arxiv") {
             item["container-title"] = source
         }
         if isRepositoryPreprint, let arxiv = m.arxivId {
@@ -30,16 +33,29 @@ enum CSLJSONMapper {
             if (m.url ?? "").isEmpty { item["URL"] = "https://arxiv.org/abs/\(arxiv)" }
         }
         if let volume = m.volume, !volume.isEmpty { item["volume"] = volume }
-        if let issue = m.issue, !issue.isEmpty { item["issue"] = issue }
+        // A report's number is its "issue".
+        if let issue = m.issue, !issue.isEmpty { item[m.type == .report ? "number" : "issue"] = issue }
         if let pages = m.pages, !pages.isEmpty { item["page"] = pages }
-        if let publisher = m.publisher, !publisher.isEmpty, !isRepositoryPreprint { item["publisher"] = publisher }
+        let institution = m.type == .thesis || m.type == .report ? m.source.nonEmpty ?? m.publisher.nonEmpty : nil
+        if let publisher = institution ?? m.publisher.nonEmpty ?? (m.type == .book ? m.source.nonEmpty : nil), !isRepositoryPreprint {
+            item["publisher"] = publisher
+        }
+        if let place = m.place.nonEmpty {
+            item["publisher-place"] = place
+            if m.type == .conferencePaper { item["event-place"] = place }
+        }
+        if let edition = m.edition.nonEmpty { item["edition"] = edition }
+        if !m.editors.isEmpty { item["editor"] = m.editors.map(cslName) }
+        if !m.translators.isEmpty { item["translator"] = m.translators.map(cslName) }
+        if let series = m.series.nonEmpty { item["collection-title"] = series }
+        if let genre = m.genre.nonEmpty { item["genre"] = genre }
         if let doi = m.doi, !doi.isEmpty { item["DOI"] = doi }
         if let url = m.url, !url.isEmpty { item["URL"] = url }
         if let abstract = m.abstract, !abstract.isEmpty { item["abstract"] = abstract }
         return item
     }
 
-    private static func cslType(for type: ItemType) -> String {
+    static func cslType(for type: ItemType) -> String {
         switch type {
         case .journalArticle: "article-journal"
         case .conferencePaper: "paper-conference"
@@ -56,7 +72,7 @@ enum CSLJSONMapper {
 
     /// Organisational authors (empty `given`) are emitted as a CSL `literal`
     /// name so citeproc does not try to invert them like a personal name.
-    private static func cslName(_ author: Author) -> [String: String] {
+    static func cslName(_ author: Author) -> [String: String] {
         let given = author.given.trimmingCharacters(in: .whitespaces)
         if given.isEmpty {
             return ["literal": author.family]
@@ -87,5 +103,13 @@ enum CSLJSONMapper {
                 || (0x3400...0x4DBF).contains(scalar.value)
                 || (0x3040...0x30FF).contains(scalar.value)
         }
+    }
+}
+
+extension Optional where Wrapped == String {
+    /// The text, unless missing or empty.
+    var nonEmpty: String? {
+        guard let self, !self.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return self
     }
 }

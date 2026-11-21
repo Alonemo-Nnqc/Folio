@@ -315,8 +315,11 @@ public sealed class LibraryToolbox
         o["authors"] = Json.Strings(item.Authors.Select(AuthorFormatter.Full));
         o.Remove("more_authors");
         foreach (var (key, value) in new[] { ("date", item.Date), ("volume", item.Volume), ("issue", item.Issue), ("pages", item.Pages),
-                     ("publisher", item.Publisher), ("isbn", item.Isbn), ("url", item.Url), ("abstract", item.Abstract) })
+                     ("publisher", item.Publisher), ("place", item.Place), ("edition", item.Edition), ("series", item.Series), ("genre", item.Genre),
+                     ("isbn", item.Isbn), ("url", item.Url), ("abstract", item.Abstract) })
             if (!string.IsNullOrEmpty(value)) o[key] = value;
+        foreach (var (key, people) in new[] { ("editors", item.Editors), ("translators", item.Translators) })
+            if (people.Count > 0) o[key] = Json.Strings(people.Select(AuthorFormatter.Full));
         o["date_added"] = Iso(item.DateAdded);
         if (Lib.LastReadDates().TryGetValue(item.Id, out var lastRead)) o["last_read"] = Iso(lastRead);
         o["files"] = Json.Array(s.FilesOf(item.Id).Select(file =>
@@ -888,12 +891,19 @@ public sealed class LibraryToolbox
             bool Has(string key) => args.ContainsKey(key);
             string? Text(string key) => args[key].Str()?.Trim() is { Length: > 0 } v ? v : null;
             if (Has("title")) { if (Text("title") is { } t) i.Title = t; else problems.Add("title cannot be empty"); }
-            if (Has("authors"))
-                i.Authors = args["authors"].StringList().Select(name =>
-                {
-                    var parts = name.Split(',', 2).Select(x => x.Trim()).ToArray();
-                    return parts.Length == 2 ? new Author(parts[0], parts[1]) : new Author(name);
-                }).ToList();
+            List<Author> People(string key) => args[key].StringList().Select(name =>
+            {
+                var parts = name.Split(',', 2).Select(x => x.Trim()).ToArray();
+                return parts.Length == 2 ? new Author(parts[0], parts[1]) : new Author(name);
+            }).ToList();
+            if (Has("authors")) i.Authors = People("authors");
+            if (Has("editors")) i.Editors = People("editors");
+            if (Has("translators")) i.Translators = People("translators");
+            if (Has("place")) i.Place = Text("place");
+            if (Has("edition")) i.Edition = Text("edition");
+            if (Has("series")) i.Series = Text("series");
+            if (Has("genre")) i.Genre = Text("genre");
+            if (Has("isbn")) i.Isbn = Text("isbn");
             if (Has("year")) i.Year = args["year"].Int();
             if (Has("venue")) i.Source = Text("venue");
             if (Has("volume")) i.Volume = Text("volume");

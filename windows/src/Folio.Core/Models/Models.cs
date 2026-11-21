@@ -94,8 +94,17 @@ public sealed record Metadata
     public string? Isbn { get; set; }
     public string? Url { get; set; }
     public string? Abstract { get; set; }
+    /// <summary>Where it was published, or where a thesis's degree-awarding institution is (CSL publisher-place).</summary>
+    public string? Place { get; set; }
+    public string? Edition { get; set; }
+    public List<Author> Editors { get; set; } = [];
+    public List<Author> Translators { get; set; } = [];
+    /// <summary>The series a book or report belongs to (CSL collection-title).</summary>
+    public string? Series { get; set; }
+    /// <summary>Thesis or report type ("博士学位论文", "Master's thesis"): CSL genre.</summary>
+    public string? Genre { get; set; }
 
-    public Metadata Copy() => this with { Authors = [.. Authors] };
+    public Metadata Copy() => this with { Authors = [.. Authors], Editors = [.. Editors], Translators = [.. Translators] };
 }
 
 /// <summary>A top-level row in the library: either a regular item or a standalone file.</summary>
@@ -128,6 +137,12 @@ public sealed class Item
     public string? Isbn { get; set; }
     public string? Url { get; set; }
     public string? Abstract { get; set; }
+    public string? Place { get; set; }
+    public string? Edition { get; set; }
+    public List<Author> Editors { get; set; } = [];
+    public List<Author> Translators { get; set; } = [];
+    public string? Series { get; set; }
+    public string? Genre { get; set; }
     public string? CitationKey { get; set; }
     public int Rating { get; set; }
     public ReadStatus ReadStatus { get; set; }
@@ -148,16 +163,19 @@ public sealed class Item
         {
             Type = Type, Authors = [.. Authors], Year = Year, Date = Date, Source = Source, Volume = Volume, Issue = Issue,
             Pages = Pages, Publisher = Publisher, Doi = Doi, ArxivId = ArxivId, Isbn = Isbn, Url = Url, Abstract = Abstract,
+            Place = Place, Edition = Edition, Editors = [.. Editors], Translators = [.. Translators], Series = Series, Genre = Genre,
         };
         set
         {
             Type = value.Type; Title = value.Title; Authors = [.. value.Authors]; Year = value.Year; Date = value.Date;
             Source = value.Source; Volume = value.Volume; Issue = value.Issue; Pages = value.Pages; Publisher = value.Publisher;
             Doi = value.Doi?.ToLowerInvariant(); ArxivId = value.ArxivId; Isbn = value.Isbn; Url = value.Url; Abstract = value.Abstract;
+            Place = value.Place; Edition = value.Edition; Editors = [.. value.Editors]; Translators = [.. value.Translators];
+            Series = value.Series; Genre = value.Genre;
         }
     }
 
-    public Item Clone() { var c = (Item)MemberwiseClone(); c.Authors = [.. Authors]; return c; }
+    public Item Clone() { var c = (Item)MemberwiseClone(); c.Authors = [.. Authors]; c.Editors = [.. Editors]; c.Translators = [.. Translators]; return c; }
 }
 
 /// <summary>What a translated file contains.</summary>

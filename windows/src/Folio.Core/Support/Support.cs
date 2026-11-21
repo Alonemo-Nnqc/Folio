@@ -168,6 +168,101 @@ public static class AuthorFormatter
         2 => $"{Full(authors[0])} & {Full(authors[1])}",
         _ => $"{Full(authors[0])} et al.",
     };
+
+    /// <summary>People as one line to read and edit: "Zhang, Tengya; Li, Wei; 王小明".</summary>
+    public static string Joined(IEnumerable<Author> people) => string.Join("; ", people.Select(Full));
+
+    /// <summary>People typed as one line: separated by ";", "；" or "、" (or " and "), each "Family, Given" or a name as it is
+    /// ("王小明", "OpenAI", "Tengya Zhang"). (AuthorFormatter.people on the Mac.)</summary>
+    public static List<Author> People(string text) => text.Replace(" and ", ";")
+        .Split([';', '；', '、'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(name =>
+        {
+            int comma = name.IndexOfAny([',', '，']);
+            if (comma >= 0) return new Author(name[..comma].Trim(), name[(comma + 1)..].Trim());
+            var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // CJK names and organisations stay whole; "Tengya Zhang" is given then family.
+            if (parts.Length < 2 || name.Any(c => c is >= '\u3000' and <= '\u9FFF')) return new Author(name);
+            return new Author(parts[^1], string.Join(' ', parts[..^1]));
+        }).ToList();
+}
+
+/// <summary>The bibliographic fields of an item that mean different things, or matter only, for some types (#19).
+/// (ItemField on the Mac.)</summary>
+public enum ItemField { Source, Volume, Issue, Pages, Publisher, Place, Edition, Editors, Translators, Series, Genre, Doi, ArxivId, Isbn, Url }
+
+public static class ItemFields
+{
+    /// <summary>The key the web inspector and item.update use.</summary>
+    public static string Key(this ItemField f) => f == ItemField.ArxivId ? "arxivId" : char.ToLowerInvariant(f.ToString()[0]) + f.ToString()[1..];
+
+    /// <summary>What the field is called for an item of <paramref name="type"/>.</summary>
+    public static string Label(this ItemField f, ItemType type) => f switch
+    {
+        ItemField.Source => type switch
+        {
+            ItemType.JournalArticle => Loc.S("期刊"),
+            ItemType.ConferencePaper => Loc.S("会议/论文集"),
+            ItemType.Preprint or ItemType.Dataset => Loc.S("平台"),
+            ItemType.BookChapter => Loc.S("所属图书"),
+            ItemType.Thesis => Loc.S("授予单位"),
+            ItemType.Report => Loc.S("机构"),
+            ItemType.Webpage => Loc.S("网站"),
+            _ => Loc.S("来源"),
+        },
+        ItemField.Volume => Loc.S("卷"),
+        ItemField.Issue => type == ItemType.Report ? Loc.S("编号") : Loc.S("期"),
+        ItemField.Pages => Loc.S("页码"),
+        ItemField.Publisher => Loc.S("出版社"),
+        ItemField.Place => type switch
+        {
+            ItemType.Thesis or ItemType.Report => Loc.S("所在地"),
+            ItemType.ConferencePaper => Loc.S("会议地点"),
+            _ => Loc.S("出版地"),
+        },
+        ItemField.Edition => Loc.S("版次"),
+        ItemField.Editors => Loc.S("编者"),
+        ItemField.Translators => Loc.S("译者"),
+        ItemField.Series => Loc.S("丛书"),
+        ItemField.Genre => type == ItemType.Thesis ? Loc.S("学位类型") : Loc.S("类型"),
+        ItemField.Doi => "DOI",
+        ItemField.ArxivId => "arXiv",
+        ItemField.Isbn => "ISBN",
+        _ => "URL",
+    };
+
+    /// <summary>The fields an item of <paramref name="type"/> is usually described with, in the inspector's order.</summary>
+    public static ItemField[] For(ItemType type) => type switch
+    {
+        ItemType.JournalArticle => [ItemField.Source, ItemField.Volume, ItemField.Issue, ItemField.Pages, ItemField.Doi, ItemField.Url],
+        ItemType.ConferencePaper => [ItemField.Source, ItemField.Editors, ItemField.Place, ItemField.Publisher, ItemField.Volume, ItemField.Pages, ItemField.Doi, ItemField.Url],
+        ItemType.Preprint => [ItemField.Source, ItemField.ArxivId, ItemField.Doi, ItemField.Url],
+        ItemType.Book => [ItemField.Publisher, ItemField.Place, ItemField.Edition, ItemField.Editors, ItemField.Translators, ItemField.Series, ItemField.Isbn, ItemField.Doi, ItemField.Url],
+        ItemType.BookChapter => [ItemField.Source, ItemField.Editors, ItemField.Translators, ItemField.Publisher, ItemField.Place, ItemField.Edition, ItemField.Series, ItemField.Pages, ItemField.Isbn, ItemField.Doi, ItemField.Url],
+        ItemType.Thesis => [ItemField.Source, ItemField.Place, ItemField.Genre, ItemField.Doi, ItemField.Url],
+        ItemType.Report => [ItemField.Source, ItemField.Place, ItemField.Genre, ItemField.Issue, ItemField.Series, ItemField.Doi, ItemField.Url],
+        ItemType.Webpage => [ItemField.Source, ItemField.Url],
+        ItemType.Dataset => [ItemField.Source, ItemField.Publisher, ItemField.Doi, ItemField.Url],
+        _ => [ItemField.Source, ItemField.Volume, ItemField.Issue, ItemField.Pages, ItemField.Publisher, ItemField.Doi, ItemField.Url],
+    };
+
+    /// <summary>The fields the inspector shows: its type's, then any other that has a value (changing the type hides nothing).</summary>
+    public static List<ItemField> Shown(Metadata m)
+    {
+        var own = For(m.Type);
+        return [.. own, .. Enum.GetValues<ItemField>().Where(f => !own.Contains(f) && !string.IsNullOrEmpty(f.Text(m)))];
+    }
+
+    /// <summary>The field's text (people as "Family, Given; …").</summary>
+    public static string? Text(this ItemField f, Metadata m) => f switch
+    {
+        ItemField.Source => m.Source, ItemField.Volume => m.Volume, ItemField.Issue => m.Issue, ItemField.Pages => m.Pages,
+        ItemField.Publisher => m.Publisher, ItemField.Place => m.Place, ItemField.Edition => m.Edition,
+        ItemField.Editors => m.Editors.Count == 0 ? null : AuthorFormatter.Joined(m.Editors),
+        ItemField.Translators => m.Translators.Count == 0 ? null : AuthorFormatter.Joined(m.Translators),
+        ItemField.Series => m.Series, ItemField.Genre => m.Genre, ItemField.Doi => m.Doi, ItemField.ArxivId => m.ArxivId,
+        ItemField.Isbn => m.Isbn, _ => m.Url,
+    };
 }
 
 /// <summary>Generates BibTeX citation keys such as zhang2026.</summary>

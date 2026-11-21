@@ -124,6 +124,9 @@ public enum FolioSkill {
         - Groups: `set_groups`, `create_group`, `update_group`. Tags: `set_tags`, `create_tag`, `update_tag`.
           Colours are names (red, orange, yellow, green, mint, cyan, blue, indigo, purple, pink, gray) or `#RRGGBB`.
         - Reading status (`unread` / `reading` / `read`), rating (0–5) and bibliographic fields: `update_item`.
+          Books, chapters, theses and reports have their own fields there: `place`, `edition`, `editors`, `translators`,
+          `series` and `genre` (thesis/degree or report type); `venue` is the journal, proceedings, the book a chapter
+          is in, or a thesis's degree-awarding institution. Citation styles such as GB/T 7714 use them.
 
         ## Translation
 

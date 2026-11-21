@@ -33,6 +33,12 @@ static class Records
             OriginItemId = Str(r, "originItemId"),
             DateModified = Date(r, "dateModified") ?? DateTime.UtcNow,
             TrashedAt = Date(r, "trashedAt"),
+            Place = Str(r, "place"),
+            Edition = Str(r, "edition"),
+            Editors = DecodeAuthors(Str(r, "editors")),
+            Translators = DecodeAuthors(Str(r, "translators")),
+            Series = Str(r, "series"),
+            Genre = Str(r, "genre"),
         };
         return item;
     }
@@ -42,13 +48,15 @@ static class Records
         i.Id, (int)i.Kind, i.Type.Raw(), i.Title, EncodeAuthors(i.Authors), i.Year, i.Date, i.Source, i.Volume, i.Issue, i.Pages,
         i.Publisher, i.Doi, i.ArxivId, i.Isbn, i.Url, i.Abstract, i.CitationKey, i.Rating, (int)i.ReadStatus, i.DefaultFileId,
         (int)i.MetadataState, i.RetryCount, i.OriginItemId, i.DateAdded, i.DateModified, i.TrashedAt,
+        i.Place, i.Edition, EncodeAuthors(i.Editors), EncodeAuthors(i.Translators), i.Series, i.Genre,
     ];
 
     const string ItemColumns = "id, kind, type, title, authors, year, date, source, volume, issue, pages, publisher, doi, arxivId, isbn, url, " +
-                               "abstract, citationKey, rating, readStatus, defaultFileId, metadataState, retryCount, originItemId, dateAdded, dateModified, trashedAt";
+                               "abstract, citationKey, rating, readStatus, defaultFileId, metadataState, retryCount, originItemId, dateAdded, dateModified, trashedAt, " +
+                               "place, edition, editors, translators, series, genre";
 
     public static void Insert(SqliteConnection c, SqliteTransaction tx, Item i) =>
-        Exec(c, tx, $"INSERT INTO item ({ItemColumns}) VALUES ({Placeholders(27)})", ItemValues(i));
+        Exec(c, tx, $"INSERT INTO item ({ItemColumns}) VALUES ({Placeholders(33)})", ItemValues(i));
 
     public static void Update(SqliteConnection c, SqliteTransaction tx, Item i)
     {

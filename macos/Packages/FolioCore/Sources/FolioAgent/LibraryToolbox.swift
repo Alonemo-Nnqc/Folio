@@ -313,8 +313,12 @@ public actor LibraryToolbox {
         object["authors"] = .array(item.authors.map { .string(AuthorFormatter.full($0)) })
         object.removeValue(forKey: "more_authors")
         for (key, value) in [("date", item.date), ("volume", item.volume), ("issue", item.issue), ("pages", item.pages),
-                             ("publisher", item.publisher), ("isbn", item.isbn), ("url", item.url), ("abstract", item.abstract)] {
+                             ("publisher", item.publisher), ("place", item.place), ("edition", item.edition), ("series", item.series),
+                             ("genre", item.genre), ("isbn", item.isbn), ("url", item.url), ("abstract", item.abstract)] {
             if let value, !value.isEmpty { object[key] = .string(value) }
+        }
+        for (key, people) in [("editors", item.editors), ("translators", item.translators)] where !people.isEmpty {
+            object[key] = .array(people.map { .string(AuthorFormatter.full($0)) })
         }
         object["date_added"] = .string(ISO8601DateFormatter().string(from: item.dateAdded))
         if let lastRead = try library.lastReadDates()[item.id] {
@@ -861,12 +865,20 @@ public actor LibraryToolbox {
                 return .some(string?.isEmpty == false ? string : nil)
             }
             if let title = text("title") { if let title { item.title = title } else { problems.append("title cannot be empty") } }
-            if let authors = args["authors"]?.stringList, args["authors"] != nil {
-                item.authors = authors.map { name in
+            func people(_ names: [String]) -> [Author] {
+                names.map { name in
                     let parts = name.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
                     return parts.count == 2 ? Author(family: parts[0], given: parts[1]) : Author(family: name)
                 }
             }
+            if let authors = args["authors"]?.stringList, args["authors"] != nil { item.authors = people(authors) }
+            if let editors = args["editors"]?.stringList, args["editors"] != nil { item.editors = people(editors) }
+            if let translators = args["translators"]?.stringList, args["translators"] != nil { item.translators = people(translators) }
+            if let value = text("place") { item.place = value }
+            if let value = text("edition") { item.edition = value }
+            if let value = text("series") { item.series = value }
+            if let value = text("genre") { item.genre = value }
+            if let value = text("isbn") { item.isbn = value }
             if let year = args["year"] { item.year = year.intValue }
             if let value = text("venue") { item.source = value }
             if let value = text("volume") { item.volume = value }

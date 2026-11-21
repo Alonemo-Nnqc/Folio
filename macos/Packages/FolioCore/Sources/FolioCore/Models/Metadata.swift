@@ -19,6 +19,18 @@ public struct Metadata: Codable, Sendable, Hashable {
     public var isbn: String?
     public var url: String?
     public var abstract: String?
+    /// Where it was published (books, chapters, reports, proceedings) or where the degree-awarding institution is
+    /// (theses): CSL `publisher-place`.
+    public var place: String?
+    /// "2nd", "第3版" (books, chapters).
+    public var edition: String?
+    /// Editors of the book or proceedings (books, chapters, conference papers).
+    public var editors: [Author] = []
+    public var translators: [Author] = []
+    /// The series a book or report belongs to: CSL `collection-title`.
+    public var series: String?
+    /// What kind of thesis or report it is ("博士学位论文", "Master's thesis", "Technical report"): CSL `genre`.
+    public var genre: String?
 
     public init(title: String) {
         self.title = title
