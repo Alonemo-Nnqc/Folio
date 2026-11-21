@@ -122,9 +122,12 @@ final class AppSettings {
         static let selectionTranslationShortcut = "selectionTranslationShortcut"
         static let backgroundTranslucency = "backgroundTranslucency"
         static let translationParallelJobs = "translationParallelJobs"
+        static let translationParallelTotal = "translationParallelTotal"
+        static let autoTranslateImports = "autoTranslateImports"
         static let selectionTranslationFallback = "selectionTranslationFallback"
         static let journalMetricsAutoFetch = "journalMetricsAutoFetch"
         static let showTranslatedBadge = "showTranslatedBadge"
+        static let markdownToolbar = "markdownToolbar"
     }
 
     private let defaults: UserDefaults
@@ -225,12 +228,18 @@ final class AppSettings {
     }
     /// 设置 ▸ 通用 ▸ 背景透明度: 0 opaque (the standard look), 1 the desktop shows through the list, inspector and reader.
     var backgroundTranslucency: Double { didSet { save(backgroundTranslucency, Key.backgroundTranslucency) } }
-    /// Papers translated at the same time (设置 ▸ 翻译 ▸ 同时翻译); the rest wait their turn.
+    /// Papers of one service translated at the same time (设置 ▸ 翻译 ▸ 同一服务); the rest wait their turn.
     var translationParallelJobs: Int { didSet { save(translationParallelJobs, Key.translationParallelJobs) } }
+    /// Papers translated at the same time across all services (设置 ▸ 翻译 ▸ 总数).
+    var translationParallelTotal: Int { didSet { save(translationParallelTotal, Key.translationParallelTotal) } }
+    /// New PDFs that have no translation yet are translated as they are added (设置 ▸ 翻译 ▸ 自动翻译新论文).
+    var autoTranslateImports: Bool { didSet { save(autoTranslateImports, Key.autoTranslateImports) } }
     /// 设置 ▸ 检索 ▸ 期刊指标: look up the ranks of new and changed items' journals by itself (META-30).
     var journalMetricsAutoFetch: Bool { didSet { save(journalMetricsAutoFetch, Key.journalMetricsAutoFetch) } }
     /// 设置 ▸ 通用 ▸ 列表: the green "已翻译" badge after the title of papers that have a translation.
     var showTranslatedBadge: Bool { didSet { save(showTranslatedBadge, Key.showTranslatedBadge) } }
+    /// Markdown 文档的格式工具栏 (标题、粗体、列表…) above a document in a tab of its own.
+    var markdownToolbar: Bool { didSet { save(markdownToolbar, Key.markdownToolbar) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -259,9 +268,12 @@ final class AppSettings {
             Key.selectionTranslationTrigger: SelectionTrigger.button.rawValue,
             Key.backgroundTranslucency: 0.0,
             Key.translationParallelJobs: 2,
+            Key.translationParallelTotal: 6,
+            Key.autoTranslateImports: false,
             Key.selectionTranslationFallback: true,
             Key.journalMetricsAutoFetch: true,
             Key.showTranslatedBadge: true,
+            Key.markdownToolbar: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
         openWithAppPath = defaults.string(forKey: Key.openWithAppPath) ?? ""
@@ -296,8 +308,11 @@ final class AppSettings {
         // Services of the old pdf2zh_next engine that are gone map to their replacement.
         translationService = TranslationServiceCatalog.resolve(defaults.string(forKey: Key.translationService) ?? TranslationServiceCatalog.defaultServiceID).id
         translationFields = defaults.dictionary(forKey: Key.translationFields) as? [String: [String: String]] ?? [:]
-        translationOptions = defaults.data(forKey: Key.translationOptions)
+        var savedOptions = defaults.data(forKey: Key.translationOptions)
             .flatMap { try? JSONDecoder().decode(TranslationOptions.self, from: $0) } ?? TranslationOptions()
+        // Pages are chosen for each run in the 翻译全文 sheet; versions up to 1.4 kept them here, for every later paper.
+        savedOptions.pages = nil
+        translationOptions = savedOptions
         translationProfiles = defaults.data(forKey: Key.translationProfiles)
             .flatMap { try? JSONDecoder().decode([TranslationProfile].self, from: $0) } ?? []
         selectedTranslationProfiles = defaults.dictionary(forKey: Key.selectedTranslationProfiles) as? [String: String] ?? [:]
@@ -313,8 +328,11 @@ final class AppSettings {
         selectionTranslationShortcut = KeyShortcut(storage: defaults.dictionary(forKey: Key.selectionTranslationShortcut)) ?? .defaultSelectionTranslation
         selectionTranslationFallback = defaults.bool(forKey: Key.selectionTranslationFallback)
         translationParallelJobs = defaults.integer(forKey: Key.translationParallelJobs)
+        translationParallelTotal = defaults.integer(forKey: Key.translationParallelTotal)
+        autoTranslateImports = defaults.bool(forKey: Key.autoTranslateImports)
         journalMetricsAutoFetch = defaults.bool(forKey: Key.journalMetricsAutoFetch)
         showTranslatedBadge = defaults.bool(forKey: Key.showTranslatedBadge)
+        markdownToolbar = defaults.bool(forKey: Key.markdownToolbar)
         backgroundTranslucency = min(1, max(0, defaults.double(forKey: Key.backgroundTranslucency)))
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.

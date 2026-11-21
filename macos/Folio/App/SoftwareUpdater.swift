@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import Sparkle
@@ -35,6 +36,20 @@ final class SoftwareUpdater: NSObject, SPUUpdaterDelegate, SPUStandardUserDriver
         observation = updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
             MainActor.assumeIsolated { self?.canCheckForUpdates = updater.canCheckForUpdates }
         }
+        // While Folio stays open (for days, often), updates are looked for as it is used, not only at launch:
+        // Sparkle's own schedule runs hourly (SUScheduledCheckInterval), and coming back to Folio checks too once
+        // half an hour has passed since the last look.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkInBackgroundIfDue() }
+        }
+    }
+
+    /// A quiet check (the result shows in the sidebar, never as an alert) when the last one is old enough.
+    func checkInBackgroundIfDue(minimumInterval: TimeInterval = 30 * 60) {
+        guard updater.automaticallyChecksForUpdates, updater.canCheckForUpdates, !updater.sessionInProgress,
+              pendingUpdate == nil else { return }
+        if let last = updater.lastUpdateCheckDate, Date().timeIntervalSince(last) < minimumInterval { return }
+        updater.checkForUpdatesInBackground()
     }
 
     private var updater: SPUUpdater { controller.updater }

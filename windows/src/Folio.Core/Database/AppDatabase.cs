@@ -284,6 +284,15 @@ static class Migrations
         ("v4", "ALTER TABLE file ADD COLUMN translatedBy TEXT"),
         // v1.3 (META-30): easyScholar journal ranks per normalised journal name; "{}" caches "not listed".
         ("v1.3-journalMetrics", "CREATE TABLE IF NOT EXISTS journalMetrics (name TEXT PRIMARY KEY, json TEXT NOT NULL, fetchedAt DATETIME NOT NULL)"),
+        // v1.5 (#19): fields of books, chapters, theses and reports, as the macOS app adds them.
+        ("v1.5-itemFields", """
+            ALTER TABLE item ADD COLUMN place TEXT;
+            ALTER TABLE item ADD COLUMN edition TEXT;
+            ALTER TABLE item ADD COLUMN editors TEXT NOT NULL DEFAULT '[]';
+            ALTER TABLE item ADD COLUMN translators TEXT NOT NULL DEFAULT '[]';
+            ALTER TABLE item ADD COLUMN series TEXT;
+            ALTER TABLE item ADD COLUMN genre TEXT;
+            """),
     ];
 
     public static void Migrate(SqliteConnection c)

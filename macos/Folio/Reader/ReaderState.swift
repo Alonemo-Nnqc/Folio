@@ -123,6 +123,17 @@ extension InkEraser.Size {
 enum ReaderSidebarTab: Int, CaseIterable {
     case thumbnails, outline, annotations, search
 
+    private static let key = "readerSidebarTab"
+
+    /// The page last chosen in a reader's sidebar.
+    static var remembered: ReaderSidebarTab {
+        get { UserDefaults.standard.object(forKey: key).flatMap { ($0 as? Int).flatMap(ReaderSidebarTab.init(rawValue:)) } ?? .thumbnails }
+        set {
+            guard !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return }
+            UserDefaults.standard.set(newValue.rawValue, forKey: key)
+        }
+    }
+
     var title: String {
         switch self {
         case .thumbnails: String(localized: "缩略图")
@@ -167,6 +178,8 @@ struct OutlineRow: Identifiable {
     let id: Int
     let title: String
     let pageIndex: Int?
+    /// Where on the page the entry leads (an `/XYZ` destination's left and top); nil for a page-level one.
+    var point: CGPoint?
     let children: [OutlineRow]?
 }
 
@@ -179,7 +192,11 @@ final class ReaderState {
     /// Colours mixed in the colour panel, newest first: every tool offers them after its presets.
     var customColors: [String] = []
     var eraserSize: InkEraser.Size
-    var sidebarTab = ReaderSidebarTab.thumbnails
+    /// The sidebar's page: the one last chosen in any paper (search results are not remembered: they belong to a
+    /// search).
+    var sidebarTab = ReaderSidebarTab.remembered {
+        didSet { if sidebarTab != .search { ReaderSidebarTab.remembered = sidebarTab } }
+    }
     var pageIndex = 0
     var pageCount = 0
     var annotations: [AnnotationRow] = []

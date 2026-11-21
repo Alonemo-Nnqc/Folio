@@ -17,6 +17,10 @@ public sealed class EngineError(string message) : Exception(message)
     public static EngineError Unreadable => new(Loc.S("无法读取这个 PDF 文件。"));
     public static EngineError Encrypted => new(Loc.S("PDF 已加密或受密码保护，无法翻译。"));
     public static EngineError NoText => new(Loc.S("这个 PDF 中没有可翻译的文字（可能是扫描件，需要先进行文字识别）。"));
+    /// <summary>The page range typed is not page numbers.</summary>
+    public static EngineError UnreadablePages(string typed) => new(PageSelection.UnreadableMessage(typed));
+    /// <summary>The page range typed has none of the document's pages (it has <paramref name="count"/>).</summary>
+    public static EngineError PagesOutOfRange(string typed, int count) => new(Loc.S("这篇 PDF 共 %lld 页，页码范围「%@」里没有其中的页。", count, typed));
     public static EngineError AlreadyInTarget(string language) => new(Loc.S("这篇论文已经是%@，不需要翻译成%@。可以在翻译设置里换一种译文语言。", language, language));
     public static EngineError TooManyRefused(int count) => new(Loc.S("翻译服务拒绝翻译 %lld 个段落（内容审核）。请换一个翻译服务或模型再试。", count));
     /// <summary>The model's reply ends at its output limit even for a single paragraph.</summary>
@@ -118,11 +122,19 @@ public sealed class TranslationJob
         using var sourceScope = source;
         var started = Stopwatch.StartNew();
         int pageCount = source.Pages.Count;
-        var selected = options.PageNumbers(pageCount);
+        var selection = PageSelection.Parse(options.Pages);
+        var selected = selection.Pages(pageCount);
+        if (selected.Count == 0)
+        {
+            // Said as it is: no pages is not a PDF without text.
+            log.Write($"pages \"{options.Pages}\" select none of {pageCount}");
+            var typed = (options.Pages ?? "").Trim();
+            throw selection.Kind == PageSelection.Kinds.Unreadable ? EngineError.UnreadablePages(typed) : EngineError.PagesOutOfRange(typed, pageCount);
+        }
         var analyzer = new LayoutAnalyzer(new LayoutAnalyzer.Options { TranslateTables = options.TranslateTables, TranslateReferences = options.TranslateReferences });
         var analysed = analyzer.Analyze(source, selected);
         cancel.ThrowIfCancellationRequested();
-        var output = options.OnlyIncludeTranslatedPages || options.Pages == null ? selected : Enumerable.Range(1, pageCount).ToList();
+        var output = options.OnlyIncludeTranslatedPages || selection.Kind == PageSelection.Kinds.All ? selected : Enumerable.Range(1, pageCount).ToList();
         var byNumber = analysed.ToDictionary(l => l.Number);
         var layouts = output.Select(n => byNumber.GetValueOrDefault(n) ?? Untouched(source, n)).OfType<PageLayout>().ToList();
         var segments = SegmentBuilder.Segments(analysed, options.LangOut);

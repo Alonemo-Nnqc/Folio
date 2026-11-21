@@ -98,6 +98,21 @@ import Testing
         #expect(names.contains("删除"))
     }
 
+    @Test func multipleSelectionOffersBatchTranslationAndRetrieval() {
+        let entries = ItemMenuBuilder.entries(for: ItemMenuContext(scope: .all, itemIds: [regular.id, standalone.id, other.id]),
+                                              snapshot: snapshot, groups: groups)
+        let names = titles(entries)
+        // Two of the three have a PDF.
+        #expect(names.contains("翻译全文（2 篇）…"))
+        #expect(names.contains("重新检索元数据"))
+        #expect(names.contains("标签") && names.contains("添加到") && names.contains("删除"))
+        // All translating already: nothing to start.
+        var busy = ItemMenuContext(scope: .all, itemIds: [regular.id, standalone.id])
+        busy.translatingItemIds = [regular.id, standalone.id]
+        let translate = ItemMenuBuilder.entries(for: busy, snapshot: snapshot, groups: groups).first { $0.title == "翻译全文（2 篇）…" }
+        if case let .action(_, _, _, enabled, _, _)? = translate { #expect(!enabled) } else { Issue.record("no batch translation") }
+    }
+
     @Test func tagSubmenuTicksAppliedTagsAndOffersNewTag() {
         let entries = ItemMenuBuilder.entries(for: ItemMenuContext(scope: .all, itemIds: [regular.id]), snapshot: snapshot, groups: groups)
         let tags = submenu("标签", in: entries)

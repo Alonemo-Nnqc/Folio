@@ -19,6 +19,24 @@ final class TagChipsView: NSView {
 
     override var isFlipped: Bool { true }
 
+    // Redrawn when its content changes, or when a new width cuts it differently, not at every resize: a pane sliding
+    // beside the list resizes every cell of the list at every frame.
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        layerContentsPlacement = .topLeft
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let old = frame.size
+        super.setFrameSize(newSize)
+        let natural = naturalWidth
+        if newSize.height != old.height || !(old.width >= natural && newSize.width >= natural) { needsDisplay = true }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let height = CapsuleLabel.tagHeight
         let scale = window?.backingScaleFactor ?? 2
@@ -41,6 +59,11 @@ final class TagChipsView: NSView {
                               font: Self.font, padding: Self.padding, dot: true, appearance: effectiveAppearance, flipped: true, scale: scale)
             x += width + Self.spacing
         }
+    }
+
+    /// The width that shows every chip.
+    private var naturalWidth: CGFloat {
+        tags.reduce(4) { $0 + Self.chipWidth($1.name) + Self.spacing }
     }
 
     static func chipWidth(_ name: String) -> CGFloat {

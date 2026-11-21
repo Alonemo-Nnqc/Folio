@@ -37,12 +37,11 @@ enum TranslationSelfTest {
                 model.settings.translationOptions = options
             }
             model.settings.translationService = UserDefaults.standard.string(forKey: "FolioTranslateService") ?? "bing"
-            model.settings.translationOptions.pages = UserDefaults.standard.string(forKey: "FolioTranslatePages") ?? "1"
             model.settings.translationOptions.outputs = .both
             model.settings.translationOptions.ignoreCache = UserDefaults.standard.bool(forKey: "FolioTranslateFresh")
             write("engine: native")
             let started = Date()
-            model.translations.start(fileId: file.id)
+            model.translations.start(fileId: file.id, pages: UserDefaults.standard.string(forKey: "FolioTranslatePages") ?? "1")
             // Apple system translation first checks its language packs, so the job appears a moment later.
             while model.translations.jobs[itemId] == nil, Date().timeIntervalSince(started) < 10 {
                 try? await Task.sleep(for: .milliseconds(100))

@@ -47,24 +47,24 @@ enum ZoteroRawLoader {
             raw.fieldsByItem[itemID, default: [:]][name] = value
         }
 
-        let authorTypeID = try Int64.fetchOne(db, sql: "SELECT creatorTypeID FROM creatorTypes WHERE creatorType = 'author'")
-        if let authorTypeID {
-            for row in try Row.fetchAll(db, sql: """
-                SELECT ic.itemID as itemID, ic.orderIndex as orderIndex,
-                       c.firstName as firstName, c.lastName as lastName, c.fieldMode as fieldMode
-                FROM itemCreators ic
-                JOIN creators c ON c.creatorID = ic.creatorID
-                JOIN items i ON i.itemID = ic.itemID
-                WHERE i.libraryID = ? AND ic.creatorTypeID = ?
-                """, arguments: [libraryID, authorTypeID]) {
-                let itemID: Int64 = row["itemID"]
-                raw.creatorsByItem[itemID, default: []].append(RawCreator(
-                    orderIndex: row["orderIndex"] ?? 0,
-                    firstName: row["firstName"],
-                    lastName: row["lastName"],
-                    fieldMode: (row["fieldMode"] as Int?) ?? 0
-                ))
-            }
+        // Authors, and the editors and translators of books and chapters (#19).
+        for row in try Row.fetchAll(db, sql: """
+            SELECT ic.itemID as itemID, ic.orderIndex as orderIndex, ct.creatorType as role,
+                   c.firstName as firstName, c.lastName as lastName, c.fieldMode as fieldMode
+            FROM itemCreators ic
+            JOIN creators c ON c.creatorID = ic.creatorID
+            JOIN creatorTypes ct ON ct.creatorTypeID = ic.creatorTypeID
+            JOIN items i ON i.itemID = ic.itemID
+            WHERE i.libraryID = ? AND ct.creatorType IN ('author', 'editor', 'translator')
+            """, arguments: [libraryID]) {
+            let itemID: Int64 = row["itemID"]
+            raw.creatorsByItem[itemID, default: []].append(RawCreator(
+                orderIndex: row["orderIndex"] ?? 0,
+                firstName: row["firstName"],
+                lastName: row["lastName"],
+                fieldMode: (row["fieldMode"] as Int?) ?? 0,
+                role: row["role"] ?? "author"
+            ))
         }
 
         for row in try Row.fetchAll(db, sql: """

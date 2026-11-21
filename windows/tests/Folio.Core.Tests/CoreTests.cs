@@ -343,6 +343,25 @@ public class LibraryTests
         Assert.True(File.Exists(library.FilePath(file)));
     }
 
+    /// <summary>Issue #21: author, year and title entered by hand rename the files; other edits leave them (and a
+    /// name given by hand) as they are.</summary>
+    [Fact]
+    public void HandEditedNamingFieldsRenameTheFiles()
+    {
+        using var library = Library.Temporary();
+        var source = Path.Combine(Path.GetTempPath(), $"scan-{Guid.NewGuid():N}.pdf");
+        File.WriteAllText(source, "%PDF-1.4 hand " + Guid.NewGuid());
+        var id = Assert.IsType<ImportOutcome.Imported>(library.ImportFiles([source]).Single()).ItemId;
+        Assert.IsType<ApplyOutcome.Created>(library.ApplyMetadata(Paper(), id, autoRename: false));
+        var original = library.Files(id).Single().RelativePath;
+        library.UpdateItem(id, true, i => { i.Rating = 3; i.Volume = "12"; });
+        Assert.Equal(original, library.Files(id).Single().RelativePath);
+        library.UpdateItem(id, false, i => i.Title = "Lecture Notes on Optics");
+        Assert.Equal(original, library.Files(id).Single().RelativePath);
+        library.UpdateItem(id, true, i => { i.Authors = [new Author("Born", "Max")]; i.Year = 1959; });
+        Assert.Equal("Files/Born_1959_Lecture Notes on Optics.pdf", library.Files(id).Single().RelativePath);
+    }
+
     [Fact]
     public void SearchesMetadataAndFulltext()
     {
@@ -447,6 +466,91 @@ public class CitationTests
         Assert.Equal(Entry.Metadata.Title, parsed.Metadata.Title);
         Assert.Equal("zhang2026", parsed.CitationKey);
         Assert.Equal(2, parsed.Metadata.Authors.Count);
+    }
+
+    // #19: books, chapters and theses cite with their own fields (ItemFieldCitationTests on the Mac).
+    static readonly CitationEntry Book = new("1", "born2009", new Metadata("光学原理")
+    {
+        Type = ItemType.Book, Authors = [new("玻恩"), new("沃尔夫")], Translators = [new("杨葭荪")], Publisher = "电子工业出版社", Place = "北京", Edition = "第7版", Year = 2009,
+    });
+    static readonly CitationEntry Thesis = new("2", "li2024", new Metadata("基于图神经网络的分割方法研究")
+    {
+        Type = ItemType.Thesis, Authors = [new("李", "伟")], Source = "北京航空航天大学", Place = "北京", Genre = "硕士学位论文", Year = 2024,
+    });
+    static readonly CitationEntry Chapter = new("3", "horn1999", new Metadata("Optical Flow")
+    {
+        Type = ItemType.BookChapter, Authors = [new("Horn", "Berthold")], Source = "Handbook of Computer Vision",
+        Editors = [new("Jähne", "Bernd"), new("Haussecker", "Horst")], Publisher = "Academic Press", Place = "San Diego", Pages = "397-422", Year = 1999,
+    });
+
+    [Fact]
+    public void Gbt7714CitesPlaceAndPublisherOfBooksAndTheses()
+    {
+        var text = new CslRenderer().Render([Book, Thesis], CitationStyle.Gbt7714).PlainText;
+        Assert.Contains("[M]", text);
+        Assert.Contains("北京: 电子工业出版社", text);
+        Assert.Contains("[D]", text);
+        Assert.Contains("北京: 北京航空航天大学", text);
+    }
+
+    [Fact]
+    public void BibTeXWritesTheFields()
+    {
+        var thesis = BibTeXWriter.Entry(Thesis);
+        Assert.StartsWith("@mastersthesis{", thesis);
+        Assert.Contains("school = {北京航空航天大学}", thesis);
+        Assert.Contains("type = {硕士学位论文}", thesis);
+        Assert.Contains("editor = {Jähne, Bernd and Haussecker, Horst}", BibTeXWriter.Entry(Chapter));
+        Assert.Contains("translator = {杨葭荪}", BibTeXWriter.Entry(Book));
+    }
+
+    [Theory]
+    [InlineData(ReferenceFormat.Bibtex)]
+    [InlineData(ReferenceFormat.Ris)]
+    [InlineData(ReferenceFormat.Csljson)]
+    public void FieldsRoundTrip(ReferenceFormat format)
+    {
+        CitationEntry[] entries = [Book, Thesis, Chapter];
+        var records = ReferenceFormats.Parse(format.Render(entries));
+        Assert.Equal(3, records.Count);
+        foreach (var (record, entry) in records.Zip(entries))
+        {
+            Metadata m = record.Metadata, e = entry.Metadata;
+            Assert.Equal(e.Type, m.Type);
+            Assert.Equal(e.Place, m.Place);
+            Assert.Equal(e.Edition, m.Edition);
+            Assert.Equal(e.Editors, m.Editors);
+            Assert.Equal(e.Translators, m.Translators);
+            Assert.Equal(e.Genre, m.Genre);
+            Assert.Equal(e.Source, m.Source);
+            Assert.Equal(e.Publisher, m.Publisher);
+        }
+    }
+
+    [Fact]
+    public void EachTypeShowsItsFieldsAndKeepsTheRest()
+    {
+        Loc.Override = "zh-Hans";
+        Assert.Equal([ItemField.Source, ItemField.Place, ItemField.Genre], ItemFields.For(ItemType.Thesis)[..3]);
+        Assert.Equal("授予单位", ItemField.Source.Label(ItemType.Thesis));
+        var m = new Metadata("A book") { Type = ItemType.JournalArticle, Place = "Berlin" };
+        Assert.Contains(ItemField.Place, ItemFields.Shown(m));
+        Assert.Equal([new Author("Jähne", "Bernd"), new Author("王小明"), new Author("Zhang", "Tengya")], AuthorFormatter.People("Jähne, Bernd; 王小明、Tengya Zhang"));
+        Assert.Equal("arxivId", ItemField.ArxivId.Key());
+    }
+
+    [Fact]
+    public void TheFieldsAreSavedWithTheItem()
+    {
+        using var library = Library.Temporary();
+        var id = ((CreateOutcome.Created)library.CreateItem(new Metadata("Principles of Optics") { Type = ItemType.Book })).ItemId;
+        library.UpdateItem(id, i => { i.Place = "Cambridge"; i.Edition = "7th"; i.Editors = [new("Wolf", "Emil")]; i.Translators = [new("杨葭荪")]; i.Series = "Classics"; });
+        var item = library.Item(id)!;
+        Assert.Equal("Cambridge", item.Place);
+        Assert.Equal("7th", item.Edition);
+        Assert.Equal("Classics", item.Series);
+        Assert.Equal([new Author("Wolf", "Emil")], item.Editors);
+        Assert.Equal([new Author("杨葭荪")], item.Translators);
     }
 }
 
@@ -719,6 +823,66 @@ public class TranslationEngineTests
         Assert.True(text.Contains("深度网络"), "text: " + text[..Math.Min(300, text.Length)]);
         using var dual = UglyToad.PdfPig.PdfDocument.Open(output.Dual!);
         Assert.Equal(1224, (int)dual.GetPage(1).Width);
+    }
+
+    /// <summary>Page ranges as people type them, with a Chinese input method on or off (pageRangesAsTyped on the Mac).</summary>
+    [Fact]
+    public void PageRangesAsTyped()
+    {
+        static List<int> Pages(string? text, int count = 10) => Folio.Core.Translate.PageSelection.Parse(text).Pages(count);
+        foreach (var all in new[] { null, "", "  ", "全部", "全部页", "all", "ALL", "所有" })
+            Assert.Equal(Folio.Core.Translate.PageSelection.Kinds.All, Folio.Core.Translate.PageSelection.Parse(all).Kind);
+        Assert.Equal([1, 3], Pages("1，3"));
+        Assert.Equal([1, 3, 5], Pages("1、3；5"));
+        Assert.Equal([1, 2, 3, 5], Pages("１－３，５"));
+        Assert.Equal([1, 2, 3], Pages("1~3"));
+        Assert.Equal([1, 2, 3], Pages("1～3"));
+        Assert.Equal([1, 2, 3], Pages("1–3"));
+        Assert.Equal([1, 2, 3], Pages("1 — 3"));
+        Assert.Equal([2, 3, 4], Pages("2至4"));
+        Assert.Equal([3], Pages("第3页"));
+        Assert.Equal([1, 2, 5], Pages("第1-2页, 第5页"));
+        Assert.Equal([1, 3, 5], Pages("1 3 5"));
+        Assert.Equal([3, 4, 5], Pages("5-3"));
+        Assert.Equal([1, 2], Pages("-2"));
+        Assert.Equal([8, 9, 10], Pages("8-"));
+        Assert.Equal([8, 9, 10], Pages("8-20"));
+        Assert.Empty(Pages("12-20"));
+        Assert.Equal(Folio.Core.Translate.PageSelection.Kinds.Ranges, Folio.Core.Translate.PageSelection.Parse("12-20").Kind);
+        foreach (var unreadable in new[] { "x", "abc", "0", "1-3,x", "-", "1-2-3", "p3", "全部,1" })
+        {
+            Assert.Equal(Folio.Core.Translate.PageSelection.Kinds.Unreadable, Folio.Core.Translate.PageSelection.Parse(unreadable).Kind);
+            Assert.NotNull(Folio.Core.Translate.PageSelection.Problem(unreadable));
+        }
+        Assert.Null(Folio.Core.Translate.PageSelection.Problem("1，3"));
+        Assert.Null(Folio.Core.Translate.PageSelection.Problem(null));
+        Assert.Equal([1, 3, 4, 5], new Folio.Core.Translate.TranslationOptions { Pages = "1, 3-5,9" }.PageNumbers(6));
+    }
+
+    /// <summary>Pages that select nothing are said as such, not as a PDF without text (a scan).</summary>
+    [Theory]
+    [InlineData("全部页码", "全部页码")]
+    [InlineData("5-9", "5-9")]
+    public async Task PageRangesThatSelectNothingAreExplained(string typed, string expected)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "folio-pages-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var input = Path.Combine(dir, "paper.pdf");
+            File.WriteAllBytes(input, TestPdfs.OnePage());
+            var request = new Folio.Core.Translate.TranslationRequest
+            {
+                Input = input, OutputDirectory = Path.Combine(dir, "out"), ServiceId = "google",
+                Options = new Folio.Core.Translate.TranslationOptions { Pages = typed },
+            };
+            var last = await new Folio.Core.Translate.TranslationJob(request, Path.Combine(dir, "job.log")).Run(_ => { });
+            var failed = Assert.IsType<Folio.Core.Translate.TranslationEvent.Failed>(last);
+            Assert.Contains(expected, failed.Message);
+            Assert.DoesNotContain("扫描", failed.Message);
+            Assert.DoesNotContain("scan", failed.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 }
 

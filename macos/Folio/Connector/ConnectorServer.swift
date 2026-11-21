@@ -302,6 +302,7 @@ final class ConnectorServer {
             defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
             if case .added? = try? library.addFiles([file], toItem: item.id, autoRename: model.settings.autoRenameFiles).first {
                 attached += 1
+                model.translations.translateNewPaper(itemId: item.id)
             }
         }
         if attached > 0 {
@@ -344,6 +345,7 @@ final class ConnectorServer {
             model.importer.indexFulltext()
             switch outcome {
             case .added:
+                model.translations.translateNewPaper(itemId: itemId)
                 let title = (try? model.library.item(itemId))?.title ?? String(localized: "条目")
                 model.toasts.show(String(localized: "已为「\(title)」附加 PDF"), systemImage: "doc.badge.plus")
                 return .json(["status": "added"])

@@ -188,7 +188,10 @@ export function ServiceSection({ compact }: { compact: boolean }) {
   );
 }
 
-export function OptionsSection({ compact }: { compact: boolean }) {
+/** The pages of the run the 翻译全文 sheet starts (not a setting: see TranslateSheet). */
+interface RunPages { value: string; problem: string | null; onChange: (v: string) => void }
+
+export function OptionsSection({ compact, pages }: { compact: boolean; pages?: RunPages }) {
   const [data, setData] = useState<any>(null);
   useEffect(() => { call("translation.services").then(setData); }, []);
   if (!data) return null;
@@ -205,7 +208,7 @@ export function OptionsSection({ compact }: { compact: boolean }) {
       <Card>
         <Row title={t("原文语言")}><Select value={o.langIn} options={languages} onChange={(v) => update({ langIn: v })} /></Row>
         <Row title={t("译文语言")}><Select value={o.langOut} options={languages} onChange={(v) => update({ langOut: v })} /></Row>
-        {compact && <OutputRows o={o} update={update} compact />}
+        {compact && <OutputRows o={o} update={update} compact pages={pages} />}
       </Card>
       {compact && <>
         <Header>{t("翻译内容")}</Header>
@@ -244,13 +247,16 @@ export function OptionsSection({ compact }: { compact: boolean }) {
   );
 }
 
-function OutputRows({ o, update, compact }: { o: any; update: (p: Record<string, unknown>) => void; compact: boolean }) {
+function OutputRows({ o, update, compact, pages }: { o: any; update: (p: Record<string, unknown>) => void; compact: boolean; pages?: RunPages }) {
   return (
     <>
       <Row title={t("生成")}><Select value={o.outputs} options={[{ value: "both", label: t("纯译文和双语对照") }, { value: "mono", label: t("仅纯译文") }, { value: "dual", label: t("仅双语对照") }]} onChange={(v) => update({ outputs: v })} /></Row>
       {o.outputs !== "mono" && <Row title={t("双语排版")}><Select value={o.dualLayout} options={[{ value: "sideBySide", label: t("原文与译文左右并排") }, { value: "alternatingPages", label: t("原文页与译文页交替") }]} onChange={(v) => update({ dualLayout: v })} /></Row>}
       {!compact && <Row title={t("再次翻译")}><Select value={o.duplicates} options={[{ value: "keepBoth", label: t("保留两者") }, { value: "replace", label: t("替换旧的译文") }]} onChange={(v) => update({ duplicates: v })} /></Row>}
-      <Row title={t("页码范围（选填）")}><Field className="set-field" value={o.pages ?? ""} placeholder={t("全部，例如 1-3,5")} onCommit={(v) => update({ pages: v.trim() || null })} /></Row>
+      {pages && <Row title={t("页码范围（选填）")} detail={pages.problem && <span className="status-bad">{pages.problem}</span>}>
+        <input className="field set-field" value={pages.value} placeholder={t("全部，例如 1-3,5")} spellCheck={false}
+          onChange={(e) => pages.onChange(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+      </Row>}
     </>
   );
 }
@@ -429,37 +435,47 @@ export function ShortcutRecorder({ value, onChange }: { value: string; onChange:
 
 /** What this run is expected to take, for services that charge: the tokens, and the cost where the model's public
  *  price is known. Worked out again whenever the service, the model or what is translated changes. */
-function EstimateLine({ files }: { files: FileRec[] }) {
+function EstimateLine({ files, pages }: { files: FileRec[]; pages: string }) {
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
     let latest = 0, timer = 0;
     const load = () => {
       const mine = ++latest;
-      call("translation.estimate", { files: files.map((f) => f.id) }).then((line) => { if (mine === latest) setText(line ?? null); }).catch(() => {});
+      call("translation.estimate", { files: files.map((f) => f.id), pages }).then((line) => { if (mine === latest) setText(line ?? null); }).catch(() => {});
     };
-    load();
+    // Pages being typed: once they are.
+    timer = window.setTimeout(load, pages ? 400 : 0);
     // A moment after the last change: typing a model's name is several of them.
     const off = on("translation.estimateChanged", () => { window.clearTimeout(timer); timer = window.setTimeout(load, 400); });
     return () => { latest = -1; window.clearTimeout(timer); off(); };
-  }, [files.map((f) => f.id).join(",")]);
+  }, [files.map((f) => f.id).join(","), pages]);
   return text ? <Note>{text}</Note> : null;
 }
 
-/** "翻译…": confirm service, languages and outputs for this run (they become the new defaults). */
+/** "翻译…": confirm service, languages and outputs for this run (they become the new defaults; the pages do not). */
 export function TranslateSheet({ files, close }: { files: FileRec[]; close: () => void }) {
   const s = getState();
+  // This run's pages only: a range typed for one paper is not every later paper's.
+  const [pages, setPages] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  const checked = useRef(0);
+  const changePages = (value: string) => {
+    setPages(value);
+    const mine = ++checked.current;
+    call<string | null>("translation.checkPages", { pages: value }).then((p) => { if (mine === checked.current) setProblem(p ?? null); }).catch(() => {});
+  };
   const title = files.length > 1 ? t("%lld 篇文献", files.length) : s.items.get(files[0].itemId)?.title ?? files[0].fileName;
   return (
     <Sheet className="settings" title={t("翻译全文")} width={560} onEscape={close} actions={
       <>
         <button className="btn" onClick={close}>{t("取消")}</button>
-        <button className="btn primary" onClick={() => { close(); call("translation.start", { files: files.map((f) => f.id) }); }}>{t("开始翻译")}</button>
+        <button className="btn primary" disabled={problem != null} onClick={() => { close(); call("translation.start", { files: files.map((f) => f.id), pages }); }}>{t("开始翻译")}</button>
       </>}>
       <div className="secondary ellipsis" title={title} style={{ marginBottom: 8 }}>{title}</div>
       <div className="body" style={{ maxHeight: "72vh" }}>
         <ServiceSection compact />
-        <OptionsSection compact />
-        <EstimateLine files={files} />
+        <OptionsSection compact pages={{ value: pages, problem, onChange: changePages }} />
+        <EstimateLine files={files} pages={pages} />
       </div>
     </Sheet>
   );

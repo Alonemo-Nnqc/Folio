@@ -32,13 +32,18 @@ function now(i: number) { return Date.UTC(2026, 9, 15) + i * 1000; }
 const library = () => ({
   full: true, root: "/Users/demo/Folio",
   items: [
-    { id: "s0", kind: "standalone", type: "other", typeName: "其他", title: "扫描版讲义 第三章.pdf", authors: [], authorsList: "", rating: 0, readStatus: 0, readStatusName: "未读", defaultFileId: "fs0", metadataState: "Failed", dateAdded: now(0), dateModified: now(0), trashed: false, retrieving: false },
+    { id: "s0", kind: "standalone", type: "other", typeName: "其他", title: "扫描版讲义 第三章.pdf", authors: [], authorsList: "", rating: 0, readStatus: 0, readStatusName: "未读", defaultFileId: "fs0", metadataState: "Failed", dateAdded: now(0), dateModified: now(0), trashed: false, retrieving: false, fields: [], moreFields: [] },
     ...items.map(([title, source, authors, year], i) => ({
       id: `i${i}`, kind: "regular", type: "journalArticle", typeName: "期刊论文", title, source, authorsList: authors, authors: authors.split(/; | & /).map((a) => ({ family: a.split(",")[0], full: a })), year,
       citationKey: `${authors.split(",")[0].toLowerCase()}${year}`, doi: i === 10 ? "10.48550/arxiv.2604.27326" : undefined, rating: i === 10 ? 4 : 0, readStatus: i === 10 ? 1 : 0, readStatusName: i === 10 ? "在读" : "未读",
       abstract: i === 10 ? "Hyperspectral image super-resolution is essential for enhancing the spatial fidelity of HSI data, yet existing deep learning methods often struggle." : undefined,
       defaultFileId: `f${i}`, metadataState: "Resolved", dateAdded: now(i + 1), dateModified: now(i + 1), trashed: false, retrieving: false,
       hasJournal: source !== "arXiv", journalMetrics: source === "arXiv" ? null : MOCK_METRICS[i % MOCK_METRICS.length],
+      fields: [
+        { key: "source", label: "期刊", value: source }, { key: "volume", label: "卷" }, { key: "issue", label: "期" }, { key: "pages", label: "页码" },
+        { key: "doi", label: "DOI", value: i === 10 ? "10.48550/arxiv.2604.27326" : undefined }, { key: "url", label: "URL" },
+      ],
+      moreFields: [{ key: "publisher", label: "出版社" }, { key: "place", label: "出版地" }, { key: "edition", label: "版次" }, { key: "editors", label: "编者" }],
     })),
   ],
   files: [

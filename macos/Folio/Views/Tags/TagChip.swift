@@ -9,7 +9,7 @@ struct TagChip: View {
 
     var body: some View {
         CapsuleText(text: tag.name, tint: NSColor(hex: tag.colorHex), dot: true,
-                    maxTextWidth: TagChipsView.maxChipWidth - 2 * CapsuleLabel.tagPadding - CapsuleLabel.dotSpace) {
+                    maxTextWidth: TagChipsView.maxChipWidth - 2 * CapsuleLabel.tagPadding) {
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
@@ -41,7 +41,7 @@ struct CapsuleText<Trailing: View>: View {
     var font = CapsuleLabel.tagFont
     var height = CapsuleLabel.tagHeight
     var padding = CapsuleLabel.tagPadding
-    /// A tag: a capsule led by its colour dot. Otherwise a badge, a small rounded rectangle.
+    /// A tag: a capsule tinted with its colour. Otherwise a badge, a small rounded rectangle.
     var dot = false
     var maxTextWidth: CGFloat = .infinity
     @ViewBuilder var trailing: () -> Trailing
@@ -51,13 +51,6 @@ struct CapsuleText<Trailing: View>: View {
         let dark = colorScheme == .dark
         let textColor = CapsuleLabel.textColor(resolved(tint), dark: dark)
         HStack(spacing: 3) {
-            if dot {
-                Circle()
-                    .fill(Color(nsColor: tint))
-                    .frame(width: CapsuleLabel.dotSize, height: CapsuleLabel.dotSize)
-                    .padding(.leading, -1)
-                    .padding(.trailing, 1)
-            }
             Image(nsImage: CapsuleLabel.textImage(text, font: font, color: textColor, height: height, maxWidth: maxTextWidth))
                 .accessibilityLabel(text)
             trailing()
@@ -65,7 +58,7 @@ struct CapsuleText<Trailing: View>: View {
         }
         .padding(.horizontal, padding)
         .frame(height: height)
-        .background(Color(nsColor: CapsuleLabel.fill(tint, dark: dark)),
+        .background(Color(nsColor: dot ? CapsuleLabel.tagFill(tint, dark: dark) : CapsuleLabel.fill(tint, dark: dark)),
                     in: RoundedRectangle(cornerRadius: dot ? height / 2 : CapsuleLabel.badgeRadius, style: .continuous))
         .fixedSize()
     }

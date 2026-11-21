@@ -5,6 +5,12 @@ import UniformTypeIdentifiers
 
 extension AppModel {
     /// Items to cite: the given ids, else the selection, else the whole current view (CITE-02).
+    /// Whether `citationEntries` would have anything, without building them (menu and toolbar validation).
+    func hasCitationEntries(_ itemIds: [String]?) -> Bool {
+        let ids = itemIds ?? (selectedItemIDs.isEmpty ? rows : rows.filter(selectedItemIDs.contains))
+        return ids.contains { snapshot.items[$0]?.kind == .regular }
+    }
+
     func citationEntries(_ itemIds: [String]?) -> [CitationEntry] {
         let ids = itemIds ?? (selectedItemIDs.isEmpty ? rows : rows.filter(selectedItemIDs.contains))
         return ids.compactMap { snapshot.items[$0] }

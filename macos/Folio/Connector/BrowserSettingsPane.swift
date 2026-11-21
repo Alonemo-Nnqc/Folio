@@ -56,8 +56,6 @@ struct BrowserSettingsPane: View {
                         redetect.run { await refreshNow() }
                     }
                 }
-            } footer: {
-                Text("扩展未上架商店，请按引导安装")
             }
         }
         .formStyle(.grouped)

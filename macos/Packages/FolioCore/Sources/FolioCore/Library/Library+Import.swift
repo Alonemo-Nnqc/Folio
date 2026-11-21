@@ -264,6 +264,17 @@ extension Library {
         }
     }
 
+    /// An edit by hand (inspector fields, the AI tools). With `autoRename`, the item's files are renamed to
+    /// `Family_Year_Title` when the edit changes what that name is made of — as metadata retrieved for it would.
+    /// Other edits (rating, notes, a field the name does not use) leave the files as they are.
+    public func updateItem(_ itemId: String, autoRename: Bool, _ change: (inout Item) -> Void) throws {
+        let before: String? = try item(itemId).flatMap { $0.kind == .regular ? FileNamer.baseName(for: $0.metadata) : nil }
+        try updateItem(itemId, change)
+        guard autoRename, let after = try item(itemId), after.kind == .regular,
+              FileNamer.baseName(for: after.metadata) != before else { return }
+        try renameFiles(ofItem: itemId)
+    }
+
     public func setDefaultFile(_ fileId: String) throws {
         try writer.write { db in
             guard let file = try FileRecord.fetchOne(db, key: fileId),

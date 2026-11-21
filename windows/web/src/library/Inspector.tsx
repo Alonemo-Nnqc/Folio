@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FilePen, FileText, Maximize2, NotebookText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
-import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type State } from "../store";
+import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type ItemFieldRow as ItemFieldRowData, type State } from "../store";
 import { MarkdownEditor } from "../notes/markdown";
 import { isMarkdownItem } from "./ItemList";
 import { MultiSelectionPanel } from "./MultiSelection";
@@ -130,8 +130,18 @@ function FilesSection({ item }: { item: Item }) {
 
 let abstractOpen = true;
 
+let moreFieldsOpen = false;
+
+/** One bibliographic field; DOI, arXiv and URL open in the browser. */
+function ItemFieldRow({ item, field }: { item: Item; field: ItemFieldRowData }) {
+  const value = field.value ?? undefined;
+  const link = !value ? undefined : field.key === "doi" ? `https://doi.org/${value}` : field.key === "arxivId" ? `https://arxiv.org/abs/${value}` : field.key === "url" ? value : undefined;
+  return <FieldRow label={field.label} value={value} link={link} onCommit={(v) => update(item.id, { [field.key]: v })} />;
+}
+
 function InfoPage({ item }: { item: Item }) {
   const [open, setOpen] = useState(abstractOpen);
+  const [moreOpen, setMoreOpen] = useState(moreFieldsOpen);
   const types = getState().statics.itemTypes;
   if (item.kind === "standalone") {
     const state = item.metadataState === "Pending" ? t("正在检索元数据…") : item.metadataState === "Failed" ? t("未检索到元数据") : item.metadataState === "NetworkFailed" ? t("网络不可用，稍后自动重试") : t("独立文件");
@@ -157,16 +167,19 @@ function InfoPage({ item }: { item: Item }) {
 
       <div className="ins-section">{t("引用")}</div>
       <FieldRow label={t("年份")} value={item.year} onCommit={(v) => update(item.id, { year: v })} />
-      <FieldRow label={t("来源")} value={item.source} onCommit={(v) => update(item.id, { source: v })} />
-      {item.hasJournal && <JournalMetricsRow item={item} />}
-      <FieldRow label={t("卷")} value={item.volume} onCommit={(v) => update(item.id, { volume: v })} />
-      <FieldRow label={t("期")} value={item.issue} onCommit={(v) => update(item.id, { issue: v })} />
-      <FieldRow label={t("页码")} value={item.pages} onCommit={(v) => update(item.id, { pages: v })} />
-      <FieldRow label={t("出版社")} value={item.publisher} onCommit={(v) => update(item.id, { publisher: v })} />
-      <FieldRow label="DOI" value={item.doi} onCommit={(v) => update(item.id, { doi: v })} link={item.doi ? `https://doi.org/${item.doi}` : undefined} />
-      <FieldRow label="arXiv" value={item.arxivId} onCommit={(v) => update(item.id, { arxivId: v })} link={item.arxivId ? `https://arxiv.org/abs/${item.arxivId}` : undefined} />
-      <FieldRow label="ISBN" value={item.isbn} onCommit={(v) => update(item.id, { isbn: v })} />
-      <FieldRow label="URL" value={item.url} onCommit={(v) => update(item.id, { url: v })} link={item.url} />
+      {/* The fields of this type of work, named for it ("期刊", "所属图书", "授予单位"…), and any other with a value (#19). */}
+      {item.fields.map((f) => (
+        <Fragment key={f.key}>
+          <ItemFieldRow item={item} field={f} />
+          {f.key === "source" && item.hasJournal && <JournalMetricsRow item={item} />}
+        </Fragment>
+      ))}
+      {item.moreFields.length > 0 && (
+        <>
+          <button className="disclose-head" onClick={() => { moreFieldsOpen = !moreOpen; setMoreOpen(!moreOpen); }}>{moreOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}{t("更多字段")}</button>
+          {moreOpen && item.moreFields.map((f) => <ItemFieldRow key={f.key} item={item} field={f} />)}
+        </>
+      )}
       <FieldRow label={t("引用键")} value={item.citationKey} onCommit={(v) => update(item.id, { citationKey: v })} />
 
       <LibrarySection item={item} />

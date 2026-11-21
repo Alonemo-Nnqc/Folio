@@ -103,6 +103,12 @@ enum BibTeXReader {
         var m = Metadata(title: title)
         m.type = itemType(kind, fields: fields)
         m.authors = (fields["author"] ?? fields["editor"]).map(authors) ?? []
+        if fields["author"] != nil { m.editors = fields["editor"].map(authors) ?? [] }
+        m.translators = fields["translator"].map(authors) ?? []
+        m.place = (fields["address"] ?? fields["location"]).map(clean)
+        m.edition = fields["edition"].map(clean)
+        m.series = fields["series"].map(clean)
+        m.genre = fields["type"].map(clean) ?? (kind == "mastersthesis" ? "Master's thesis" : nil)
         if let year = fields["year"].flatMap({ Int(clean($0).prefix(4)) }) { m.year = year }
         if let date = fields["date"].map(clean), !date.isEmpty {
             m.date = date
@@ -271,16 +277,28 @@ enum RISReader {
         case "UNPB", "PREPRINT": .preprint
         default: .other
         }
-        m.authors = tags.filter { ["AU", "A1", "A2"].contains($0.0) }.prefix(200).map { BibTeXReader.authors($0.1) }.flatMap { $0 }
+        func people(_ names: [String]) -> [Author] {
+            tags.filter { names.contains($0.0) }.prefix(200).map { BibTeXReader.authors($0.1) }.flatMap { $0 }
+        }
+        m.authors = people(["AU", "A1"])
+        // A2 / ED are the book's or proceedings' editors, A4 the translators (Zotero's RIS).
+        m.editors = people(["A2", "ED"])
+        if m.authors.isEmpty { m.authors = m.editors; m.editors = [] }
+        m.translators = people(["A4"])
+        m.place = first("CY", "PP")
+        m.edition = first("ET")
+        m.series = first("T3")
+        m.genre = first("M3")
         let date = first("PY", "Y1", "DA")
         m.year = date.flatMap { Int($0.prefix(4)) }
-        m.source = first("T2", "JO", "JF", "JA", "T3")
+        m.source = first("T2", "JO", "JF", "JA") ?? (m.type == .thesis || m.type == .report ? first("PB") : nil)
         m.volume = first("VL")
         m.issue = first("IS")
         if let start = first("SP") {
             m.pages = first("EP").map { "\(start)-\($0)" } ?? start
         }
-        m.publisher = first("PB")
+        // A thesis's university and a report's institution come as the publisher (Zotero): they are its source here.
+        m.publisher = m.type == .thesis || m.type == .report ? nil : first("PB")
         m.doi = first("DO")?.lowercased().replacingOccurrences(of: "https://doi.org/", with: "")
         m.url = first("UR")
         m.isbn = first("SN")
@@ -317,10 +335,19 @@ enum RISWriter {
         add("TY", kind)
         add("ID", e.citationKey)
         add("TI", m.title)
-        for author in m.authors { add("AU", author.given.isEmpty ? author.family : "\(author.family), \(author.given)") }
+        func person(_ author: Author) -> String { author.given.isEmpty ? author.family : "\(author.family), \(author.given)" }
+        for author in m.authors { add("AU", person(author)) }
+        for editor in m.editors { add("A2", person(editor)) }
+        for translator in m.translators { add("A4", person(translator)) }
         add("PY", m.year.map(String.init))
         add("DA", m.date)
-        add("T2", m.source)
+        // A book's, thesis's or report's source is who published it (the publisher, university or institution).
+        let publishedBy = [ItemType.book, .thesis, .report].contains(m.type)
+        if !publishedBy { add("T2", m.source) }
+        add("T3", m.series)
+        add("ET", m.edition)
+        add("M3", m.genre)
+        add("CY", m.place)
         add("VL", m.volume)
         add("IS", m.issue)
         if let pages = m.pages {
@@ -328,7 +355,7 @@ enum RISWriter {
             add("SP", parts.first)
             if parts.count > 1 { add("EP", parts[1]) }
         }
-        add("PB", m.publisher)
+        add("PB", m.type == .thesis || m.type == .report ? m.source ?? m.publisher : m.publisher ?? (m.type == .book ? m.source : nil))
         add("DO", m.doi)
         add("UR", m.url)
         add("SN", m.isbn)
@@ -378,11 +405,26 @@ enum CSLJSONReader {
                 m.year = numbers.first
                 if numbers.count > 1 { m.date = numbers.map { String(format: "%02d", $0) }.joined(separator: "-") }
             }
+            func people(_ key: String) -> [Author] {
+                (item[key] as? [[String: Any]] ?? []).compactMap { name in
+                    if let literal = name["literal"] as? String { return Author(family: literal) }
+                    guard let family = name["family"] as? String else { return nil }
+                    return Author(family: family, given: name["given"] as? String ?? "")
+                }
+            }
             m.source = item["container-title"] as? String
             m.volume = item["volume"].map { "\($0)" }
-            m.issue = item["issue"].map { "\($0)" }
+            m.issue = (item["issue"] ?? (m.type == .report ? item["number"] : nil)).map { "\($0)" }
             m.pages = item["page"] as? String
             m.publisher = item["publisher"] as? String
+            // A thesis's university and a report's institution are their source here.
+            if m.type == .thesis || m.type == .report, m.source == nil { m.source = m.publisher; m.publisher = nil }
+            m.place = (item["publisher-place"] ?? item["event-place"]) as? String
+            m.edition = item["edition"].map { "\($0)" }
+            m.editors = people("editor")
+            m.translators = people("translator")
+            m.series = item["collection-title"] as? String
+            m.genre = item["genre"] as? String
             m.doi = (item["DOI"] as? String)?.lowercased()
             m.url = item["URL"] as? String
             m.abstract = item["abstract"] as? String

@@ -18,8 +18,12 @@ export interface Item {
   journalMetrics: JournalMetrics | null;
   /** 出版物: the venue's short name and its ranks, as capsules; null when the item has no venue. */
   venue: VenueInfo | null;
+  /** The inspector's fields for its type, named for it, and the others (#19). */
+  fields: ItemFieldRow[];
+  moreFields: ItemFieldRow[];
 }
 export interface VenueInfo { badges: { kind: string; text: string; emphasized?: boolean }[]; tip: string }
+export interface ItemFieldRow { key: string; label: string; value?: string | null }
 export interface JournalBadge { kind: string; text: string; detail: string; emphasized: boolean }
 export interface JournalMetrics { badges: JournalBadge[]; rank?: string; impactFactor?: string; summary: string }
 /** 期刊指标's queue and key, for the inspector's hints and 设置. */

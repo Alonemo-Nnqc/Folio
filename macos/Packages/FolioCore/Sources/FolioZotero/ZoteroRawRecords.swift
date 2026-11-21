@@ -20,13 +20,14 @@ struct RawAttachment {
     let dateModified: Date
 }
 
-/// A row from `itemCreators` (already filtered to the "author" creator type) joined with
-/// `creators`.
+/// A row from `itemCreators` (authors, editors and translators) joined with `creators`.
 struct RawCreator {
     let orderIndex: Int
     let firstName: String?
     let lastName: String?
     let fieldMode: Int
+    /// Zotero's creator type: "author", "editor" or "translator".
+    var role = "author"
 }
 
 /// A row from `collections`.

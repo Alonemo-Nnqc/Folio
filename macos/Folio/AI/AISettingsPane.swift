@@ -14,7 +14,6 @@ struct AISettingsPane: View {
             Section {
                 Toggle(isOn: $settings.aiAllowWrites) {
                     Text("允许 AI 修改文献库")
-                    Text("关闭后仅可检索、阅读与引用")
                 }
                 LabeledContent("MCP 服务器") {
                     HStack {
@@ -65,8 +64,6 @@ struct AISettingsPane: View {
                         integration.detect(userInitiated: true)
                     }
                 }
-            } footer: {
-                Text("开关会写入或移除该智能体的配置（修改前自动备份），重启智能体后生效")
             }
 
             Section {
@@ -81,8 +78,6 @@ struct AISettingsPane: View {
                 }
             } header: {
                 Text("手动配置")
-            } footer: {
-                Text("适用于 VS Code、Zed、Windsurf 等")
             }
         }
         .formStyle(.grouped)
