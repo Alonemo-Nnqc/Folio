@@ -24,7 +24,8 @@ private struct ScannedPage {
         ]))
     }
 
-    func document() -> CGPDFDocument {
+    /// rotation: the page is shown turned by `/Rotate`; the layer is written the way the paper lies.
+    func document(rotation: Int = 0) -> CGPDFDocument {
         let scale = 200.0 / 72
         let width = Int(size.width * scale), height = Int(size.height * scale)
         let bitmap = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -82,16 +83,22 @@ private struct ScannedPage {
                 }, angle: angle)
             }
         }
-        let source = CGPDFDocument(CGDataProvider(data: data as CFData)!)!
-        let written = OCRTextLayer.write(source: source, layers: [1: OCRPageResult(page: 1, imageSize: size, lines: lines)])
+        // (Turned before the layer is there: PDFKit, rewriting a file, loses the layer's text on macOS 26.)
+        var bytes = data as Data
+        if rotation != 0 {
+            let pdf = PDFDocument(data: bytes)!
+            pdf.page(at: 0)!.rotation = rotation
+            bytes = pdf.dataRepresentation()!
+        }
+        let source = CGPDFDocument(CGDataProvider(data: bytes as CFData)!)!
+        var result = OCRPageResult(page: 1, imageSize: size, lines: lines)
+        result.turn = (360 - rotation) % 360
+        let written = OCRTextLayer.write(source: source, layers: [1: result])
         return CGPDFDocument(CGDataProvider(data: written as CFData)!)!
     }
 
     func layout(rotation: Int = 0) -> PageLayout {
-        let pdf = document()
-        let data = pdf.page(at: 1).map { _ in PDFDocument(data: Self.data(of: pdf))! }!
-        if rotation != 0 { data.page(at: 0)!.rotation = rotation }
-        let bytes = data.dataRepresentation()!
+        let bytes = Self.data(of: document(rotation: rotation))
         let cg = CGPDFDocument(CGDataProvider(data: bytes as CFData)!)!
         var analyzer = LayoutAnalyzer()
         return analyzer.analyze(document: PDFDocument(data: bytes)!, cgDocument: cg, pages: [1])[0]

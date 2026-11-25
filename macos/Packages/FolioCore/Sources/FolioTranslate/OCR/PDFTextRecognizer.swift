@@ -67,7 +67,7 @@ public enum PDFTextRecognizer {
             guard let page = document.page(at: number) else { continue }
             do {
                 // One page that cannot be read does not cost the rest of the document its text.
-                if let result = try autoreleasepool(invoking: { try recognize(page: page, number: number, anew: force) }), !result.lines.isEmpty,
+                if let result = try await read(page: page, number: number, anew: force), !result.lines.isEmpty,
                    !onlyPagesOfText || isPageOfText(result) {
                     results[number] = result
                     characters += result.lines.reduce(0) { $0 + $1.words.reduce(0) { $0 + $1.text.count } }
@@ -82,6 +82,17 @@ public enum PDFTextRecognizer {
               looksTheSame(document, written) else { throw OCRError.appearanceChanged }
         try data.write(to: output, options: .atomic)
         return Summary(pages: results.count, characters: characters)
+    }
+
+    /// Reads a page away from the threads Swift's tasks share: reading one blocks for seconds, and Vision needs such threads
+    /// itself (a few documents read at once on a Mac with few cores had them all, and waited for each other for ever).
+    private static func read(page: CGPDFPage, number: Int, anew: Bool) async throws -> OCRPageResult? {
+        nonisolated(unsafe) let page = page
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<OCRPageResult?, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(with: Result { try autoreleasepool { try recognize(page: page, number: number, anew: anew) } })
+            }
+        }
     }
 
     /// Several lines that are parts of sentences: a page of text, not a picture with labels.
