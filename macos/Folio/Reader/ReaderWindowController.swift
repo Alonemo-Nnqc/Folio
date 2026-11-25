@@ -1,5 +1,6 @@
 import AppKit
 import FolioCore
+import FolioTranslate
 import PDFKit
 import SwiftUI
 
@@ -369,9 +370,15 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
 
     // MARK: Document
 
+    /// Saving annotations would take the text recognised by an earlier version with it (PDFKit before macOS 27).
+    private static func safeToSave(_ data: Data) -> Data {
+        if #available(macOS 27, *) { return data }
+        return OCRTextLayer.safeToSave(data) ?? data
+    }
+
     /// Reads the file into memory (mapped), so atomic saves can replace it underneath safely.
     private func loadDocument() -> Bool {
-        guard let data = try? Data(contentsOf: fileURL, options: .alwaysMapped), let document = PDFDocument(data: data) else {
+        guard let data = try? Data(contentsOf: fileURL, options: .alwaysMapped), let document = PDFDocument(data: Self.safeToSave(data)) else {
             model.toasts.show(String(localized: "无法打开「\(fileURL.lastPathComponent)」：不是有效的 PDF"), systemImage: "exclamationmark.triangle")
             return false
         }

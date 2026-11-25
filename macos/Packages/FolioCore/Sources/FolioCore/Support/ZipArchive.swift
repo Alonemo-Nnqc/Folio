@@ -96,8 +96,10 @@ final class ZipWriter {
     private func begin(_ name: String, date: Date, size: UInt64) throws {
         let parts = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
         let year = min(max(parts.year ?? 1980, 1980), 2107) - 1980
-        let time = UInt16((parts.hour ?? 0) << 11 | (parts.minute ?? 0) << 5 | (parts.second ?? 0) / 2)
-        let day = UInt16(year << 9 | (parts.month ?? 1) << 5 | (parts.day ?? 1))
+        let hour: Int = parts.hour ?? 0, minute: Int = parts.minute ?? 0, second: Int = parts.second ?? 0
+        let month: Int = parts.month ?? 1, dayOfMonth: Int = parts.day ?? 1
+        let time = UInt16((hour << 11) | (minute << 5) | (second / 2))
+        let day = UInt16((year << 9) | (month << 5) | dayOfMonth)
         let entry = Entry(name: Data(name.utf8), crc: 0, size: size, offset: position, time: (time, day))
         entries.append(entry)
         try write(header(entry))

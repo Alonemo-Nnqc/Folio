@@ -51,6 +51,52 @@ jobs:
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             -testLanguage en -testRegion US test -only-testing:FolioTests
 
+  # Scans on every macOS there is a machine for: recognised, annotated and saved (PDFKit writes files differently on each), translated.
+  # The tool is built once, as the release is, and run where it would be used.
+  scan-tool:
+    name: Scan check (build)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Build
+        working-directory: macos/Packages/FolioCore
+        run: |
+          swift build -c release --product folio-translate --arch arm64 --arch x86_64
+          BIN=$(swift build -c release --product folio-translate --arch arm64 --arch x86_64 --show-bin-path)
+          mkdir out && cp "$BIN/folio-translate" out/ && cp -R "$BIN"/*.bundle out/
+          swiftc -O -target arm64-apple-macos14 -o out/check-arm64 ../../script/scan-check/main.swift
+          swiftc -O -target x86_64-apple-macos14 -o out/check-x86_64 ../../script/scan-check/main.swift
+          cp ../../script/scan-check/*.pdf out/
+          tar czf "$GITHUB_WORKSPACE/tool.tgz" -C out .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scan-tool
+          path: tool.tgz
+          retention-days: 1
+
+  scans:
+    name: Scans (${{ matrix.os }})
+    needs: scan-tool
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: scan-tool
+      - name: Check
+        run: |
+          mkdir tool && tar xzf tool.tgz -C tool && cd tool
+          "./check-$(uname -m)" "$PWD/folio-translate" folio-1.5.pdf windows.pdf
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest

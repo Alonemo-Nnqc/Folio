@@ -134,6 +134,14 @@ public class OcrTextLayerTests
     [Fact] public void PictureBesideTextIsNoScan() => Check(ScanPdf(Picture + Text), false);
     [Fact] public void BlankPagesAreNotCounted() => Check(ScanPdf("", "", "", Picture), true, 4);
 
+    /// <summary>The same font as the macOS app's, byte for byte.</summary>
+    [Fact]
+    public void TheFontIsTheMacs()
+    {
+        Assert.Equal(262732, OcrTextLayer.TrueType.Length);
+        Assert.StartsWith("EA3F30BF2BAE38C4", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(OcrTextLayer.TrueType)));
+    }
+
     [Fact]
     public void UnreadableLayerIsReplaced()
     {

@@ -168,9 +168,64 @@ public static class OcrTextLayer
         return text.ToString();
     }
 
-    /// <summary>The glyphless TrueType font (two empty glyphs, 500 units wide), the one the macOS app embeds.</summary>
-    internal static readonly byte[] GlyphlessTrueType = Convert.FromBase64String(
-        "AAEAAAAKAIAAAwAgT1MvMkUAQ7AAAAEoAAAAYGNtYXAADABzAAABkAAAADRnbHlmAAAAAAAAAcwAAAABaGVhZC9AyCYAAACsAAAANmhoZWEDIgEuAAAA5AAAACRobXR4AfQAAAAAAYgAAAAGbG9jYQAAAAAAAAHEAAAABm1heHAAAwACAAABCAAAACBuYW1lPah3zwAAAdAAAABjcG9zdAAHAAAAAAI0AAAAJgABAAAAAQAAN22Si18PPPUAAwPoAAAAAOcawncAAAAA5xrCdwAA/zgB9AMgAAAAAwACAAAAAAAAAAEAAAMg/zgAAAH0AAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAEAAAACAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwH0AZAABQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAPz8/PwAAACAAIAMg/zgAAAMgAMgAAAAAAAAAAAAAAAAAAAAgAAAB9AAAAAAAAAAAAAIAAAADAAAAFAADAAEAAAAUAAQAIAAAAAQABAABAAAAIP//AAAAIP///+EAAQAAAAAAAAAAAAAAAAAAAAAAAAAEADYAAQAAAAAAAQAIAAAAAQAAAAAAAgAHAAgAAwABBAkAAQAQAA8AAwABBAkAAgAOAB9Gb2xpb09DUlJlZ3VsYXIARgBvAGwAaQBvAE8AQwBSAFIAZQBnAHUAbABhAHIAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAMAAA==");
+    /// <summary>The TrueType font the macOS app embeds too: 65535 empty glyphs, 500 units wide, the glyph of each UTF-16 unit being the
+    /// one of its number. With one glyph for all characters macOS before 27 loses the text when PDFKit saves the file.</summary>
+    public static readonly byte[] TrueType = MakeTrueType();
+
+    static byte[] MakeTrueType()
+    {
+        const int glyphs = 65535;
+        var @base = Convert.FromBase64String(TwoGlyphTrueType);
+        static byte[] Word(long v) => [(byte)(v >> 8), (byte)v];
+        static byte[] Long(long v) => [(byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v];
+        static byte[] Words(params int[] v) => v.SelectMany(x => Word(x)).ToArray();
+        long Read(long at, int count) { long v = 0; for (int k = 0; k < count; k++) v = v << 8 | @base[at + k]; return v; }
+        var tables = new List<(string Name, byte[] Data)>();
+        for (int k = 0; k < Read(4, 2); k++)
+        {
+            int record = 12 + k * 16;
+            var name = Encoding.ASCII.GetString(@base, record, 4);
+            var data = @base.AsSpan((int)Read(record + 8, 4), (int)Read(record + 12, 4)).ToArray();
+            switch (name)
+            {
+                case "maxp": Word(glyphs).CopyTo(data, 4); break;
+                case "hhea": Word(1).CopyTo(data, 34); break;
+                case "hmtx": data = [.. Word(500), .. new byte[2 * glyphs]]; break;
+                case "loca": data = new byte[2 * (glyphs + 1)]; break;
+                case "head": Long(0).CopyTo(data, 8); break;
+                // Format 4: the characters from the space on, each its own number.
+                case "cmap": data = Words(0, 2, 0, 3, 0, 20, 3, 1, 0, 20, 4, 32, 0, 4, 4, 1, 0, 0xFFFE, 0xFFFF, 0, 0x20, 0xFFFF, 0, 1, 0, 0); break;
+            }
+            tables.Add((name, data));
+        }
+        static uint Sum(byte[] data)
+        {
+            uint total = 0;
+            for (int at = 0; at < data.Length; at += 4)
+            {
+                uint value = 0;
+                for (int k = 0; k < 4; k++) value = value << 8 | (at + k < data.Length ? data[at + k] : 0u);
+                total += value;
+            }
+            return total;
+        }
+        List<byte> directory = [.. @base[..12]], body = [];
+        int headAt = 0;
+        foreach (var (name, data) in tables)
+        {
+            int at = 12 + tables.Count * 16 + body.Count;
+            if (name == "head") headAt = at;
+            directory.AddRange([.. Encoding.ASCII.GetBytes(name), .. Long(Sum(data)), .. Long(at), .. Long(data.Length)]);
+            body.AddRange([.. data, .. new byte[(4 - data.Length % 4) % 4]]);
+        }
+        byte[] font = [.. directory, .. body];
+        Long(unchecked(0xB1B0AFBA - Sum(font))).CopyTo(font, headAt + 8);
+        return font;
+    }
+
+    /// <summary>What it is made from: two empty glyphs.</summary>
+    const string TwoGlyphTrueType =
+        "AAEAAAAKAIAAAwAgT1MvMkUAQ7AAAAEoAAAAYGNtYXAADABzAAABkAAAADRnbHlmAAAAAAAAAcwAAAABaGVhZC9AyCYAAACsAAAANmhoZWEDIgEuAAAA5AAAACRobXR4AfQAAAAAAYgAAAAGbG9jYQAAAAAAAAHEAAAABm1heHAAAwACAAABCAAAACBuYW1lPah3zwAAAdAAAABjcG9zdAAHAAAAAAI0AAAAJgABAAAAAQAAN22Si18PPPUAAwPoAAAAAOcawncAAAAA5xrCdwAA/zgB9AMgAAAAAwACAAAAAAAAAAEAAAMg/zgAAAH0AAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAEAAAACAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAwH0AZAABQAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAPz8/PwAAACAAIAMg/zgAAAMgAMgAAAAAAAAAAAAAAAAAAAAgAAAB9AAAAAAAAAAAAAIAAAADAAAAFAADAAEAAAAUAAQAIAAAAAQABAABAAAAIP//AAAAIP///+EAAQAAAAAAAAAAAAAAAAAAAAAAAAAEADYAAQAAAAAAAQAIAAAAAQAAAAAAAgAHAAgAAwABBAkAAQAQAA8AAwABBAkAAgAOAB9Gb2xpb09DUlJlZ3VsYXIARgBvAGwAaQBvAE8AQwBSAFIAZQBnAHUAbABhAHIAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAMAAA==";
 
     internal static string ToUnicodeCMap()
     {
@@ -206,13 +261,14 @@ public static partial class AnnotationWriter
             IToken Resolve(IToken t) => t is IndirectReferenceToken r ? document.Structure.GetObject(r.Data).Data : t;
             string Stream(string dict, byte[] data) => $"<<{dict} /Length {data.Length}>>\nstream\n{Encoding.Latin1.GetString(data)}\nendstream";
             // The font.
-            long file = next(), descriptor = next(), gidMap = next(), cid = next(), toUnicode = next(), font = next();
-            write(file, Stream($"/Length1 {OcrTextLayer.GlyphlessTrueType.Length}", OcrTextLayer.GlyphlessTrueType));
+            long file = next(), descriptor = next(), cid = next(), toUnicode = next(), font = next();
+            using (var packed = new MemoryStream())
+            {
+                using (var deflate = new System.IO.Compression.ZLibStream(packed, System.IO.Compression.CompressionLevel.SmallestSize, true)) deflate.Write(OcrTextLayer.TrueType);
+                write(file, Stream($"/Length1 {OcrTextLayer.TrueType.Length} /Filter /FlateDecode", packed.ToArray()));
+            }
             write(descriptor, "<</Type /FontDescriptor /FontName /GlyphLessFont /Flags 5 /FontBBox [0 -200 500 800] /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 800 /StemV 80 /FontFile2 " + file + " 0 R>>");
-            var map = new byte[65536 * 2];
-            for (int i = 1; i < map.Length; i += 2) map[i] = 1;
-            write(gidMap, Stream("", map));
-            write(cid, $"<</Type /Font /Subtype /CIDFontType2 /BaseFont /GlyphLessFont /CIDSystemInfo <</Registry (Adobe) /Ordering (Identity) /Supplement 0>> /FontDescriptor {descriptor} 0 R /DW 500 /CIDToGIDMap {gidMap} 0 R>>");
+            write(cid, $"<</Type /Font /Subtype /CIDFontType2 /BaseFont /GlyphLessFont /CIDSystemInfo <</Registry (Adobe) /Ordering (Identity) /Supplement 0>> /FontDescriptor {descriptor} 0 R /DW 500 /CIDToGIDMap /Identity>>");
             write(toUnicode, Stream("", Encoding.ASCII.GetBytes(OcrTextLayer.ToUnicodeCMap())));
             write(font, $"<</Type /Font /Subtype /Type0 /BaseFont /GlyphLessFont /Encoding /Identity-H /DescendantFonts [{cid} 0 R] /ToUnicode {toUnicode} 0 R>>");
 

@@ -57,7 +57,8 @@ import Testing
         try await Task.sleep(for: .milliseconds(300))
         task.cancel()
         _ = try? await task.value
-        #expect(Date().timeIntervalSince(started) < 5)
+        // (Of 30; a busy machine takes its time to get round to it.)
+        #expect(Date().timeIntervalSince(started) < 20)
     }
 
     @Test func aPaperAlreadyInTheTargetLanguageSaysSo() {

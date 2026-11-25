@@ -124,6 +124,12 @@ case "ocr":
             print(String(format: "%d pages, %d characters in %.1f s", summary.pages, summary.characters, Date().timeIntervalSince(start)))
         } catch { print("error:", error.localizedDescription) }
     }
+case "safe-to-save":
+    // safe-to-save <pdf> <out.pdf>: what the reader opens instead of a scan recognised by an earlier version.
+    let data = try Data(contentsOf: url(arguments[1]))
+    let safe = OCRTextLayer.safeToSave(data)
+    print(safe == nil ? "as it is" : "fonts replaced")
+    try (safe ?? data).write(to: url(arguments[2]))
 case "selection":
     // selection <service> <text> [--to zh]: 划词翻译 of one passage
     let target = arguments.firstIndex(of: "--to").map { arguments[$0 + 1] } ?? "zh"
