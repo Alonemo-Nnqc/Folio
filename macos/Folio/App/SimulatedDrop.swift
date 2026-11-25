@@ -53,10 +53,11 @@ extension SimulatedDrop {
         pasteboard.clearContents()
         pasteboard.writeObjects([URL(filePath: path) as NSURL])
         let info = FakeDraggingInfo(pasteboard: pasteboard)
-        let operation = sidebar.outlineView(sidebar.outline, validateDrop: info, proposedItem: node,
-                                            proposedChildIndex: NSOutlineViewDropOnItemIndex)
+        // `-FolioSimulateDropIndex <n>`: between its subgroups instead of on it.
+        let place = UserDefaults.standard.object(forKey: "FolioSimulateDropIndex").flatMap { Int("\($0)") } ?? NSOutlineViewDropOnItemIndex
+        let operation = sidebar.outlineView(sidebar.outline, validateDrop: info, proposedItem: node, proposedChildIndex: place)
         let accepted = operation.isEmpty ? false
-            : sidebar.outlineView(sidebar.outline, acceptDrop: info, item: node, childIndex: NSOutlineViewDropOnItemIndex)
+            : sidebar.outlineView(sidebar.outline, acceptDrop: info, item: node, childIndex: place)
         if let log = UserDefaults.standard.string(forKey: "FolioSimulateDropLog") {
             append("sidebar validate=\(operation.rawValue) accepted=\(accepted)\n", to: log)
         }

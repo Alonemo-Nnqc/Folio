@@ -40,6 +40,8 @@ public sealed class HostWindow : Form
     Color _captionBack = Color.White, _captionText = Color.Black;
     /// <summary>背景透明度: 0 opaque; otherwise the share of the panels' colour left over the Acrylic backdrop.</summary>
     double _veil = 1;
+    /// <summary>1 while the floating panel covers the part of the page beside the buttons.</summary>
+    double _captionPanel;
     bool Translucent => _veil < 1;
     bool? _themeDark;
     System.Windows.Forms.Timer? _captionFade;
@@ -47,6 +49,21 @@ public sealed class HostWindow : Form
     readonly HashSet<string> _previewHosts = [];
     bool _pageFlushed, _ready;
     static readonly string IconFontName = FontFamily.Families.Any(f => f.Name == "Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
+
+    /// <summary>Files dragged out of the page into other programs (and over the page itself, which knows what they are). Started
+    /// while the mouse button is down; done when it is let go.</summary>
+    public Task DragFiles(IReadOnlyList<string> paths)
+    {
+        var done = new TaskCompletionSource();
+        // Not inside the page's message: the drag runs a message loop of its own.
+        BeginInvoke(() =>
+        {
+            try { if ((MouseButtons & MouseButtons.Left) != 0) _web.DoDragDrop(Shell.FileData(paths), DragDropEffects.Copy | DragDropEffects.Link); }
+            catch (Exception e) when (e is InvalidOperationException or System.Runtime.InteropServices.ExternalException) { }
+            finally { done.TrySetResult(); }
+        });
+        return done.Task;
+    }
 
     public HostWindow(string route, Options options)
     {
@@ -252,20 +269,23 @@ public sealed class HostWindow : Form
     }
 
     /// <summary>Colours of the buttons' part of the title bar, from what the page shows there.</summary>
-    public void SetCaptionColors(string background, string foreground, bool animate = false)
+    public void SetCaptionColors(string background, string foreground, bool animate = false, bool panel = false)
     {
         var to = ColorTranslator.FromHtml(background);
         _captionText = ColorTranslator.FromHtml(foreground);
         StopCaptionFade();
-        if (!animate || !Visible || to == _captionBack)
+        double panelTo = panel ? 1 : 0;
+        if (!animate || !Visible || (to == _captionBack && panelTo == _captionPanel))
         {
             _captionBack = to;
+            _captionPanel = panelTo;
             if (!Translucent) BackColor = to;
             InvalidateCaption();
             return;
         }
         // Keeps pace with the panel sliding in underneath.
         var from = _captionBack;
+        double panelFrom = _captionPanel;
         long start = System.Environment.TickCount64;
         _captionFade = new System.Windows.Forms.Timer { Interval = 15 };
         _captionFade.Tick += (_, _) =>
@@ -274,6 +294,7 @@ public sealed class HostWindow : Form
             double eased = 1 - (1 - t) * (1 - t);
             int Mix(byte a, byte b) => (int)Math.Round(a + (b - a) * eased);
             _captionBack = Color.FromArgb(Mix(from.R, to.R), Mix(from.G, to.G), Mix(from.B, to.B));
+            _captionPanel = panelFrom + (panelTo - panelFrom) * eased;
             InvalidateCaption();
             if (t < 1) return;
             StopCaptionFade();
@@ -471,7 +492,9 @@ public sealed class HostWindow : Form
             // Written with its alpha (GDI would leave the glass fully clear), the same veil as the page beside it.
             e.Graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
             // The page lays two translucent layers there (the window's background and the column's): the same cover.
-            double cover = 1 - (1 - _veil) * (1 - _veil);
+            double clear = (1 - _veil) * (1 - _veil);
+            // The floating panel (styles.css .floating-inspector) draws what is under it again, blurred, and itself at 66%.
+            double cover = 1 - clear * (1 - _captionPanel * (1 - clear * 0.34));
             using (var veil = new SolidBrush(Color.FromArgb((int)Math.Round(255 * cover), _captionBack))) e.Graphics.FillRectangle(veil, rect);
             e.Graphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceOver;
             e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;

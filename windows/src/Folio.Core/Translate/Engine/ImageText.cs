@@ -151,7 +151,7 @@ public static class ImageText
         var services = Platform;
         if (services == null) return vector;
         var media = geometry.CropBox;
-        var textBoxes = interpreter.Glyphs.Where(g => g.IsVisible && (g.Text?.Any(char.IsLetterOrDigit) ?? false)).Select(g => g.Box).ToList();
+        var textBoxes = interpreter.Glyphs.Where(g => (g.IsVisible || (interpreter.IsRecognizedScan && g.RenderMode == 3 && !g.IsClipped)) && (g.Text?.Any(char.IsLetterOrDigit) ?? false)).Select(g => g.Box).ToList();
         var pictures = new List<Rect>();
         foreach (var (_, image) in interpreter.Images)
         {
@@ -643,7 +643,7 @@ public static class ImageText
 
     static double Distance((double R, double G, double B) a, (double R, double G, double B) b) => Math.Abs(a.R - b.R) + Math.Abs(a.G - b.G) + Math.Abs(a.B - b.B);
 
-    static (double R, double G, double B) Median(List<(double R, double G, double B)> colors)
+    internal static (double R, double G, double B) Median(List<(double R, double G, double B)> colors)
     {
         if (colors.Count == 0) return (1, 1, 1);
         static double Mid(IEnumerable<double> v) { var s = v.OrderBy(x => x).ToList(); return s[s.Count / 2]; }

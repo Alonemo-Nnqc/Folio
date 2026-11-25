@@ -72,23 +72,59 @@ final class ImportCoordinator {
 
     // MARK: Importing (DND-01/02, META-01, DUP-01/02)
 
-    func importFiles(_ urls: [URL], toGroup groupId: String?) {
+    /// Files go to `groupId`; a folder becomes a group in it (nil: at the top level), at `index` among its groups.
+    func importFiles(_ urls: [URL], toGroup groupId: String?, index: Int? = nil) {
         guard let library, !urls.isEmpty else { return }
+        // A package of a library is not a paper.
+        if let package = urls.first(where: { $0.pathExtension.lowercased() == LibraryPackageInfo.fileExtension }) {
+            model?.activeSheet = .packageImport(package)
+            return
+        }
+        let folders = urls.filter(Self.isFolder)
+        let files = urls.filter { url in !folders.contains(url) && FileManager.default.fileExists(atPath: url.path) }
+        if folders.isEmpty, files.isEmpty {
+            model?.toasts.show(String(localized: "没有找到可导入的文件"), systemImage: "doc.questionmark")
+            return
+        }
         Task {
-            let files = Self.expand(urls)
-            guard !files.isEmpty else {
-                model?.toasts.show(String(localized: "没有找到可导入的文件"), systemImage: "doc.questionmark")
-                return
+            if !files.isEmpty {
+                let outcomes = await Task.detached(priority: .userInitiated) { (try? library.importFiles(files, toGroup: groupId)) ?? [] }.value
+                handle(outcomes, groupId: groupId)
             }
-            let outcomes = await Task.detached(priority: .userInitiated) {
-                (try? library.importFiles(files, toGroup: groupId)) ?? []
-            }.value
-            handle(outcomes, groupId: groupId)
+            var place = index
+            for url in folders {
+                await importFolder(url, parentId: groupId, index: place)
+                place = place.map { $0 + 1 }
+            }
         }
     }
 
-    private func handle(_ outcomes: [ImportOutcome], groupId: String?) {
+    nonisolated static func isFolder(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isPackageKey])
+        return values?.isDirectory == true && values?.isPackage != true
+    }
+
+    private func importFolder(_ url: URL, parentId: String?, index: Int?) async {
+        guard let model, let library else { return }
+        let name = url.lastPathComponent
+        guard let folder = await Task.detached(priority: .userInitiated, operation: { ImportFolder.scan(url) }).value else {
+            model.toasts.show(String(localized: "「\(name)」中没有 PDF 或 Markdown 文件"), systemImage: "folder.badge.questionmark")
+            return
+        }
+        if folder.fileCount > 20 { model.toasts.show(String(localized: "正在导入「\(name)」（\(folder.fileCount) 个文件）…"), systemImage: "folder.badge.plus") }
+        do {
+            let result = try await Task.detached(priority: .userInitiated) { try library.importFolder(folder, parentId: parentId, index: index) }.value
+            handle(result.outcomes, groupId: result.groupId ?? parentId, folder: name)
+            if let groupId = result.groupId { model.sidebarSelection = .group(groupId) }
+        } catch {
+            model.toasts.show(String(localized: "无法导入「\(name)」：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle")
+        }
+    }
+
+    /// `folder`: the name of the folder they were in; what came of them is said once, for all.
+    private func handle(_ outcomes: [ImportOutcome], groupId: String?, folder: String? = nil) {
         guard let model else { return }
+        if let folder { summarize(outcomes, folder: folder) }
         for outcome in outcomes {
             switch outcome {
             case .imported(let id, let isPDF):
@@ -104,20 +140,53 @@ final class ImportCoordinator {
                     model.ocr.recognizeIfScanned(itemId: id)
                     model.translations.translateNewPaper(itemId: id)
                 }
-            case .duplicateFile(let existing, let addedToGroup):
-                let title = model.snapshot.items[existing]?.title ?? ""
-                if addedToGroup, let groupId, let name = model.snapshot.groupsById[groupId]?.name {
-                    model.toasts.show(String(localized: "已有该文献，已加入「\(name)」"), systemImage: "doc.on.doc")
-                } else {
-                    model.toasts.show(String(localized: "已有该文献「\(title)」"), systemImage: "doc.on.doc")
-                }
-            case .duplicateInTrash(let existing):
-                let title = model.snapshot.items[existing]?.title ?? ""
-                prompter.askRestore(title: title) { [weak model] restore in
-                    if restore { model?.restoreItems([existing]) }
-                }
-            case .failed(let url, let reason):
-                model.toasts.show(String(localized: "无法添加「\(url.lastPathComponent)」：\(reason)"), systemImage: "exclamationmark.triangle")
+            case .duplicateFile, .duplicateInTrash, .failed:
+                if folder != nil { continue }
+                said(outcome, groupId: groupId)
+            }
+        }
+    }
+
+    private func said(_ outcome: ImportOutcome, groupId: String?) {
+        guard let model else { return }
+        switch outcome {
+        case .imported: break
+        case .duplicateFile(let existing, let addedToGroup):
+            let title = model.snapshot.items[existing]?.title ?? ""
+            if addedToGroup, let groupId, let name = model.snapshot.groupsById[groupId]?.name {
+                model.toasts.show(String(localized: "已有该文献，已加入「\(name)」"), systemImage: "doc.on.doc")
+            } else {
+                model.toasts.show(String(localized: "已有该文献「\(title)」"), systemImage: "doc.on.doc")
+            }
+        case .duplicateInTrash(let existing):
+            let title = model.snapshot.items[existing]?.title ?? ""
+            prompter.askRestore(title: title) { [weak model] restore in
+                if restore { model?.restoreItems([existing]) }
+            }
+        case .failed(let url, let reason):
+            model.toasts.show(String(localized: "无法添加「\(url.lastPathComponent)」：\(reason)"), systemImage: "exclamationmark.triangle")
+        }
+    }
+
+    private func summarize(_ outcomes: [ImportOutcome], folder: String) {
+        guard let model else { return }
+        var added = 0, known = 0, trashed: [String] = [], failed = 0
+        for outcome in outcomes {
+            switch outcome {
+            case .imported: added += 1
+            case .duplicateFile: known += 1
+            case .duplicateInTrash(let id): trashed.append(id)
+            case .failed: failed += 1
+            }
+        }
+        var parts = [String(localized: "已导入「\(folder)」：\(added) 个文件")]
+        if known > 0 { parts.append(String(localized: "\(known) 个已在文献库，已加入分组")) }
+        if failed > 0 { parts.append(String(localized: "\(failed) 个无法添加")) }
+        model.toasts.show(parts.joined(separator: String(localized: "，")), systemImage: failed > 0 ? "exclamationmark.triangle" : "folder.badge.plus")
+        if let first = trashed.first {
+            let title = model.snapshot.items[first]?.title ?? ""
+            prompter.askRestore(title: trashed.count > 1 ? String(localized: "\(title) 等 \(trashed.count) 篇") : title) { [weak model] restore in
+                if restore { model?.restoreItems(trashed) }
             }
         }
     }
@@ -134,25 +203,6 @@ final class ImportCoordinator {
                 model?.toasts.show(added == 1 ? String(localized: "已添加文件") : String(localized: "已添加 \(added) 个文件"), systemImage: "paperclip")
             }
         }
-    }
-
-    /// Folders are searched recursively for PDFs; files are taken as they are.
-    nonisolated static func expand(_ urls: [URL]) -> [URL] {
-        var result: [URL] = []
-        for url in urls {
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { continue }
-            if isDirectory.boolValue {
-                let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil,
-                                                                options: [.skipsHiddenFiles, .skipsPackageDescendants])
-                while let file = enumerator?.nextObject() as? URL {
-                    if file.pathExtension.lowercased() == "pdf" { result.append(file) }
-                }
-            } else {
-                result.append(url)
-            }
-        }
-        return result
     }
 
     // MARK: Retrieval (META-01…07)

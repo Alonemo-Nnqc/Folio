@@ -4,7 +4,7 @@ import { getState } from "../store";
 // Windows' caption buttons are drawn by the app beside the page: they take the colour of what the page shows under them,
 // darkened like the page while a sheet's scrim covers it, so the two never differ.
 
-let base = { background: "#ffffff", foreground: "#000000" };
+let base = { background: "#ffffff", foreground: "#000000", panel: false };
 let scrims = 0;
 
 function hex(n: number) { return Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, "0"); }
@@ -20,12 +20,12 @@ function send(animate: boolean) {
   // The scrim's black (styles.css --scrim), once per sheet in the stack.
   const alpha = getState().dark ? 0.38 : 0.18;
   const cover = 1 - Math.pow(1 - alpha, scrims);
-  call("window.caption", { background: shaded(base.background, cover), foreground: base.foreground, animate }).catch(() => {});
+  call("window.caption", { background: shaded(base.background, cover), foreground: base.foreground, animate, panel: base.panel }).catch(() => {});
 }
 
-/** What the page shows under the buttons. */
-export function setCaption(background: string, foreground: string, animate = false) {
-  base = { background, foreground };
+/** What the page shows under the buttons (panel: the floating panel, which lets less of the glass through). */
+export function setCaption(background: string, foreground: string, animate = false, panel = false) {
+  base = { background, foreground, panel };
   send(animate);
 }
 

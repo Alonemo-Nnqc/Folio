@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ReadingRing } from "../ui/ring";
 import { ChevronDown, ChevronUp, Columns2, Eraser, ScanText, SquarePen, Highlighter, MousePointer2, MoveHorizontal, NotebookPen, PanelRight, Pen, Printer, Search, Strikethrough, Type, Underline, X, ZoomIn, ZoomOut } from "lucide-react";
 import { CustomizeToolbarSheet, TOOLBAR_ITEMS, toolbarIds } from "./toolbar";
 import { call, on } from "../rpc";
@@ -627,9 +628,9 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
         break;
       }
       case "loaded": if (pane === main) pageCount.current = m.pages; break;
-      case "page": if (pane === main && m.pages > 0) { shownPage.current = m.page; setPageLabel(t("第 %lld / %lld 页", m.page, m.pages)); } break;
+      case "page": if (pane === main && m.pages > 0) { shownPage.current = m.page; pageCount.current = m.pages; noteSeen(m.page, m.pages); setPageLabel(t("第 %lld / %lld 页", m.page, m.pages)); } break;
       case "position":
-        if (pane === main && pane.fileId) call("reader.savePosition", { file: pane.fileId, page: m.page, left: m.left ?? 0, top: m.top ?? 0, scale: m.scale ?? 1, autoScale: m.autoScale ?? true });
+        if (pane === main && pane.fileId) call("reader.savePosition", { file: pane.fileId, page: m.page, left: m.left ?? 0, top: m.top ?? 0, scale: m.scale ?? 1, autoScale: m.autoScale ?? true, pages: pageCount.current || undefined });
         break;
       case "scroll": (pane === main ? parallelRef.current : main)?.send({ cmd: "scrollTo", page: m.page, fraction: m.fraction }); break;
       case "selection":
@@ -808,6 +809,29 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
 
   useEffect(() => { if (visible) { checkForChanges(); requestAnimationFrame(() => main.frame?.contentWindow?.focus()); } }, [visible]);
 
+  // READ-01: a page on screen for a moment counts as seen. At the end of a paper most of which was seen, marking it read is
+  // offered once (jumping to the last page for its references is not reading it); it is never done by itself.
+  const floating = useStore((s) => !!s.settings.inspectorFloating);
+  const [readOffer, setReadOffer] = useState(false);
+  const readOffered = useRef(false);
+  const seenTimer = useRef(0);
+  const noteSeen = (page: number, pages: number) => {
+    clearTimeout(seenTimer.current);
+    const id = main.fileId;
+    // Only in the tab that is in front.
+    if (!id || getState().activeTab !== tabKey) return;
+    seenTimer.current = window.setTimeout(async () => {
+      const two = getState().settings.readerLayout === "twoUp";
+      const seen = await call<{ atEnd: boolean }>("reader.seen", { file: id, page, pages, two }).catch(() => null);
+      const s = getState();
+      const item = s.items.get(s.files.get(id)?.itemId ?? "");
+      if (!seen || readOffered.current || s.settings.offerMarkAsRead === false || pages < 2 || page + (two ? 1 : 0) < pages || !seen.atEnd || item?.readStatus !== 1) return;
+      readOffered.current = true;
+      setReadOffer(true);
+    }, 1000);
+  };
+  useEffect(() => () => clearTimeout(seenTimer.current), []);
+
   // 扫描件 (OCR-01): a banner offers to recognise the text; the file is reloaded once that is done.
   const [isScan, setIsScan] = useState(false);
   const [scanDismissed, setScanDismissed] = useState(false);
@@ -925,7 +949,7 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
   useLayoutEffect(() => { setState({ readerNotes: { ...getState().readerNotes, [tabKey]: notesVisible } }); }, [notesVisible]);
 
   const left = sidebarVisible ? sidebarWidth : 0;
-  const right = notesVisible ? notesWidth : 0;
+  const right = notesVisible && !floating ? notesWidth : 0;
   const area = `calc(100% - ${right}px)`;
   const leftPaneWidth = parallel ? `calc(${left}px + (100% - ${left + right}px) / 2)` : area;
   const rightPaneWidth = `calc((100% - ${left + right}px) / 2)`;
@@ -986,16 +1010,24 @@ export function ReaderTab({ tabKey, fileId, page, visible }: { tabKey: string; f
       </div>
 
       {notesPhase !== "closed" && (
-        <div className={`reader-notes${isEntering(notesPhase) ? " entering" : ""}`} style={{ width: notesWidth, transform: notesPhase === "closing" ? "translateX(100%)" : undefined }}>
+        <div className={`reader-notes${floating ? " floating" : ""}${isEntering(notesPhase) ? " entering" : ""}`} style={{ width: notesWidth, transform: notesPhase === "closing" ? "translateX(100%)" : undefined }}>
           <div className="titlebar-row drag" />
           <NoteEditor itemId={file.itemId} title={item?.title ?? file.fileName} inputRef={noteBox} />
-          <Splitter side="right" width={notesWidth} min={220} max={560} onLive={setNotesWidth} onDone={setNotesWidth} />
+          <Splitter side="right" width={notesWidth} min={220} max={floating ? Math.round(window.innerWidth * 0.8) : 560} onLive={setNotesWidth} onDone={setNotesWidth} />
         </div>
       )}
 
       <SidebarButtons visible={sidebarVisible} width={sidebarWidth} onToggle={toggleSidebar} />
       <PanelToggle onClick={toggleNotes} />
 
+      {readOffer && (
+        <div className="scan-banner read-offer" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>
+          <ReadingRing status={1} fraction={1} size={17} />
+          <span>{t("看到最后一页了")}</span>
+          <button className="btn small primary" onClick={() => { setReadOffer(false); call("items.update", { ids: [file.itemId], patch: { readStatus: 2 } }); }}>{t("标为已读")}</button>
+          <button className="scan-close" title={t("关闭")} onClick={() => setReadOffer(false)}><X size={11} strokeWidth={2.6} /></button>
+        </div>
+      )}
       {running && <div className="hud"><TranslationProgress itemId={file.itemId} /></div>}
       {(ocr || (isScan && !scanDismissed)) && (
         <div className="scan-banner" role="status" style={{ left: `calc(${left}px + (100% - ${left + right}px) / 2)` }}>

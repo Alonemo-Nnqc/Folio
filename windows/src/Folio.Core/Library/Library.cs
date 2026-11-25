@@ -128,7 +128,7 @@ public sealed partial class Library : IDisposable
         {
             var info = new FileInfo(Store.PathFor(relative));
             var now = DateTime.UtcNow;
-            var item = new Item(ItemKind.Standalone, Path.GetFileName(path), now) { MetadataState = isPdf ? MetadataState.Pending : MetadataState.None };
+            var item = new Item(ItemKind.Standalone, WithoutMarkdownExtension(Path.GetFileName(path)), now) { MetadataState = isPdf ? MetadataState.Pending : MetadataState.None };
             var file = new FileRecord(item.Id, relative, Path.GetFileName(path), info.Length, hash, info.LastWriteTimeUtc, now,
                                       isPdf ? FulltextState.Pending : FulltextState.NotApplicable);
             item.DefaultFileId = file.Id;
@@ -800,9 +800,49 @@ public sealed partial class Library : IDisposable
     /// <summary>Saved without raising Changed: scrolling never refreshes the list.</summary>
     public void SaveReadingState(ReadingState s) => Database.Read(c =>
         Exec(c, null, """
-            INSERT OR REPLACE INTO readingState (fileId, pageIndex, pointX, pointY, scale, autoScale, displayMode, dateModified)
-            SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM file WHERE id = ?)
-            """, s.FileId, s.PageIndex, s.PointX, s.PointY, s.Scale, s.AutoScale, s.DisplayMode, s.DateModified, s.FileId));
+            INSERT OR REPLACE INTO readingState (fileId, pageIndex, pointX, pointY, scale, autoScale, displayMode, dateModified, pageCount, seenPages)
+            SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM file WHERE id = ?)
+            """, s.FileId, s.PageIndex, s.PointX, s.PointY, s.Scale, s.AutoScale, s.DisplayMode, s.DateModified, s.PageCount, s.SeenPages, s.FileId));
+
+    /// <summary>The state to save with the pages seen so far kept: what an older version left counts up to its place, a paper
+    /// opened for the first time has none yet.</summary>
+    public ReadingState KeepingSeenPages(ReadingState s)
+    {
+        var known = ReadingState(s.FileId);
+        int? count = s.PageCount ?? known?.PageCount;
+        var seen = known == null ? "" : known.SeenPages ?? (count is { } n ? new SeenPages(n, null, known.PageIndex).Stored : null);
+        return s with { PageCount = count, SeenPages = seen };
+    }
+
+    /// <summary>How far each item has been read: the page reached in the file of it read furthest; LastRead is of the one read last.</summary>
+    public Dictionary<string, ReadingProgress> ReadingProgress() => Database.Read(c =>
+    {
+        var result = new Dictionary<string, ReadingProgress>();
+        var rows = Query(c, null, """
+            SELECT file.itemId AS itemId, file.id AS fileId, readingState.pageIndex AS pageIndex, readingState.pageCount AS pageCount,
+                   readingState.seenPages AS seenPages, readingState.dateModified AS date
+            FROM readingState JOIN file ON file.id = readingState.fileId ORDER BY readingState.dateModified
+            """, r => (Item: Str(r, "itemId")!, File: Str(r, "fileId")!, Page: (int)(Long(r, "pageIndex") ?? 0), Count: (int?)Long(r, "pageCount"), Seen: Str(r, "seenPages"), Date: Date(r, "date")));
+        foreach (var row in rows)
+        {
+            if (row.Date is not { } date) continue;
+            int? reached = row.Count is { } n ? new SeenPages(n, row.Seen, row.Page).Reached : null;
+            var progress = new ReadingProgress(reached ?? 0, reached == null ? null : row.Count, row.File, date);
+            if (result.TryGetValue(row.Item, out var other) && other.Fraction > progress.Fraction) progress = other with { LastRead = date };
+            result[row.Item] = progress;
+        }
+        return result;
+    });
+
+    /// <summary>Files last read by a version before 1.6: how many pages they have was not noted.</summary>
+    public List<string> FilesWithoutPageCount() => Database.Read(c => Query(c, null, "SELECT fileId FROM readingState WHERE pageCount IS NULL", r => Str(r, "fileId")!));
+
+    /// <summary>Notes it: the pages up to where the file was left count as read. The date it was read stays.</summary>
+    public void SetPageCount(int count, string fileId)
+    {
+        if (ReadingState(fileId) is not { PageCount: null } state) return;
+        SaveReadingState(state with { PageCount = count, SeenPages = state.SeenPages ?? new SeenPages(count, null, state.PageIndex).Stored });
+    }
 
     public Dictionary<string, DateTime> LastReadDates() => Database.Read(c => Query(c, null, """
         SELECT file.itemId AS itemId, MAX(readingState.dateModified) AS date

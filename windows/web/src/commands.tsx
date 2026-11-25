@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { AppWindow, BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, FilePen, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X } from "lucide-react";
+import { copyFiles } from "./library/ItemList";
+import { AppWindow, BarChart3, BookOpen, Copy, ScanText, Download, Edit3, ExternalLink, FileText, FilePen, Folder, FolderOpen, Library, Link, Paperclip, Plus, Quote, RefreshCw, Search, Share, Star, StickyNote, Tag as TagIcon, Trash2, Undo2, X, Package, PackageOpen } from "lucide-react";
 import { FullTextTranslateIcon } from "./ui/icons";
 import { call } from "./rpc";
 import { t } from "./i18n";
@@ -9,6 +10,7 @@ import { askText, confirm, dialog, openSheet, Sheet } from "./ui/sheet";
 import { Field } from "./ui/controls";
 import { TranslateSheet } from "./settings/TranslationPane";
 import { ZoteroSheet } from "./settings/ZoteroSheet";
+import { exportPackage, importPackage } from "./settings/PackageSheets";
 
 const icon = (C: any) => <C size={14} />;
 
@@ -213,6 +215,7 @@ export async function newMarkdownDocument() {
   if (getState().scope === "trash") await call("library.scope", { scope: "all" });
   setState({ selection: [r.itemId], fileSelection: null, multiSelect: false });
   call("library.select", { ids: [r.itemId] });
+  setState({ naming: r.fileId });
   openWhenListed(r.fileId);
 }
 
@@ -223,7 +226,7 @@ export async function newMarkdownAttachment(item: Item) {
   if (!fileId) return;
   const expanded = new Set(getState().expanded);
   expanded.add(item.id);
-  setState({ expanded });
+  setState({ expanded, naming: fileId });
   openWhenListed(fileId);
 }
 
@@ -244,6 +247,9 @@ export function addMenu(): MenuEntry[] {
     sep,
     { label: t("导入 BibTeX / RIS…"), icon: icon(Download), action: importReferences },
     { label: t("从 Zotero 导入…"), icon: icon(Library), action: zoteroImport },
+    sep,
+    { label: t("打包导出文献库与设置…"), icon: icon(Package), action: exportPackage },
+    { label: t("导入 Folio 包…"), icon: icon(PackageOpen), action: importPackage },
   ];
 }
 
@@ -330,9 +336,13 @@ export function itemMenu(ids: string[]): MenuEntry[] {
   const singleFile = single && defaultFile(s, single);
   if (singleFile) entries.push(openWithMenu(singleFile));
   entries.push(sep, groupMenu(selected), tagMenu(ids));
-  if (allRegular) {
+  if (selected.every((i) => i.tracksReading)) {
     entries.push(
       { label: t("阅读状态"), icon: icon(BookOpen), submenu: s.statics.statuses.map((st) => ({ label: st.name, checked: selected.every((i) => i.readStatus === st.raw), action: () => call("items.update", { ids, patch: { readStatus: st.raw } }) })) },
+    );
+  }
+  if (allRegular) {
+    entries.push(
       { label: t("评分"), icon: icon(Star), submenu: [0, 1, 2, 3, 4, 5].map((v) => ({ label: v === 0 ? t("无评分") : "★".repeat(v), checked: selected.every((i) => i.rating === v), action: () => call("items.update", { ids, patch: { rating: v } }) })) },
       { label: t("引用与导出"), icon: icon(Share), submenu: citeMenu(ids) },
     );
@@ -355,6 +365,7 @@ export function itemMenu(ids: string[]): MenuEntry[] {
       if (single.hasJournal) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
     } else {
       entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: single.metadataState === "Pending" || !filesOf(s, single.id)[0]?.isPdf, action: () => call("items.retrieve", { ids }) });
+      if (singleFile?.isMarkdown) entries.push({ label: t("重命名…"), icon: icon(Edit3), action: () => renameFile(singleFile) });
       entries.push({ label: t("手动匹配…"), icon: icon(Search), action: () => manualMatch(single) });
     }
   } else {
@@ -364,12 +375,19 @@ export function itemMenu(ids: string[]): MenuEntry[] {
     entries.push({ label: t("重新检索元数据"), icon: icon(RefreshCw), disabled: selected.every((i) => i.metadataState === "Pending"), action: () => call("items.retrieve", { ids }) });
   }
   if (!single && selected.some((i) => i.hasJournal)) entries.push({ label: t("刷新期刊指标"), icon: icon(BarChart3), action: () => refreshJournalMetrics(ids) });
+  if (selected.some((i) => defaultFile(s, i))) entries.push({ label: t("拷贝文件"), icon: icon(Copy), key: "Ctrl+C", action: () => copyFiles(ids) });
   if (selected.some((i) => defaultFile(s, i))) entries.push({ label: t("在资源管理器中显示"), icon: icon(Folder), key: "Ctrl+Shift+R", action: () => revealFirstFile(ids) });
   entries.push(sep);
   const group = scopeGroupId(s.scope);
   if (group) entries.push({ label: t("从当前分组移除"), icon: icon(X), key: "Delete", action: () => call("items.removeFromGroup", { ids, group }) });
   entries.push({ label: t("删除"), icon: icon(Trash2), key: group ? "Shift+Delete" : "Delete", action: () => call("items.trash", { ids }) });
   return entries;
+}
+
+async function renameFile(file: FileRec) {
+  const name = await askText(t("重命名文件"), t("文件名"), file.fileName.replace(/\.[^.]+$/, ""), t("重命名"));
+  if (!name?.trim()) return;
+  if (file.isMarkdown) call("markdown.rename", { file: file.id, name: name.trim() }); else call("file.rename", { id: file.id, name: name.trim() });
 }
 
 export function fileMenu(file: FileRec): MenuEntry[] {
@@ -380,11 +398,9 @@ export function fileMenu(file: FileRec): MenuEntry[] {
     openWithMenu(file),
     sep,
     { label: t("设为默认打开文件"), icon: icon(Star), disabled: item?.defaultFileId === file.id, checked: item?.defaultFileId === file.id, action: () => call("file.setDefault", { id: file.id }) },
-    { label: t("重命名…"), icon: icon(Edit3), action: async () => {
-      const name = await askText(t("重命名文件"), t("文件名"), file.fileName.replace(/\.[^.]+$/, ""), t("重命名"));
-      if (name?.trim()) call("file.rename", { id: file.id, name: name.trim() });
-    } },
+    { label: t("重命名…"), icon: icon(Edit3), action: () => renameFile(file) },
     ...(file.isPdf && !file.translationKind ? [translateEntry(file.itemId, () => translate([file.itemId], file))] : []),
+    { label: t("拷贝文件"), icon: icon(Copy), key: "Ctrl+C", action: () => copyFiles([], file.id) },
     { label: t("在资源管理器中显示"), icon: icon(Folder), action: () => call("file.reveal", { id: file.id }) },
     sep,
     { label: t("删除"), icon: icon(Trash2), action: () => call("files.trash", { ids: [file.id] }) },

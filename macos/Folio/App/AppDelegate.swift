@@ -140,11 +140,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func newGroup(_ sender: Any?) { showLibrary(nil); model.createGroup() }
     @objc func newTag(_ sender: Any?) { model.activeSheet = .tagEditor(tagId: nil, applyTo: []) }
     @objc func importFromZotero(_ sender: Any?) { showLibrary(nil); model.activeSheet = .zoteroImport }
+    @objc func exportPackage(_ sender: Any?) { showLibrary(nil); model.activeSheet = .packageExport }
+    @objc func importPackage(_ sender: Any?) { showLibrary(nil); model.choosePackageToImport() }
     @objc func importReferences(_ sender: Any?) { showLibrary(nil); model.chooseReferencesToImport() }
 
     @objc func showOnboarding(_ sender: Any?) { OnboardingWindowController.show(model: model) }
 
     static let projectURL = URL(string: "https://github.com/Alonemo-Nnqc/Folio")!
+
+    static func relaunch() {
+        let process = Process()
+        process.executableURL = URL(filePath: "/bin/sh")
+        process.arguments = ["-c", "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; open \"$0\"", Bundle.main.bundlePath]
+        try? process.run()
+        NSApp.terminate(nil)
+    }
 
     @objc func openProjectPage(_ sender: Any?) { NSWorkspace.shared.open(Self.projectURL) }
 

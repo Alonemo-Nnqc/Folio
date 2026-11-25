@@ -53,6 +53,12 @@ public struct FileRecord: Codable, Sendable, Hashable, Identifiable, FetchableRe
     }
 
     public var fileName: String { (relativePath as NSString).lastPathComponent }
+
+    /// What a document is called: its file's name, without the number the folder all files share may have made it need.
+    public var documentName: String {
+        let name = (fileName as NSString).deletingPathExtension, own = (originalName as NSString).deletingPathExtension
+        return !own.isEmpty && name.hasPrefix(own + " ") && Int(name.dropFirst(own.count + 1)) != nil ? own : name
+    }
     public var isPDF: Bool { (relativePath as NSString).pathExtension.lowercased() == "pdf" }
     /// A Markdown document Folio edits itself (MD-01).
     public var isMarkdown: Bool { ["md", "markdown"].contains((relativePath as NSString).pathExtension.lowercased()) }

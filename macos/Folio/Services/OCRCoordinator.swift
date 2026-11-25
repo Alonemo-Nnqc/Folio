@@ -24,6 +24,12 @@ final class OCRCoordinator {
     private(set) var jobs: [String: Progress] = [:]
     @ObservationIgnored private weak var model: AppModel?
     @ObservationIgnored private var queue: [String] = []
+    /// Files the user asked to recognise (the banner, the menu): every page with a picture is read when none looks like a
+    /// scan, and what went wrong is said. The others were queued by themselves after import.
+    @ObservationIgnored private var asked: Set<String> = []
+    /// Files that have text, with a few scanned pages among it: only pages that turn out to be pages of text are taken.
+    @ObservationIgnored private var mixed: Set<String> = []
+    @ObservationIgnored private var textless: [String: Bool] = [:]
     @ObservationIgnored private var worker: Task<Void, Never>?
     @ObservationIgnored private var current: (fileId: String, task: Task<PDFTextRecognizer.Summary, Error>)?
     /// Whether a file (by its hash) is a scan: asked once per version of the file.
@@ -49,6 +55,27 @@ final class OCRCoordinator {
         return result
     }
 
+    /// Whether a file that is no scan has pages without text (a letter or an appendix scanned in, or just a whole-page picture).
+    func hasPagesWithoutText(fileId: String) async -> Bool {
+        guard let model, let file = model.snapshot.files[fileId], file.isPDF else { return false }
+        let key = "\(fileId)|\(file.sha256)"
+        if let known = textless[key] { return known }
+        let url = model.fileURL(file)
+        let result = await Task.detached(priority: .utility) { ScannedPDF.hasPagesWithoutText(url) }.value
+        textless[key] = result
+        return result
+    }
+
+    /// Recognises the scanned pages of a file that otherwise has text, before it is translated. Nothing to read on them
+    /// (pictures) is no failure; the pages are not looked at again.
+    func recognizeScannedPages(fileId: String, progress: @escaping (Progress) -> Void = { _ in }) async {
+        guard let file = model?.snapshot.files[fileId] else { return }
+        if jobs[fileId] == nil { mixed.insert(fileId) }
+        do { try await recognizeAndWait(fileId: fileId, progress: progress) } catch {
+            if error as? OCRError == .noTextFound { textless["\(fileId)|\(file.sha256)"] = false }
+        }
+    }
+
     /// After import: a scan is recognised by itself (its metadata is looked for again afterwards).
     func recognizeIfScanned(itemId: String) {
         Task {
@@ -59,12 +86,13 @@ final class OCRCoordinator {
                 if file != nil { break }
                 try? await Task.sleep(for: .milliseconds(100))
             }
-            if let file, await isScanned(fileId: file.id) { recognize(fileId: file.id) }
+            if let file, await isScanned(fileId: file.id) { recognize(fileId: file.id, asked: false) }
         }
     }
 
     /// Queues a file (the reader's banner, 识别文字（OCR）).
-    func recognize(fileId: String) {
+    func recognize(fileId: String, asked isAsked: Bool = true) {
+        if isAsked { asked.insert(fileId) }
         guard jobs[fileId] == nil else { return }
         jobs[fileId] = Progress()
         queue.append(fileId)
@@ -77,7 +105,7 @@ final class OCRCoordinator {
         listeners[fileId, default: []].append(progress)
         try await withCheckedThrowingContinuation { continuation in
             waiters[fileId, default: []].append(continuation)
-            recognize(fileId: fileId)
+            recognize(fileId: fileId, asked: false)
         }
     }
 
@@ -110,9 +138,11 @@ final class OCRCoordinator {
         guard let model, let file = model.snapshot.files[fileId] else { jobs[fileId] = nil; finish(fileId, CocoaError(.fileNoSuchFile)); return }
         let url = model.fileURL(file)
         let library = model.library
+        let force = asked.contains(fileId)
+        let onlyText = mixed.contains(fileId) && !force
         let temp = url.deletingLastPathComponent().appending(path: ".\(UUID().uuidString).folio-ocr.pdf")
         let task = Task.detached(priority: .utility) {
-            try await PDFTextRecognizer.recognize(input: url, output: temp) { done, total in
+            try await PDFTextRecognizer.recognize(input: url, output: temp, force: force, onlyPagesOfText: onlyText) { done, total in
                 Task { @MainActor [weak self] in
                     guard let self, self.jobs[fileId] != nil else { return }
                     let progress = Progress(done: done, total: total)
@@ -122,7 +152,7 @@ final class OCRCoordinator {
             }
         }
         current = (fileId, task)
-        defer { current = nil; jobs[fileId] = nil }
+        defer { current = nil; jobs[fileId] = nil; asked.remove(fileId); mixed.remove(fileId) }
         do {
             _ = try await task.value
             try Self.replace(url, with: temp, backupFolder: library.root.appending(path: ".ocr-backup"), name: fileId)
@@ -144,7 +174,9 @@ final class OCRCoordinator {
             try? FileManager.default.removeItem(at: temp)
             let quiet = waiters[fileId]?.isEmpty == false
             finish(fileId, error)
-            if !quiet { model.toasts.show(String(localized: "无法识别「\(file.fileName)」的文字：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle") }
+            // A file recognised by itself that turned out to have no text on it (photos, plates) is nobody's trouble.
+            let expected = error as? OCRError == .noTextFound || error as? OCRError == .nothingToRecognize
+            if !quiet, asked.contains(fileId) || !expected { model.toasts.show(String(localized: "无法识别「\(file.fileName)」的文字：\(error.localizedDescription)"), systemImage: "exclamationmark.triangle") }
         }
     }
 

@@ -5,8 +5,8 @@ import Foundation
 /// and selection across reloads.
 final class SidebarNode: NSObject {
     enum Kind: Hashable {
-        /// Section headers (group rows): 文献库, 分组, 标签.
-        case libraryHeader, groupsHeader, tagsHeader
+        /// Section headers (group rows): 文献库, 阅读, 分组, 标签.
+        case libraryHeader, readingHeader, groupsHeader, tagsHeader
         case builtin(ViewScope)
         case group(String)
         case tag(String)
@@ -24,7 +24,7 @@ final class SidebarNode: NSObject {
         case .builtin(let scope): scope
         case .group(let id): .group(id)
         case .tag(let id): .tag(id)
-        case .libraryHeader, .groupsHeader, .tagsHeader: nil
+        case .libraryHeader, .readingHeader, .groupsHeader, .tagsHeader: nil
         }
     }
 
@@ -34,7 +34,7 @@ final class SidebarNode: NSObject {
 
     var isHeader: Bool {
         switch kind {
-        case .libraryHeader, .groupsHeader, .tagsHeader: true
+        case .libraryHeader, .readingHeader, .groupsHeader, .tagsHeader: true
         default: false
         }
     }
@@ -45,6 +45,7 @@ final class SidebarNode: NSObject {
 /// Builds the sidebar tree from a snapshot, reusing node objects:
 ///
 ///     文献库    所有文献 · 未分组 · 回收站
+///     阅读      在读 · 未读 · 已读
 ///     分组      top-level groups ▸ subgroups, up to four levels
 ///     标签      tags
 final class SidebarTree {
@@ -52,6 +53,8 @@ final class SidebarTree {
     private(set) var roots: [SidebarNode] = []
 
     static let builtins: [ViewScope] = [.all, .unfiled, .trash]
+    /// What is being read comes first.
+    static let statuses: [ReadStatus] = [.reading, .unread, .read]
 
     /// Returns true when the structure (not just labels) changed.
     @discardableResult
@@ -59,6 +62,8 @@ final class SidebarTree {
         let old = signature
         let library = node(.libraryHeader)
         library.children = Self.builtins.map { node(.builtin($0)) }
+        let reading = node(.readingHeader)
+        reading.children = Self.statuses.map { node(.builtin(.status($0))) }
         let groups = node(.groupsHeader)
         var visited: Set<String> = []
         func groupNode(_ id: String) -> SidebarNode {
@@ -69,7 +74,7 @@ final class SidebarTree {
         groups.children = snapshot.topLevelGroups.filter { visited.insert($0).inserted }.map(groupNode)
         let tags = node(.tagsHeader)
         tags.children = snapshot.tags.map { node(.tag($0.id)) }
-        roots = [library, groups, tags]
+        roots = [library, reading, groups, tags]
         return signature != old
     }
 

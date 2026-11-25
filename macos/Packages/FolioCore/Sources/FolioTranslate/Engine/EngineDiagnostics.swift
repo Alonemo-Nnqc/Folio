@@ -157,9 +157,8 @@ extension EngineDiagnostics {
 extension EngineDiagnostics {
     public static func runs(input: URL, page number: Int) -> String {
         guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { return "" }
-        let interpreter = ContentInterpreter()
-        interpreter.run(page: cg.page(at: number)!)
-        var chars = PageText.characters(of: document.page(at: number - 1)!, interpreter: interpreter)
+        let (interpreter, read, _) = LayoutAnalyzer.prepare(document.page(at: number - 1)!, cgPage: cg.page(at: number)!)
+        var chars = read
         MathDetector.mark(&chars)
         let visible = chars.filter { !$0.isSpace && !$0.isNewline }
         var out = "runs \(interpreter.runs.count), chars \(visible.count), unmapped \(visible.filter { $0.run == nil }.count)\n"
@@ -272,9 +271,8 @@ extension EngineDiagnostics {
 extension EngineDiagnostics {
     public static func lines(input: URL, page number: Int, minY: Double, maxY: Double) -> String {
         guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { return "" }
-        let interpreter = ContentInterpreter()
-        interpreter.run(page: cg.page(at: number)!)
-        var chars = PageText.characters(of: document.page(at: number - 1)!, interpreter: interpreter)
+        let (_, read, scan) = LayoutAnalyzer.prepare(document.page(at: number - 1)!, cgPage: cg.page(at: number)!)
+        var chars = read
         MathDetector.mark(&chars)
         let analyzer = LayoutAnalyzer()
         let lines = analyzer.buildLines(chars, tables: [], pageWidth: 600)
@@ -282,6 +280,10 @@ extension EngineDiagnostics {
         for line in lines where line.baseline >= minY && line.baseline <= maxY {
             out += String(format: "base %.1f size %.1f x %.1f-%.1f: ", line.baseline, line.size, line.minX, line.maxX) + line.text + "\n"
             out += "   " + line.chars.filter { !$0.isSpace }.map { String(format: "%@[%.1f r%d m%d]", $0.text, $0.baseline, $0.run ?? -1, $0.isMath ? 1 : 0) }.joined(separator: " ") + "\n"
+        }
+        for bit in scan?.bits ?? [] where bit.midY >= minY && bit.midY <= maxY { out += String(format: "bit (%.0f,%.0f %.0fx%.0f)\n", bit.minX, bit.minY, bit.width, bit.height) }
+        for mark in scan?.marks ?? [] where mark.rect.midY >= minY && mark.rect.midY <= maxY {
+            out += String(format: "\(mark.kind) (%.0f,%.0f %.1fx%.1f)\n", mark.rect.minX, mark.rect.minY, mark.rect.width, mark.rect.height)
         }
         return out
     }
@@ -571,6 +573,16 @@ extension EngineDiagnostics {
     public static func blocks(input: URL, page: Int, containing needle: String = "") -> String {
         guard let document = PDFDocument(url: input), let cg = CGPDFDocument(input as CFURL) else { return "" }
         var analyzer = LayoutAnalyzer()
+        // Page 0: every page, one line per block (to compare with the Windows engine).
+        if page == 0 {
+            return analyzer.analyze(document: document, cgDocument: cg, pages: Array(1...max(cg.numberOfPages, 1))).map { layout in
+                "== \(layout.number)\n" + layout.blocks.map { block in
+                    let r = block.rect
+                    return block.kind.rawValue.lowercased() + (block.translate ? "*" : "") + String(format: " (%.0f,%.0f %.0fx%.0f) %.1f ", r.minX, r.minY, r.width, r.height, block.size)
+                        + (block.font.isBold ? "bold " : "") + String(block.text.prefix(60))
+                }.joined(separator: "\n")
+            }.joined(separator: "\n")
+        }
         guard let layout = analyzer.analyze(document: document, cgDocument: cg, pages: [page]).first else { return "" }
         var out = ""
         // Which stretch of even lines each paragraph is set in.

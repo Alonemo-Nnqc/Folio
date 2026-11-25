@@ -6,10 +6,11 @@ import { defaultFile, getState, setState, useStore, type FileRec } from "../stor
 import { openReader } from "../commands";
 import { readerLabels } from "../reader/ReaderTab";
 import { useLayer } from "../ui/dismiss";
+import { MarkdownEditor } from "../notes/markdown";
 
 /**
  * 快速预览, like Quick Look on the Mac: Space (or a middle click — a three-finger tap on most touchpads) shows the selected
- * paper over the list, read-only; the arrow keys keep moving through the list and the preview follows.
+ * paper, Markdown document or note over the list, read-only; the arrow keys keep moving through the list and the preview follows.
  */
 export function QuickLook() {
   const open = useStore((s) => s.quickLook);
@@ -18,14 +19,24 @@ export function QuickLook() {
   const files = useStore((s) => s.files);
   const items = useStore((s) => s.items);
   const dark = useStore((s) => s.dark);
+  const noteRow = useStore((s) => s.quickLookNote);
+  const noted = useStore((s) => s.noted);
   const [closing, setClosing] = useState(false);
 
   const target = useMemo(() => {
     const s = getState();
+    if (noteRow && items.get(noteRow)) return { file: undefined, item: items.get(noteRow) };
     const file = fileSelection ? files.get(fileSelection) : selection.length === 1 && items.get(selection[0]) ? defaultFile(s, items.get(selection[0])!) : undefined;
     const item = file ? items.get(file.itemId) : selection.length === 1 ? items.get(selection[0]) : undefined;
     return { file, item };
-  }, [selection, fileSelection, files, items]);
+  }, [selection, fileSelection, files, items, noteRow]);
+  const markdown = target.file?.isMarkdown ? `file:${target.file.id}` : !target.file && target.item && noted.has(target.item.id) ? `note:${target.item.id}` : null;
+  // Read-only: as it is set in the editor, nothing in it can be changed.
+  const source = useMemo(() => ({
+    key: markdown,
+    load: () => (markdown!.startsWith("file:") ? call<string>("markdown.get", { file: markdown!.slice(5) }) : call<string>("note.get", { item: markdown!.slice(5) })),
+    save: () => {},
+  }), [markdown]);
 
   const close = () => {
     setClosing(true);
@@ -49,18 +60,20 @@ export function QuickLook() {
 
   if (!open || !target.item) return null;
   const { file, item } = target;
-  const title = item.kind === "regular" ? item.title : file?.fileName ?? item.title;
+  const name = item.kind === "regular" ? item.title : file?.fileName ?? item.title;
+  const title = markdown?.startsWith("note:") ? t("笔记：%@", name) : name;
   return (
     <div className={`quicklook-scrim${closing ? " closing" : ""}`} onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="quicklook" role="dialog" aria-label={t("快速预览")}>
         <div className="ql-head">
           <button className="ql-close" title={t("关闭（空格）")} onClick={close}><X size={13} strokeWidth={2.4} /></button>
           <div className="ql-title ellipsis" title={title}>{title}</div>
-          {file && <button className="btn small" onClick={() => { close(); openReader(file.id); }}><BookOpen size={13} />{t("阅读")}</button>}
+          {file && <button className="btn small" onClick={() => { close(); openReader(file.id); }}><BookOpen size={13} />{file.isMarkdown ? t("在标签页中打开") : t("阅读")}</button>}
           {file && <button className="ql-icon" title={t("用默认应用打开")} onClick={() => call("file.open", { id: file.id, system: true })}><ExternalLink size={14} /></button>}
         </div>
         <div className="ql-body">
           {file?.isPdf ? <PdfPreview key={file.id} file={file} dark={dark} />
+            : markdown ? <MarkdownEditor key={markdown} source={source} placeholder="" readOnly className="ql-markdown" />
             : <div className="ql-placeholder">
                 <FileText size={56} strokeWidth={1.2} />
                 <div className="big">{file?.fileName ?? title}</div>

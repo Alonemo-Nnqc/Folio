@@ -208,5 +208,6 @@ struct ReaderNotesPanel: View {
             .id(itemId)
             .padding(.top, 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .ignoresSafeArea(edges: model.settings.inspectorFloating ? .top : [])
     }
 }

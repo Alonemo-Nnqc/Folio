@@ -43,6 +43,19 @@ public struct LibrarySnapshot: Sendable, Equatable {
         (filesByItem[itemId] ?? []).compactMap { files[$0] }
     }
 
+    /// What a file is called wherever its name shows: a Markdown document that is an item of its own has the item's title, in the
+    /// list and in its tab alike.
+    public func documentName(_ file: FileRecord) -> String {
+        guard file.isMarkdown else { return (file.fileName as NSString).deletingPathExtension }
+        guard let item = items[file.itemId], item.kind == .standalone, item.defaultFileId == nil || item.defaultFileId == file.id else { return file.documentName }
+        return Library.withoutMarkdownExtension(item.title)
+    }
+
+    /// Whether the item is something to read through: a paper, or a PDF without metadata yet (a Markdown document is not).
+    public func tracksReading(_ item: Item) -> Bool {
+        item.kind == .regular || (filesByItem[item.id] ?? []).contains { files[$0]?.isPDF == true }
+    }
+
     public func tags(of itemId: String) -> [Tag] {
         (itemTags[itemId] ?? []).compactMap { tagsById[$0] }
     }

@@ -19,6 +19,7 @@ public static partial class Api
         InstallIntegrations();
         InstallJournalMetrics();
         InstallOcr();
+        InstallPackages();
         WireEvents();
     }
 
@@ -36,6 +37,7 @@ public static partial class Api
             windowState = a.Window?.WindowStateName,
             library = LibraryState(full: true),
             rows = RowsState(),
+            reading = ReadingState(),
             jobs = JobsState(),
             startupProblem = M.StartupProblem,
             annotationColors = AnnotationColors.All.Select(c => new { key = c.Key, title = Loc.S(c.Title), hex = AnnotationColors.Hex(c.Key) }),
@@ -56,7 +58,7 @@ public static partial class Api
         Bridge.On("window.close", a => { App.Ui.TryEnqueue(() => a.Window?.Close()); return null; });
         Bridge.On("window.fullScreen", a => { a.Window?.ToggleFullScreen(); return null; });
         Bridge.On("window.resize", a => { a.Window?.BeginResize(a.Str("edge")); return null; });
-        Bridge.On("window.caption", a => { a.Window?.SetCaptionColors(a.Str("background"), a.Str("foreground"), a.Bool("animate")); return null; });
+        Bridge.On("window.caption", a => { a.Window?.SetCaptionColors(a.Str("background"), a.Str("foreground"), a.Bool("animate"), a.Bool("panel")); return null; });
         Bridge.On("window.translucency", a => { a.Window?.SetTranslucency(a.Num("value")); return null; });
         Bridge.On("window.theme", a => { a.Window?.ApplyTheme(a.Bool("dark")); return null; });
         Bridge.On("window.title", a => { if (a.Window != null) a.Window.Text = a.Str("title"); return null; });
@@ -91,13 +93,17 @@ public static partial class Api
     public static Dictionary<string, object?> AllSettings()
     {
         var s = M.Settings;
-        return new()
+        var all = new Dictionary<string, object?>
         {
             ["libraryPath"] = M.Library.Root,
             ["openWithMode"] = s.OpenWith.ToString().ToLowerInvariant(),
             ["openWithAppPath"] = s.OpenWithAppPath,
             ["includeSubgroupItems"] = s.IncludeSubgroupItems,
             ["showTranslatedBadge"] = s.ShowTranslatedBadge,
+            ["inspectorFloating"] = s.InspectorFloating,
+            ["floatingInspectorWidth"] = s.Raw("floatingInspectorWidth")?.GetValue<double>() ?? 340.0,
+            ["showReadingRings"] = s.ShowReadingRings,
+            ["offerMarkAsRead"] = s.OfferMarkAsRead,
             ["autoRenameFiles"] = s.AutoRenameFiles,
             ["autoPurgeTrash"] = s.AutoPurgeTrash,
             ["crossrefMailto"] = s.CrossrefMailto,
@@ -151,11 +157,15 @@ public static partial class Api
             ["readerSidebarWidth"] = s.Raw("readerSidebarWidth")?.GetValue<double>() ?? 220.0,
             ["readerSidebarTab"] = s.Raw("readerSidebarTab")?.ToString() ?? "thumbnails",
         };
+        // 设置 ▸ Markdown: what was set (the page has the defaults).
+        foreach (var key in AppSettings.MarkdownKeys) if (s.Raw(key) is { } value) all[key] = value;
+        return all;
     }
 
     static void WireEvents()
     {
         M.SnapshotChanged += () => App.EmitToDocuments("library", LibraryState(full: false));
+        M.ReadingProgressChanged += () => App.EmitToDocuments("reading", ReadingState());
         M.RowsChanged += () => App.Main?.Bridge.Emit("rows", RowsState());
         M.RevealRequested += id => App.Main?.Bridge.Emit("reveal", id);
         M.OpenInReaderRequested += (file, page) => App.Main?.Bridge.Emit("reader.open", new { fileId = file.Id, page });

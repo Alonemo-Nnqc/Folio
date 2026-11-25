@@ -86,7 +86,9 @@ enum Feature14SelfTest {
             check(glyphs, "Chinese set in a font that has it (\(cjkFont?.fontName ?? "nil"))")
             check((headingFont?.pointSize ?? 0) > 16, "heading drawn large (\(headingFont?.pointSize ?? 0))")
             note.setSelectedRange(NSRange(location: 3, length: 0))
-            check(storage.attribute(.mdHidden, at: 0, effectiveRange: nil) == nil, "markers shown on the edited line")
+            check(storage.attribute(.mdHidden, at: 0, effectiveRange: nil) != nil, "a heading's marker stays hidden on the edited line")
+            note.setSelectedRange(NSRange(location: boldStart + 3, length: 0))
+            check(storage.attribute(.mdHidden, at: boldStart, effectiveRange: nil) == nil, "bold's markers shown while the caret is in it")
             // Tasks: typed, then ticked with the box.
             note.setSelectedRange(NSRange(location: (note.string as NSString).length, length: 0))
             note.insertNewline(nil)

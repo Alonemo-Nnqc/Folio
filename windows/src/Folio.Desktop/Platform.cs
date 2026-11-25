@@ -67,6 +67,20 @@ static class Shell
         try { Process.Start("explorer.exe", $"/select,\"{path}\""); } catch { }
     }
 
+    /// <summary>Files on the clipboard, as Explorer puts them there: pasted into a folder, a chat, a mail.</summary>
+    public static void CopyFiles(IReadOnlyList<string> paths) => Clipboard.SetDataObject(FileData(paths), true, 5, 100);
+
+    public static DataObject FileData(IReadOnlyList<string> paths)
+    {
+        var list = new System.Collections.Specialized.StringCollection();
+        list.AddRange(paths.ToArray());
+        var data = new DataObject();
+        data.SetFileDropList(list);
+        // A copy: the library keeps its files.
+        data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes((int)DragDropEffects.Copy)));
+        return data;
+    }
+
     public static void CopyText(string text, string? html = null)
     {
         var data = new DataObject();
@@ -278,10 +292,10 @@ public static class BrowserExtensions
 }
 
 /// <summary>folio:// links (agents, the browser extension, notes) open in Folio: registered for this Windows user at each
-/// launch, so the command follows Folio wherever it is installed; removed on uninstall.</summary>
+/// launch, so the command follows Folio wherever it is installed; removed on uninstall. So do packages (.foliolib).</summary>
 static class UrlProtocol
 {
-    const string Key = @"Software\Classes\folio";
+    const string Key = @"Software\Classes\folio", Package = @"Software\Classes\Folio.Package", Extension = @"Software\Classes\." + LibraryPackageInfo.Extension;
 
     public static void Register()
     {
@@ -295,13 +309,20 @@ static class UrlProtocol
             using var command = root.CreateSubKey(@"shell\open\command");
             var value = $"\"{exe}\" \"%1\"";
             if (command.GetValue("") as string != value) command.SetValue("", value);
+            using var package = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Package);
+            package.SetValue("", Loc.S("Folio 文献库包"));
+            using (var icon = package.CreateSubKey("DefaultIcon")) icon.SetValue("", $"\"{exe}\",0");
+            using (var open = package.CreateSubKey(@"shell\open\command")) open.SetValue("", value);
+            using var extension = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Extension);
+            extension.SetValue("", "Folio.Package");
         }
         catch { }
     }
 
     public static void Unregister()
     {
-        try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(Key, false); } catch { }
+        foreach (var key in new[] { Key, Package, Extension })
+            try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(key, false); } catch { }
     }
 }
 

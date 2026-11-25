@@ -116,6 +116,13 @@ struct PageLayout: Sendable {
     var glyphs: [Glyph] = []
     /// The page's link annotations.
     var links: [PageLink] = []
+    /// A scan whose text was recognised: the words are in the page's picture, under a hidden text layer.
+    var isScan = false
+    /// The page's user space → the space this layout is in: a scan may lie on its side or at a slant, and is analysed upright
+    /// (identity otherwise).
+    var transform: CGAffineTransform = .identity
+    /// Where the ink of a scan's words is, by the run that wrote them.
+    var wordInk: [Int: CGRect] = [:]
 }
 
 /// Counts by key, for finding the one counted most. Of keys counted alike, `most` is the one counted first: the same

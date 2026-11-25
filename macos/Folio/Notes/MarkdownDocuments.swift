@@ -30,7 +30,7 @@ extension AppModel {
             if sidebarSelection == .trash { sidebarSelection = .all }
             selectedFileIDs = []
             selectedItemIDs = [created.itemId]
-            DispatchQueue.main.async { [weak self] in self?.openMarkdown(fileId: created.fileId) }
+            DispatchQueue.main.async { [weak self] in self?.openMarkdown(fileId: created.fileId, naming: true) }
         }
     }
 
@@ -54,7 +54,7 @@ extension AppModel {
         // Named like any new document, not after the paper (it is listed under the paper anyway).
         guard let fileId = createMarkdownAttachment(itemId: itemId) else { return }
         previewExpandRequest = itemId
-        DispatchQueue.main.async { [weak self] in self?.openMarkdown(fileId: fileId) }
+        DispatchQueue.main.async { [weak self] in self?.openMarkdown(fileId: fileId, naming: true) }
     }
 
     /// The Markdown file the inspector shows: a selected .md file, or a document item's own file.
@@ -79,11 +79,7 @@ struct MarkdownFileInspector: View {
             HStack(spacing: 8) {
                 Image(systemName: "doc.richtext")
                     .foregroundStyle(.secondary)
-                Text(file.fileName)
-                    .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(file.fileName)
+                MarkdownNameField(model: model, file: file)
                 Spacer(minLength: 4)
                 Button {
                     model.openMarkdown(fileId: file.id)
@@ -103,28 +99,52 @@ struct MarkdownFileInspector: View {
     }
 }
 
+/// A document's name, renamed where it stands: Return or leaving the field renames the file, Esc keeps the name.
+private struct MarkdownNameField: View {
+    let model: AppModel
+    let file: FileRecord
+    @State private var draft = ""
+    @FocusState private var focused: Bool
+
+    private var name: String { model.snapshot.documentName(file) }
+
+    var body: some View {
+        TextField("文件名", text: $draft)
+            .textFieldStyle(.plain)
+            .font(.callout.weight(.medium))
+            .focused($focused)
+            .help(file.fileName)
+            .onSubmit { focused = false }
+            .onExitCommand { draft = name; focused = false }
+            .onChange(of: focused) { _, now in if !now { commit() } }
+            .onAppear { draft = name }
+            .onChange(of: name) { _, _ in if !focused { draft = name } }
+            .accessibilityIdentifier("markdownInspectorName")
+    }
+
+    private func commit() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { draft = name } else if trimmed != name { model.renameMarkdownFile(file.id, to: trimmed) }
+    }
+}
+
 /// The live Markdown editor on a library file (the inspector, a document tab).
 struct MarkdownFileEditor: NSViewRepresentable {
     let model: AppModel
     let fileId: String
-    var fontSize: CGFloat = 13
-    var readableWidth: CGFloat = 0
     var focus = false
 
     func makeCoordinator() -> MarkdownEditorController {
-        let controller = MarkdownEditorController(fontSize: fontSize, placeholder: "")
+        let controller = MarkdownEditorController()
         controller.textView.setAccessibilityIdentifier("markdownEditor")
-        controller.textView.readableWidth = readableWidth
-        if readableWidth > 0 {
-            controller.textView.verticalInset = 28
-            controller.textView.horizontalInset = 24
-        }
         return controller
     }
 
-    func makeNSView(context: Context) -> NSScrollView { context.coordinator.scrollView }
+    func makeNSView(context: Context) -> MarkdownPane { MarkdownPane(editor: context.coordinator) }
 
-    func updateNSView(_ nsView: NSScrollView, context: Context) {
+    func updateNSView(_ nsView: MarkdownPane, context: Context) {
+        nsView.showsToolbar = model.settings.markdownToolbar
+        context.coordinator.textView.references = { [weak model] in model?.markdownReferences(matching: $0) ?? [] }
         context.coordinator.load(model.markdownSource(fileId: fileId))
         if focus, model.markdownFocusFileId == fileId {
             context.coordinator.focus(request: model.noteFocusRequest + 1_000_000)
@@ -132,7 +152,7 @@ struct MarkdownFileEditor: NSViewRepresentable {
         }
     }
 
-    static func dismantleNSView(_ nsView: NSScrollView, coordinator: MarkdownEditorController) {
+    static func dismantleNSView(_ nsView: MarkdownPane, coordinator: MarkdownEditorController) {
         coordinator.saveNow()
     }
 }
@@ -166,16 +186,22 @@ struct ItemDocumentsMenu: View {
             Picker(selection: Binding(get: { choice.fileId }, set: { choice.fileId = $0 })) {
                 Label("笔记", systemImage: "note.text").tag("")
                 ForEach(documents) { file in
-                    Label((file.fileName as NSString).deletingPathExtension, systemImage: "doc.richtext").tag(file.id)
+                    Label(model.snapshot.documentName(file), systemImage: "doc.richtext").tag(file.id)
                 }
             } label: { EmptyView() }
             .pickerStyle(.inline)
             Divider()
+            if let current {
+                Button { model.askMarkdownName(fileId: current.id) } label: { Label("重命名…", systemImage: "pencil") }
+            }
             Button {
-                if let id = model.createMarkdownAttachment(itemId: itemId) { choice.fileId = id }
+                if let id = model.createMarkdownAttachment(itemId: itemId) {
+                    choice.fileId = id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { model.askMarkdownName(fileId: id) }
+                }
             } label: { Label("新建 Markdown 附件", systemImage: "plus") }
         } label: {
-            Text(current.map { ($0.fileName as NSString).deletingPathExtension } ?? String(localized: "笔记"))
+            Text(current.map { model.snapshot.documentName($0) } ?? String(localized: "笔记"))
                 .font(titleFont)
         }
         .menuStyle(.borderlessButton)
@@ -264,9 +290,30 @@ enum MarkdownTarget: Hashable {
 
 extension AppModel {
     /// Opens a Markdown file as a tab beside the library (or brings its tab forward).
-    func openMarkdown(fileId: String) {
-        guard snapshot.files[fileId] != nil else { return }
+    /// `naming`: a new document, its name selected to be typed over.
+    func openMarkdown(fileId: String, naming: Bool = false) {
+        guard snapshot.files[fileId] != nil else {
+            // Just created: in the snapshot a moment later.
+            if naming { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in if self?.snapshot.files[fileId] != nil { self?.openMarkdown(fileId: fileId, naming: true) } } }
+            return
+        }
         markdownTabs.open(.file(fileId))
+        if naming { markdownTabs.controller(for: fileId)?.beginNaming() }
+    }
+
+    /// Asks for a Markdown document's new name (its menus in the panels, where it has no row of its own).
+    func askMarkdownName(fileId: String) {
+        guard let file = snapshot.files[fileId] else { return }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "重命名文档")
+        let field = NSTextField(string: snapshot.documentName(file))
+        field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: String(localized: "重命名"))
+        alert.addButton(withTitle: String(localized: "取消"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        renameMarkdownFile(fileId, to: field.stringValue)
     }
 
     /// Opens an item's note as a document tab (the note is a document of the item, listed under it).
@@ -327,21 +374,30 @@ final class MarkdownTabCoordinator {
 
 /// A Markdown document (or an item's note) in a tab of its own: the editor centred at a comfortable reading width,
 /// under a toolbar of the usual formatting tools (设置 ▸ 通用 ▸ 显示 Markdown 文档工具栏).
-final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, NSTextFieldDelegate {
+final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, NSTextFieldDelegate, NSMenuDelegate {
     let target: MarkdownTarget
     let editor: MarkdownEditorController
     var onClose: () -> Void = {}
     private var observers: [ObservationLoop] = []
+    private let countLabel = NSTextField(labelWithString: "")
+    private var countTask: Task<Void, Never>?
+    private weak var styleItem: NSMenuToolbarItem?
+    private weak var outlineItem: NSMenuToolbarItem?
+    private weak var appearanceItem: NSMenuToolbarItem?
 
     var fileId: String? { if case .file(let id) = target { id } else { nil } }
     var noteItemId: String? { if case .note(let id) = target { id } else { nil } }
 
     init(model: AppModel, target: MarkdownTarget) {
         self.target = target
-        editor = MarkdownEditorController(fontSize: 15, placeholder: "")
-        editor.textView.readableWidth = 760
+        editor = MarkdownEditorController(inPanel: false)
+        editor.textView.limitsWidth = true
+        editor.textView.readableWidth = MarkdownPreferences.current.readableWidth
         editor.textView.verticalInset = 28
-        editor.textView.horizontalInset = 32
+        // Room beside the text for the handles of the line under the pointer, however narrow the window.
+        editor.textView.horizontalInset = 56
+        editor.textView.showsGutter = true
+        editor.textView.references = { [weak model] in model?.markdownReferences(matching: $0) ?? [] }
         editor.textView.setAccessibilityIdentifier("markdownDocumentEditor")
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 820),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -371,6 +427,15 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
             editor.scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             editor.scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
         ])
+        countLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        countLabel.textColor = .tertiaryLabelColor
+        countLabel.translatesAutoresizingMaskIntoConstraints = false
+        countLabel.setAccessibilityIdentifier("markdownWordCount")
+        root.addSubview(countLabel)
+        NSLayoutConstraint.activate([
+            countLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+            countLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -10),
+        ])
         content.view = root
         window.contentViewController = content
         window.setContentSize(NSSize(width: 1100, height: 820))
@@ -383,6 +448,9 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
         case .note(let id): editor.load(model.noteSource(itemId: id))
         }
         window.initialFirstResponder = editor.textView
+        editor.onSelectionChange = { [weak self] in self?.updateStyleButton() }
+        editor.onTextChange = { [weak self] in self?.textChanged() }
+        textChanged()
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             let snapshot = self.model.snapshot
@@ -390,12 +458,13 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
             case .file(let id):
                 guard let file = snapshot.files[id] else { return }
                 let item = snapshot.items[file.itemId]
-                let name = (file.fileName as NSString).deletingPathExtension
+                let name = snapshot.documentName(file)
                 self.window?.title = name
                 self.window?.subtitle = item?.kind == .regular ? (item?.title ?? "") : ""
                 self.window?.tab.title = name
                 self.window?.representedURL = self.model.fileURL(file)
                 if self.nameField.currentEditor() == nil, self.nameField.stringValue != name { self.nameField.stringValue = name }
+                self.fitName()
                 self.nameField.toolTip = item?.kind == .regular ? String(localized: "\(file.fileName) · \(item?.title ?? "")") : file.fileName
             case .note(let id):
                 guard let item = snapshot.items[id] else { return }
@@ -412,6 +481,11 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
                 shown = wanted
                 self.installToolbar()
             }
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            _ = self.model.settings.markdown.showsWordCount
+            self.textChanged()
         })
     }
 
@@ -434,20 +508,53 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
 
     // MARK: Toolbar
 
-    /// A new toolbar whenever the formatting tools are shown or hidden (the window keeps its title either way).
+    /// A new toolbar whenever the formatting tools are shown or hidden (the window keeps its title either way). The name is
+    /// at the left, the tools in the middle of the window, what is about the whole document at the right.
     private func installToolbar() {
         let toolbar = NSToolbar(identifier: model.settings.markdownToolbar ? "MarkdownFormatToolbar" : "MarkdownPlainToolbar")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
+        if model.settings.markdownToolbar { toolbar.centeredItemIdentifiers = Set(Self.formatItems) }
         window?.toolbar = toolbar
         updateReturnButton()
+        updateStyleButton()
     }
+
+    private static let formatItems: [NSToolbarItem.Identifier] = [.markdownStyle, .markdownInline, .markdownLists, .markdownBlocks, .markdownInsert]
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         let name: [NSToolbarItem.Identifier] = fileId != nil ? [.markdownName] : []
-        guard model.settings.markdownToolbar else { return name }
-        return name + [.flexibleSpace, .markdownHeading, .markdownInline, .markdownLink, .markdownLists, .markdownBlocks, .flexibleSpace]
+        let paper: [NSToolbarItem.Identifier] = paperFile != nil ? [.markdownPaper] : []
+        guard model.settings.markdownToolbar else { return name + [.flexibleSpace] + paper + [.markdownAppearance, .markdownOutline] }
+        return name + Self.formatItems + [.flexibleSpace] + paper + [.markdownAppearance, .markdownOutline, .markdownFind]
+    }
+
+    /// The PDF of the paper the document or note belongs to.
+    private var paperFile: FileRecord? {
+        guard let id = targetItemIds.first, let item = model.snapshot.items[id], item.kind == .regular,
+              let file = model.defaultFile(of: id), file.isPDF else { return nil }
+        return file
+    }
+
+    // MARK: What follows the text
+
+    private func updateStyleButton() {
+        guard let styleItem else { return }
+        let title = editor.textView.styleTitle
+        if styleItem.title != title { styleItem.title = title }
+    }
+
+    /// The count a moment after typing stops.
+    private func textChanged() {
+        updateStyleButton()
+        countTask?.cancel()
+        countTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, let self else { return }
+            let count = self.editor.wordCount
+            self.countLabel.stringValue = count == 0 || !self.model.settings.markdown.showsWordCount ? "" : String(localized: "\(count) 字")
+        }
     }
 
     // MARK: The file's name, edited in place
@@ -467,14 +574,36 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
         field.setAccessibilityIdentifier("markdownFileName")
         field.setAccessibilityLabel(String(localized: "文件名"))
         field.translatesAutoresizingMaskIntoConstraints = false
-        field.widthAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true
-        field.widthAnchor.constraint(lessThanOrEqualToConstant: 340).isActive = true
+        nameWidth = field.widthAnchor.constraint(equalToConstant: 80)
+        nameWidth?.isActive = true
         return field
     }()
 
+    private var nameWidth: NSLayoutConstraint?
+
+    /// The name selected, to be typed over (a new document); Return goes on to the text.
+    func beginNaming(tries: Int = 12) {
+        guard let window, nameField.window === window, window.makeFirstResponder(nameField) else {
+            if tries > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in self?.beginNaming(tries: tries - 1) } }
+            return
+        }
+        nameField.currentEditor()?.selectAll(nil)
+    }
+
+    var isNaming: Bool { nameField.currentEditor() != nil }
+
+    /// The field is as wide as the name: a wider one would push the tools out of the window's middle.
+    private func fitName() {
+        let font = nameField.font ?? .systemFont(ofSize: 13, weight: .semibold)
+        let width = (nameField.stringValue as NSString).size(withAttributes: [.font: font]).width
+        nameWidth?.constant = min(max(ceil(width) + 12, 60), 220)
+    }
+
+    func controlTextDidChange(_ obj: Notification) { fitName() }
+
     private func commitName() {
         guard let fileId, let file = model.snapshot.files[fileId] else { return }
-        let current = (file.fileName as NSString).deletingPathExtension
+        let current = model.snapshot.documentName(file)
         let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty { nameField.stringValue = current } else if name != current { model.renameMarkdownFile(fileId, to: name) }
     }
@@ -488,7 +617,7 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
             window?.makeFirstResponder(editor.textView)
             return true
         case #selector(NSResponder.cancelOperation(_:)):
-            if let fileId, let file = model.snapshot.files[fileId] { nameField.stringValue = (file.fileName as NSString).deletingPathExtension }
+            if let fileId, let file = model.snapshot.files[fileId] { nameField.stringValue = model.snapshot.documentName(file) }
             window?.makeFirstResponder(editor.textView)
             return true
         default:
@@ -510,6 +639,8 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
                                            labels: parts.map(\.1), target: self, action: action)
             group.label = label
             group.paletteLabel = label
+            // Never folded into a menu of their own: in a narrow window the last groups go into the toolbar's overflow.
+            group.controlRepresentation = .expanded
             for (index, sub) in group.subitems.enumerated() { sub.toolTip = parts[index].1 }
             return group
         }
@@ -523,44 +654,125 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
             item.isNavigational = true
             item.visibilityPriority = .high
             return item
-        case .markdownHeading:
+        case .markdownStyle:
             let menu = NSMenu()
-            for (level, title) in [(1, String(localized: "标题 1")), (2, String(localized: "标题 2")), (3, String(localized: "标题 3")), (0, String(localized: "正文"))] {
-                let item = NSMenuItem(title: title, action: #selector(heading(_:)), keyEquivalent: "")
+            for (index, command) in MarkdownCommand.all.enumerated() where command.style != nil {
+                if index > 0, MarkdownCommand.all[index - 1].section != command.section { menu.addItem(.separator()) }
+                let item = NSMenuItem(title: command.title, action: #selector(blockStyle(_:)), keyEquivalent: "")
                 item.target = self
-                item.tag = level
+                item.tag = index
+                item.image = command.image
                 menu.addItem(item)
             }
             let item = NSMenuToolbarItem(itemIdentifier: id)
             item.menu = menu
-            item.image = symbol("number", String(localized: "标题"))
-            item.label = String(localized: "标题")
-            item.toolTip = String(localized: "标题")
-            item.showsIndicator = false
+            item.title = String(localized: "正文")
+            item.label = String(localized: "段落样式")
+            item.toolTip = String(localized: "段落样式")
+            item.showsIndicator = true
+            item.visibilityPriority = .high
+            styleItem = item
             return item
         case .markdownInline:
             return group(id, String(localized: "文字"), [("bold", String(localized: "粗体（⌘B）")), ("italic", String(localized: "斜体（⌘I）")),
-                                                        ("strikethrough", String(localized: "删除线")), ("chevron.left.forwardslash.chevron.right", String(localized: "行内代码"))],
+                                                        ("strikethrough", String(localized: "删除线")), ("highlighter", String(localized: "高亮")),
+                                                        ("chevron.left.forwardslash.chevron.right", String(localized: "行内代码"))],
                          #selector(inlineStyle(_:)))
-        case .markdownLink:
-            let item = NSToolbarItem(itemIdentifier: id)
-            item.image = symbol("link", String(localized: "链接（⌘K）"))
-            item.label = String(localized: "链接")
-            item.toolTip = String(localized: "链接（⌘K）")
-            item.target = self
-            item.action = #selector(link(_:))
-            return item
         case .markdownLists:
             return group(id, String(localized: "列表"), [("list.bullet", String(localized: "项目列表")), ("list.number", String(localized: "编号列表")),
                                                         ("checklist", String(localized: "任务列表"))],
                          #selector(listStyle(_:)))
         case .markdownBlocks:
-            return group(id, String(localized: "插入"), [("text.quote", String(localized: "引用")), ("curlybraces", String(localized: "代码块")),
-                                                        ("tablecells", String(localized: "表格")), ("minus", String(localized: "分隔线"))],
+            return group(id, String(localized: "区块"), [("text.quote", String(localized: "引用块")), ("curlybraces", String(localized: "代码块")),
+                                                        ("tablecells", String(localized: "表格"))],
                          #selector(block(_:)))
+        case .markdownInsert:
+            return group(id, String(localized: "插入"), [("link", String(localized: "链接（⌘K）")), ("quote.opening", String(localized: "引用文献")),
+                                                        ("plus", String(localized: "插入（/）"))],
+                         #selector(insert(_:)))
+        case .markdownPaper:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.image = symbol("doc.text", String(localized: "打开论文"))
+            item.label = String(localized: "打开论文")
+            item.toolTip = String(localized: "打开论文")
+            item.isBordered = true
+            item.target = self
+            item.action = #selector(openPaper(_:))
+            return item
+        case .markdownAppearance:
+            let menu = NSMenu()
+            menu.delegate = self
+            let item = NSMenuToolbarItem(itemIdentifier: id)
+            item.menu = menu
+            item.image = symbol("textformat.size", String(localized: "文字大小"))
+            item.label = String(localized: "文字大小")
+            item.toolTip = String(localized: "文字大小、行高和宽度")
+            item.showsIndicator = false
+            appearanceItem = item
+            return item
+        case .markdownOutline:
+            let menu = NSMenu()
+            menu.delegate = self
+            let item = NSMenuToolbarItem(itemIdentifier: id)
+            item.menu = menu
+            item.image = symbol("list.bullet.indent", String(localized: "大纲"))
+            item.label = String(localized: "大纲")
+            item.toolTip = String(localized: "大纲")
+            item.showsIndicator = false
+            outlineItem = item
+            return item
+        case .markdownFind:
+            let item = NSToolbarItem(itemIdentifier: id)
+            item.image = symbol("magnifyingglass", String(localized: "查找（⌘F）"))
+            item.label = String(localized: "查找")
+            item.toolTip = String(localized: "查找（⌘F）")
+            item.isBordered = true
+            item.target = self
+            item.action = #selector(find(_:))
+            return item
         default:
             return nil
         }
+    }
+
+    // MARK: Outline
+
+    /// The headings as they are when the menu opens.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        if menu === appearanceItem?.menu {
+            let entries = editor.textView.appearanceMenu()
+            for item in entries.items { entries.removeItem(item); menu.addItem(item) }
+            return
+        }
+        let headings = editor.headings
+        guard !headings.isEmpty else {
+            let empty = NSMenuItem(title: String(localized: "没有标题"), action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+            return
+        }
+        let top = headings.map(\.level).min() ?? 1
+        for heading in headings {
+            let item = NSMenuItem(title: heading.title, action: #selector(goToHeading(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = heading.location
+            item.indentationLevel = min(heading.level - top, 5)
+            menu.addItem(item)
+        }
+    }
+
+    @objc private func goToHeading(_ sender: NSMenuItem) { editor.reveal(sender.tag) }
+
+    @objc private func openPaper(_ sender: Any?) {
+        if let file = paperFile { model.open(fileId: file.id, mode: .reader) }
+    }
+
+    @objc private func find(_ sender: Any?) {
+        window?.makeFirstResponder(textView)
+        let item = NSMenuItem()
+        item.tag = NSTextFinder.Action.showFindInterface.rawValue
+        textView.performTextFinderAction(item)
     }
 
     // MARK: Formatting
@@ -571,22 +783,32 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
         (sender as? NSToolbarItemGroup)?.selectedIndex ?? (sender as? NSSegmentedControl)?.selectedSegment ?? -1
     }
 
-    @objc private func heading(_ sender: NSMenuItem) { textView.toggleHeading(sender.tag) }
+    @objc private func blockStyle(_ sender: NSMenuItem) {
+        guard MarkdownCommand.all.indices.contains(sender.tag), let style = MarkdownCommand.all[sender.tag].style else { return }
+        textView.setBlockStyle(style)
+        updateStyleButton()
+    }
 
     @objc private func inlineStyle(_ sender: Any?) {
-        window?.makeFirstResponder(textView)
+        if textView.blockViews.activeCell == nil { window?.makeFirstResponder(textView) }
         switch segment(sender) {
         case 0: textView.toggleWrap("**")
         case 1: textView.toggleWrap("*")
         case 2: textView.toggleWrap("~~")
-        case 3: textView.toggleWrap("`")
+        case 3: textView.toggleWrap("==")
+        case 4: textView.toggleWrap("`")
         default: break
         }
     }
 
-    @objc private func link(_ sender: Any?) {
+    @objc private func insert(_ sender: Any?) {
         window?.makeFirstResponder(textView)
-        textView.insertLink()
+        switch segment(sender) {
+        case 0: textView.insertLink()
+        case 1: textView.openMenu(typingSlash: true, citing: true)
+        case 2: textView.openMenu(typingSlash: true)
+        default: break
+        }
     }
 
     @objc private func listStyle(_ sender: Any?) {
@@ -602,8 +824,7 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
         switch segment(sender) {
         case 0: textView.toggleLineStyle(.quote)
         case 1: textView.insertCodeBlock()
-        case 2: textView.insertBlock("| \(String(localized: "列 1")) | \(String(localized: "列 2")) |\n| --- | --- |\n|  |  |", caretOffset: 2)
-        case 3: textView.insertBlock("---")
+        case 2: textView.insertTable()
         default: break
         }
     }
@@ -622,9 +843,13 @@ final class MarkdownWindowController: FolioWindowController, NSToolbarDelegate, 
 
 extension NSToolbarItem.Identifier {
     static let markdownName = NSToolbarItem.Identifier("MarkdownName")
-    static let markdownHeading = NSToolbarItem.Identifier("MarkdownHeading")
+    static let markdownStyle = NSToolbarItem.Identifier("MarkdownStyle")
     static let markdownInline = NSToolbarItem.Identifier("MarkdownInline")
-    static let markdownLink = NSToolbarItem.Identifier("MarkdownLink")
     static let markdownLists = NSToolbarItem.Identifier("MarkdownLists")
     static let markdownBlocks = NSToolbarItem.Identifier("MarkdownBlocks")
+    static let markdownInsert = NSToolbarItem.Identifier("MarkdownInsert")
+    static let markdownPaper = NSToolbarItem.Identifier("MarkdownPaper")
+    static let markdownAppearance = NSToolbarItem.Identifier("MarkdownAppearance")
+    static let markdownOutline = NSToolbarItem.Identifier("MarkdownOutline")
+    static let markdownFind = NSToolbarItem.Identifier("MarkdownFind")
 }

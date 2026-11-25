@@ -19,9 +19,75 @@ import Testing
         try library.writeText("# 第一周\n\n- [ ] 读 **SAM** 论文\n", toFile: fileId)
         #expect(try library.text(ofFile: fileId).contains("SAM"))
         snapshot = try library.snapshot()
-        #expect(snapshot.items[itemId]?.title == "第一周", "the title follows the first heading")
+        #expect(snapshot.items[itemId]?.title == "阅读计划", "a name given stays")
         #expect(snapshot.files[fileId]?.size == Int64(Data("# 第一周\n\n- [ ] 读 **SAM** 论文\n".utf8).count))
         #expect(try library.fulltextItemIds(matching: "SAM").contains(itemId))
+    }
+
+    @Test func unnamedDocumentsAreToldApartAndNamedByTheirHeading() throws {
+        let library = try Library.temporary()
+        let a = try library.createMarkdownDocument(title: "未命名文档"), b = try library.createMarkdownDocument(title: "未命名文档")
+        func title(_ id: String) throws -> String? { try library.snapshot().items[id]?.title }
+        func file(_ id: String) throws -> String? { try library.snapshot().files[id]?.fileName }
+        #expect(try title(a.itemId) == "未命名文档" && title(b.itemId) == "未命名文档 2")
+        // Nobody named it: it is called after its heading, and goes on being so.
+        try library.writeText("# 第一周\n", toFile: b.fileId)
+        #expect(try title(b.itemId) == "第一周" && file(b.fileId) == "第一周.md")
+        #expect(try library.text(ofFile: b.fileId) == "# 第一周\n")
+        try library.writeText("# 第二周\n", toFile: b.fileId)
+        #expect(try title(b.itemId) == "第二周" && file(b.fileId) == "第二周.md")
+        // Named by hand: the heading no longer matters.
+        try library.renameMarkdownFile(b.fileId, to: "周报")
+        try library.writeText("# 第三周\n", toFile: b.fileId)
+        #expect(try title(b.itemId) == "周报" && file(b.fileId) == "周报.md")
+    }
+
+    @Test func aDocumentIsCalledTheSameWhereverItsNameShows() throws {
+        let library = try Library.temporary()
+        let paper = try library.importItem("Segment Anything")
+        // A paper's attachment has the plain file name already; the new document is the first of its kind all the same.
+        let attached = try library.createMarkdownAttachment(title: "未命名文档", toItem: paper)
+        let document = try library.createMarkdownDocument(title: "未命名文档")
+        var snapshot = try library.snapshot()
+        let file = try #require(snapshot.files[document.fileId])
+        #expect(file.fileName == "未命名文档 2.md" && snapshot.items[document.itemId]?.title == "未命名文档")
+        #expect(snapshot.documentName(file) == "未命名文档")
+        #expect(snapshot.documentName(try #require(snapshot.files[attached])) == "未命名文档")
+        // Attachments of one paper are told apart, those of another start over.
+        let second = try library.createMarkdownAttachment(title: "未命名文档", toItem: paper)
+        let other = try library.createMarkdownAttachment(title: "未命名文档", toItem: try library.importItem("SAM 2"))
+        snapshot = try library.snapshot()
+        #expect(snapshot.documentName(try #require(snapshot.files[second])) == "未命名文档 2")
+        #expect(snapshot.documentName(try #require(snapshot.files[other])) == "未命名文档")
+        try library.renameMarkdownFile(second, to: "想法")
+        #expect(snapshot.documentName(try #require(try library.snapshot().files[second])) == "想法")
+        // A number free again is used again.
+        let third = try library.createMarkdownDocument(title: "未命名文档")
+        try library.trashItems([third.itemId])
+        let fourth = try library.createMarkdownDocument(title: "未命名文档")
+        #expect(try library.snapshot().items[fourth.itemId]?.title == "未命名文档 2")
+    }
+
+    @Test func unnamedDocumentsAreNamedByTheirFirstLine() throws {
+        let library = try Library.temporary()
+        let a = try library.createMarkdownDocument(title: "未命名文档")
+        func title() throws -> String? { try library.snapshot().items[a.itemId]?.title }
+        func file() throws -> String? { try library.snapshot().files[a.fileId]?.fileName }
+        // While the line is being written the file keeps its name.
+        try library.writeText("今天读", toFile: a.fileId)
+        #expect(try title() == "今天读" && file() == "未命名文档.md")
+        try library.writeText("今天读了三篇\n", toFile: a.fileId)
+        #expect(try title() == "今天读了三篇" && file() == "今天读了三篇.md")
+        // A heading says better what it is.
+        try library.writeText("今天读了三篇\n\n# 周报\n", toFile: a.fileId)
+        #expect(try title() == "周报" && file() == "周报.md")
+        try library.renameMarkdownFile(a.fileId, to: "存档")
+        try library.writeText("别的\n", toFile: a.fileId)
+        #expect(try title() == "存档")
+        #expect(Library.name(from: "---\ntitle: x\n---\n\n- [ ] 读 **SAM** 的[论文](https://a.b)\n")?.name == "读 SAM 的论文")
+        #expect(Library.name(from: "```swift\nlet a = 1\n```\n> 引用\n")?.name == "引用")
+        #expect(Library.name(from: "\n***\n  \n") == nil)
+        #expect(Library.name(from: String(repeating: "长", count: 80) + "\n")?.name.count == 40)
     }
 
     @Test func attachmentKeepsThePapersTitle() throws {

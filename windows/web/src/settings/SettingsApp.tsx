@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, TerminalSquare, BookOpen, Compass, Languages, Library, RefreshCw, Settings as Gear, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, TerminalSquare, BookOpen, Compass, FilePen, Languages, Library, RefreshCw, Settings as Gear, Sparkles } from "lucide-react";
 import { call, on } from "../rpc";
 import { t } from "../i18n";
 import { getState, setSetting, setState, useStore } from "../store";
@@ -12,10 +12,12 @@ import { TranslationPane } from "./TranslationPane";
 import { SelectionTranslationPane } from "./SelectionPane";
 import { setCaption } from "../ui/caption";
 import { ZoteroSheet } from "./ZoteroSheet";
+import { MarkdownSettings } from "./MarkdownSettings";
+import { exportPackage, importPackage } from "./PackageSheets";
 import { TEXT_SIZES } from "../reader/ReaderTab";
 
 const PANES = [
-  { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen },
+  { key: "general", title: "通用", icon: Gear }, { key: "reader", title: "阅读", icon: BookOpen }, { key: "markdown", title: "Markdown", icon: FilePen },
   { key: "library", title: "文献库", icon: Library }, { key: "translation", title: "翻译", icon: Languages },
   { key: "browser", title: "浏览器", icon: Compass }, { key: "ai", title: "AI", icon: Sparkles },
 ];
@@ -69,10 +71,13 @@ function General() {
   return (
     <>
       <Header>{t("外观")}</Header>
-      <Card><Appearance /><Translucency /></Card>
+      <Card><Appearance /><Translucency />
+        <Row title={t("右侧栏样式")}><Select value={s.inspectorFloating ? "floating" : "beside"} options={[{ value: "beside", label: t("并排") }, { value: "floating", label: t("浮空") }]} onChange={(v) => setSetting("inspectorFloating", v === "floating")} /></Row>
+      </Card>
       <Header>{t("列表")}</Header>
       <Card>
         <Row title={t("父分组中显示子分组的条目")}><Switch on={s.includeSubgroupItems} onChange={(v) => setSetting("includeSubgroupItems", v)} /></Row>
+        <Row title={t("在列表中显示阅读进度环")}><Switch on={s.showReadingRings !== false} onChange={(v) => setSetting("showReadingRings", v)} /></Row>
         <Row title={t("显示“已翻译”标签")}><Switch on={s.showTranslatedBadge !== false} onChange={(v) => setSetting("showTranslatedBadge", v)} /></Row>
         <Row title={t("默认引用样式")}><Select value={s.citationStyle} options={statics.citationStyles.map((c) => ({ value: c.raw, label: c.name }))} onChange={(v) => setSetting("citationStyle", v)} /></Row>
       </Card>
@@ -111,6 +116,7 @@ function Reader() {
             <button className="btn" onClick={async () => { const [path] = await call<string[]>("pick.file", { filter: "EXE|*.exe", multiple: false }); if (path) setSetting("openWithAppPath", path); }}>{t("选择…")}</button>
           </Row>
         )}
+        <Row title={t("读完时提示标为\"已读\"")}><Switch on={s.offerMarkAsRead !== false} onChange={(v) => setSetting("offerMarkAsRead", v)} /></Row>
         <Row title={t("打开未读的论文时，标为\"在读\"")}><Switch on={s.markReadingOnOpen} onChange={(v) => setSetting("markReadingOnOpen", v)} /></Row>
         <Row title={t("启动时重新打开上次的论文标签页")}><Switch on={s.reopenReaderTabs} onChange={(v) => setSetting("reopenReaderTabs", v)} /></Row>
         <Row title={t("记住每篇论文的阅读位置")}><Switch on={s.rememberReadingPosition !== false} onChange={(v) => setSetting("rememberReadingPosition", v)} /></Row>
@@ -170,6 +176,13 @@ function LibraryPane() {
       <Retrieval />
       <Header>{t("导入")}</Header>
       <Card><Row title="Zotero"><button className="btn" onClick={() => openSheet((close) => <ZoteroSheet close={close} />)}>{t("从 Zotero 导入…")}</button></Row></Card>
+      <Header>{t("备份与迁移")}</Header>
+      <Card>
+        <Row title={t("文献库与设置")} detail={t("打包成一个文件，在另一台 Mac 或 Windows 的 Folio 中导入")}>
+          <button className="btn" onClick={exportPackage}>{t("打包导出…")}</button>
+          <button className="btn" onClick={importPackage}>{t("导入…")}</button>
+        </Row>
+      </Card>
     </>
   );
 }
@@ -390,6 +403,7 @@ export function SettingsApp() {
           <h1 className="settings-heading">{title === "AI" ? "AI" : t(title)}</h1>
           {pane === "general" && <General />}
           {pane === "reader" && <Reader />}
+          {pane === "markdown" && <MarkdownSettings />}
           {pane === "library" && <LibraryPane />}
           {pane === "translation" && <TranslationPane />}
           {pane === "browser" && <Browser />}

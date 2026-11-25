@@ -226,6 +226,7 @@ public static class App
         foreach (var arg in args)
         {
             if (arg.StartsWith("folio://", StringComparison.OrdinalIgnoreCase)) Model.OpenLink(arg);
+            else if (File.Exists(arg) && arg.EndsWith("." + LibraryPackageInfo.Extension, StringComparison.OrdinalIgnoreCase)) Api.OpenPackage(arg);
             else if (File.Exists(arg) && arg.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) Model.Importer.ImportFiles([arg], null).Fire();
         }
     }

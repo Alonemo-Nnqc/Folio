@@ -1,4 +1,5 @@
 import AppKit
+import FolioCore
 
 /// Icon + name + count, laid out like Mail's mailbox rows. Fonts and icon sizes follow the system
 /// "边栏图标大小" setting through the outline's row size style; nothing is hard-coded.
@@ -53,6 +54,13 @@ final class SidebarCell: NSTableCellView {
         name.font = .systemFont(ofSize: size)
         count.font = .monospacedDigitSystemFont(ofSize: size - 1, weight: .regular)
         icon.symbolConfiguration = .init(pointSize: size + 2, weight: .regular)
+    }
+
+    /// 在读, 未读, 已读: the list's ring as the icon.
+    func configure(ring status: ReadStatus, title: String, count value: Int?) {
+        configure(symbol: "circle", tint: nil, title: title, count: value)
+        icon.contentTintColor = nil
+        icon.image = ReadingRing.image(status, size: (name.font?.pointSize ?? 13) + 3)
     }
 
     func configure(symbol: String, tint: NSColor?, title: String, count value: Int?) {

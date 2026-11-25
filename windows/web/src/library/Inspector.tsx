@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ReadingRing } from "../ui/ring";
 import { AlertTriangle, BarChart3, ChevronDown, ChevronRight, ExternalLink, FilePen, FileText, Maximize2, NotebookText, Paperclip, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
-import { filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type ItemFieldRow as ItemFieldRowData, type State } from "../store";
-import { MarkdownEditor } from "../notes/markdown";
+import { docName, filesOf, getState, groupsForMenus, setState, tagsOf, useStore, type FileRec, type Item, type ItemFieldRow as ItemFieldRowData, type State } from "../store";
+import { MarkdownPanel } from "../notes/MarkdownTools";
 import { isMarkdownItem } from "./ItemList";
 import { MultiSelectionPanel } from "./MultiSelection";
 import { fileMenu, manualMatch, newTag, openNote, openReader, refreshJournalMetrics } from "../commands";
@@ -88,6 +89,9 @@ function LibrarySection({ item }: { item: Item }) {
           </Row>
           <Row label={t("状态")}>
             <Segmented accent value={item.readStatus} onChange={(v) => update(item.id, { readStatus: v })} options={s.statics.statuses.map((st) => ({ value: st.raw, label: st.name }))} />
+            {item.readStatus === 1 && s.reading[item.id]?.pages && (
+              <span className="reading-note"><ReadingRing status={1} fraction={s.reading[item.id].fraction} size={13} />{t("读到第 %lld / %lld 页", s.reading[item.id].page, s.reading[item.id].pages!)}{filesOf(s, item.id).filter((f) => f.isPdf).length > 1 && <span className="ellipsis">{s.files.get(s.reading[item.id].file ?? "")?.title}</span>}</span>
+            )}
           </Row>
         </>
       )}
@@ -258,7 +262,7 @@ export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null;
     save: (text: string) => { call("note.set", { item: itemId, text }); },
   }), [itemId]);
   const fileSource = useMemo(() => (current ? markdownSource(current.id) : null), [current?.id]);
-  const name = (f: FileRec) => f.fileName.replace(/\.(md|markdown)$/i, "");
+  const name = docName;
   const menu = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (!itemId) return;
     openMenuAt(e.currentTarget, [
@@ -282,8 +286,8 @@ export function NoteEditor({ itemId, title, inputRef }: { itemId: string | null;
       </div>
       {title !== undefined && title && <div className="note-sub">{title}</div>}
       {current && fileSource
-        ? <MarkdownEditor key={current.id} source={fileSource} className="note-text" placeholder="" />
-        : <MarkdownEditor source={noteSource} inputRef={inputRef} className="note-text" placeholder="" />}
+        ? <MarkdownPanel key={current.id} source={fileSource} className="note-text" placeholder="" />
+        : <MarkdownPanel source={noteSource} inputRef={inputRef} className="note-text" placeholder="" />}
     </div>
   );
 }
@@ -297,11 +301,11 @@ function MarkdownFileInspector({ file }: { file: FileRec }) {
     <div className="md-inspector">
       <div className="md-file-head">
         <FilePen size={14} className="secondary" style={{ flex: "none" }} />
-        <span className="ellipsis" title={file.fileName}>{file.fileName}</span>
+        <span className="ellipsis" title={file.fileName}>{docName(file)}</span>
         <span style={{ flex: 1 }} />
         <button className="icon-button" title={t("在标签页中打开")} onClick={() => openReader(file.id)}><Maximize2 size={13} /></button>
       </div>
-      <MarkdownEditor source={source} focus={focus} className="md-text" placeholder="" />
+      <MarkdownPanel source={source} focus={focus} className="md-text" placeholder="" />
     </div>
   );
 }

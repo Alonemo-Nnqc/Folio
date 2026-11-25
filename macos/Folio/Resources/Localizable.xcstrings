@@ -1,6 +1,736 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "系统默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System"
+          }
+        }
+      }
+    },
+    "衬线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serif"
+          }
+        }
+      }
+    },
+    "圆体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rounded"
+          }
+        }
+      }
+    },
+    "等宽" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monospaced"
+          }
+        }
+      }
+    },
+    "窄" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Narrow"
+          }
+        }
+      }
+    },
+    "标准" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        }
+      }
+    },
+    "宽" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wide"
+          }
+        }
+      }
+    },
+    "更宽" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wider"
+          }
+        }
+      }
+    },
+    "整个窗口" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full Width"
+          }
+        }
+      }
+    },
+    "文档字号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Document text size"
+          }
+        }
+      }
+    },
+    "侧栏字号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side panel text size"
+          }
+        }
+      }
+    },
+    "字体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Typeface"
+          }
+        }
+      }
+    },
+    "标题大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heading size"
+          }
+        }
+      }
+    },
+    "代码字号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code size"
+          }
+        }
+      }
+    },
+    "间距" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spacing"
+          }
+        }
+      }
+    },
+    "行高" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line height"
+          }
+        }
+      }
+    },
+    "段落间距" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paragraph spacing"
+          }
+        }
+      }
+    },
+    "文档宽度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Document width"
+          }
+        }
+      }
+    },
+    "指针移到一行时显示手柄" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show handles beside the line under the pointer"
+          }
+        }
+      }
+    },
+    "空行显示提示文字（标题 1、列表…）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show hints on empty lines (Heading 1, List…)"
+          }
+        }
+      }
+    },
+    "显示字数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show word count"
+          }
+        }
+      }
+    },
+    "完成的任务加删除线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Strike through completed tasks"
+          }
+        }
+      }
+    },
+    "输入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Typing"
+          }
+        }
+      }
+    },
+    "输入“/”或“、”打开工具菜单" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type “/” or “、” to open the tool menu"
+          }
+        }
+      }
+    },
+    "回车延续列表和引用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Return continues lists and quotes"
+          }
+        }
+      }
+    },
+    "自动转换中文符号（》、【】、·）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Chinese symbols (》, 【】, ·)"
+          }
+        }
+      }
+    },
+    "选中文字粘贴网址时生成链接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pasting a URL over text makes a link"
+          }
+        }
+      }
+    },
+    "检查拼写" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check spelling"
+          }
+        }
+      }
+    },
+    "语法高亮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syntax highlighting"
+          }
+        }
+      }
+    },
+    "缩进" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indentation"
+          }
+        }
+      }
+    },
+    "%lld 个空格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld spaces"
+          }
+        }
+      }
+    },
+    "捏合、⌘+、⌘−，⌘0 恢复默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinch, ⌘+, ⌘−; ⌘0 for the default"
+          }
+        }
+      }
+    },
+    "恢复默认设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore defaults"
+          }
+        }
+      }
+    },
+    "默认字号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default Size"
+          }
+        }
+      }
+    },
+    "Markdown 设置…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown Settings…"
+          }
+        }
+      }
+    },
+    "文字大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text Size"
+          }
+        }
+      }
+    },
+    "文字大小、行高和宽度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text size, line height and width"
+          }
+        }
+      }
+    },
+    "## 阅读笔记\n行高和段落间距决定读起来是否舒服。中英文混排时，**重点**、`code` 和 [链接](https://example.com) 都在同一行里。\n> 引用的一句话\n- 第一项\n- 第二项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "## Reading notes\nLine height and paragraph spacing decide how comfortable this is to read. **Emphasis**, `code` and [links](https://example.com) share a line.\n> A quoted sentence\n- First item\n- Second item"
+          }
+        }
+      }
+    },
+    "打包导出文献库与设置…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Library & Settings…"
+          }
+        }
+      }
+    },
+    "导入 Folio 包…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Folio Package…"
+          }
+        }
+      }
+    },
+    "打包导出…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export…"
+          }
+        }
+      }
+    },
+    "文献库与设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library & settings"
+          }
+        }
+      }
+    },
+    "打包成一个文件，在另一台 Mac 或 Windows 的 Folio 中导入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Packed into one file, to import in Folio on another Mac or Windows PC"
+          }
+        }
+      }
+    },
+    "备份与迁移" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup & Migration"
+          }
+        }
+      }
+    },
+    "选择从另一台设备的 Folio 导出的 .foliolib 文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a .foliolib file exported from Folio on another device"
+          }
+        }
+      }
+    },
+    "打包导出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export"
+          }
+        }
+      }
+    },
+    "设置与配置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "%lld 个条目、%lld 个文件（%@），包括分组、标签、笔记、批注、译文和阅读进度，不包括回收站" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld items and %2$lld files (%3$@), with groups, tags, notes, annotations, translations and reading progress; without the trash"
+          }
+        }
+      }
+    },
+    "偏好设置、翻译服务、术语表、工具栏和列表的列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preferences, translation services, glossary, toolbars and list columns"
+          }
+        }
+      }
+    },
+    "包括 API Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include API keys"
+          }
+        }
+      }
+    },
+    "用密码加密，导入时输入同一密码" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encrypted with a password you enter again when importing"
+          }
+        }
+      }
+    },
+    "密码" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "确认密码" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm password"
+          }
+        }
+      }
+    },
+    "两次输入的密码不同" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The passwords do not match"
+          }
+        }
+      }
+    },
+    "正在打包 %lld / %lld…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Packing %1$lld of %2$lld…"
+          }
+        }
+      }
+    },
+    "导出完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exported"
+          }
+        }
+      }
+    },
+    "在另一台设备的 Folio 中选择 文件 ▸ 导入 Folio 包… 即可导入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the other device, choose File ▸ Import Folio Package… in Folio"
+          }
+        }
+      }
+    },
+    "%lld 个文件已不在文献库文件夹中，没有打包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld files are no longer in the library folder and were left out"
+          }
+        }
+      }
+    },
+    "Folio 设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folio Settings"
+          }
+        }
+      }
+    },
+    "导入 Folio 包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Folio Package"
+          }
+        }
+      }
+    },
+    "正在读取…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading…"
+          }
+        }
+      }
+    },
+    "%@，由 Folio %@ 于 %@ 导出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@, exported by Folio %2$@ on %3$@"
+          }
+        }
+      }
+    },
+    "%lld 个条目、%lld 个文件、%lld 个分组、%lld 个标签。合并到当前文献库：已有的文献不会重复，信息、笔记和批注以较新的为准，被换下的文件移到废纸篓" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld items, %2$lld files, %3$lld groups, %4$lld tags. Merged into this library: papers you already have are not added twice, the newer details, notes and annotations are kept, and replaced files go to the Trash"
+          }
+        }
+      }
+    },
+    "替换这台设备的设置，完成后重新启动 Folio。只导入你信任的文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces the settings on this device; Folio restarts afterwards. Only import files you trust"
+          }
+        }
+      }
+    },
+    "API Key 的密码（留空则不导入 API Key）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password of the API keys (leave empty to skip them)"
+          }
+        }
+      }
+    },
+    "新增 %lld 个条目、%lld 个文件、%lld 个分组、%lld 个标签" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added %1$lld items, %2$lld files, %3$lld groups and %4$lld tags"
+          }
+        }
+      }
+    },
+    "更新 %lld 个已有条目（%lld 个文件换成较新的）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updated %1$lld existing items (%2$lld files replaced by newer ones)"
+          }
+        }
+      }
+    },
+    "%lld 个条目已是最新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld items were up to date"
+          }
+        }
+      }
+    },
+    "%lld 个文件不在包中或已损坏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld files were missing from the package or damaged"
+          }
+        }
+      }
+    },
+    "设置在重新启动 Folio 后生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The settings take effect after restarting Folio"
+          }
+        }
+      }
+    },
+    "重新启动 Folio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restart Folio"
+          }
+        }
+      }
+    },
+    "无法读取「%@」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read “%1$@”: %2$@"
+          }
+        }
+      }
+    },
+    "笔记：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note: %@"
+          }
+        }
+      }
+    },
     "\n\n可以在 设置 ▸ 文献库 中查看或更改文献库位置。" : {
       "localizations" : {
         "en" : {
@@ -11279,6 +12009,1016 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Doctoral dissertation"
+          }
+        }
+      }
+    },
+    "正文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
+    "标题 1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heading 1"
+          }
+        }
+      }
+    },
+    "标题 2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heading 2"
+          }
+        }
+      }
+    },
+    "标题 3" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heading 3"
+          }
+        }
+      }
+    },
+    "文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
+    "区块" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocks"
+          }
+        }
+      }
+    },
+    "插入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert"
+          }
+        }
+      }
+    },
+    "代码块" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code Block"
+          }
+        }
+      }
+    },
+    "表格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Table"
+          }
+        }
+      }
+    },
+    "分隔线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Divider"
+          }
+        }
+      }
+    },
+    "项目列表" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bulleted List"
+          }
+        }
+      }
+    },
+    "编号列表" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Numbered List"
+          }
+        }
+      }
+    },
+    "任务列表" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Task List"
+          }
+        }
+      }
+    },
+    "引用文献…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cite a Paper…"
+          }
+        }
+      }
+    },
+    "引用文献" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cite a Paper"
+          }
+        }
+      }
+    },
+    "链接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link"
+          }
+        }
+      }
+    },
+    "今天的日期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today's Date"
+          }
+        }
+      }
+    },
+    "没有找到文献" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No papers found"
+          }
+        }
+      }
+    },
+    "输入标题、作者或年份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type a title, author or year"
+          }
+        }
+      }
+    },
+    "在下方添加（点按）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add below (click)"
+          }
+        }
+      }
+    },
+    "点按打开菜单，拖动移动" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click for the menu, drag to move"
+          }
+        }
+      }
+    },
+    "转换为" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn Into"
+          }
+        }
+      }
+    },
+    "在上方插入一行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Line Above"
+          }
+        }
+      }
+    },
+    "在下方插入一行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Line Below"
+          }
+        }
+      }
+    },
+    "上移" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Up"
+          }
+        }
+      }
+    },
+    "下移" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Down"
+          }
+        }
+      }
+    },
+    "创建副本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicate"
+          }
+        }
+      }
+    },
+    "列 1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Column 1"
+          }
+        }
+      }
+    },
+    "列 2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Column 2"
+          }
+        }
+      }
+    },
+    "列 3" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Column 3"
+          }
+        }
+      }
+    },
+    "段落样式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paragraph Style"
+          }
+        }
+      }
+    },
+    "插入（/）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert (/)"
+          }
+        }
+      }
+    },
+    "打开论文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Paper"
+          }
+        }
+      }
+    },
+    "大纲" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outline"
+          }
+        }
+      }
+    },
+    "没有标题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No headings"
+          }
+        }
+      }
+    },
+    "查找（⌘F）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find (⌘F)"
+          }
+        }
+      }
+    },
+    "标题 %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heading %lld"
+          }
+        }
+      }
+    },
+    "%lld 字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld words"
+          }
+        }
+      }
+    },
+    "已下载" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloaded"
+          }
+        }
+      }
+    },
+    "粗体（⌘B）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bold (⌘B)"
+          }
+        }
+      }
+    },
+    "链接（⌘K）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link (⌘K)"
+          }
+        }
+      }
+    },
+    "已标为“%@”" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marked as %@"
+          }
+        }
+      }
+    },
+    "%@，点按标为%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@; click to mark as %2$@"
+          }
+        }
+      }
+    },
+    "阅读状态：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading status: %@"
+          }
+        }
+      }
+    },
+    "看到最后一页了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You reached the last page"
+          }
+        }
+      }
+    },
+    "标为已读" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark as Read"
+          }
+        }
+      }
+    },
+    "在列表中显示阅读进度环" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show reading rings in the list"
+          }
+        }
+      }
+    },
+    "读完时提示标为\"已读\"" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Offer to mark papers as read at their end"
+          }
+        }
+      }
+    },
+    "在读 · 读到 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading · %@ in"
+          }
+        }
+      }
+    },
+    "读到第 %lld / %lld 页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to page %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "右侧栏样式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Right panel"
+          }
+        }
+      }
+    },
+    "并排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beside"
+          }
+        }
+      }
+    },
+    "浮空" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Floating"
+          }
+        }
+      }
+    },
+    "重命名文档" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rename Document"
+          }
+        }
+      }
+    },
+    "重命名…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rename…"
+          }
+        }
+      }
+    },
+    "文件名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File name"
+          }
+        }
+      }
+    },
+    "未命名文档" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untitled Document"
+          }
+        }
+      }
+    },
+    "隐藏右侧栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Right Panel"
+          }
+        }
+      }
+    },
+    "拷贝代码" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Code"
+          }
+        }
+      }
+    },
+    "自动检测" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto Detect"
+          }
+        }
+      }
+    },
+    "自动检测（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto Detect (%@)"
+          }
+        }
+      }
+    },
+    "纯文本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plain Text"
+          }
+        }
+      }
+    },
+    "添加一列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Column"
+          }
+        }
+      }
+    },
+    "添加一行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Row"
+          }
+        }
+      }
+    },
+    "这一列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Column"
+          }
+        }
+      }
+    },
+    "这一行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Row"
+          }
+        }
+      }
+    },
+    "左对齐" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Align Left"
+          }
+        }
+      }
+    },
+    "右对齐" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Align Right"
+          }
+        }
+      }
+    },
+    "居中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Center"
+          }
+        }
+      }
+    },
+    "在左侧插入列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Column Left"
+          }
+        }
+      }
+    },
+    "在右侧插入列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Column Right"
+          }
+        }
+      }
+    },
+    "在上方插入行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Row Above"
+          }
+        }
+      }
+    },
+    "在下方插入行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Row Below"
+          }
+        }
+      }
+    },
+    "左移" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Left"
+          }
+        }
+      }
+    },
+    "右移" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Right"
+          }
+        }
+      }
+    },
+    "删除列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Column"
+          }
+        }
+      }
+    },
+    "删除行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Row"
+          }
+        }
+      }
+    },
+    "删除表格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Table"
+          }
+        }
+      }
+    },
+    "编辑表格" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Table"
+          }
+        }
+      }
+    },
+    "行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Row"
+          }
+        }
+      }
+    },
+    "列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Column"
+          }
+        }
+      }
+    },
+    "在下方添加…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Below…"
+          }
+        }
+      }
+    },
+    "待办事项" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To-do"
+          }
+        }
+      }
+    },
+    "引用块" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quote"
+          }
+        }
+      }
+    },
+    "正在识别扫描页文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recognizing scanned pages"
+          }
+        }
+      }
+    },
+    "文档缩放" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Document zoom"
+          }
+        }
+      }
+    },
+    "侧栏缩放" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side panel zoom"
+          }
+        }
+      }
+    },
+    "手势与快捷键" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestures and shortcuts"
+          }
+        }
+      }
+    },
+    "捏合、⌘+、⌘− 整页缩放，⌘0 或双指轻点两下恢复 100%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinch, ⌘+ or ⌘− zooms the whole page; ⌘0 or a two-finger double tap goes back to 100%"
+          }
+        }
+      }
+    },
+    "实际大小（现为 %lld%%）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actual Size (now %lld%%)"
+          }
+        }
+      }
+    },
+    "「%@」中没有 PDF 或 Markdown 文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no PDF or Markdown files in “%@”"
+          }
+        }
+      }
+    },
+    "正在导入「%@」（%lld 个文件）…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing “%1$@” (%2$lld files)…"
+          }
+        }
+      }
+    },
+    "无法导入「%@」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t import “%1$@”: %2$@"
+          }
+        }
+      }
+    },
+    "已导入「%@」：%lld 个文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imported “%1$@”: %2$lld files"
+          }
+        }
+      }
+    },
+    "%lld 个已在文献库，已加入分组" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld already in the library, added to the group"
+          }
+        }
+      }
+    },
+    "%lld 个无法添加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld couldn’t be added"
+          }
+        }
+      }
+    },
+    "，" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", "
+          }
+        }
+      }
+    },
+    "%@ 等 %lld 篇" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ and others (%2$lld in all)"
+          }
+        }
+      }
+    },
+    "松开以导入文件夹" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drop to import the folder"
+          }
+        }
+      }
+    },
+    "文件夹成为分组，子文件夹成为子分组；拖到侧边栏可选择位置和级别" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The folder becomes a group and its subfolders subgroups; drop it in the sidebar to choose where and at which level"
+          }
+        }
+      }
+    },
+    "更多工具" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More tools"
           }
         }
       }

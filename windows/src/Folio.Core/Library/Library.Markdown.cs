@@ -17,10 +17,12 @@ public sealed partial class Library
     {
         // A new document starts empty: the title only names the file (and the item, until the first heading does).
         var body = text ?? "";
-        var relative = WriteNewTextFile(FileNamer.Sanitize(title), body);
+        // Unnamed documents are told apart by a number: the first that no other document in the list has.
+        var name = IsUnnamed(title) ? Free(title, Database.Read(DocumentTitles)) : title;
+        var relative = WriteNewTextFile(FileNamer.Sanitize(name), body);
         var now = DateTime.UtcNow;
-        var item = new Item(ItemKind.Standalone, title, now) { MetadataState = MetadataState.None };
-        var file = TextFileRecord(relative, item.Id, body, now);
+        var item = new Item(ItemKind.Standalone, name, now) { MetadataState = MetadataState.None };
+        var file = TextFileRecord(relative, name, item.Id, body, now);
         item.DefaultFileId = file.Id;
         try
         {
@@ -45,8 +47,9 @@ public sealed partial class Library
     {
         if (Item(itemId) == null) throw LibraryException.NotFound();
         var body = text ?? "";
-        var relative = WriteNewTextFile(FileNamer.Sanitize(title), body);
-        var file = TextFileRecord(relative, itemId, body, DateTime.UtcNow);
+        var name = Free(title, Files(itemId).Where(f => f.IsMarkdown).Select(f => f.DocumentName.ToLowerInvariant()).ToHashSet());
+        var relative = WriteNewTextFile(FileNamer.Sanitize(name), body);
+        var file = TextFileRecord(relative, name, itemId, body, DateTime.UtcNow);
         try
         {
             Database.Write((c, tx) =>
@@ -73,12 +76,14 @@ public sealed partial class Library
         catch (UnauthorizedAccessException) { return ""; }
     }
 
-    /// <summary>Saves a text file's new contents: the file on disk, its size, date and hash, the search index, and — for a
-    /// document that is an item of its own — the item's title from its first heading.</summary>
+    /// <summary>Saves a text file's new contents: the file on disk, its size, date and hash, the search index, and the name
+    /// of a document nobody has named, from what it starts with.</summary>
     public void WriteText(string text, string fileId)
     {
         var file = File(fileId) ?? throw LibraryException.NotFound();
         var path = Store.PathFor(file.RelativePath);
+        string? before = null;
+        try { before = NameFrom(System.IO.File.ReadAllText(path, Encoding.UTF8))?.Name; } catch (IOException) { } catch (UnauthorizedAccessException) { }
         var temp = path + ".folio-tmp";
         System.IO.File.WriteAllText(temp, text, Utf8);
         System.IO.File.Move(temp, path, overwrite: true);
@@ -87,14 +92,33 @@ public sealed partial class Library
         file.Size = info.Length;
         file.ModifiedAt = info.LastWriteTimeUtc;
         try { file.Sha256 = FileHasher.Sha256(path); } catch (IOException) { }
-        var heading = FirstHeading(text);
+        // A document nobody has named is called after its first heading, or its first line; a name given by hand stays.
+        string? title = null;
+        if (file.IsMarkdown && NameFrom(text) is { } found && Item(file.ItemId) is { } owner)
+        {
+            bool own = owner.Kind == ItemKind.Standalone && owner.DefaultFileId == file.Id;
+            var current = own ? owner.Title : file.DocumentName;
+            if (IsUnnamed(current) || current == before)
+            {
+                if (own && found.Name != current) title = found.Name;
+                // The file follows once the line is written, not letter by letter.
+                var name = FileNamer.Sanitize(found.Name);
+                if (found.IsFinished && name.Length > 0 && (own || found.Name != current) && (name != file.DocumentName || file.OriginalName != name + ".md"))
+                    try
+                    {
+                        if (name != file.DocumentName) file.RelativePath = Store.Rename(file.RelativePath, name);
+                        file.OriginalName = name + ".md";
+                    }
+                    catch (IOException) { }
+            }
+        }
         Database.Write((c, tx) =>
         {
             Update(c, tx, file);
             IndexText(text, file.Id, c, tx);
             if (FetchItem(c, tx, file.ItemId) is { } item)
             {
-                if (item.Kind == ItemKind.Standalone && item.DefaultFileId == file.Id && heading != null && heading != item.Title) item.Title = heading;
+                if (title != null) item.Title = title;
                 item.DateModified = now;
                 Update(c, tx, item);
             }
@@ -110,6 +134,7 @@ public sealed partial class Library
         var @base = FileNamer.Sanitize(title);
         if (@base.Length == 0) return file;
         file.RelativePath = Store.Rename(file.RelativePath, @base);
+        file.OriginalName = @base + Path.GetExtension(file.RelativePath);
         Database.Write((c, tx) =>
         {
             Update(c, tx, file);
@@ -121,6 +146,72 @@ public sealed partial class Library
             }
         });
         return file;
+    }
+
+    /// <summary>"未命名文档", "Untitled Document 2": what Folio calls a new document.</summary>
+    public static bool IsUnnamed(string title) =>
+        System.Text.RegularExpressions.Regex.IsMatch(title, @"^(未命名文档|Untitled( Document)?)( \d+)?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    public static string WithoutMarkdownExtension(string name) =>
+        Path.GetExtension(name).ToLowerInvariant() is ".md" or ".markdown" ? Path.GetFileNameWithoutExtension(name) : name;
+
+    /// <summary>title, or the first of "title 2", "title 3"… that is not taken (in lower case).</summary>
+    static string Free(string title, HashSet<string> taken)
+    {
+        if (!taken.Contains(title.ToLowerInvariant())) return title;
+        int number = 2;
+        while (taken.Contains($"{title} {number}".ToLowerInvariant())) number++;
+        return $"{title} {number}";
+    }
+
+    /// <summary>The names of the documents that are items of their own (those in the trash aside).</summary>
+    static HashSet<string> DocumentTitles(SqliteConnection c) =>
+        Strings(c, null, "SELECT title FROM item WHERE kind = ? AND trashedAt IS NULL", (int)ItemKind.Standalone).Select(t => WithoutMarkdownExtension(t).ToLowerInvariant()).ToHashSet();
+
+    /// <summary>What a document nobody has named is called: its first heading, else the first line it has. IsFinished: more
+    /// comes after that line, or it is a heading.</summary>
+    public static (string Name, bool IsFinished)? NameFrom(string text)
+    {
+        if (FirstHeading(text) is { } heading) return (heading, true);
+        var lines = text.Split('\n').Select(l => l.Trim(' ', '\t', '\r')).ToList();
+        int start = 0;
+        // Front matter says things about the document; it is not its text.
+        if (lines[0] == "---" && lines.FindIndex(1, l => l == "---") is > 0 and var end) start = end + 1;
+        string? fence = null;
+        for (int k = start; k < lines.Count; k++)
+        {
+            var line = lines[k];
+            if (fence != null) { if (line.StartsWith(fence, StringComparison.Ordinal)) fence = null; continue; }
+            if (line.StartsWith("```") || line.StartsWith("~~~")) { fence = line[..3]; continue; }
+            var plain = PlainLine(line);
+            if (plain.Any(char.IsLetterOrDigit)) return (Shortened(plain), k < lines.Count - 1);
+        }
+        return null;
+    }
+
+    /// <summary>A line without its marks: of a list, a quote, a task, emphasis, links and pictures.</summary>
+    static string PlainLine(string line)
+    {
+        static string R(string text, string pattern, string by) => System.Text.RegularExpressions.Regex.Replace(text, pattern, by);
+        var text = R(line, @"^(\s*(>|[-*+]\s|\d{1,9}[.)]\s|\[[ xX]\]\s))+", "");
+        text = R(text, @"!\[([^\]]*)\]\([^)]*\)", "$1");
+        text = R(text, @"\[([^\]]+)\]\([^)]*\)", "$1");
+        text = R(text, @"[*_~=`]{1,3}|<[^>]+>", "");
+        if (text.StartsWith('|')) text = text.Replace('|', ' ');
+        return R(text, @"\s+", " ").Trim();
+    }
+
+    /// <summary>The first sentence of a long line, or as much as a name holds.</summary>
+    static string Shortened(string text)
+    {
+        var parts = System.Globalization.StringInfo.ParseCombiningCharacters(text);
+        if (parts.Length <= 40) return text;
+        int end = text.IndexOfAny([.. "。！？；!?;"]);
+        if (end >= 4 && end <= 40) return text[..end];
+        var head = text[..parts[40]];
+        // Not in the middle of a Latin word.
+        int space = head.LastIndexOf(' ');
+        return space >= 0 && head.Length - space < 16 && text[parts[40]] < 128 ? head[..space] : head;
     }
 
     /// <summary>The text of the document's first <c>#</c> heading.</summary>
@@ -146,10 +237,10 @@ public sealed partial class Library
         return relative;
     }
 
-    FileRecord TextFileRecord(string relative, string itemId, string text, DateTime date)
+    FileRecord TextFileRecord(string relative, string name, string itemId, string text, DateTime date)
     {
         var path = Store.PathFor(relative);
-        var file = new FileRecord(itemId, relative, relative.Split('/').Last(), Utf8.GetByteCount(text), FileHasher.Sha256(path), date, date, FulltextState.Indexed);
+        var file = new FileRecord(itemId, relative, FileNamer.Sanitize(name) + ".md", Utf8.GetByteCount(text), FileHasher.Sha256(path), date, date, FulltextState.Indexed);
         // Two empty documents have the same contents: the hash an import compares against stays unique.
         file.OriginalSha256 = "md-" + file.Id;
         return file;

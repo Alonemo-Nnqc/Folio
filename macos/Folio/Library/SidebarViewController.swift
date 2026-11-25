@@ -27,6 +27,8 @@ final class SidebarViewController: NSViewController {
         let pill = NSHostingView(rootView: UpdatePill(updater: AppDelegate.shared.updater))
         pill.translatesAutoresizingMaskIntoConstraints = false
         pill.sizingOptions = [.intrinsicContentSize]
+        // The inset that keeps the list clear of the card is not the card's own: it would lift it off the sidebar's foot.
+        pill.safeAreaRegions = []
         let container = NSView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(scroll)

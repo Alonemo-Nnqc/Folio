@@ -132,6 +132,28 @@ public sealed class TranslationJob
             throw selection.Kind == PageSelection.Kinds.Unreadable ? EngineError.UnreadablePages(typed) : EngineError.PagesOutOfRange(typed, pageCount);
         }
         var analyzer = new LayoutAnalyzer(new LayoutAnalyzer.Options { TranslateTables = options.TranslateTables, TranslateReferences = options.TranslateReferences });
+        // Scans are measured in a render of each page, and it says which colour the paper is under the words.
+        var renders = new Dictionary<int, ScanPage.Shown>();
+        if (ImageText.Platform is { } platform)
+            foreach (var number in LayoutAnalyzer.RecognizedScans(source, selected.Max()))
+            {
+                cancel.ThrowIfCancellationRequested();
+                var page = source.Pages[number - 1];
+                var geometry = PdfComposer.Geometry(page);
+                var crop = geometry.CropBox;
+                var shown = geometry.Rotation % 180 == 0 ? crop : new Rect(0, 0, crop.H, crop.W);
+                try
+                {
+                    double scale = Math.Min(6, 2400 / Math.Max(Math.Max(crop.W, crop.H), 1));
+                    if (await platform.Render(Request.Input, number, shown, shown, scale) is not { } bitmap) continue;
+                    var interpreter = new ContentInterpreter();
+                    interpreter.Run(page);
+                    analyzer.Scans[number] = ScanPage.Read(page, interpreter, new ScanPage.Shown(bitmap, crop, geometry.Rotation));
+                    // Half as fine is enough for colours.
+                    renders[number] = new ScanPage.Shown(bitmap.Reduced(2), crop, geometry.Rotation);
+                }
+                catch (Exception e) { log.Write($"page {number}: not rendered, {e.Message}"); }
+            }
         var analysed = analyzer.Analyze(source, selected);
         cancel.ThrowIfCancellationRequested();
         var output = options.OnlyIncludeTranslatedPages || selection.Kind == PageSelection.Kinds.All ? selected : Enumerable.Range(1, pageCount).ToList();
@@ -198,7 +220,7 @@ public sealed class TranslationJob
                     state.Store(segment.Kind == BlockKind.Heading ? HeadingNumbers.RestoreSpace(segment.Source, hit) : hit, segment);
             }
             log.Write($"cache: {state.DoneCount} of {segments.Count} segments");
-            var renderer = new TranslationRenderer(source, options.LangOut);
+            var renderer = new TranslationRenderer(source, options.LangOut) { PageRenders = renders };
             var previews = new PreviewWriter(renderer, layouts, segments, Request.OutputDirectory, emit);
 
             // What is left to send: whole paragraphs, the continued ones as one text each. A text the paper has more than

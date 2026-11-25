@@ -48,6 +48,23 @@
 				<string>public.data</string>
 			</array>
 		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.nnqc.folio.package</string>
+			<key>UTTypeDescription</key>
+			<string>Folio 文献库包</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>foliolib</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
@@ -72,6 +89,18 @@
 			<key>LSItemContentTypes</key>
 			<array>
 				<string>com.adobe.pdf</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Folio 文献库包</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.nnqc.folio.package</string>
 			</array>
 		</dict>
 	</array>

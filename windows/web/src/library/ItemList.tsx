@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AppWindow, BookOpen, ChevronDown, ChevronRight, ChevronUp, Circle, CircleCheck, FilePen, FileText, Languages, ListChecks, NotebookText, Plus, Search, Share, Star, X } from "lucide-react";
 import { FullTextTranslateIcon } from "../ui/icons";
-import { call, on } from "../rpc";
+import { call, on, inHost } from "../rpc";
 import { t } from "../i18n";
 import { filesOf, getState, scopeGroupId, setSetting, setState, tagsOf, useStore, type Item, type State } from "../store";
 import { addMenu, citeMenu, emptyTrash, fileMenu, itemMenu, openItems, openNote, purgeItems, translate } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
 import { Chip, SearchBox, Segmented } from "../ui/controls";
 import { dragPointer, formatDate } from "../ui/util";
-import { ITEMS_MIME, setDraggingItems } from "./Sidebar";
+import { dragOut, draggedItems, ITEMS_MIME, nativeDrag, setDraggingItems } from "./Sidebar";
+import { percent, ReadingRingButton, statusName } from "../ui/ring";
 import { toggleQuickLook } from "./QuickLook";
 
 const ROW = 32;
@@ -42,7 +43,7 @@ function cellText(key: string, item: Item, s: State): string {
     case "volume": return dash(item.volume);
     case "issue": return dash(item.issue);
     case "pages": return dash(item.pages);
-    case "readStatus": return item.kind === "standalone" ? "—" : item.readStatusName;
+    case "readStatus": return !item.tracksReading ? "—" : item.readStatus === 1 && s.reading[item.id]?.fraction ? percent(s.reading[item.id].fraction) : item.readStatusName;
     case "fileCount": return String(s.filesByItem[item.id]?.length ?? 0);
     case "citationKey": return dash(item.citationKey);
     case "journalRank": return dash(item.journalMetrics?.rank);
@@ -115,6 +116,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   const multi = useStore((s) => s.multiSelect);
   const visible = useStore((s) => s.settings.visibleColumns as string[] | undefined) ?? ["title", "venue", "authors", "year", "tags", "dateAdded"];
   const widths = useStore((s) => s.settings.columnWidths as Record<string, number> | undefined) ?? {};
+  const rings = useStore((s) => s.settings.showReadingRings !== false) && !multi && scope !== "trash";
+  useStore((s) => s.reading);
   const state = getState();
 
   const scroller = useRef<HTMLDivElement>(null);
@@ -127,6 +130,8 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   /** The note row chosen: its item is the selection, the note row shows selected. */
   const [noteRow, setNoteRow] = useState<string | null>(null);
   const noteShown = noteRow !== null && selection.length === 1 && selection[0] === noteRow && !fileSelection;
+  const previewNote = noteShown ? noteRow : null;
+  useEffect(() => { setState({ quickLookNote: previewNote }); }, [previewNote]);
   const typing = useRef(false);
 
   useEffect(() => { if (!typing.current) setSearching(searchText); }, [searchText]);
@@ -228,6 +233,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
   }, [rows, expanded, filesByItem, noted, items]);
 
   const scopeName = scope === "all" ? t("所有文献") : scope === "unfiled" ? t("未分组") : scope === "trash" ? t("回收站")
+    : scope.startsWith("status:") ? statusName(Number(scope.slice(7)))
     : scope.startsWith("group:") ? groups.get(scope.slice(6))?.name ?? "" : tags.find((tag) => `tag:${tag.id}` === scope)?.name ?? "";
 
   useLayoutEffect(() => {
@@ -323,6 +329,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
       case "ArrowLeft": { const next = new Set(expanded); ids.forEach((i) => next.delete(i)); setState({ expanded: next }); break; }
       case "Enter": openItems(ids); break;
       case " ": toggleQuickLook(); break;
+      case "c": case "C": if (!e.ctrlKey || e.shiftKey || e.altKey) return; copyFiles(selection, fileSelection); break;
       case "Escape": if (getState().multiSelect) setState({ multiSelect: false }); else return; break;
       case "a": if (e.ctrlKey) setSelection(rows); else return; break;
       case "Delete": case "Backspace": {
@@ -424,7 +431,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
             e.clientX, e.clientY);
         }}
         onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes(ITEMS_MIME) || !canReorder) return;
+          if (!(nativeDrag ? nativeDrag.items.length : e.dataTransfer.types.includes(ITEMS_MIME)) || !canReorder) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "link";
           setInsertion(insertionIndex(e));
@@ -432,12 +439,12 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setInsertion(null); }}
         onDrop={(e) => {
           setInsertion(null);
-          const data = e.dataTransfer.getData(ITEMS_MIME);
-          if (!data || !canReorder) return;
+          const ids = draggedItems(e);
+          if (!ids.length || !canReorder) return;
           e.preventDefault();
           e.stopPropagation();
           const index = insertionIndex(e);
-          call("library.moveItems", { ids: data.split("\n").filter(Boolean), index: flat.slice(0, index).filter((r) => !r.fileId).length });
+          call("library.moveItems", { ids, index: flat.slice(0, index).filter((r) => !r.fileId).length });
         }}>
         <div className="table-inner" style={{ height: 28 + flat.length * ROW + 8, minWidth }}>
           <div className="table-head" onContextMenu={columnsMenu}>
@@ -479,7 +486,11 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
               const file = files.get(row.fileId);
               if (!file) return null;
               return (
-                <div key={row.fileId} className={`tr${fileSelection === row.fileId ? " selected" : ""}`} style={{ top, transform: "none" }} onClick={(e) => clickRow(e, row)} onDoubleClick={() => openRow(row)}
+                <div key={row.fileId} className={`tr${fileSelection === row.fileId ? " selected" : ""}`} style={{ top, transform: "none" }} draggable
+                  onDragStart={(e) => {
+                    if (inHost) { e.preventDefault(); dragOut([file.id], []); return; }
+                    e.dataTransfer.setData("DownloadURL", `application/octet-stream:${file.fileName}:${dragUrl(getState(), file.id)}`);
+                  }} onClick={(e) => clickRow(e, row)} onDoubleClick={() => openRow(row)}
                   onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }} onAuxClick={(e) => { if (e.button === 1) { setSelection([row.itemId], row.fileId); setState({ quickLook: true }); } }}
                   onContextMenu={(e) => { e.preventDefault(); setSelection([row.itemId], row.fileId); openMenu(scope === "trash" ? itemMenu([row.itemId]) : fileMenu(file), e.clientX, e.clientY); }}>
                   <span style={{ width: 44, flex: "none" }} />
@@ -515,6 +526,9 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                   pendingDragSelect.current = false;
                   const ids = selectedSet.has(item.id) ? selection : [item.id];
                   if (!selectedSet.has(item.id)) setSelection(ids);
+                  // Papers with files: dragged by Windows, so any program can take them (Explorer, a chat, a mail).
+                  const out = ids.map((id) => dragFile(getState(), id)).filter((f): f is string => !!f);
+                  if (inHost && out.length) { e.preventDefault(); dragOut(out, ids).finally(() => setInsertion(null)); return; }
                   setDraggingItems(true);
                   e.dataTransfer.setData(ITEMS_MIME, ids.join("\n"));
                   e.dataTransfer.effectAllowed = "copyLink";
@@ -531,6 +545,7 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
                         {(fileCount > 0 && !standalone) || noted.has(item.id)
                           ? <button className="disc" onClick={(e) => { e.stopPropagation(); toggleExpanded(item.id); }} onDoubleClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>{expanded.has(item.id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</button>
                           : <span className="disc-space" />}
+                        {rings && (item.tracksReading && !item.trashed ? <ReadingRingButton item={item} /> : <span className="ring-space" />)}
                         {multi
                           ? (selectedSet.has(item.id) ? <CircleCheck size={16} strokeWidth={2} className="check-on" style={{ flex: "none" }} /> : <Circle size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />)
                           : isMarkdownItem(item, getState()) ? <FilePen size={16} strokeWidth={1.5} className="secondary" style={{ flex: "none" }} />
@@ -561,6 +576,19 @@ export function ItemList({ leadInset, trailingInset, tabs }: { leadInset?: numbe
 export function isMarkdownItem(item: Item, s: State) {
   if (item.kind !== "standalone" || !item.defaultFileId) return false;
   return !!s.files.get(item.defaultFileId)?.isMarkdown;
+}
+
+/** The file an item is dragged out as: the one it opens, else its first. */
+function dragFile(s: State, itemId: string): string | undefined {
+  const files = filesOf(s, itemId), id = s.items.get(itemId)?.defaultFileId;
+  return files.find((f) => f.id === id)?.id ?? files[0]?.id;
+}
+
+/** Ctrl+C in the list, 拷贝文件: the files themselves, to paste into other programs. */
+export function copyFiles(ids: string[], file?: string | null) {
+  const s = getState();
+  const out = file ? [file] : ids.map((id) => dragFile(s, id)).filter((f): f is string => !!f);
+  if (out.length) call("files.copy", { ids: out });
 }
 
 function dragUrl(s: State, fileId: string) {

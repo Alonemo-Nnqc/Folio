@@ -128,5 +128,5 @@ static class Records
     public static ReadingState ReadReading(SqliteDataReader r) =>
         new(Str(r, "fileId")!, (int)(Long(r, "pageIndex") ?? 0), AppDatabase.Double(r, "pointX"), AppDatabase.Double(r, "pointY"),
             AppDatabase.Double(r, "scale"), (Long(r, "autoScale") ?? 0) != 0, (int)(Long(r, "displayMode") ?? 0),
-            Date(r, "dateModified") ?? DateTime.UtcNow);
+            Date(r, "dateModified") ?? DateTime.UtcNow, (int?)Long(r, "pageCount"), Str(r, "seenPages"));
 }

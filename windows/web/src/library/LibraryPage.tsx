@@ -1,16 +1,16 @@
 import { UpdateButton } from "../ui/update";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
 import { call, droppedPaths } from "../rpc";
 import { t } from "../i18n";
 import { closeTab, appMenu } from "../commands";
-import { getState, setSetting, setState, useStore } from "../store";
+import { docName, getState, setSetting, setState, useStore } from "../store";
 import { openMenu, sep } from "../ui/menu";
 import { detached, detachTab, returnTab } from "../ui/detach";
 import { readers } from "../reader/ReaderTab";
 import { dragPointer } from "../ui/util";
-import { SlidePanel, useMoving } from "../ui/slide";
-import { Sidebar } from "./Sidebar";
+import { isShown, SlidePanel, useMoving, usePanelPhase } from "../ui/slide";
+import { nativeDrag, Sidebar } from "./Sidebar";
 import { ItemList } from "./ItemList";
 import { Inspector } from "./Inspector";
 import { QuickLook } from "./QuickLook";
@@ -27,12 +27,10 @@ export function TabBar() {
   const files = useStore((s) => s.files);
   const items = useStore((s) => s.items);
   if (tabs.length === 0 || (detached && tabs.length < 2)) return null;
-  // A Markdown document of its own is named by its first heading (the item's title), as on the Mac.
   const titleOf = (fileId: string, note?: string) => {
     if (note) return `${t("笔记")} · ${items.get(note)?.title ?? ""}`;
     const file = files.get(fileId);
-    const item = file && items.get(file.itemId);
-    return file?.isMarkdown ? (item?.kind === "standalone" ? item.title : file.fileName.replace(/\.(md|markdown)$/i, "")) : file?.tabTitle ?? "";
+    return file?.isMarkdown ? docName(file) : file?.tabTitle ?? "";
   };
   return (
     <div className="tabbar">
@@ -135,7 +133,7 @@ export function PanelToggle({ onClick }: { onClick: () => void }) {
 }
 
 export function Splitter({ side, width, min, max, onLive, onDone, offset }: { side: "left" | "right"; width: number; min: number; max: number; onLive: (w: number) => void; onDone: (w: number) => void; offset?: number }) {
-  return <div className="splitter" style={side === "left" ? { right: offset ?? -3 } : { left: offset ?? -3 }} onPointerDown={(e) => {
+  return <div className="splitter" style={side === "left" ? { right: offset ?? -5 } : { left: offset ?? -5 }} onPointerDown={(e) => {
     let latest = width;
     dragPointer(e, (dx) => { latest = Math.max(min, Math.min(max, width + (side === "left" ? dx : -dx))); onLive(latest); }, () => onDone(latest));
   }} />;
@@ -153,6 +151,17 @@ export function LibraryPage({ visible }: { visible: boolean }) {
   const [dropping, setDropping] = useState(false);
 
   const toggleSidebar = () => setSetting("sidebarVisible", !getState().settings.sidebarVisible);
+  // 多选 shows the right panel while it lasts: one that was closed closes again afterwards, however 多选 ends.
+  const multi = useStore((s) => s.multiSelect);
+  const openedForSelecting = useRef(false);
+  useEffect(() => {
+    if (multi && !getState().settings.inspectorVisible) { openedForSelecting.current = true; setSetting("inspectorVisible", true); }
+    if (!multi && openedForSelecting.current) { openedForSelecting.current = false; setSetting("inspectorVisible", false); }
+  }, [multi]);
+  // 设置 ▸ 通用 ▸ 右侧栏样式: floating over the list, which keeps its width.
+  const floating = useStore((s) => !!s.settings.inspectorFloating);
+  const floatWidth = useStore((s) => (s.settings.floatingInspectorWidth as number | undefined) ?? 340);
+  const floatPhase = usePanelPhase(floating && inspectorVisible);
   const toggleInspector = () => setSetting("inspectorVisible", !getState().settings.inspectorVisible);
 
   const moving = useMoving([sidebarVisible, inspectorVisible]);
@@ -160,7 +169,7 @@ export function LibraryPage({ visible }: { visible: boolean }) {
   return (
     <div className={`window${moving ? " moving" : ""}`} style={{ display: visible ? "flex" : "none", position: "relative" }}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes("Files") || scope === "trash") return;
+        if (nativeDrag || !e.dataTransfer.types.includes("Files") || scope === "trash") return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
         setDropping(true);
@@ -168,10 +177,11 @@ export function LibraryPage({ visible }: { visible: boolean }) {
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false); }}
       onDrop={async (e) => {
         setDropping(false);
+        if (nativeDrag) { e.preventDefault(); return; }
         if (!e.dataTransfer.types.includes("Files") || scope === "trash") return;
         e.preventDefault();
         const paths = await droppedPaths(e.dataTransfer.files);
-        if (paths.length) call("files.import", { paths });
+        if (paths.length) { const group = await call<string | null>("files.import", { paths }); if (group) call("library.scope", { scope: `group:${group}` }); }
       }}>
       <SlidePanel open={sidebarVisible} width={sidebarWidth ?? storedSidebar} anchor="right">
         <div className="column column-sidebar" style={{ width: "100%" }}>
@@ -182,9 +192,16 @@ export function LibraryPage({ visible }: { visible: boolean }) {
         </div>
       </SlidePanel>
       <div className="column column-center">
-        <ItemList leadInset={sidebarVisible ? 0 : LEAD_ROOM} trailingInset={inspectorVisible ? 0 : captionWidth + TOGGLE_ROOM} tabs={<TabBar />} />
+        <ItemList leadInset={sidebarVisible ? 0 : LEAD_ROOM} trailingInset={inspectorVisible && !floating ? 0 : captionWidth + TOGGLE_ROOM} tabs={<TabBar />} />
       </div>
-      <SlidePanel open={inspectorVisible} width={inspectorWidth ?? storedInspector} anchor="left">
+      {floating && floatPhase !== "closed" && (
+        <div className={`floating-inspector${isShown(floatPhase) ? " on" : ""}`} style={{ width: inspectorWidth ?? floatWidth }}>
+          <div className="titlebar-row drag" />
+          <Inspector />
+          <Splitter side="right" width={inspectorWidth ?? floatWidth} min={270} max={Math.round(window.innerWidth * 0.8)} onLive={setInspectorWidth} onDone={(w) => { setSetting("floatingInspectorWidth", w); setInspectorWidth(null); }} />
+        </div>
+      )}
+      <SlidePanel open={inspectorVisible && !floating} width={inspectorWidth ?? storedInspector} anchor="left">
         <div className="column column-inspector" style={{ width: "100%" }}>
           <div className="titlebar-row drag" />
           <Inspector />
@@ -199,7 +216,7 @@ export function LibraryPage({ visible }: { visible: boolean }) {
           <div className="drop-card">
             <Plus size={36} color="var(--accent)" />
             <div className="big">{t("松开以添加文件")}</div>
-            <div className="secondary">{t("PDF 会自动检索元数据并创建条目")}</div>
+            <div className="secondary">{t("PDF 会自动检索元数据并创建条目；文件夹成为分组")}</div>
           </div>
         </div>
       )}

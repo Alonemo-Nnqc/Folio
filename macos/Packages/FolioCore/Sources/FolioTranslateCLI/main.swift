@@ -112,6 +112,18 @@ case "audit":
     let model = arguments.count > 3 && !arguments[3].hasPrefix("--") ? arguments[3] : ""
     print(try EngineDiagnostics.audit(input: url(arguments[1]), serviceID: arguments[2], model: model, output: out,
                                       verbose: arguments.contains("--verbose")))
+case "ocr":
+    // ocr <scan.pdf> [out.pdf] [--facts]: what makes each page a scan or not, then the recognised copy.
+    print("scanned:", ScannedPDF.isScanned(url(arguments[1])))
+    print(ScannedPDF.describe(url(arguments[1])))
+    if arguments.count > 2, !arguments.contains("--facts") {
+        let start = Date()
+        do {
+            let summary = try await PDFTextRecognizer.recognize(input: url(arguments[1]), output: url(arguments[2]), force: arguments.contains("--force"),
+                                                                      onlyPagesOfText: arguments.contains("--mixed"))
+            print(String(format: "%d pages, %d characters in %.1f s", summary.pages, summary.characters, Date().timeIntervalSince(start)))
+        } catch { print("error:", error.localizedDescription) }
+    }
 case "selection":
     // selection <service> <text> [--to zh]: 划词翻译 of one passage
     let target = arguments.firstIndex(of: "--to").map { arguments[$0 + 1] } ?? "zh"

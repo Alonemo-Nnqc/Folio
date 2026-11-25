@@ -1,3 +1,4 @@
+import { applyMarkdown } from "./notes/prefs";
 import { useSyncExternalStore } from "react";
 import { call, inHost, on } from "./rpc";
 
@@ -10,7 +11,7 @@ export interface Author { family: string; given?: string; full: string }
 export interface Item {
   id: string; kind: "regular" | "standalone"; type: string; typeName: string; title: string; authors: Author[]; authorsList: string;
   year?: number; source?: string; volume?: string; issue?: string; pages?: string; publisher?: string; doi?: string; arxivId?: string; isbn?: string; url?: string;
-  abstract?: string; citationKey?: string; rating: number; readStatus: number; readStatusName: string; defaultFileId?: string; metadataState: string;
+  abstract?: string; citationKey?: string; rating: number; readStatus: number; readStatusName: string; tracksReading: boolean; defaultFileId?: string; metadataState: string;
   dateAdded: number; dateModified: number; trashed: boolean; retrieving: boolean;
   /** The item has a journal worth asking easyScholar about (META-30). */
   hasJournal: boolean;
@@ -29,9 +30,11 @@ export interface JournalMetrics { badges: JournalBadge[]; rank?: string; impactF
 /** 期刊指标's queue and key, for the inspector's hints and 设置. */
 export interface JournalMetricsState { key: string; hasKey: boolean; autoFetch: boolean; pending: number; status?: string; attention: boolean; keyPage: string }
 export interface FileRec {
-  id: string; itemId: string; fileName: string; path: string; isPdf: boolean; isMarkdown?: boolean; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
+  id: string; itemId: string; fileName: string; path: string; isPdf: boolean; isMarkdown?: boolean; docName?: string; translationOf?: string; translationKind?: "mono" | "dual"; translatedBy?: string;
   sha: string; dateAdded: number; title: string; tabTitle: string; tabTip: string;
 }
+/** What a Markdown document is called wherever its name shows. */
+export const docName = (f: FileRec) => f.docName ?? f.fileName.replace(/\.(md|markdown)$/i, "");
 export interface Group { id: string; parentId?: string; name: string; color?: string }
 export interface Tag { id: string; name: string; color: string }
 export interface Job { fileId: string; fraction?: number; stage: string; preview?: string }
@@ -72,14 +75,20 @@ export interface State {
   journalMetrics: JournalMetricsState | null;
   /** 扫描件识别 under way, by file: pages done of pages to do (OCR-01). */
   ocr: Record<string, { done: number; total: number }>;
+  /** How far each paper has been read, by item. */
+  reading: Record<string, { fraction: number; page: number; pages?: number; file?: string }>;
   toast: Toast | null;
   tabs: ReaderTabState[];
   activeTab: string; // "library" or a reader tab's key
   inspectorPage: "info" | "annotations" | "notes";
   /** 快速预览 of the selection is open. */
   quickLook: boolean;
+  /** …and of this item's note, whose row in the list is the selected one. */
+  quickLookNote: string | null;
   /** 多选 mode (the toolbar's button): a click adds or removes an item, rows show check circles, the inspector the batch panel. */
   multiSelect: boolean;
+  /** A new document whose name is to be typed over when its tab opens. */
+  naming: string | null;
   /** A Markdown file just created: its editor takes the keyboard when it appears. */
   markdownFocus: string | null;
   captionWidth: number;
@@ -104,7 +113,7 @@ export interface Statics {
 let state: State = {
   items: new Map(), files: new Map(), filesByItem: {}, groups: new Map(), topGroups: [], childGroups: {}, tags: [], itemTags: {}, itemGroups: {}, noted: new Set(), counts: {}, root: "", libraryVersion: 0,
   rows: [], scope: "all", searchText: "", searchWholeLibrary: false, includeFulltext: false, sortAscending: true,
-  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false, multiSelect: false, markdownFocus: null,
+  selection: [], fileSelection: null, expanded: new Set(), settings: {}, jobs: {}, journalMetrics: null, ocr: {}, reading: {}, naming: null, toast: null, tabs: [], activeTab: "library", inspectorPage: "info", quickLook: false, quickLookNote: null, multiSelect: false, markdownFocus: null,
   captionWidth: 138, readerNotes: {}, windowState: "normal", active: true, dark: false,
   statics: { version: "", channel: "", translucency: false, annotationColors: [], tagPresets: [], citationStyles: [], referenceFormats: [], itemTypes: [], statuses: [], homeFolder: "", userName: "" },
 };
@@ -166,6 +175,7 @@ function applyTheme(settings: Record<string, any>) {
   if (dark !== state.dark) setState({ dark });
   call("window.theme", { dark });
   applyTranslucency(settings.backgroundTranslucency ?? 0);
+  applyMarkdown(settings);
 }
 
 /** How much of the panels' colour stays over the desktop at a 背景透明度 of `amount` (1 opaque), as in the macOS app. */
@@ -210,6 +220,8 @@ export async function boot(route: string) {
   on("settings", (s) => { setState({ settings: s }); applyTheme(s); });
   on("translation.jobs", (jobs) => setState({ jobs }));
   on("journalMetrics", (journalMetrics) => setState({ journalMetrics }));
+  setState({ reading: b.reading ?? {} });
+  on("reading", (reading) => setState({ reading: reading ?? {} }));
   on("ocr", (ocr) => setState({ ocr }));
   call("ocr.state").then((ocr) => setState({ ocr: ocr ?? {} })).catch(() => {});
   call("journalMetrics.state").then((journalMetrics) => setState({ journalMetrics })).catch(() => {});

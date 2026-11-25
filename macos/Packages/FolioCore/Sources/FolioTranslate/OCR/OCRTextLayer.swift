@@ -15,8 +15,20 @@ public struct OCRWord: Sendable, Equatable {
 /// A line of words, left to right.
 public struct OCRLine: Sendable, Equatable {
     public var words: [OCRWord]
+    /// How far the line is turned on the image (radians, clockwise): its words' boxes are then given as they would be
+    /// with the image turned back by that about its origin (a tilting scan, the title up the side of a chart).
+    public var angle: Double
 
-    public init(words: [OCRWord]) { self.words = words }
+    public init(words: [OCRWord], angle: Double = 0) {
+        self.words = words
+        self.angle = angle
+    }
+
+    /// The boxes of the words together, on the image.
+    public var box: CGRect {
+        let rect = words.reduce(CGRect.null) { $0.union($1.rect) }
+        return angle == 0 ? rect : rect.applying(CGAffineTransform(rotationAngle: angle))
+    }
 
     public var text: String { OCRTextLayer.join(words.map(\.text)) }
 }
@@ -28,11 +40,16 @@ public struct OCRPageResult: Sendable, Equatable {
     public var page: Int
     public var imageSize: CGSize
     public var lines: [OCRLine]
+    /// How far the image was turned (clockwise, degrees) past the page's own rotation to read it: a page scanned sideways.
+    public var turn: Int
+    /// The page had recognised text already: this takes its place.
+    public var replaces = false
 
-    public init(page: Int, imageSize: CGSize, lines: [OCRLine]) {
+    public init(page: Int, imageSize: CGSize, lines: [OCRLine], turn: Int = 0) {
         self.page = page
         self.imageSize = imageSize
         self.lines = lines
+        self.turn = turn
     }
 
     public var text: String { lines.map(\.text).joined(separator: "\n") }
@@ -73,7 +90,7 @@ public enum OCRTextLayer {
 
     /// The page's text layer: one `BT … ET` drawing every word (and the spaces between words) invisibly.
     static func content(for result: OCRPageResult, crop: CGRect, rotation: Int, font: String = fontResource) -> Data {
-        let toUser = displayToUser(crop: crop, rotation: rotation, imageSize: result.imageSize)
+        let toUser = displayToUser(crop: crop, rotation: rotation + result.turn, imageSize: result.imageSize)
         var out = "BT\n3 Tr\n/\(font) 1 Tf\n"
         for line in result.lines {
             let words = line.words.filter { !$0.text.isEmpty && $0.rect.width > 0 }
@@ -86,7 +103,8 @@ public enum OCRTextLayer {
             // One text matrix per line, the words placed along it with Td: text extraction (PDFKit, pdf.js) then reads
             // the line as one, on rotated pages too (a matrix per word made each word a line of its own there).
             let start = words[0].rect.minX
-            let matrix = CGAffineTransform(a: height, b: 0, c: 0, d: -height, tx: start, ty: baseline).concatenating(toUser)
+            let matrix = CGAffineTransform(a: height, b: 0, c: 0, d: -height, tx: start, ty: baseline)
+                .concatenating(line.angle == 0 ? .identity : CGAffineTransform(rotationAngle: line.angle)).concatenating(toUser)
             out += [matrix.a, matrix.b, matrix.c, matrix.d, matrix.tx, matrix.ty].map(PDFValue.format).joined(separator: " ") + " Tm"
             var at = start
             func show(_ text: String, x: Double, width: Double) {
@@ -201,6 +219,28 @@ public enum OCRTextLayer {
 
     // MARK: Document
 
+    /// The page's content without the hidden text of an earlier recognition nobody can read (its font does not say
+    /// which characters it draws): left in, it would be selected and copied along with the new text. Nil: none.
+    static func withoutUnreadableLayer(_ page: CGPDFPage, content: Data, all: Bool = false) -> Data? {
+        let interpreter = ContentInterpreter()
+        interpreter.run(page: page)
+        guard let stream = interpreter.streams[[]], stream.source == content else { return nil }
+        // Operators of the page's own content that only draw hidden, unreadable glyphs (with their spaces).
+        var drop: [Range<Int>] = []
+        for run in interpreter.runs where run.location.stream.isEmpty && run.renderMode == 3 && !run.glyphs.isEmpty {
+            let glyphs = interpreter.glyphs[run.glyphs]
+            guard all || glyphs.contains(where: { ScannedPDF.readableCharacters($0) == nil }),
+                  stream.ops.indices.contains(run.location.index), ["Tj", "TJ"].contains(stream.ops[run.location.index].name) else { continue }
+            drop.append(stream.ops[run.location.index].range)
+        }
+        guard !drop.isEmpty else { return nil }
+        var result = content
+        for range in drop.sorted(by: { $0.lowerBound > $1.lowerBound }) {
+            result.replaceSubrange(result.startIndex + range.lowerBound..<result.startIndex + range.upperBound, with: Data(" ".utf8))
+        }
+        return result
+    }
+
     /// A copy of `source` with the text layers added to their pages (by page number). Everything else of the
     /// document is carried over: page boxes and rotation, resources (images as they are: JPEG and JPEG 2000 data is
     /// copied byte for byte, other images losslessly), annotations, outline, named destinations, forms and info.
@@ -231,6 +271,7 @@ public enum OCRTextLayer {
             if rotation % 360 != 0 { entries["Rotate"] = .int(rotation) }
             let sourceResources = PDFDictionary.resources(of: dict)
             var content = PDFDictionary.contents(of: dict)
+            if let layer = layers[number], let cleaned = withoutUnreadableLayer(page, content: content, all: layer.replaces) { content = cleaned }
             if let layer = layers[number], let font, !layer.lines.isEmpty {
                 var resources = sourceResources.map { copier.entries(of: $0, skipping: ["Font"]) } ?? [:]
                 var fonts = sourceResources.flatMap { PDFDictionary.dict($0, "Font") }.map { copier.entries(of: $0) } ?? [:]

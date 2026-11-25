@@ -144,14 +144,28 @@ struct MetadataInspector: View {
                 RatingControl(rating: item.rating) { value in model.setRating(value, on: [item.id]) }
             }
             row(String(localized: "状态")) {
-                Picker("阅读状态", selection: Binding(get: { item.readStatus },
-                                                     set: { model.setReadStatus($0, on: [item.id]) })) {
-                    ForEach(ReadStatus.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                VStack(alignment: .leading, spacing: 5) {
+                    Picker("阅读状态", selection: Binding(get: { item.readStatus },
+                                                         set: { model.setReadStatus($0, on: [item.id]) })) {
+                        ForEach(ReadStatus.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .fixedSize()
+                    if item.readStatus == .reading, let progress = model.readingProgress[item.id], let pages = progress.pageCount {
+                        HStack(spacing: 5) {
+                            Image(nsImage: ReadingRing.image(.reading, fraction: progress.fraction, size: 13)).accessibilityHidden(true)
+                            Text("读到第 \(progress.pageIndex + 1) / \(pages) 页")
+                            .help(model.snapshot.files[progress.fileId].map { model.label(of: $0) } ?? "")
+                        if let file = model.snapshot.files[progress.fileId], model.snapshot.files(of: item.id).filter(\.isPDF).count > 1 {
+                            Text(model.label(of: file)).lineLimit(1).truncationMode(.middle)
+                        }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .fixedSize()
             }
             row(String(localized: "分组")) {
                 FlowLayout(spacing: 6) {

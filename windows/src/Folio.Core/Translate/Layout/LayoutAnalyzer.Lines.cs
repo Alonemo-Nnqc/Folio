@@ -25,7 +25,7 @@ public sealed partial class LayoutAnalyzer
     // MARK: Table cells
 
     /// <summary>Lines of one table cell joined; then each cell learns how its column is aligned.</summary>
-    static void MergeTableCells(List<LayoutBlock> blocks, List<Rect> tables, List<Rect> rules)
+    static void MergeTableCells(List<LayoutBlock> blocks, List<Rect> tables, List<Rect> rules, List<Rect> bits)
     {
         foreach (var table in tables)
         {
@@ -64,6 +64,9 @@ public sealed partial class LayoutAnalyzer
                     // A line reaching under another cell of the row above spans columns: a row of its own
                     // ("zero-shot transfer methods:"), not the rest of this cell.
                     if (upperPeers.Any(p => p.MinX < lower.MaxX - 1 && p.MaxX > lower.MinX + 1)) break;
+                    // Something in the picture on the lower row, read or not: a row of its own.
+                    if (bits.Any(b => b.MidY > lower.Baseline - lower.Size * 0.3 && b.MidY < lower.Baseline + lower.Size * 0.8 && area.Contains(b.Center)
+                                      && (b.MaxX < lower.MinX - lower.Size || b.MinX > lower.MaxX + lower.Size))) break;
                     bool startsLow = StartsLower(lower.Text.Trim());
                     bool endsOpen = Regex.IsMatch(upper.Text, @"(-|,|\b(and|or|of|the|for|to|with|in|on|by|a|an))\s*$");
                     if (!(startsLow || endsOpen || (lowerPeers.Count == 0 && upperPeers.Count > 0))) break;
@@ -272,7 +275,8 @@ public sealed partial class LayoutAnalyzer
                 bool sameLine = dy < mainSize * 0.5 || (small && dy < mainSize * 0.9 && overlap > 0);
                 double gap = c.Rect.MinX - last.Rect.MaxX;
                 int table = tables.FindIndex(t => t.InsetBy(-1, -2).Contains(c.Center));
-                double limit = (table >= 0 ? 0.75 : 2.2) * Math.Max(mainSize, c.Size);
+                // (Rows of a scan are whole: what is wide apart on them has something unread in between.)
+                double limit = (table >= 0 ? 0.75 : _isScan && last.Run != null && c.Run != null ? 8 : 2.2) * Math.Max(mainSize, c.Size);
                 bool acrossGutter = table >= 0 && table < gutters.Count && gutters[table].Any(g => last.Rect.MaxX <= g.Lower + 0.5 && c.Rect.MinX >= g.Upper - 0.5);
                 // …and so does an upright rule of the grid standing between the two characters, on their row.
                 acrossGutter |= table >= 0 && dividers != null && table < dividers.Count && dividers[table].Any(rule =>
@@ -290,7 +294,8 @@ public sealed partial class LayoutAnalyzer
             current.Add(c);
         }
         Flush();
-        return Regroup(lines, tables, pageWidth);
+        // Recognised lines are whole as they are: no formula or script cut them into pieces to join again.
+        return _isScan ? lines : Regroup(lines, tables, pageWidth);
     }
 
     /// <summary>Repairs lines geometrically: scripts go to the line they sit on, pieces of one line are joined.</summary>

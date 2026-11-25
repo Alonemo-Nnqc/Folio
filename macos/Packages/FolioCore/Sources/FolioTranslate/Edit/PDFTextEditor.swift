@@ -109,12 +109,13 @@ public final class PDFTextEditor: @unchecked Sendable {
         guard let cgPage = cg.page(at: index + 1), let page = document.page(at: index) else { return nil }
         let interpreter = ContentInterpreter()
         interpreter.run(page: cgPage)
-        let chars = PageText.characters(of: page, interpreter: interpreter)
+        // (A scan's words are in its picture: there is no text to edit, only what was read.)
+        let chars = interpreter.isRecognizedScan ? [] : PageText.characters(of: page, interpreter: interpreter)
         var analyzer = LayoutAnalyzer()
         analyzer.bodySize = documentBodySize()
         var layout = analyzer.analyzePage(number: index + 1, cgPage: cgPage, interpreter: interpreter, chars: chars)
         // One block per paragraph (the translator's blocks run some together and cut others).
-        layout.blocks = EditParagraphs.refine(layout.blocks)
+        layout.blocks = layout.isScan ? [] : EditParagraphs.refine(layout.blocks)
         pages[index] = (layout, interpreter)
         return (layout, interpreter)
     }

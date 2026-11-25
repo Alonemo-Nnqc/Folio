@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import { canAddSubgroup, getState, groupAncestors, groupDepth, groupSubtreeHeight, MAX_GROUP_DEPTH, setSetting, useStore, type Group, type State } from "../store";
 import { addMenu, deleteGroup, deleteTag, editTag, emptyTrash, newGroup, newTag, renameGroup } from "../commands";
 import { openMenu, openMenuAt, sep, type MenuEntry } from "../ui/menu";
+import { ReadingRing, statusName } from "../ui/ring";
 
 export const ITEMS_MIME = "application/x-folio-items";
 export const GROUP_MIME = "application/x-folio-group";
@@ -42,9 +43,47 @@ export function groupDrop(s: State, id: string, target: string | null, zone: Zon
   return { parent, index: siblings.indexOf(target) + (zone === "after" ? 1 : 0) };
 }
 
+/** Where a folder dragged here from outside goes: as a group dropped there would, its subfolders wherever there are levels left. */
+export function folderDrop(s: State, target: string | null, zone: Zone, isOpen: (g: string) => boolean = () => true): { parent: string | null; index: number | null } | null {
+  if (target === null) return { parent: null, index: null };
+  const children = s.childGroups[target] ?? [];
+  if (zone === "on") return { parent: target, index: null };
+  if (zone === "after" && isOpen(target) && children.length > 0) return groupDepth(s, target) < MAX_GROUP_DEPTH ? { parent: target, index: 0 } : null;
+  const parent = s.groups.get(target)?.parentId ?? null;
+  const siblings = parent === null ? s.topGroups : s.childGroups[parent] ?? [];
+  return { parent, index: siblings.indexOf(target) + (zone === "after" ? 1 : 0) };
+}
+
+/** Whether what is dragged in from outside may be a folder (until it is dropped, all there is to tell by is that it has no type). */
+const mayBeFolder = (e: React.DragEvent) => [...e.dataTransfer.items].some((i) => i.kind === "file" && i.type === "");
+/** Whether a folder was dropped (asked in the drop itself: afterwards it is gone). */
+const hasFolder = (e: React.DragEvent) => [...e.dataTransfer.items].some((i) => i.webkitGetAsEntry?.()?.isDirectory);
+
+async function importDropped(e: React.DragEvent, place: { parent: string | null; index: number | null }) {
+  const folders = hasFolder(e);
+  const paths = await droppedPaths(e.dataTransfer.files);
+  if (!paths.length) return;
+  const group = await call<string | null>("files.importTo", { paths, group: place.parent, ...(folders && place.index !== null ? { index: place.index } : {}) });
+  if (group) call("library.scope", { scope: `group:${group}` });
+}
+
 let draggingGroup: string | null = null;
 export let draggingItems = false;
 export function setDraggingItems(v: boolean) { draggingItems = v; }
+
+/** A drag of files the host runs (so that other programs take them): the items dragged, or none for a paper's single file.
+ *  The page sees it come back as files from outside, and knows it by this. */
+export let nativeDrag: { items: string[] } | null = null;
+export async function dragOut(files: string[], items: string[]) {
+  const drag = { items };
+  nativeDrag = drag;
+  setDraggingItems(items.length > 0);
+  try { await call("files.dragOut", { ids: files }); } catch { /* the drag did not start */ }
+  // The drop on the page itself arrives a moment after the drag is over.
+  setTimeout(() => { if (nativeDrag === drag) { nativeDrag = null; setDraggingItems(false); } }, 400);
+}
+/** The items a drag over the page carries. */
+export const draggedItems = (e: React.DragEvent) => nativeDrag ? nativeDrag.items : e.dataTransfer.getData(ITEMS_MIME).split("\n").filter(Boolean);
 
 function Row({ scope, name, icon, count, depth = 0, disclosure, onContext, groupId, hasFiles, open }: {
   scope: string; name: string; icon: React.ReactNode; count?: number; depth?: number; disclosure?: React.ReactNode; onContext: (e: React.MouseEvent) => void; groupId?: string; hasFiles?: boolean;
@@ -67,9 +106,15 @@ function Row({ scope, name, icon, count, depth = 0, disclosure, onContext, group
     }
     if (draggingItems) {
       if (s.scope === "trash" || scope === s.scope) return null;
-      return isGroup || scope.startsWith("tag:") || scope === "trash" ? "on" : null;
+      return isGroup || scope.startsWith("tag:") || scope.startsWith("status:") || scope === "trash" ? "on" : null;
     }
-    if (e.dataTransfer.types.includes("Files")) return isGroup || hasFiles ? "on" : null;
+    if (nativeDrag) return null;
+    if (e.dataTransfer.types.includes("Files")) {
+      if (!isGroup || !mayBeFolder(e)) return isGroup || hasFiles ? "on" : null;
+      const h = e.currentTarget.getBoundingClientRect(), y = e.clientY - h.top;
+      const z: Zone = y < h.height * 0.28 ? "before" : y > h.height * 0.72 ? "after" : "on";
+      return folderDrop(s, groupId!, z, isOpen) ? z : "on";
+    }
     return null;
   };
 
@@ -99,16 +144,21 @@ function Row({ scope, name, icon, count, depth = 0, disclosure, onContext, group
           if (move) call("group.move", { id: draggingGroup, parent: move.parent, index: move.index });
           return;
         }
-        const items = e.dataTransfer.getData(ITEMS_MIME);
-        if (items) {
-          const ids = items.split("\n").filter(Boolean);
+        const ids = draggedItems(e);
+        if (ids.length) {
           if (groupId) call("items.addToGroup", { ids, group: groupId });
           else if (scope.startsWith("tag:")) call("items.setTag", { tag: scope.slice(4), ids, on: true });
+          else if (scope.startsWith("status:")) {
+            const status = Number(scope.slice(7));
+            call("items.update", { ids: ids.filter((id) => getState().items.get(id)?.tracksReading), patch: { readStatus: status } });
+            call("toast.show", { message: t("已标为“%@”", statusName(status)), icon: "checkmark" });
+          }
           else if (scope === "trash") call("items.trash", { ids });
           return;
         }
-        const paths = await droppedPaths(e.dataTransfer.files);
-        if (paths.length) call("files.importTo", { paths, group: groupId ?? null });
+        // (Files let go between two groups go into the group they were let go at.)
+        const place = isGroup ? (hasFolder(e) ? folderDrop(s, groupId!, z, isOpen) : { parent: groupId!, index: null }) : { parent: null, index: null };
+        if (place) await importDropped(e, place);
       }}
       onClick={() => call("library.scope", { scope })} onContextMenu={onContext}>
       {disclosure}
@@ -197,18 +247,27 @@ export function Sidebar() {
 
   const context = (items: MenuEntry[]) => (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); openMenu(items, e.clientX, e.clientY); };
 
-  const header = (id: string, title: string, add: (el: HTMLElement) => void, tip: string, dropHeader?: boolean) => (
+  const header = (id: string, title: string, add: ((el: HTMLElement) => void) | null, tip: string, dropHeader?: boolean) => (
     <div className={`side-header${folded.has(id) ? " folded" : ""}`} onClick={() => toggle(folded, setFolded, id)}
-      onDragOver={dropHeader ? (e) => { if (draggingGroup) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } } : undefined}
+      onDragOver={dropHeader ? (e) => {
+        if (draggingGroup) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }
+        else if (!draggingItems && !nativeDrag && e.dataTransfer.types.includes("Files") && mayBeFolder(e)) { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "copy"; }
+      } : undefined}
       onDrop={dropHeader ? (e) => {
-        if (!draggingGroup) return;
+        if (!draggingGroup) {
+          if (draggingItems || nativeDrag || !e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          importDropped(e, { parent: null, index: null });
+          return;
+        }
         e.preventDefault();
         const move = groupDrop(getState(), draggingGroup, null, "on");
         if (move) call("group.move", { id: draggingGroup, parent: move.parent, index: move.index });
       } : undefined}>
       <span>{title}</span>
       <span className="chev">{folded.has(id) ? <ChevronRight size={10} /> : <ChevronDown size={10} />}</span>
-      <button className="add" title={tip} onClick={(e) => { e.stopPropagation(); add(e.currentTarget); }}><Plus size={13} /></button>
+      {add && <button className="add" title={tip} onClick={(e) => { e.stopPropagation(); add(e.currentTarget); }}><Plus size={13} /></button>}
     </div>
   );
 
@@ -221,6 +280,11 @@ export function Sidebar() {
         <Row scope="unfiled" name={t("未分组")} icon={<span className="icon"><Inbox size={18} strokeWidth={1.6} /></span>} count={counts.unfiled} hasFiles onContext={context(background)} />
         <Row scope="trash" name={t("回收站")} icon={<span className="icon"><Trash2 size={18} strokeWidth={1.6} /></span>} count={counts.trash} onContext={context([{ label: t("清空回收站…"), icon: <Trash2 size={14} />, disabled: !counts.trash, action: emptyTrash }])} />
       </>}
+      {header("reading", t("阅读"), null, "")}
+      {/* What is being read comes first. */}
+      {!folded.has("reading") && [1, 0, 2].map((status) => (
+        <Row key={status} scope={`status:${status}`} name={statusName(status)} icon={<span className="icon"><ReadingRing status={status} /></span>} count={counts[`status:${status}`]} onContext={context(background)} />
+      ))}
       {header("groups", t("分组"), () => newGroup(), t("新建分组"), true)}
       {!folded.has("groups") && topGroups.map((id) => <GroupBranch key={id} id={id} depth={0} menu={(g) => context(groupMenu(g))} />)}
       {header("tags", t("标签"), () => newTag(), t("新建标签"))}

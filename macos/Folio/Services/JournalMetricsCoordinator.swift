@@ -30,7 +30,7 @@ final class JournalMetricsCoordinator {
 
     /// UI tests and screenshot runs keep the key in memory and never touch the Keychain.
     @ObservationIgnored private let inMemory = UserDefaults.standard.bool(forKey: "FolioUITesting")
-    private static let store = SecretStore(service: "com.nnqc.Folio.easyscholar", label: "Folio：easyScholar SecretKey")
+    static let store = SecretStore(service: "com.nnqc.Folio.easyscholar", label: "Folio：easyScholar SecretKey")
     private static let account = (service: "easyscholar", option: "secretKey")
 
     init(model: AppModel) {

@@ -7,7 +7,7 @@ struct InspectorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !model.inspectorTabsInToolbar {
+            if !model.inspectorTabsInToolbar && !model.settings.inspectorFloating {
                 Picker("检查器", selection: $model.inspectorTab) {
                     ForEach(InspectorTab.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
@@ -22,6 +22,8 @@ struct InspectorView: View {
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // Floating, it is over the toolbar, not under it.
+        .ignoresSafeArea(edges: model.settings.inspectorFloating ? .top : [])
     }
 
     @ViewBuilder

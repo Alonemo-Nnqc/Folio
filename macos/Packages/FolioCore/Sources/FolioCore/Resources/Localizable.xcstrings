@@ -1,6 +1,46 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "文件已损坏，或不是 Folio 文献库包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file is damaged or is not a Folio package"
+          }
+        }
+      }
+    },
+    "不支持这个压缩包的格式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This archive format is not supported"
+          }
+        }
+      }
+    },
+    "压缩包中的「%@」已损坏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” in the archive is damaged"
+          }
+        }
+      }
+    },
+    "这个文件由更新版本的 Folio 导出，请先更新 Folio" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file was exported by a newer version of Folio. Update Folio first."
+          }
+        }
+      }
+    },
     "下划线" : {
       "localizations" : {
         "en" : {

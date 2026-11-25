@@ -28,7 +28,8 @@ public static class PdfTextEditor
         var layout = analyzer.Analyze(source, [page]).FirstOrDefault();
         if (layout == null) return null;
         // One block per paragraph (the translator's blocks run some together and cut others).
-        layout.Blocks = EditParagraphs.Refine(layout.Blocks);
+        // (A scan's words are in its picture: there is no text to edit, only what was read.)
+        layout.Blocks = layout.IsScan ? [] : EditParagraphs.Refine(layout.Blocks);
         foreach (var block in layout.Blocks) if (block.Kind != BlockKind.Formula) block.Translate = true;
         return layout;
     }

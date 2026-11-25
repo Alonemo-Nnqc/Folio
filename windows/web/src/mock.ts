@@ -13,6 +13,8 @@ const items = [
   ["Spectral Dynamic Attention Network for Hyperspectral Image Super-Resolution", "arXiv", "Zhang, Tengya; Gao, Feng; Qi, Lin", 2026, ["t1", "t2", "t3", "t4"]],
 ] as const;
 
+const MOCK_STATUS = [1, 1, 2, 0, 1, 2, 0, 0, 0, 0, 1];
+
 const MOCK_METRICS = [
   { rank: "1 区 Top", impactFactor: "9.7", summary: "中科院 1 区 Top · JCR Q1 · IF 9.7", badges: [
     { kind: "cas1", text: "中科院 1 区 Top", detail: "中科院分区（升级版）：计算机科学 1 区，Top 期刊", emphasized: true },
@@ -32,10 +34,11 @@ function now(i: number) { return Date.UTC(2026, 9, 15) + i * 1000; }
 const library = () => ({
   full: true, root: "/Users/demo/Folio",
   items: [
-    { id: "s0", kind: "standalone", type: "other", typeName: "其他", title: "扫描版讲义 第三章.pdf", authors: [], authorsList: "", rating: 0, readStatus: 0, readStatusName: "未读", defaultFileId: "fs0", metadataState: "Failed", dateAdded: now(0), dateModified: now(0), trashed: false, retrieving: false, fields: [], moreFields: [] },
+    { id: "sm", kind: "standalone", type: "other", typeName: "其他", title: "阅读笔记 U-Net", authors: [], authorsList: "", rating: 0, tracksReading: false, readStatus: 0, readStatusName: "未读", defaultFileId: "fm", metadataState: "None", dateAdded: now(0), dateModified: now(0), trashed: false, retrieving: false, hasJournal: false, journalMetrics: null, fields: [], moreFields: [] },
+    { id: "s0", kind: "standalone", type: "other", typeName: "其他", title: "扫描版讲义 第三章.pdf", authors: [], authorsList: "", rating: 0, tracksReading: true, readStatus: 0, readStatusName: "未读", defaultFileId: "fs0", metadataState: "Failed", dateAdded: now(0), dateModified: now(0), trashed: false, retrieving: false, fields: [], moreFields: [] },
     ...items.map(([title, source, authors, year], i) => ({
       id: `i${i}`, kind: "regular", type: "journalArticle", typeName: "期刊论文", title, source, authorsList: authors, authors: authors.split(/; | & /).map((a) => ({ family: a.split(",")[0], full: a })), year,
-      citationKey: `${authors.split(",")[0].toLowerCase()}${year}`, doi: i === 10 ? "10.48550/arxiv.2604.27326" : undefined, rating: i === 10 ? 4 : 0, readStatus: i === 10 ? 1 : 0, readStatusName: i === 10 ? "在读" : "未读",
+      citationKey: `${authors.split(",")[0].toLowerCase()}${year}`, doi: i === 10 ? "10.48550/arxiv.2604.27326" : undefined, rating: i === 10 ? 4 : 0, tracksReading: true, readStatus: MOCK_STATUS[i] ?? 0, readStatusName: ["未读", "在读", "已读"][MOCK_STATUS[i] ?? 0],
       abstract: i === 10 ? "Hyperspectral image super-resolution is essential for enhancing the spatial fidelity of HSI data, yet existing deep learning methods often struggle." : undefined,
       defaultFileId: `f${i}`, metadataState: "Resolved", dateAdded: now(i + 1), dateModified: now(i + 1), trashed: false, retrieving: false,
       hasJournal: source !== "arXiv", journalMetrics: source === "arXiv" ? null : MOCK_METRICS[i % MOCK_METRICS.length],
@@ -47,16 +50,17 @@ const library = () => ({
     })),
   ],
   files: [
+    { id: "fm", itemId: "sm", fileName: "阅读笔记 U-Net.md", isPdf: false, isMarkdown: true, sha: "x", dateAdded: now(0), title: "阅读笔记 U-Net.md", tabTitle: "阅读笔记 U-Net", tabTip: "" },
     { id: "fs0", itemId: "s0", fileName: "扫描版讲义 第三章.pdf", isPdf: true, sha: "x", dateAdded: now(0), title: "原文", tabTitle: "扫描版讲义 第三章", tabTip: "" },
     ...items.map(([title], i) => ({ id: `f${i}`, itemId: `i${i}`, fileName: `${title}.pdf`, isPdf: true, sha: "x", dateAdded: now(i), title: "原文", tabTitle: title.split(":")[0], tabTip: title })),
   ],
-  filesByItem: Object.fromEntries([["s0", ["fs0"]], ...items.map((_, i) => [`i${i}`, [`f${i}`]])]),
+  filesByItem: Object.fromEntries([["sm", ["fm"]], ["s0", ["fs0"]], ...items.map((_, i) => [`i${i}`, [`f${i}`]])]),
   groups: [{ id: "g1", name: "2026美赛B题" }, { id: "g1a", parentId: "g1", name: "参考文献" }, { id: "g1b", parentId: "g1", name: "数据集" }, { id: "g1a1", parentId: "g1a", name: "综述" }, { id: "g1a1a", parentId: "g1a1", name: "医学图像" }, { id: "g2", name: "夜间场景" }, { id: "g3", name: "医学图像分割" }, { id: "g4", name: "论文辅导" }],
   topGroups: ["g1", "g2", "g3", "g4"], childGroups: { g1: ["g1a", "g1b"], g1a: ["g1a1"], g1a1: ["g1a1a"] },
   tags: [{ id: "t1", name: "必读", color: "#FF3B30" }, { id: "t2", name: "待复现", color: "#FF9500" }, { id: "t3", name: "Mamba", color: "#AF52DE" }, { id: "t4", name: "视网膜血管分割方法", color: "#34C759" }, { id: "t5", name: "综述", color: "#007AFF" }],
   itemTags: Object.fromEntries(items.map(([, , , , tags], i) => [`i${i}`, [...tags]])),
   itemGroups: { i10: ["g1a"] }, noted: [], removedItems: [], removedFiles: [],
-  counts: { all: 12, unfiled: 2, trash: 2, "group:g1": 4, "group:g1a": 3, "group:g1b": 1, "group:g1a1": 1, "group:g1a1a": 1, "group:g2": 3, "group:g3": 4, "tag:t1": 3, "tag:t2": 2, "tag:t3": 3, "tag:t4": 3, "tag:t5": 1 },
+  counts: { all: 12, "status:0": 6, "status:1": 4, "status:2": 2, unfiled: 2, trash: 2, "group:g1": 4, "group:g1a": 3, "group:g1b": 1, "group:g1a1": 1, "group:g1a1a": 1, "group:g2": 3, "group:g3": 4, "tag:t1": 3, "tag:t2": 2, "tag:t3": 3, "tag:t4": 3, "tag:t5": 1 },
 });
 
 const settings: Record<string, unknown> = {
@@ -70,7 +74,8 @@ export async function mockCall(method: string, params: any): Promise<any> {
   switch (method) {
     case "app.boot": return {
       isEnglish: false, settings, version: "1.0.0", channel: "win-x64", captionWidth: 138, windowState: "normal", library: library(), jobs: {},
-      rows: { rows: ["s0", ...items.map((_, i) => `i${i}`)], scope: "all", searchText: "", sortAscending: true },
+      reading: { i0: { fraction: 0.62, page: 16, pages: 25 }, i1: { fraction: 0.2, page: 5, pages: 25 }, i4: { fraction: 0.9, page: 23, pages: 25 }, i10: { fraction: 0.04, page: 1, pages: 25 } },
+      rows: { rows: ["sm", "s0", ...items.map((_, i) => `i${i}`)], scope: "all", searchText: "", sortAscending: true },
       annotationColors: [{ key: "yellow", title: "黄色", hex: "#FFD933" }, { key: "green", title: "绿色", hex: "#73D966" }, { key: "blue", title: "蓝色", hex: "#66B3FF" }, { key: "pink", title: "粉色", hex: "#FF8CBF" }, { key: "purple", title: "紫色", hex: "#BF8CFF" }, { key: "red", title: "红色", hex: "#FF5959" }, { key: "orange", title: "橙色", hex: "#FF9E33" }, { key: "black", title: "黑色", hex: "#1C1C1F" }],
       tagPresets: [["红", "#FF3B30"], ["橙", "#FF9500"], ["黄", "#FFCC00"], ["绿", "#34C759"], ["薄荷", "#00C7BE"], ["青", "#32ADE6"], ["蓝", "#007AFF"], ["靛", "#5856D6"], ["紫", "#AF52DE"], ["粉", "#FF2D55"]].map(([name, hex]) => ({ name, hex })),
       citationStyles: [{ raw: "gbt7714", name: "GB/T 7714-2015" }, { raw: "apa", name: "APA" }, { raw: "ieee", name: "IEEE" }],
@@ -94,6 +99,12 @@ export async function mockCall(method: string, params: any): Promise<any> {
     case "note.get": return "";
     case "annotations.read": return [];
     case "zotero.locate": return null;
+    case "package.counts": return { items: 12, files: 14, bytes: 48_300_000 };
+    case "package.pick": return "/Users/demo/Folio 2026-11-25.foliolib";
+    case "package.read": return { path: params.path, fileName: "Folio 2026-11-25.foliolib", app: "1.6.0", exported: Date.UTC(2026, 10, 25, 8), hasLibrary: true, items: 120, files: 168, groups: 12, tags: 8, hasSettings: true, hasKeys: true };
+    case "package.export": return { path: "/Users/demo/Folio.foliolib", fileName: "Folio 2026-11-25.foliolib", missing: 1 };
+    case "package.import": return params.password === "wrong" ? { wrongPassword: true } : { library: params.library ? { itemsAdded: 118, itemsUpdated: 1, itemsUnchanged: 1, filesAdded: 160, filesUpdated: 1, groupsCreated: 10, tagsCreated: 7, missingFiles: 0 } : null, settings: params.settings };
+    case "markdown.get": return mockMarkdown;
     case "pick.file": return [];
     case "settings.set": settings[params.key] = params.value; return null;
     case "journalMetrics.state": case "journalMetrics.setKey": case "journalMetrics.setAutoFetch":
@@ -111,3 +122,5 @@ let mockTerms: any[] = [
   { id: "4", source: "fine-tuning", target: "微调", enabled: false, extracted: true, paper: "A Simple Recipe for Language-guided Domain Generalized Segmentation" },
   { id: "5", source: "curvilinear structure", target: "曲线结构", enabled: true, extracted: true, paper: "Dual-level Adapter Boosting Prompt-free Curvilinear Structure Segmentation" },
 ];
+
+const mockMarkdown = "# 阅读笔记 U-Net\n\n这是**粗体**、*斜体*、==高亮==、`code`、[链接](https://example.com)。\n\n> 引用第一行\n> 引用第二行\n退出引用后紧接的一行\n\n- 列表\n  - 二级\n- [ ] 待办\n- [x] 完成\n1. 第一\n2. 第二\n\n```python\ndef f(x):\n    return str(42)\n```\n\n| 模型 | Dice |\n| --- | ---: |\n| U-Net | 0.91 |\n\n---\n## 小结\n结束\n";

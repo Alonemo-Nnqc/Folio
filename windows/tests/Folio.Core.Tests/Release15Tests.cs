@@ -29,7 +29,7 @@ public class MarkdownDocumentTests
         library.WriteText(text, fileId);
         Assert.Contains("SAM", library.Text(fileId));
         snapshot = library.Snapshot();
-        Assert.Equal("第一周", snapshot.Items[itemId].Title); // the title follows the first heading
+        Assert.Equal("阅读计划", snapshot.Items[itemId].Title); // a name given stays
         Assert.Equal(Encoding.UTF8.GetByteCount(text), snapshot.Files[fileId].Size);
         Assert.Contains(itemId, library.FulltextItemIds("SAM"));
         // The file is plain UTF-8 without a byte order mark, as the Mac writes it.

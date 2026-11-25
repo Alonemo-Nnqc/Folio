@@ -15,7 +15,7 @@ export function UpdateButton() {
     return on("update", setState);
   }, []);
   if (!state?.available) return null;
-  const detail = state.downloading ? t("正在下载…") : state.downloaded ? t("已下载，重启即可完成") : t("新版本可用");
+  const detail = state.downloading ? t("正在下载…") : state.downloaded ? t("已下载") : t("新版本可用");
   const tip = state.downloaded ? t("Folio %@ 已下载，点按重新启动并安装", state.available) : t("Folio %@ 可供更新", state.available);
   return (
     <button className="update-row" title={tip} disabled={state.downloading} onClick={() => call("update.install")}>

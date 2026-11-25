@@ -293,6 +293,11 @@ static class Migrations
             ALTER TABLE item ADD COLUMN series TEXT;
             ALTER TABLE item ADD COLUMN genre TEXT;
             """),
+        // v1.6: how far each file has been read, as the macOS app adds it.
+        ("v1.6-readingProgress", """
+            ALTER TABLE readingState ADD COLUMN pageCount INTEGER;
+            ALTER TABLE readingState ADD COLUMN seenPages TEXT;
+            """),
     ];
 
     public static void Migrate(SqliteConnection c)

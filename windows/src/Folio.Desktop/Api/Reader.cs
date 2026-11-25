@@ -240,9 +240,11 @@ public static partial class Api
         Bridge.On("reader.savePosition", a =>
         {
             M.SaveReadingState(new ReadingState(a.Str("file"), a.Int("page") - 1, a.Has("left") ? a.Num("left") : 0, a.Has("top") ? a.Num("top") : 0,
-                a.Has("scale") ? a.Num("scale") : 1, a.Bool("autoScale", true), M.Settings.ReaderLayout == ReaderLayout.TwoUp ? 3 : 1, DateTime.UtcNow));
+                a.Has("scale") ? a.Num("scale") : 1, a.Bool("autoScale", true), M.Settings.ReaderLayout == ReaderLayout.TwoUp ? 3 : 1, DateTime.UtcNow, a.OptInt("pages")));
             return null;
         });
+        // A page was on screen for a moment: how much of the paper has been seen by now.
+        Bridge.On("reader.seen", a => M.NoteSeenPages(a.Str("file"), a.Int("page") - 1, a.Int("pages"), a.Bool("two", false)));
 
         Bridge.OnAsync("reader.undo", a => Session(a).Undo());
         Bridge.OnAsync("reader.redo", a => Session(a).Redo());

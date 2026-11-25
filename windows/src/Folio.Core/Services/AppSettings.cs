@@ -97,6 +97,18 @@ public sealed class AppSettings
     public bool IncludeSubgroupItems { get => Get("includeSubgroupItems", true); set => Set("includeSubgroupItems", value); }
     /// <summary>设置 ▸ 通用 ▸ 列表: the green "已翻译" badge after the title of papers that have a translation.</summary>
     public bool ShowTranslatedBadge { get => Get("showTranslatedBadge", true); set => Set("showTranslatedBadge", value); }
+    /// <summary>设置 ▸ 通用 ▸ 在列表中显示阅读进度环; 设置 ▸ 阅读 ▸ 读完时提示标为"已读".</summary>
+    /// <summary>The right panel floats over the content instead of taking room beside it.</summary>
+    public bool InspectorFloating { get => Get("inspectorFloating", false); set => Set("inspectorFloating", value); }
+    /// <summary>设置 ▸ Markdown, as the macOS app keeps it (MarkdownPreferences.swift); the page knows the defaults.</summary>
+    public static readonly string[] MarkdownKeys =
+    [
+        "markdownFontSize", "markdownPanelFontSize", "markdownZoom", "markdownPanelZoom", "markdownTypeface", "markdownLineHeight", "markdownParagraphSpacing", "markdownHeadingScale", "markdownCodeScale", "markdownReadableWidth", "markdownCodeIndent",
+        "markdownShowsHandles", "markdownShowsPlaceholders", "markdownShowsWordCount", "markdownHighlightsCode", "markdownStrikesDone", "markdownChecksSpelling", "markdownSlashMenu", "markdownContinuesLists", "markdownCompletesSymbols", "markdownPastesLinks",
+        "markdownToolbar",
+    ];
+    public bool ShowReadingRings { get => Get("showReadingRings", true); set => Set("showReadingRings", value); }
+    public bool OfferMarkAsRead { get => Get("offerMarkAsRead", true); set => Set("offerMarkAsRead", value); }
     public bool AutoRenameFiles { get => Get("autoRenameFiles", true); set => Set("autoRenameFiles", value); }
     public bool AutoPurgeTrash { get => Get("autoPurgeTrash", true); set => Set("autoPurgeTrash", value); }
     public string CrossrefMailto { get => Get("crossrefMailto", ""); set => Set("crossrefMailto", value); }

@@ -56,7 +56,7 @@ extension Library {
         do {
             let attributes = try FileManager.default.attributesOfItem(atPath: store.url(for: relative).path)
             let now = Date()
-            var item = Item(kind: .standalone, title: url.lastPathComponent, dateAdded: now)
+            var item = Item(kind: .standalone, title: Self.withoutMarkdownExtension(url.lastPathComponent), dateAdded: now)
             item.metadataState = isPDF ? .pending : .none
             let file = FileRecord(itemId: item.id, relativePath: relative, originalName: url.lastPathComponent,
                                   size: (attributes[.size] as? NSNumber)?.int64Value ?? 0, sha256: hash,

@@ -64,6 +64,42 @@ import Testing
         #expect(try library.readingState(fileId: "missing") == nil)
     }
 
+    @Test func readingProgressIsThePageReached() throws {
+        let library = try Library.temporary()
+        let id = try library.importItem("Paper")
+        let source = try #require(try library.files(ofItem: id).first)
+        #expect(try library.readingProgress().isEmpty)
+        func reached(_ flags: String) -> Int? { SeenPages(count: flags.count, saved: flags).reached }
+        #expect(reached("11001110011") == 10, "skimmed pages do not hold it back")
+        #expect(reached("1110000000000001") == 2, "a jump to the end is not reading up to there")
+        #expect(reached("0000") == nil && reached("0001") == 0)
+        #expect(SeenPages(count: 4, saved: nil, through: 1).stored == "1100")
+        #expect(SeenPages(count: 2, saved: "0111").stored == "01", "fewer pages than before")
+        func state(_ file: String, _ page: Int, _ count: Int?, _ seen: String?, _ seconds: Double) -> ReadingState {
+            ReadingState(fileId: file, pageIndex: page, pointX: 0, pointY: 0, scale: 1, autoScale: true, displayMode: 1,
+                         dateModified: Date(timeIntervalSince1970: seconds), pageCount: count, seenPages: seen)
+        }
+        // Scrolling back does not lose it.
+        try library.saveReadingState(state(source.id, 0, 10, "1111000000", 100))
+        #expect(try library.readingProgress()[id]?.fraction == 0.4)
+        // Read further in its translation: that file counts, and says so.
+        let translated = try library.addTranslatedFile(at: try Fixture.pdf(named: "out.pdf", lines: ["论文", UUID().uuidString]), of: source.id, kind: .dual, baseName: "Paper 2")
+        try library.saveReadingState(state(translated.id, 3, 5, "11110", 200))
+        var progress = try #require(try library.readingProgress()[id])
+        #expect(progress.fraction == 0.8 && progress.pageIndex == 3 && progress.pageCount == 5 && progress.fileId == translated.id)
+        // Opened again at its first page later, the original does not set it back.
+        try library.saveReadingState(state(source.id, 0, 10, "1111000000", 300))
+        progress = try #require(try library.readingProgress()[id])
+        #expect(progress.fileId == translated.id && progress.lastRead == Date(timeIntervalSince1970: 300))
+        // Left by a version before 1.6: filled in from the document.
+        try library.saveReadingState(state(source.id, 8, nil, nil, 400))
+        #expect(try library.filesWithoutPageCount() == [source.id])
+        try library.setPageCount(10, ofFileLastReadBefore16: source.id)
+        progress = try #require(try library.readingProgress()[id])
+        #expect(progress.fraction == 0.9 && progress.fileId == source.id && progress.lastRead == Date(timeIntervalSince1970: 400))
+        #expect(try library.filesWithoutPageCount().isEmpty)
+    }
+
     @Test func translatedFileJoinsItsItem() throws {
         let library = try Library.temporary()
         let id = try library.importItem("Paper")

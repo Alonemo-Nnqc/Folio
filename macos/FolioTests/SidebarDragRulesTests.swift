@@ -24,6 +24,14 @@ import Testing
         #expect(SidebarDragRules.decide(.group(id: "x", height: 4), .group(id: "a", ancestors: [])) == .reject)
     }
 
+    @Test func itemsDroppedOnAStatusTakeIt() {
+        #expect(SidebarDragRules.decide(.items(ids: ["a"], from: .all), .builtin(.status(.read))) == .setStatus(ids: ["a"], .read))
+        #expect(SidebarDragRules.decide(.items(ids: ["a"], from: .status(.reading)), .builtin(.status(.unread))) == .setStatus(ids: ["a"], .unread))
+        #expect(SidebarDragRules.decide(.items(ids: ["a"], from: .status(.read)), .builtin(.status(.read))) == .reject)
+        #expect(SidebarDragRules.decide(.items(ids: ["a"], from: .trash), .builtin(.status(.read))) == .reject)
+        #expect(SidebarDragRules.decide(.files(urls), .builtin(.status(.read))) == .reject)
+    }
+
     @Test func groupsNeverMoveIntoThemselvesOrTheirDescendants() {
         #expect(SidebarDragRules.decide(.group(id: "a", height: 1), .group(id: "a", ancestors: [])) == .reject)
         #expect(SidebarDragRules.decide(.group(id: "a", height: 2), .group(id: "c", ancestors: ["a"])) == .reject)
@@ -104,5 +112,16 @@ import Testing
         s.groupsById["d"]?.parentId = "b"
         #expect(tree.rebuild(from: s))
         #expect(tree.node(for: .group("b"))?.children.map(\.groupId) == ["c", "d"])
+    }
+
+    @Test func foldersBecomeGroupsWhereTheyAreDropped() {
+        let urls = [URL(filePath: "/tmp/论文", directoryHint: .isDirectory)]
+        #expect(SidebarDragRules.decide(.folders(urls), .group(id: "g", ancestors: ["a"])) == .importFolders(urls, parentId: "g", index: nil))
+        #expect(SidebarDragRules.decide(.folders(urls), .topLevelGap(index: 2)) == .importFolders(urls, parentId: nil, index: 2))
+        #expect(SidebarDragRules.decide(.folders(urls), .childGap(parentId: "c", ancestors: ["a", "b"], index: 1)) == .importFolders(urls, parentId: "c", index: 1))
+        #expect(SidebarDragRules.decide(.folders(urls), .childGap(parentId: "d", ancestors: ["a", "b", "c"], index: 0)) == .reject, "there is no fifth level")
+        #expect(SidebarDragRules.decide(.folders(urls), .builtin(.unfiled)) == .importFolders(urls, parentId: nil, index: nil))
+        #expect(SidebarDragRules.decide(.folders(urls), .tag("t")) == .reject)
+        #expect(SidebarDragRules.decide(.files(urls), .topLevelGap(index: 0)) == .reject)
     }
 }

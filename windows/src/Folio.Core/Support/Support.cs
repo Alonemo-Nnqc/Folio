@@ -431,7 +431,7 @@ public static class FileLabel
             if (alike.Count == 0) return name;
             return $"{name} · {MadeAt(file, alike)}";
         }
-        return IsOriginal(file, files, defaultFileId) ? Loc.S("原文") : file.FileName;
+        return IsOriginal(file, files, defaultFileId) ? Loc.S("原文") : file.IsMarkdown ? file.DocumentName + Path.GetExtension(file.RelativePath) : file.FileName;
     }
 
     /// <summary>A reader tab's name: what tells the papers and their translations apart when tabs are narrow, so the kind of

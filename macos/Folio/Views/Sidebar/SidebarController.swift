@@ -98,7 +98,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private func syncSelection() {
         guard let model else { return }
         let kind: SidebarNode.Kind = switch model.sidebarSelection {
-        case .all, .unfiled, .trash: .builtin(model.sidebarSelection)
+        case .all, .unfiled, .trash, .status: .builtin(model.sidebarSelection)
         case .group(let id): .group(id)
         case .tag(let id): .tag(id)
         }
@@ -120,6 +120,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private func expandAncestors(of node: SidebarNode) {
         var chain: [SidebarNode.Kind] = []
         switch node.kind {
+        case .builtin(.status): chain = [.readingHeader]
         case .builtin: chain = [.libraryHeader]
         case .tag: chain = [.tagsHeader]
         case .group(let id):
@@ -175,6 +176,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     private static func key(_ kind: SidebarNode.Kind) -> String {
         switch kind {
         case .libraryHeader: "library"
+        case .readingHeader: "reading"
         case .groupsHeader: "groups"
         case .tagsHeader: "tags"
         default: ""
@@ -212,12 +214,19 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         switch node.kind {
         case .libraryHeader:
             return header(title: String(localized: "文献库"), addTitle: nil, action: nil, identifier: nil)
+        case .readingHeader:
+            return header(title: String(localized: "阅读"), addTitle: nil, action: nil, identifier: nil)
         case .groupsHeader:
             return header(title: String(localized: "分组"), addTitle: String(localized: "新建分组"), action: #selector(LibraryWindowController.newGroup(_:)),
                           identifier: "sidebar.addGroup")
         case .tagsHeader:
             return header(title: String(localized: "标签"), addTitle: String(localized: "新建标签"), action: #selector(LibraryWindowController.newTag(_:)),
                           identifier: "sidebar.addTag")
+        case .builtin(.status(let status)):
+            let cell = makeCell()
+            cell.configure(ring: status, title: status.displayName, count: model.counts[.status(status)])
+            cell.setAccessibilityIdentifier("sidebar.status.\(status.rawValue)")
+            return cell
         case .builtin(let scope):
             let cell = makeCell()
             let symbol = switch scope {
@@ -334,7 +343,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         guard let model else { return }
         let node = outline.clickedRow >= 0 ? outline.item(atRow: outline.clickedRow) as? SidebarNode : nil
         switch node?.kind {
-        case .none, .libraryHeader, .groupsHeader:
+        case .none, .libraryHeader, .readingHeader, .groupsHeader:
             menu.addItem(item(String(localized: "创建分组"), "folder.badge.plus") { model.createGroup() })
             menu.addItem(item(String(localized: "搜索文献"), "magnifyingglass") { model.showSearch() })
         case .builtin(.trash):
@@ -423,12 +432,18 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
     func outlineView(_ outlineView: NSOutlineView, validateDrop info: any NSDraggingInfo, proposedItem item: Any?,
                      proposedChildIndex index: Int) -> NSDragOperation {
         guard let source = dragSource(info) else { return [] }
+        // Folders let go below everything, or on the section's name: a group after the last.
+        if case .folders = source, let header = tree.roots.first(where: { $0.kind == .groupsHeader }),
+           item == nil || (item as? SidebarNode) === header && index == NSOutlineViewDropOnItemIndex {
+            outlineView.setDropItem(header, dropChildIndex: header.children.count)
+            return .copy
+        }
         switch SidebarDragRules.decide(source, dropTarget(item: item as? SidebarNode, childIndex: index)) {
         case .reject: return []
         case .moveGroup, .nestGroup: return .move
         case .trashItems: return .delete
-        case .importFiles: return .copy
-        case .addItems, .tagItems: return .link
+        case .importFiles, .importFolders: return .copy
+        case .addItems, .tagItems, .setStatus: return .link
         }
     }
 
@@ -448,8 +463,13 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         case let .tagItems(ids, tagId):
             model.setTag(tagId, on: ids, enabled: true)
             model.toasts.show(String(localized: "已添加标签「\(model.snapshot.tagsById[tagId]?.name ?? "")」"), systemImage: "tag")
+        case let .setStatus(ids, status):
+            model.setReadStatus(status, on: ids)
+            model.toasts.show(String(localized: "已标为“\(status.displayName)”"), systemImage: "book")
         case let .importFiles(urls, groupId):
             model.importer.importFiles(urls, toGroup: groupId)
+        case let .importFolders(urls, parentId, index):
+            model.importer.importFiles(urls, toGroup: parentId, index: index)
         }
         return true
     }
@@ -462,6 +482,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
         return proposed
     }
 
+    /// Whether the drag going on has folders in it (asked of the disk once).
+    private var lookedAt: (sequence: Int, folders: Bool)?
+
     private func dragSource(_ info: any NSDraggingInfo) -> SidebarDragSource? {
         let pasteboard = info.draggingPasteboard
         if let id = pasteboard.pasteboardItems?.first?.string(forType: .folioGroup) {
@@ -472,7 +495,9 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             return .items(ids: dragged.map(\.itemId), from: ViewScope(key: first.scopeKey) ?? .all)
         }
         let urls = ItemPasteboard.fileURLs(pasteboard)
-        return urls.isEmpty ? nil : .files(urls)
+        if urls.isEmpty { return nil }
+        if lookedAt?.sequence != info.draggingSequenceNumber { lookedAt = (info.draggingSequenceNumber, urls.contains(where: ImportCoordinator.isFolder)) }
+        return lookedAt?.folders == true ? .folders(urls) : .files(urls)
     }
 
     /// Maps the outline's proposal onto the sidebar's drop vocabulary. Top-level groups are the
@@ -493,7 +518,7 @@ final class SidebarController: NSObject, NSOutlineViewDataSource, NSOutlineViewD
             return .childGap(parentId: id, ancestors: ancestors, index: index)
         case .tag(let id):
             return onItem ? .tag(id) : .elsewhere
-        case .libraryHeader, .tagsHeader:
+        case .libraryHeader, .readingHeader, .tagsHeader:
             return .elsewhere
         }
     }

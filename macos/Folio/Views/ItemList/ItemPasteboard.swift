@@ -21,6 +21,7 @@ extension ViewScope {
         case "trash": self = .trash
         default:
             if key.hasPrefix("group:") { self = .group(String(key.dropFirst(6))) }
+            else if key.hasPrefix("status:"), let status = Int(key.dropFirst(7)).flatMap(ReadStatus.init) { self = .status(status) }
             else if key.hasPrefix("tag:") { self = .tag(String(key.dropFirst(4))) }
             else { return nil }
         }

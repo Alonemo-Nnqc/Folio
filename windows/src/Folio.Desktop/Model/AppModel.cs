@@ -106,6 +106,9 @@ public sealed partial class AppModel : IImportUi
     /// <summary>Raised before the library's folder or database goes away: readers close their files.</summary>
     public event Action? LibraryWillChange;
 
+    /// <summary>Closes the papers and documents that are open (a package's files may replace theirs).</summary>
+    public void CloseDocuments() => LibraryWillChange?.Invoke();
+
     /// <summary>Moves the whole library folder into another folder and reopens it there (Settings ▸ 文献库).</summary>
     public async Task RelocateLibrary(string newParent)
     {
@@ -238,8 +241,77 @@ public sealed partial class AppModel : IImportUi
     {
         CheckExternalChanges();
         bool current = WatchedVersion() == _dataVersion;
-        Perform(() => Library.SaveReadingState(state));
+        Perform(() => Library.SaveReadingState(Library.KeepingSeenPages(state)));
         if (current) _dataVersion = WatchedVersion();
+    }
+
+    /// <summary>How far each paper has been read (READ-01). Apart from the snapshot, so that scrolling never reloads the list.</summary>
+    public Dictionary<string, ReadingProgress> Reading { get; private set; } = [];
+    public event Action? ReadingProgressChanged;
+    int _readingFiles = -1;
+
+    public void ReloadReadingProgress()
+    {
+        _readingFiles = Snapshot.Files.Count;
+        try { Reading = Library.ReadingProgress(); } catch { return; }
+        ReadingProgressChanged?.Invoke();
+        FillInPageCounts();
+    }
+
+    bool _filledIn;
+
+    /// <summary>Papers last read by a version that did not note how many pages they have: looked up once, in the background.</summary>
+    void FillInPageCounts()
+    {
+        if (_filledIn || Snapshot.Files.Count == 0) return;
+        _filledIn = true;
+        var library = Library;
+        var paths = Snapshot.Files.Values.Where(f => f.IsPdf).ToDictionary(f => f.Id, library.FilePath);
+        Task.Run(() =>
+        {
+            var counts = new List<(string Id, int Count)>();
+            try
+            {
+                foreach (var id in library.FilesWithoutPageCount())
+                    try
+                    {
+                        if (!paths.TryGetValue(id, out var path)) continue;
+                        using var pdf = UglyToad.PdfPig.PdfDocument.Open(path);
+                        if (pdf.NumberOfPages > 0) counts.Add((id, pdf.NumberOfPages));
+                    }
+                    catch { }
+            }
+            catch { return; }
+            if (counts.Count == 0) return;
+            _ui.TryEnqueue(() =>
+            {
+                if (library != Library) return;
+                CheckExternalChanges();
+                bool current = WatchedVersion() == _dataVersion;
+                foreach (var (id, count) in counts) Perform(() => library.SetPageCount(count, id));
+                if (current) _dataVersion = WatchedVersion();
+                ReloadReadingProgress();
+            });
+        });
+    }
+
+    /// <summary>A page (and the one beside it) was on screen for a moment; returns the share of the paper seen by now.</summary>
+    public object NoteSeenPages(string fileId, int page, int pages, bool two)
+    {
+        if (pages <= 0 || !Snapshot.Files.TryGetValue(fileId, out var file)) return new { atEnd = false };
+        var known = Library.ReadingState(fileId) ?? new ReadingState(fileId, page, 0, 0, 1, true, 1, DateTime.UtcNow, pages, "");
+        var seen = new SeenPages(pages, known.PageCount is { } n && n != pages ? "" : known.SeenPages, known.PageIndex);
+        seen.Add(page);
+        if (two) seen.Add(page + 1);
+        if (seen.Stored != known.SeenPages || known.PageCount != pages)
+        {
+            CheckExternalChanges();
+            bool current = WatchedVersion() == _dataVersion;
+            Perform(() => Library.SaveReadingState(known with { PageCount = pages, SeenPages = seen.Stored, DateModified = DateTime.UtcNow }));
+            if (current) _dataVersion = WatchedVersion();
+            ReloadReadingProgress();
+        }
+        return new { atEnd = seen.Reached == pages - 1 };
     }
 
     /// <summary>Everything again: a setting changed what the counts and rows mean.</summary>
@@ -247,7 +319,11 @@ public sealed partial class AppModel : IImportUi
 
     public void ResolveRows()
     {
-        var query = new ViewQuery(Scope, SearchText, SearchWholeLibrary, _fulltextMatches, Settings.IncludeSubgroupItems, Snapshot.Sort(Scope));
+        if (_readingFiles != Snapshot.Files.Count) ReloadReadingProgress();
+        var query = new ViewQuery(Scope, SearchText, SearchWholeLibrary, _fulltextMatches, Settings.IncludeSubgroupItems, Snapshot.Sort(Scope))
+        {
+            LastRead = Scope is ViewScope.StatusScope { Status: ReadStatus.Reading } ? Reading.ToDictionary(p => p.Key, p => p.Value.LastRead) : null,
+        };
         Rows = ViewResolver.Rows(query, Snapshot);
         RowsChanged?.Invoke();
     }
@@ -333,7 +409,7 @@ public sealed partial class AppModel : IImportUi
             return;
         }
         // After the reader is up: the paper should appear first.
-        if (Settings.MarkReadingOnOpen && Snapshot.Items.TryGetValue(file.ItemId, out var item) && item.Kind == ItemKind.Regular && item.ReadStatus == ReadStatus.Unread)
+        if (Settings.MarkReadingOnOpen && Snapshot.Items.TryGetValue(file.ItemId, out var item) && Snapshot.TracksReading(item) && item.ReadStatus == ReadStatus.Unread)
             _ui.TryEnqueue(() => Perform(() => Library.UpdateItem(item.Id, i => i.ReadStatus = ReadStatus.Reading)));
         // A Markdown document is written in Folio: it opens in a tab of its own, whatever opens PDFs (MD-01).
         if ((file.IsPdf && Settings.OpenWith == OpenWith.Folio) || file.IsMarkdown) OpenInReaderRequested?.Invoke(file, page);

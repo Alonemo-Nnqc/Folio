@@ -9,13 +9,14 @@ export function dragPointer(e: React.PointerEvent, move: (dx: number, dy: number
   const onUp = () => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
-    document.body.style.cursor = "";
+    document.body.classList.remove("resizing");
     document.querySelectorAll("iframe").forEach((f) => (f.style.pointerEvents = ""));
     done?.();
   };
   // Iframes would swallow the pointer on its way across them.
   document.querySelectorAll("iframe").forEach((f) => (f.style.pointerEvents = "none"));
-  document.body.style.cursor = "col-resize";
+  // Whatever it passes over meanwhile does not change it.
+  document.body.classList.add("resizing");
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
 }
