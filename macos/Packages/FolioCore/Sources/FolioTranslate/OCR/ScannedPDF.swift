@@ -113,7 +113,7 @@ public enum ScannedPDF {
         var looked = 0, scanned = 0
         for number in sample(of: document.numberOfPages) {
             guard let page = document.page(at: number) else { continue }
-            let facts = autoreleasepool { facts(of: page) }
+            let facts: PageFacts = autoreleasepool { Self.facts(of: page) }
             if facts.isBlank { continue }
             looked += 1
             if facts.needsOCR, !reader.reads(number, facts) { scanned += 1 }
