@@ -133,6 +133,10 @@ class FolioWindowController: NSWindowController, NSWindowDelegate, NSMenuItemVal
         case .addToGroup(let groupId): model.addItems(ids, toGroup: groupId)
         case .toggleTag(let tagId): model.toggleTag(tagId, on: ids)
         case .newTag: model.activeSheet = .tagEditor(tagId: nil, applyTo: ids)
+        case .rename:
+            if let fileId = context.fileId ?? ids.first.flatMap({ model.defaultFile(of: $0)?.id }) {
+                if model.itemListController?.beginRenaming(fileId: fileId) != true { model.askMarkdownName(fileId: fileId) }
+            }
         case .setReadStatus(let status): model.setReadStatus(status, on: ids)
         case .setRating(let value): model.setRating(value, on: ids)
         case .copyCitation(let style): model.copyCitations(style: style, itemIds: ids)

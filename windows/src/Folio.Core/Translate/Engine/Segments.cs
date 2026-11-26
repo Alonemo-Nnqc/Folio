@@ -179,6 +179,8 @@ public static partial class SegmentBuilder
                 var word = current[..^1].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "";
                 if (nextText.Length > 0 && char.IsLower(nextText[0]) && !word.Contains('-') && !word.Contains('/')) output.Length--;
             }
+            // Chinese runs on over the line's end without a space.
+            else if (current.Length > 0 && nextText.Length > 0 && OcrTextLayer.IsCjk(current[^1]) && OcrTextLayer.IsCjk(nextText[0])) { }
             else if (output.Length == 0 || output[^1] != ' ') output.Append(' ');
         }
         return (output.ToString().Trim(' '), formulas, leadParts);

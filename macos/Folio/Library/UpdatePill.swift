@@ -23,7 +23,7 @@ struct UpdatePill: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.primary)
                             .monospacedDigit()
-                        Text(update.isDownloaded ? String(localized: "已下载，重启即可完成") : String(localized: "新版本可用"))
+                        Text(update.isDownloaded ? String(localized: "已下载") : String(localized: "新版本可用"))
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
                     }

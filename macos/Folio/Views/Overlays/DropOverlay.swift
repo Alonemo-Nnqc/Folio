@@ -3,19 +3,20 @@ import SwiftUI
 /// Liquid Glass panel shown while files from Finder hover over the list (DND-01).
 struct DropOverlay: View {
     let fileCount: Int
+    var hasFolders = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var bounce = 0
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "doc.badge.plus")
+            Image(systemName: hasFolders ? "folder.badge.plus" : "doc.badge.plus")
                 .font(.system(size: 46, weight: .regular))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(.tint)
                 .symbolEffect(.bounce, options: .repeating.speed(0.6), value: bounce)
-            Text(fileCount > 1 ? String(localized: "松开以添加 \(fileCount) 个文件") : String(localized: "松开以添加文件"))
+            Text(hasFolders ? String(localized: "松开以导入文件夹") : fileCount > 1 ? String(localized: "松开以添加 \(fileCount) 个文件") : String(localized: "松开以添加文件"))
                 .font(.title3.weight(.semibold))
-            Text("PDF 会自动检索元数据并创建条目")
+            Text(hasFolders ? "文件夹成为分组，子文件夹成为子分组；拖到侧边栏可选择位置和级别" : "PDF 会自动检索元数据并创建条目")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

@@ -213,7 +213,7 @@ extension AppModel {
     /// Opening an unread item marks it as being read (OPEN-03).
     func markReading(itemId: String) {
         guard settings.markReadingOnOpen else { return }
-        if let item = snapshot.items[itemId], item.kind == .regular, item.readStatus == .unread {
+        if let item = snapshot.items[itemId], snapshot.tracksReading(item), item.readStatus == .unread {
             perform { try library.updateItem(item.id) { $0.readStatus = .reading } }
         }
     }
@@ -240,6 +240,18 @@ extension AppModel {
         panel.message = String(localized: "选择要添加到 Folio 的文献")
         let group = sidebarSelection.groupId
         present(panel) { [weak self] in self?.importer.importFiles(panel.urls, toGroup: group) }
+    }
+
+    func choosePackageToImport() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.folioPackage]
+        panel.prompt = String(localized: "导入")
+        panel.message = String(localized: "选择从另一台设备的 Folio 导出的 .foliolib 文件")
+        present(panel) { [weak self] in
+            guard let url = panel.url else { return }
+            // The panel's own sheet goes first.
+            DispatchQueue.main.async { self?.activeSheet = .packageImport(url) }
+        }
     }
 
     func chooseFilesToAttach(to itemId: String) {
@@ -278,7 +290,7 @@ extension AppModel {
 
     func setReadStatus(_ status: ReadStatus, on ids: [String]) {
         perform {
-            for id in ids where snapshot.items[id]?.kind == .regular {
+            for id in ids where snapshot.items[id].map(snapshot.tracksReading) ?? false {
                 try library.updateItem(id) { $0.readStatus = status }
             }
         }

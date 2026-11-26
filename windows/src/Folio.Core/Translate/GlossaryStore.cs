@@ -124,6 +124,23 @@ public sealed class GlossaryStore(string path)
         }
     }
 
+    /// <summary>Terms of another computer's glossary: what the user wrote there replaces what is here for the same source,
+    /// what a model found there is added where nothing is.</summary>
+    public void Merge(IEnumerable<GlossaryTerm> others)
+    {
+        lock (_lock)
+        {
+            var terms = All().ToList();
+            foreach (var term in others.Where(t => t.Source.Length > 0 && t.Target.Length > 0))
+            {
+                var index = terms.FindIndex(t => Key(t.Language) == Key(term.Language) && Same(t.Source, term.Source));
+                if (index < 0) terms.Add(term.Copy());
+                else if (term.Origin == GlossaryTerm.User) terms[index] = term.Copy();
+            }
+            Write(terms);
+        }
+    }
+
     public void Remove(IEnumerable<Guid> ids)
     {
         var gone = ids.ToHashSet();

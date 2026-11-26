@@ -89,7 +89,8 @@ import Testing
         #expect(names.contains("重新检索元数据"))
         #expect(names.contains("手动匹配…"))
         #expect(!names.contains("复制引用"))
-        #expect(!names.contains("阅读状态"))
+        // A PDF without metadata is read like any paper: it has a reading status too (not a rating).
+        #expect(names.contains("阅读状态"))
     }
 
     @Test func multipleSelectionHidesSingleItemActions() {

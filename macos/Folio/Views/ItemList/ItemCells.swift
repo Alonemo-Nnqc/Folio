@@ -19,6 +19,9 @@ enum ItemListMetrics {
 final class TitleCell: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("TitleCell")
 
+    /// How far the paper has been read, before its icon; a click moves it to the next status.
+    let ring = ReadingRingButton()
+    private var iconLeading: NSLayoutConstraint!
     let icon = NSImageView()
     let spinner = NSProgressIndicator()
     let label = NSTextField(labelWithString: "")
@@ -84,12 +87,15 @@ final class TitleCell: NSTableCellView {
         progressLabel.setContentHuggingPriority(.required, for: .horizontal)
         progressLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        for view in [icon, spinner, label, badges, stageLabel, progress, progressLabel] as [NSView] {
+        for view in [ring, icon, spinner, label, badges, stageLabel, progress, progressLabel] as [NSView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         NSLayoutConstraint.activate([
-            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            ring.leadingAnchor.constraint(equalTo: leadingAnchor),
+            ring.centerYAnchor.constraint(equalTo: centerYAnchor),
+            ring.widthAnchor.constraint(equalToConstant: 22),
+            ring.heightAnchor.constraint(equalToConstant: 24),
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: ItemListMetrics.iconSize),
             icon.heightAnchor.constraint(equalToConstant: ItemListMetrics.iconSize),
@@ -115,6 +121,19 @@ final class TitleCell: NSTableCellView {
         labelBeforeProgress = label.trailingAnchor.constraint(lessThanOrEqualTo: stageLabel.leadingAnchor, constant: -8)
         titleRoom = label.widthAnchor.constraint(greaterThanOrEqualToConstant: 64)
         titleRoom.priority = .defaultHigh
+        iconLeading = icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2)
+        iconLeading.isActive = true
+        ring.isHidden = true
+    }
+
+    /// The ring of a paper (nil: none, as for files, notes and Markdown documents). `room`: the place of the ring is kept
+    /// without one, so titles line up in a list of both.
+    func showRing(_ status: ReadStatus?, fraction: Double, room: Bool, onChange: @escaping (ReadStatus) -> Void = { _ in }) {
+        ring.isHidden = status == nil
+        iconLeading.constant = room ? 26 : 2
+        guard let status else { return }
+        ring.onChange = onChange
+        ring.configure(status, fraction: fraction)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
@@ -195,6 +214,7 @@ final class TitleCell: NSTableCellView {
 
     /// `label` says what the file is (原文, 双语对照 · Google …), so a translation needs no badge of its own.
     func configureFile(_ file: FileRecord, label text: String, url: URL, isDefault: Bool) {
+        showRing(nil, fraction: 0, room: false)
         spinner.stopAnimation(nil)
         progress.isHidden = true
         stageLabel.isHidden = true
@@ -216,6 +236,7 @@ final class TitleCell: NSTableCellView {
 
     /// An item's note, listed under it like a document: 笔记 and its first words.
     func configureNote(preview: String) {
+        showRing(nil, fraction: 0, room: false)
         spinner.stopAnimation(nil)
         progress.isHidden = true
         stageLabel.isHidden = true
@@ -405,14 +426,11 @@ final class TagsCell: NSTableCellView {
 }
 
 enum CellText {
-    static func readStatus(_ item: Item) -> NSAttributedString {
-        guard item.kind == .regular else { return NSAttributedString(string: "") }
-        let (symbol, color): (String, NSColor) = switch item.readStatus {
-        case .unread: ("●", .controlAccentColor)
-        case .reading: ("◐", .secondaryLabelColor)
-        case .read: ("", .clear)
-        }
-        return NSAttributedString(string: symbol, attributes: [.foregroundColor: color, .font: NSFont.systemFont(ofSize: 10)])
+    /// 未读 / 62% / 已读.
+    static func readStatus(_ status: ReadStatus, fraction: Double) -> NSAttributedString {
+        NSAttributedString(string: ReadingRing.label(status, fraction: fraction), attributes: [
+            .foregroundColor: status == .reading ? NSColor.controlAccentColor : .secondaryLabelColor,
+            .font: NSFont.monospacedDigitSystemFont(ofSize: ItemListMetrics.secondaryFont.pointSize, weight: .regular)])
     }
 
     /// Right-aligned, tabular digits so a column of impact factors lines up; "—" when unknown.

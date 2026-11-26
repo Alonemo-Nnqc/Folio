@@ -58,6 +58,13 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     required init?(coder: NSCoder) { fatalError("init(coder:) is unused") }
 
     private func startObserving() {
+        splitViewController.onFloatingInspectorMade = { [weak self] panel in
+            guard let self else { return }
+            let tabs = FloatingInspector.toolbarTabs(InspectorTab.allCases.map(\.title), target: self, action: #selector(self.inspectorTabChosen(_:)))
+            tabs.selectedSegment = InspectorTab.allCases.firstIndex(of: self.model.inspectorTab) ?? 0
+            self.floatingTabs = tabs
+            panel.setHeader(center: FloatingInspector.toolbarItem(tabs))
+        }
         observers.append(ObservationLoop { [weak self] in
             guard let self, let window = self.window else { return }
             window.title = self.model.title
@@ -89,6 +96,22 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             item.label = on ? String(localized: "完成") : String(localized: "多选")
             if #available(macOS 26, *) { item.style = on ? .prominent : .plain }
         })
+        // 多选 shows the right panel while it lasts: one that was closed closes again afterwards, however 多选 ends.
+        var selecting = false
+        var openedForSelecting = false
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let on = self.model.multiSelectMode
+            guard on != selecting else { return }
+            selecting = on
+            if on {
+                openedForSelecting = !self.splitViewController.isInspectorOpen
+                if openedForSelecting { self.splitViewController.setInspectorOpen(true) }
+            } else if openedForSelecting {
+                openedForSelecting = false
+                self.splitViewController.setInspectorOpen(false)
+            }
+        })
         var lastInspectorRequest = model.showInspectorRequest
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -101,6 +124,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             guard let self else { return }
             let index = InspectorTab.allCases.firstIndex(of: self.model.inspectorTab) ?? 0
             (self.inspectorTabsItem?.view as? NSSegmentedControl)?.selectedSegment = index
+            self.floatingTabs?.selectedSegment = index
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self, let message = self.model.loadError, message != self.shownLoadError else { return }
@@ -166,6 +190,8 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         case .identifierAdd: AnyView(IdentifierAddSheet(model: model))
         case .manualMatch(let id): AnyView(ManualMatchSheet(model: model, itemId: id))
         case .zoteroImport: AnyView(ZoteroImportSheet(model: model))
+        case .packageExport: AnyView(PackageExportSheet(model: model))
+        case .packageImport(let url): AnyView(PackageImportSheet(model: model, url: url))
         case let .tagEditor(tagId, applyTo, initialName):
             AnyView(TagEditorSheet(model: model, tagId: tagId, applyTo: applyTo, initialName: initialName))
         case .translate(let fileIds): AnyView(TranslateSheet(model: model, fileIds: fileIds))
@@ -300,6 +326,18 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
         }
     }
 
+    private func makeInspectorTabs() -> NSSegmentedControl {
+        let control = NSSegmentedControl(labels: InspectorTab.allCases.map(\.title), trackingMode: .selectOne,
+                                         target: self, action: #selector(inspectorTabChosen(_:)))
+        control.selectedSegment = InspectorTab.allCases.firstIndex(of: model.inspectorTab) ?? 0
+        control.setAccessibilityIdentifier("inspectorTabs")
+        for index in InspectorTab.allCases.indices { control.setWidth(52, forSegment: index) }
+        return control
+    }
+
+    /// The same tabs in the floating panel's header.
+    private weak var floatingTabs: NSSegmentedControl?
+
     @objc private func inspectorTabChosen(_ sender: NSSegmentedControl) {
         guard InspectorTab.allCases.indices.contains(sender.selectedSegment) else { return }
         model.inspectorTab = InspectorTab.allCases[sender.selectedSegment]
@@ -368,11 +406,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
             searchItem = item
             return item
         case .folioInspectorTabs:
-            let control = NSSegmentedControl(labels: InspectorTab.allCases.map(\.title), trackingMode: .selectOne,
-                                             target: self, action: #selector(inspectorTabChosen(_:)))
-            control.selectedSegment = InspectorTab.allCases.firstIndex(of: model.inspectorTab) ?? 0
-            control.setAccessibilityIdentifier("inspectorTabs")
-            for index in InspectorTab.allCases.indices { control.setWidth(52, forSegment: index) }
+            let control = makeInspectorTabs()
             let item = NSToolbarItem(itemIdentifier: id)
             item.view = control
             item.label = String(localized: "检查器")
@@ -415,7 +449,6 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     @objc func toggleMultiSelect(_ sender: Any?) {
         model.multiSelectMode.toggle()
         if model.multiSelectMode {
-            splitViewController.showInspector()
             window?.makeFirstResponder(splitViewController.itemList.controller.outline)
         }
     }
@@ -431,6 +464,8 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
     }
     @objc func newTag(_ sender: Any?) { model.activeSheet = .tagEditor(tagId: nil, applyTo: targetItemIds) }
     @objc func importFromZotero(_ sender: Any?) { model.activeSheet = .zoteroImport }
+    @objc func exportPackage(_ sender: Any?) { model.activeSheet = .packageExport }
+    @objc func importPackage(_ sender: Any?) { model.choosePackageToImport() }
     @objc func importReferences(_ sender: Any?) { model.chooseReferencesToImport() }
     @objc func focusSearch(_ sender: Any?) { model.showSearch() }
     @objc func moveToTrash(_ sender: Any?) { model.deleteSelection(command: true) }
@@ -487,7 +522,7 @@ final class LibraryWindowController: FolioWindowController, NSToolbarDelegate, N
                 && !splitViewController.isInspectorCollapsed ? .on : .off
             return true
         case #selector(setReadStatusFromMenu(_:)):
-            let regular = items.filter { $0.kind == .regular }
+            let regular = items.filter(model.snapshot.tracksReading)
             menuItem.state = !regular.isEmpty && regular.allSatisfy { $0.readStatus.rawValue == menuItem.tag } ? .on : .off
             return !regular.isEmpty && !inTrash
         case #selector(setRatingFromMenu(_:)):

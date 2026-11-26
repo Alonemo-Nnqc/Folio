@@ -68,6 +68,9 @@ enum MainMenu {
         menu.addItem(item(String(localized: "导出参考文献…"), #selector(FolioWindowController.exportBibTeX(_:)), "e", [.command, .shift]))
         menu.addItem(item(String(localized: "导出笔记…"), #selector(FolioWindowController.exportNote(_:))))
         menu.addItem(.separator())
+        menu.addItem(item(String(localized: "打包导出文献库与设置…"), #selector(LibraryWindowController.exportPackage(_:))))
+        menu.addItem(item(String(localized: "导入 Folio 包…"), #selector(LibraryWindowController.importPackage(_:))))
+        menu.addItem(.separator())
         menu.addItem(item(String(localized: "打印…"), #selector(ReaderWindowController.printDocument(_:)), "p"))
         return menu
     }

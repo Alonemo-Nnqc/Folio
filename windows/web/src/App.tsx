@@ -1,3 +1,4 @@
+import { openPackage } from "./settings/PackageSheets";
 import { useEffect, useRef } from "react";
 import { call, emitLocal, on } from "./rpc";
 import { addByIdentifier, addFiles, closeTab, importReferences, newGroup, newMarkdownDocument, openNote, openReader, revealFirstFile, selectNextTab, showNotes, translate } from "./commands";
@@ -111,6 +112,7 @@ export function MainApp() {
   const activeTab = useStore((s) => s.activeTab);
   const dark = useStore((s) => s.dark);
   const panelUnderButtons = useStore((s) => (s.activeTab === "library" ? s.settings.inspectorVisible : s.readerNotes[s.activeTab] ?? false));
+  const panelFloats = useStore((s) => !!s.settings.inspectorFloating) && panelUnderButtons;
   const captionShown = useRef({ activeTab, dark });
 
   useWindowKeys();
@@ -121,6 +123,7 @@ export function MainApp() {
     const tabs = getState().tabs;
     tabs.forEach((tab) => closeTab(tab.key));
   }), []);
+  useEffect(() => on("package.open", (path: string) => openPackage(path)), []);
   useEffect(() => on("reveal", () => setState({ activeTab: "library" })), []);
   // What is still in flight: a note being typed saves when its box loses focus, the readers save their place.
   useEffect(() => on("app.willClose", () => {
@@ -130,13 +133,13 @@ export function MainApp() {
 
   // What is under Windows' buttons follows what the page shows there.
   useEffect(() => {
-    const light = panelUnderButtons ? "#f7f7f9" : "#fcfcfd";
-    const night = panelUnderButtons ? "#212123" : "#1d1d1f";
+    const light = panelFloats ? "#f9f9fa" : panelUnderButtons ? "#f7f7f9" : "#fcfcfd";
+    const night = panelFloats ? "#202022" : panelUnderButtons ? "#212123" : "#1d1d1f";
     // A panel sliding in fades the colour with it; a change of tab or theme is immediate.
     const animate = captionShown.current.activeTab === activeTab && captionShown.current.dark === dark;
     captionShown.current = { activeTab, dark };
-    setCaption(dark ? night : light, dark ? "#ffffff" : "#000000", animate);
-  }, [activeTab, panelUnderButtons, dark]);
+    setCaption(dark ? night : light, dark ? "#ffffff" : "#000000", animate, panelFloats);
+  }, [activeTab, panelUnderButtons, panelFloats, dark]);
 
   useEffect(() => { call("window.title", { title: "Folio" }); emitLocal("focusList", null); }, []);
   useEffect(() => { if (activeTab === "library") emitLocal("focusList", null); }, [activeTab]);

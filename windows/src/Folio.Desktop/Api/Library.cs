@@ -18,7 +18,7 @@ public static partial class Api
         authors = i.Authors.Select(a => new { family = a.Family, given = a.Given, full = AuthorFormatter.Full(a) }),
         authorsList = AuthorFormatter.ListDisplay(i.Authors),
         year = i.Year, source = i.Source, volume = i.Volume, issue = i.Issue, pages = i.Pages, publisher = i.Publisher, doi = i.Doi, arxivId = i.ArxivId, isbn = i.Isbn, url = i.Url,
-        @abstract = i.Abstract, citationKey = i.CitationKey, rating = i.Rating, readStatus = (int)i.ReadStatus, readStatusName = i.ReadStatus.DisplayName(),
+        @abstract = i.Abstract, citationKey = i.CitationKey, rating = i.Rating, readStatus = (int)i.ReadStatus, tracksReading = s.TracksReading(i), readStatusName = i.ReadStatus.DisplayName(),
         defaultFileId = i.DefaultFileId, metadataState = i.MetadataState.ToString(), dateAdded = Ms(i.DateAdded), dateModified = Ms(i.DateModified), trashed = i.IsTrashed,
         retrieving = M.Importer.IsRetrieving(i.Id),
         hasJournal = JournalMetrics.JournalName(i) != null, journalMetrics = JournalMetricsDto(i, s),
@@ -37,12 +37,16 @@ public static partial class Api
 
     static object FileDto(FileRecord f, Item? item, IReadOnlyList<FileRecord> siblings) => new
     {
-        id = f.Id, itemId = f.ItemId, fileName = f.FileName, path = f.RelativePath, isPdf = f.IsPdf, isMarkdown = f.IsMarkdown, translationOf = f.TranslationOf, translationKind = f.TranslationKind?.ToString().ToLowerInvariant(), translatedBy = f.TranslatedBy,
+        id = f.Id, itemId = f.ItemId, fileName = f.FileName, path = f.RelativePath, isPdf = f.IsPdf, isMarkdown = f.IsMarkdown, docName = f.IsMarkdown ? DocumentName(f, item) : null, translationOf = f.TranslationOf, translationKind = f.TranslationKind?.ToString().ToLowerInvariant(), translatedBy = f.TranslatedBy,
         sha = f.Sha256, dateAdded = Ms(f.DateAdded),
         title = FileLabel.Title(f, siblings, item?.DefaultFileId),
         tabTitle = FileLabel.TabTitle(f, item, siblings),
         tabTip = FileLabel.TabToolTip(f, item, siblings),
     };
+
+    /// <summary>What a Markdown document is called wherever its name shows: one that is an item of its own has the item's title.</summary>
+    static string DocumentName(FileRecord f, Item? item) =>
+        item is { Kind: ItemKind.Standalone } && (item.DefaultFileId == null || item.DefaultFileId == f.Id) ? Library.WithoutMarkdownExtension(item.Title) : f.DocumentName;
 
     /// <summary>The library for the page. After the first time only items and files that changed travel: thousands of papers stay cheap.</summary>
     static object LibraryState(bool full)
@@ -91,6 +95,9 @@ public static partial class Api
         };
     }
 
+    /// <summary>How far each paper has been read, apart from the library: reading one never sends the list again.</summary>
+    static object ReadingState() => M.Reading.ToDictionary(p => p.Key, p => new { fraction = Math.Round(p.Value.Fraction, 3), page = p.Value.PageIndex + 1, pages = p.Value.PageCount, file = p.Value.FileId });
+
     static object RowsState()
     {
         var sort = M.Snapshot.Sort(M.Scope);
@@ -113,6 +120,7 @@ public static partial class Api
             var id = key[(colon + 1)..];
             if (kind == "group") return ViewScope.Group(id);
             if (kind == "tag") return ViewScope.TagOf(id);
+            if (kind == "status" && int.TryParse(id, out var raw) && Enum.IsDefined((ReadStatus)raw)) return ViewScope.StatusOf((ReadStatus)raw);
         }
         return ViewScope.All;
     }
@@ -179,6 +187,22 @@ public static partial class Api
             if (a.Bool("system")) Shell.OpenPath(M.Library.FilePath(f)); else M.OpenFile(f, a.OptInt("page"));
             return null;
         });
+        static List<string> ExistingPaths(IEnumerable<string> ids) =>
+            ids.Select(id => M.Snapshot.Files.TryGetValue(id, out var f) ? M.Library.FilePath(f) : null).OfType<string>().Where(File.Exists).ToList();
+        Bridge.OnAsync("files.dragOut", async a =>
+        {
+            var paths = ExistingPaths(a.Strs("ids"));
+            if (paths.Count > 0 && a.Window != null) await a.Window.DragFiles(paths);
+            return null;
+        });
+        Bridge.On("files.copy", a =>
+        {
+            var paths = ExistingPaths(a.Strs("ids"));
+            if (paths.Count == 0) return null;
+            Shell.CopyFiles(paths);
+            M.Toasts.Show(Loc.S("已拷贝 %lld 个文件", paths.Count), "copy");
+            return null;
+        });
         Bridge.On("file.reveal", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.Reveal(M.Library.FilePath(f)); return null; });
         Bridge.On("file.openSystem", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.OpenPath(M.Library.FilePath(f)); return null; });
         Bridge.On("file.openWithDialog", a => { if (M.Snapshot.Files.TryGetValue(a.Str("id"), out var f)) Shell.OpenWithDialog(M.Library.FilePath(f)); return null; });
@@ -235,10 +259,11 @@ public static partial class Api
         Bridge.OnAsync("files.importPick", async _ =>
         {
             var paths = Pickers.OpenFiles("PDF|*.pdf|*|*.*");
+            paths = WithoutPackages(paths);
             if (paths.Count > 0) await M.Importer.ImportFiles(paths, M.Scope.GroupId);
         });
-        Bridge.OnAsync("files.import", a => M.Importer.ImportFiles(a.Strs("paths"), a.OptStr("group") ?? M.Scope.GroupId));
-        Bridge.OnAsync("files.importTo", a => M.Importer.ImportFiles(a.Strs("paths"), a.OptStr("group")));
+        Bridge.OnAsync("files.import", async a => (object?)await M.Importer.ImportFiles(WithoutPackages(a.Strs("paths")), a.OptStr("group") ?? M.Scope.GroupId));
+        Bridge.OnAsync("files.importTo", async a => (object?)await M.Importer.ImportFiles(WithoutPackages(a.Strs("paths")), a.OptStr("group"), a.OptInt("index")));
         Bridge.On("files.dragPaths", a => a.Strs("items").SelectMany(id => M.Snapshot.FilesOf(id)).Select(f => M.Library.FilePath(f)).Where(File.Exists).ToList());
 
         // Groups and tags.

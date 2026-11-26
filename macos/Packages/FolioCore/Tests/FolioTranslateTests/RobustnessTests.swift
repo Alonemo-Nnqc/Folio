@@ -52,12 +52,24 @@ import Testing
     }
 
     @Test func aStoppedJobStopsItsCommandAtOnce() async throws {
-        let started = Date()
-        let task = Task { try await LocalProcess.run(["/bin/sleep", "30"], input: "", timeout: 60) }
-        try await Task.sleep(for: .milliseconds(300))
+        let file = FileManager.default.temporaryDirectory.appending(path: "folio-pid-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let task = Task { try await LocalProcess.run(["/bin/sh", "-c", "echo $$ > '\(file.path)'; exec /bin/sleep 120"], input: "", timeout: 200) }
+        // However long a busy machine takes to start it, or to come back here.
+        var pid: pid_t?
+        for _ in 0..<600 where pid == nil {
+            try await Task.sleep(for: .milliseconds(100))
+            pid = (try? String(contentsOf: file, encoding: .utf8)).flatMap { pid_t($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        }
+        let command = try #require(pid, "the command started")
+        #expect(kill(command, 0) == 0)
+        let stopped = Date()
         task.cancel()
-        _ = try? await task.value
-        #expect(Date().timeIntervalSince(started) < 5)
+        // The command itself is watched, from this thread: not when the test gets its turn again.
+        while kill(command, 0) == 0, Date().timeIntervalSince(stopped) < 15 { usleep(20_000) }
+        #expect(kill(command, 0) != 0, "it has ended")
+        #expect(Date().timeIntervalSince(stopped) < 10)
+        await #expect(throws: (any Error).self) { try await task.value }
     }
 
     @Test func aPaperAlreadyInTheTargetLanguageSaysSo() {

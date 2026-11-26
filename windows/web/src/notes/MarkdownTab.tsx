@@ -1,19 +1,30 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { EditorView } from "@codemirror/view";
-import { Bold, Code, Heading, Italic, Link, List, ListOrdered, ListTodo, Minus, Quote, SquareCode, Strikethrough, Table } from "lucide-react";
+import { FileText } from "lucide-react";
 import { call } from "../rpc";
 import { t } from "../i18n";
-import { useStore } from "../store";
+import { docName, setState, useStore } from "../store";
 import { TabBar, SettingsButton } from "../library/LibraryPage";
 import { markdownSource } from "../library/Inspector";
-import { openMenuAt } from "../ui/menu";
-import { format, MarkdownEditor } from "./markdown";
+import { openItems } from "../commands";
+import { styleAt, wordCount } from "./blocks";
+import { MarkdownEditor } from "./markdown";
+import { DocumentTools, MarkdownTools } from "./MarkdownTools";
+import { mdOf } from "./prefs";
 import { ReturnToTabsButton } from "../ui/detach";
 
 /** A document's name in its tab's title row, edited in place: Enter renames the file, Esc keeps the name. */
 function FileName({ fileId, name }: { fileId: string; name: string }) {
   const [draft, setDraft] = useState(name);
   const editing = useRef(false);
+  const field = useRef<HTMLInputElement>(null);
+  // A new document: its name is selected, to be typed over; Enter goes on to the text.
+  const naming = useStore((s) => s.naming === fileId);
+  useEffect(() => {
+    if (!naming) return;
+    const timer = setTimeout(() => { field.current?.focus(); field.current?.select(); setState({ naming: null }); }, 120);
+    return () => clearTimeout(timer);
+  }, [naming]);
   useEffect(() => { if (!editing.current) setDraft(name); }, [name]);
   const commit = () => {
     editing.current = false;
@@ -22,13 +33,13 @@ function FileName({ fileId, name }: { fileId: string; name: string }) {
     else if (value !== name) call("markdown.rename", { file: fileId, name: value });
   };
   return (
-    <input className="doc-name" value={draft} spellCheck={false} aria-label={t("文件名")} size={Math.max(8, Math.min(40, draft.length + 1))}
+    <input ref={field} className="doc-name" value={draft} spellCheck={false} aria-label={t("文件名")} size={Math.max(8, Math.min(40, draft.length + 1))}
       onFocus={(e) => { editing.current = true; e.currentTarget.select(); }}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
         e.stopPropagation();
-        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Enter") { e.currentTarget.closest(".md-tab")?.querySelector<HTMLElement>(".cm-content")?.focus(); e.currentTarget.blur(); }
         if (e.key === "Escape") { editing.current = false; setDraft(name); requestAnimationFrame(() => (e.target as HTMLInputElement).blur()); }
       }} />
   );
@@ -40,16 +51,24 @@ export function MarkdownTab({ fileId, noteItemId, visible }: { fileId?: string; 
   const file = useStore((s) => (fileId ? s.files.get(fileId) : undefined));
   const item = useStore((s) => s.items.get(noteItemId ?? file?.itemId ?? ""));
   const captionWidth = useStore((s) => s.captionWidth);
+  const tools = useStore((s) => mdOf(s.settings, "markdownToolbar"));
+  const counts = useStore((s) => mdOf(s.settings, "markdownShowsWordCount"));
   const view = useRef<EditorView | null>(null);
+  const [style, setStyleName] = useState("text");
+  const [count, setCount] = useState(0);
+  const countTimer = useRef(0);
+  const onUpdate = (v: EditorView) => {
+    setStyleName(styleAt(v, v.state.selection.main.head));
+    clearTimeout(countTimer.current);
+    countTimer.current = window.setTimeout(() => setCount(wordCount(v.state.doc.toString())), 200);
+  };
+  const hasPaper = !!item && item.kind === "regular" && !!item.defaultFileId;
   const source = useMemo(() => noteItemId
     ? { key: `note:${noteItemId}`, load: () => call<string>("note.get", { item: noteItemId }), save: (text: string) => { call("note.set", { item: noteItemId, text }); } }
     : markdownSource(fileId!), [fileId, noteItemId]);
   if (!noteItemId && !file) return null;
-  const name = file ? file.fileName.replace(/\.(md|markdown)$/i, "") : "";
+  const name = file ? docName(file) : "";
   const subtitle = noteItemId || item?.kind === "regular" ? item?.title ?? "" : "";
-  const run = (f: (v: EditorView) => void) => (e: React.MouseEvent) => { e.preventDefault(); if (view.current) f(view.current); };
-  const tool = (label: string, Icon: any, f: (v: EditorView) => void) =>
-    <button title={label} aria-label={label} onMouseDown={run(f)}><Icon size={16} strokeWidth={1.75} /></button>;
   return (
     <div className="md-tab window" style={{ display: visible ? "flex" : "none" }}>
       <div className="titlebar-row drag" style={{ paddingLeft: 10, paddingRight: captionWidth + 8 }}>
@@ -59,40 +78,20 @@ export function MarkdownTab({ fileId, noteItemId, visible }: { fileId?: string; 
           {file ? <FileName fileId={file.id} name={name} /> : <div className="name ellipsis">{t("笔记")}</div>}
           {subtitle && <div className="count ellipsis" title={subtitle}>{subtitle}</div>}
         </div>
-        <div className="md-tools">
+        {tools && <div className="md-tools"><MarkdownTools view={view} style={style} /></div>}
+        <div className="md-tools end">
           <div className="glass-group">
-            <button title={t("标题")} aria-label={t("标题")} onMouseDown={(e) => {
-              e.preventDefault();
-              const v = view.current;
-              if (!v) return;
-              openMenuAt(e.currentTarget, [1, 2, 3, 0].map((level) => ({ label: level ? t("标题 %lld", level) : t("正文"), action: () => format.heading(v, level) })));
-            }}><Heading size={16} strokeWidth={1.75} /></button>
-          </div>
-          <div className="glass-group">
-            {tool(t("粗体（Ctrl+B）"), Bold, (v) => format.wrap(v, "**"))}
-            {tool(t("斜体（Ctrl+I）"), Italic, (v) => format.wrap(v, "*"))}
-            {tool(t("删除线"), Strikethrough, (v) => format.wrap(v, "~~"))}
-            {tool(t("行内代码"), Code, (v) => format.wrap(v, "`"))}
-            {tool(t("链接（Ctrl+K）"), Link, format.link)}
-          </div>
-          <div className="glass-group">
-            {tool(t("项目列表"), List, (v) => format.lines(v, "bullet"))}
-            {tool(t("编号列表"), ListOrdered, (v) => format.lines(v, "numbered"))}
-            {tool(t("任务列表"), ListTodo, (v) => format.lines(v, "task"))}
-          </div>
-          <div className="glass-group">
-            {tool(t("引用"), Quote, (v) => format.lines(v, "quote"))}
-            {tool(t("代码块"), SquareCode, format.codeBlock)}
-            {tool(t("表格"), Table, (v) => format.block(v, `| ${t("列 1")} | ${t("列 2")} |\n| --- | --- |\n|  |  |`, 2))}
-            {tool(t("分隔线"), Minus, (v) => format.block(v, "---"))}
+            {hasPaper && <button title={t("打开论文")} aria-label={t("打开论文")} onClick={() => openItems([item!.id])}><FileText size={16} strokeWidth={1.75} /></button>}
+            <DocumentTools panel={false} view={view} />
           </div>
         </div>
       </div>
       <TabBar />
       <div className="md-tab-body">
         <div className="md-tab-column">
-          <MarkdownEditor source={source} viewRef={view} focus className="md-text" placeholder="" />
+          <MarkdownEditor source={source} viewRef={view} focus gutter onUpdate={onUpdate} className="md-text" placeholder="" />
         </div>
+        {counts && count > 0 && <div className="md-count tabular">{t("%lld 字", count)}</div>}
       </div>
     </div>
   );

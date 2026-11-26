@@ -1,4 +1,5 @@
 import CoreGraphics
+import CryptoKit
 import CoreText
 import Foundation
 import PDFKit
@@ -279,6 +280,178 @@ enum ScanSample {
         await #expect(throws: OCRError.nothingToRecognize) {
             try await PDFTextRecognizer.recognize(input: input, output: folder.url.appending(path: "out.pdf"))
         }
+    }
+}
+
+/// Scans as they come from scanners, copiers and databases.
+@Suite(.serialized) struct RealWorldScanTests {
+    static func document(_ data: Data) -> CGPDFDocument { CGPDFDocument(CGDataProvider(data: data as CFData)!)! }
+
+    /// The page of `scan` with `content` drawn after it (`F` is Helvetica).
+    static func adding(_ content: String, to scan: Data, box: CGRect? = nil, scale: CGFloat = 1) -> Data {
+        let source = document(scan)
+        let writer = PDFWriter(), copier = PDFCopier(writer: writer)
+        let pages = writer.reserve(), pageObject = writer.reserve()
+        let dict = source.page(at: 1)!.dictionary!
+        copier.pageMap[PDFCopier.key(dict)] = pageObject
+        var entries = copier.entries(of: dict, skipping: ["Parent", "Contents", "Resources", "MediaBox", "CropBox"])
+        let media = source.page(at: 1)!.getBoxRect(.mediaBox)
+        var resources = copier.entries(of: PDFDictionary.resources(of: dict)!, skipping: ["Font"])
+        let helvetica = writer.add(.dict(["Type": .name("Font"), "Subtype": .name("Type1"), "BaseFont": .name("Helvetica")]))
+        resources["Font"] = .dict(["F": .ref(helvetica)])
+        entries["Resources"] = .dict(resources)
+        entries["Parent"] = .ref(pages)
+        entries["MediaBox"] = .rect(CGRect(x: 0, y: 0, width: media.width * scale, height: media.height * scale))
+        var data = Data("q \(scale) 0 0 \(scale) 0 0 cm\n".utf8)
+        data.append(PDFDictionary.contents(of: dict))
+        data.append(Data("\nQ\n\(content)\n".utf8))
+        entries["Contents"] = .ref(writer.addStream(dict: [:], data: data))
+        writer.set(pageObject, .dict(entries))
+        writer.set(pages, .dict(["Type": .name("Pages"), "Kids": .array([.ref(pageObject)]), "Count": .int(1)]))
+        return writer.finish(root: writer.add(.dict(["Type": .name("Catalog"), "Pages": .ref(pages)])), info: nil)
+    }
+
+    @Test func footerOfADatabaseDoesNotHideTheScan() async throws {
+        let scan = Self.adding("BT /F 7 Tf 60 20 Td (China Academic Journal Electronic Publishing House. All rights reserved. http://www.cnki.net) Tj ET",
+                               to: ScanSample.pdf([ScanSample.chinese]))
+        #expect(ScannedPDF.isScanned(Self.document(scan)))
+        let (result, _, _) = try await ScanRecognitionTests.recognize(scan)
+        let text = result.string ?? ""
+        #expect(text.contains("深度学习方法"))
+        // The footer is text already: not there twice.
+        #expect(text.components(separatedBy: "cnki").count == 2, "\(text)")
+    }
+
+    /// A layer as Folio before 1.6 (and Tesseract) wrote it: every character the same glyph; `inForm`: as OCRmyPDF puts it on the page.
+    static func oneGlyphLayer(_ text: String, inForm: Bool) -> Data {
+        let writer = PDFWriter()
+        let file = writer.addStream(dict: ["Length1": .int(OCRTextLayer.twoGlyphTrueType.count)], data: OCRTextLayer.twoGlyphTrueType)
+        let descriptor = writer.add(.dict(["Type": .name("FontDescriptor"), "FontName": .name("GlyphLessFont"), "Flags": .int(5), "FontBBox": .array([.int(0), .int(-200), .int(500), .int(800)]),
+                                           "ItalicAngle": .int(0), "Ascent": .int(800), "Descent": .int(-200), "CapHeight": .int(800), "StemV": .int(80), "FontFile2": .ref(file)]))
+        var map = Data(count: 65536 * 2)
+        for k in stride(from: 1, to: map.count, by: 2) { map[k] = 1 }
+        let gids = writer.addStream(dict: [:], data: map)
+        let cid = writer.add(.dict(["Type": .name("Font"), "Subtype": .name("CIDFontType2"), "BaseFont": .name("GlyphLessFont"), "FontDescriptor": .ref(descriptor), "DW": .int(500), "CIDToGIDMap": .ref(gids),
+                                    "CIDSystemInfo": .dict(["Registry": .string(Data("Adobe".utf8)), "Ordering": .string(Data("Identity".utf8)), "Supplement": .int(0)])]))
+        let unicode = writer.addStream(dict: [:], data: OCRTextLayer.toUnicodeCMap)
+        let font = writer.add(.dict(["Type": .name("Font"), "Subtype": .name("Type0"), "BaseFont": .name("GlyphLessFont"), "Encoding": .name("Identity-H"), "DescendantFonts": .array([.ref(cid)]), "ToUnicode": .ref(unicode)]))
+        let content = Data(("BT 3 Tr /F 12 Tf 72 700 Td <" + text.utf16.map { String(format: "%04X", $0) }.joined() + "> Tj ET").utf8)
+        let fonts: PDFValue = .dict(["Font": .dict(["F": .ref(font)])])
+        let pages = writer.reserve()
+        let resources: PDFValue, contents: Int
+        if inForm {
+            let form = writer.addStream(dict: ["Type": .name("XObject"), "Subtype": .name("Form"), "BBox": .rect(CGRect(x: 0, y: 0, width: 612, height: 792)), "Resources": fonts], data: content)
+            resources = .dict(["XObject": .dict(["O": .ref(form)])])
+            contents = writer.addStream(dict: [:], data: Data("q /O Do Q".utf8))
+        } else {
+            resources = fonts
+            contents = writer.addStream(dict: [:], data: content)
+        }
+        let kids = (0..<2).map { _ in
+            writer.add(.dict(["Type": .name("Page"), "Parent": .ref(pages), "MediaBox": .rect(CGRect(x: 0, y: 0, width: 612, height: 792)), "Resources": resources, "Contents": .ref(contents)]))
+        }
+        writer.set(pages, .dict(["Type": .name("Pages"), "Kids": .array(kids.map { .ref($0) }), "Count": .int(2)]))
+        return writer.finish(root: writer.add(.dict(["Type": .name("Catalog"), "Pages": .ref(pages)])), info: nil)
+    }
+
+    /// PDFKit writes fonts anew by their glyphs (macOS before 27): the text has to come out of that whole.
+    @Test(arguments: [false, true]) func textSurvivesBeingSaved(inForm: Bool) throws {
+        let words = "quick brown fox 深度学习"
+        let safe = try #require(OCRTextLayer.safeToSave(Self.oneGlyphLayer(words, inForm: inForm)))
+        #expect(OCRTextLayer.safeToSave(safe) == nil, "nothing left to replace")
+        let document = try #require(PDFDocument(data: safe))
+        document.page(at: 0)!.addAnnotation(PDFAnnotation(bounds: CGRect(x: 72, y: 690, width: 100, height: 20), forType: .highlight, withProperties: nil))
+        let saved = try #require(PDFDocument(data: document.dataRepresentation()!))
+        for k in 0..<2 { #expect(saved.page(at: k)?.string?.trimmingCharacters(in: .whitespacesAndNewlines) == words) }
+        #expect(saved.page(at: 0)?.annotations.count == 1)
+    }
+
+    /// The Windows version makes the same one, byte for byte.
+    @Test func theFontIsWhatItWas() {
+        #expect(OCRTextLayer.trueType.count == 262_732)
+        #expect(SHA256.hash(data: OCRTextLayer.trueType).prefix(8).map { String(format: "%02x", $0) }.joined() == "ea3f30bf2bae38c4")
+    }
+
+    @Test func recognisedScanSurvivesBeingSaved() async throws {
+        let (_, written, _) = try await ScanRecognitionTests.recognize(ScanSample.pdf([ScanSample.english, ScanSample.chinese]))
+        #expect(OCRTextLayer.safeToSave(written) == nil)
+        let document = try #require(PDFDocument(data: written))
+        document.page(at: 0)!.addAnnotation(PDFAnnotation(bounds: CGRect(x: 72, y: 690, width: 100, height: 20), forType: .highlight, withProperties: nil))
+        let data = try #require(document.dataRepresentation())
+        let saved = try #require(PDFDocument(data: data))
+        #expect(!saved.findString("brown fox", withOptions: .caseInsensitive).isEmpty)
+        #expect(saved.page(at: 1)?.string?.contains("深度学习方法") == true)
+        let interpreter = ContentInterpreter()
+        interpreter.run(page: Self.document(data).page(at: 1)!)
+        #expect(interpreter.isRecognizedScan, "and can still be translated")
+    }
+
+    @Test func slantedWatermarkDoesNotHideTheScan() {
+        let scan = Self.adding("BT /F 40 Tf 0.7 0.7 -0.7 0.7 100 200 Tm (FOR LIBRARY USE ONLY SAMPLE COPY) Tj ET", to: ScanSample.pdf([ScanSample.chinese]))
+        #expect(ScannedPDF.isScanned(Self.document(scan)))
+    }
+
+    @Test func pageOfOnePointPerPixelIsRead() async throws {
+        let scan = Self.adding("", to: ScanSample.pdf([ScanSample.chinese]), scale: 9)
+        #expect(Self.document(scan).page(at: 1)!.getBoxRect(.mediaBox).height > 7000)
+        let (result, _, _) = try await ScanRecognitionTests.recognize(scan)
+        #expect((result.string ?? "").contains("深度学习方法"))
+    }
+
+    @Test func coverPageWithTextDoesNotHideTheScan() throws {
+        let cover = PDFDocument(data: TestPDF.make([TestPDF.paragraph(["This cover page was added by the document delivery service of the library."], top: 700)]))!
+        let scans = PDFDocument(data: ScanSample.pdf([ScanSample.chinese, ScanSample.english, ScanSample.chinese]))!
+        for k in 0..<3 { cover.insert(scans.page(at: k)!.copy() as! PDFPage, at: k + 1) }
+        let data = cover.dataRepresentation()!
+        #expect(ScannedPDF.isScanned(Self.document(data)))
+        #expect(ScannedPDF.pagesNeedingOCR(Self.document(data)) == [2, 3, 4])
+    }
+
+    @Test func sidewaysAndUpsideDownPagesAreRead() async throws {
+        for (turn, box) in [(180, CGRect(x: 0, y: 0, width: 612, height: 792)), (90, CGRect(x: 0, y: 0, width: 792, height: 612))] {
+            let image = ScanSample.bitmap(ScanSample.english, size: CGSize(width: 612, height: 792), jpeg: false)
+            let data = NSMutableData()
+            var media = box
+            let context = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!, mediaBox: &media, nil)!
+            context.beginPDFPage(nil)
+            context.translateBy(x: box.midX, y: box.midY)
+            context.rotate(by: CGFloat(turn) * .pi / 180)
+            context.draw(image, in: CGRect(x: -306, y: -396, width: 612, height: 792))
+            context.endPDFPage()
+            context.closePDF()
+            let (result, _, _) = try await ScanRecognitionTests.recognize(data as Data)
+            let text = (result.string ?? "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            #expect(ScanRecognitionTests.accuracy(text, ScanSample.english.map(\.text)) >= 0.9, "\(turn): \(text)")
+            let first = try #require(text.range(of: "Scanned")), last = try #require(text.range(of: "quick"))
+            #expect(first.lowerBound < last.lowerBound, "\(turn): \(text)")
+        }
+    }
+
+    @Test func recognisedScanIsTranslatable() async throws {
+        let (_, written, _) = try await ScanRecognitionTests.recognize(ScanSample.pdf([ScanSample.english]))
+        let cg = Self.document(written)
+        let interpreter = ContentInterpreter()
+        interpreter.run(page: cg.page(at: 1)!)
+        #expect(interpreter.isRecognizedScan)
+        var analyzer = LayoutAnalyzer(options: .init(translateTables: true, translateReferences: false))
+        let layouts = analyzer.analyze(document: PDFDocument(data: written)!, cgDocument: cg, pages: [1])
+        #expect(layouts.first?.isScan == true)
+        let segments = SegmentBuilder.segments(for: layouts, target: "zh")
+        // Words apart, as they were read.
+        #expect(segments.contains { $0.source.contains("quick brown fox jumps") }, "\(segments.map(\.source))")
+        let translations = Dictionary(uniqueKeysWithValues: segments.map { ($0.id, "译文甲乙丙丁") })
+        let output = TranslationRenderer(source: cg, language: "zh").render(layouts: layouts, segments: segments, translations: translations,
+                                                                            mono: true, dual: false, dualLayout: .sideBySide, title: nil)
+        let mono = try #require(output.mono)
+        #expect((PDFDocument(data: mono)?.string ?? "").contains("译文甲乙丙丁"))
+        // The words of the picture are painted over with its paper.
+        let before = PDFTextRecognizer.render(cg.page(at: 1)!, longSide: 800)!
+        let after = PDFTextRecognizer.render(Self.document(mono).page(at: 1)!, longSide: 800)!
+        func ink(_ image: CGImage) -> Int {
+            let data = image.dataProvider!.data! as Data
+            return data.filter { $0 < 120 }.count
+        }
+        #expect(ink(after) < ink(before))
     }
 }
 

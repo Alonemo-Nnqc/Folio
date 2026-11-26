@@ -105,7 +105,7 @@ final class ItemOutlineView: NSOutlineView {
 }
 
 final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate, NSMenuDelegate,
-    QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+    QLPreviewPanelDataSource, QLPreviewPanelDelegate, NSTextFieldDelegate {
     let outline = ItemOutlineView()
     weak var model: AppModel?
     private var itemNodes: [String: ItemNode] = [:]
@@ -195,7 +195,8 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
     // MARK: Model → view
 
     func update() {
-        guard let model else { return }
+        // Reloading the rows would end the rename.
+        guard let model, renaming == nil else { return }
         let snapshot = model.snapshot
         let ids = model.rows
         let fileLists = Dictionary(uniqueKeysWithValues: ids.map { ($0, snapshot.filesByItem[$0] ?? []) })
@@ -347,6 +348,84 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         outline.headerView?.needsDisplay = true
     }
 
+    // MARK: Renaming a Markdown document (MD-01)
+
+    private var renaming: (fileId: String, field: NSTextField, name: String)?
+    private var cancelsRename = false
+
+    /// The document's name edited in its row. False when it has none on screen.
+    func beginRenaming(fileId: String) -> Bool {
+        guard let model, let file = model.snapshot.files[fileId], file.isMarkdown, outline.window?.isKeyWindow == true else { return false }
+        let own = model.snapshot.items[file.itemId]?.kind == .standalone
+        let row = own ? outline.row(forItem: itemNodes[file.itemId]) : outline.row(forItem: fileNodes[fileId])
+        guard row >= 0 else { return false }
+        outline.scrollRowToVisible(row)
+        let column = outline.column(withIdentifier: ItemColumn.title.identifier)
+        guard let cell = outline.view(atColumn: column, row: row, makeIfNecessary: true) as? TitleCell else { return false }
+        let name = model.snapshot.documentName(file)
+        renaming = (fileId, cell.label, name)
+        cancelsRename = false
+        cell.label.stringValue = name
+        cell.label.isEditable = true
+        cell.label.delegate = self
+        guard outline.window?.makeFirstResponder(cell.label) == true else {
+            endRenaming()
+            return false
+        }
+        cell.label.currentEditor()?.selectAll(nil)
+        return true
+    }
+
+    private func endRenaming() {
+        guard let (_, field, _) = renaming else { return }
+        renaming = nil
+        field.isEditable = false
+        field.delegate = nil
+        lastRowIds = []
+        update()
+        outline.window?.makeFirstResponder(outline)
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard let (fileId, field, name) = renaming, obj.object as? NSTextField === field else { return }
+        let typed = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cancelsRename, !typed.isEmpty, typed != name { model?.renameMarkdownFile(fileId, to: typed) }
+        DispatchQueue.main.async { [weak self] in self?.endRenaming() }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard renaming != nil, selector == #selector(NSResponder.cancelOperation(_:)) else { return false }
+        cancelsRename = true
+        control.window?.makeFirstResponder(outline)
+        return true
+    }
+
+    /// The ring of a paper in its row (设置 ▸ 通用 ▸ 在列表中显示阅读进度环). Choosing rows shows check circles instead.
+    private func showRing(of item: Item, in cell: TitleCell) {
+        guard let model else { return }
+        let shown = model.settings.showReadingRings && !model.multiSelectMode && !item.isTrashed
+        let status = shown && model.snapshot.tracksReading(item) ? item.readStatus : nil
+        cell.showRing(status, fraction: model.readingProgress[item.id]?.fraction ?? 0, room: shown) { [weak model] in
+            model?.setReadStatus($0, on: [item.id])
+        }
+    }
+
+    /// The rings on screen, after a paper was read further (no row is reloaded).
+    func updateReadingProgress() {
+        guard let model else { return }
+        let title = outline.column(withIdentifier: ItemColumn.title.identifier)
+        let status = outline.column(withIdentifier: ItemColumn.readStatus.identifier)
+        let visible = outline.rows(in: outline.visibleRect)
+        guard visible.length > 0 else { return }
+        for row in visible.location..<visible.location + visible.length {
+            guard let node = outline.item(atRow: row) as? ItemNode, let item = model.snapshot.items[node.id], item.readStatus == .reading else { continue }
+            if title >= 0, let cell = outline.view(atColumn: title, row: row, makeIfNecessary: false) as? TitleCell { showRing(of: item, in: cell) }
+            if status >= 0, let cell = outline.view(atColumn: status, row: row, makeIfNecessary: false) as? TextCell {
+                cell.configure(CellText.readStatus(.reading, fraction: model.readingProgress[item.id]?.fraction ?? 0))
+            }
+        }
+    }
+
     /// The check circles of the rows on screen, after the selection changed (多选).
     func updateChecks() {
         guard let model else { return }
@@ -480,6 +559,7 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             cell.configureItem(entry, fileURL: model.defaultFile(of: entry.id).map(model.fileURL), origin: origin,
                                hasNote: snapshot.notedItems.contains(entry.id), translation: translation,
                                translations: translations)
+            showRing(of: entry, in: cell)
             cell.showCheck(model.multiSelectMode ? model.selectedItemIDs.contains(entry.id) : nil)
             return cell
         case .tags:
@@ -488,7 +568,8 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             return cell
         case .readStatus:
             let cell = make(TextCell.self, TextCell.identifier)
-            cell.configure(CellText.readStatus(entry))
+            cell.configure(snapshot.tracksReading(entry)
+                ? CellText.readStatus(entry.readStatus, fraction: model.readingProgress[entry.id]?.fraction ?? 0) : NSAttributedString(string: ""))
             return cell
         case .rating:
             let cell = make(TextCell.self, TextCell.identifier)
@@ -608,21 +689,35 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
         if panel.isVisible { panel.orderOut(nil) } else { panel.makeKeyAndOrderFront(nil) }
     }
 
-    private var previewURLs: [URL] {
+    /// Markdown (documents and notes) is set as in the editor: the system would show its bare text, if anything.
+    private var previewItems: [any QLPreviewItem] {
         guard let model else { return [] }
-        return outline.selectedRowIndexes.compactMap { row -> URL? in
+        func note(_ itemId: String) -> (any QLPreviewItem)? {
+            guard let text = try? model.library.note(for: itemId), !text.isEmpty else { return nil }
+            let title = model.snapshot.items[itemId]?.title ?? ""
+            return MarkdownPreviewItem.item(key: "note-\(itemId)", title: String(localized: "笔记：\(title)"), text: text, base: nil)
+        }
+        func document(_ file: FileRecord) -> any QLPreviewItem {
+            let url = model.fileURL(file)
+            if file.isMarkdown, let text = try? String(contentsOf: url, encoding: .utf8),
+               let item = MarkdownPreviewItem.item(key: file.id, title: file.fileName, text: text, base: url.deletingLastPathComponent()) { return item }
+            return url as NSURL
+        }
+        return outline.selectedRowIndexes.compactMap { row in
             switch outline.item(atRow: row) {
-            case let node as ItemNode: model.defaultFile(of: node.id).map(model.fileURL)
-            case let node as FileNode: model.snapshot.files[node.id].map(model.fileURL)
+            case let node as ItemNode: model.defaultFile(of: node.id).map(document) ?? note(node.id)
+            case let node as FileNode: model.snapshot.files[node.id].map(document)
+            case let node as NoteNode: note(node.itemId)
             default: nil
             }
         }
     }
 
-    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { previewURLs.count }
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { previewItems.count }
 
     func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
-        previewURLs[index] as NSURL
+        let items = previewItems
+        return items.indices.contains(index) ? items[index] : nil
     }
 
     func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
@@ -758,8 +853,11 @@ final class ItemListController: NSObject, NSOutlineViewDataSource, NSOutlineView
             // The whole list is the target; the glass overlay replaces the table's own highlight.
             outlineView.draggingDestinationFeedbackStyle = .none
             outlineView.setDropItem(nil, dropChildIndex: NSOutlineViewDropOnItemIndex)
-            let count = ItemPasteboard.fileURLs(info.draggingPasteboard).count
-            if model.externalDropCount != count { model.externalDropCount = count }
+            let urls = ItemPasteboard.fileURLs(info.draggingPasteboard)
+            if model.externalDropCount != urls.count {
+                model.externalDropHasFolders = urls.contains(where: ImportCoordinator.isFolder)
+                model.externalDropCount = urls.count
+            }
             return .copy
         case .reorder:
             outlineView.draggingDestinationFeedbackStyle = .gap

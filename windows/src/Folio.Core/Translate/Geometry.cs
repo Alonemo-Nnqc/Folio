@@ -23,6 +23,14 @@ public readonly record struct Affine(double A, double B, double C, double D, dou
         C * t2.A + D * t2.C, C * t2.B + D * t2.D,
         Tx * t2.A + Ty * t2.C + t2.Tx, Tx * t2.B + Ty * t2.D + t2.Ty);
 
+    /// <summary>CGAffineTransformInvert (itself when it cannot be).</summary>
+    public Affine Inverted()
+    {
+        double det = A * D - B * C;
+        if (Math.Abs(det) < 1e-12) return this;
+        return new(D / det, -B / det, -C / det, A / det, (C * Ty - D * Tx) / det, (B * Tx - A * Ty) / det);
+    }
+
     public Affine Translated(double x, double y) => Translation(x, y).Concatenating(this);
     public Affine Scaled(double x, double y) => Scale(x, y).Concatenating(this);
 }

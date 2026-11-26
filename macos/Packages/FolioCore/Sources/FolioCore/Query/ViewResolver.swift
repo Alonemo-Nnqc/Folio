@@ -10,6 +10,8 @@ public struct ViewQuery: Sendable, Hashable {
     /// Parent groups also show their subgroups' items (SIDE-10).
     public var includeSubgroupItems: Bool
     public var sort: SortState
+    /// When each paper was last read: the order of 在读 until it is given one by hand.
+    public var lastRead: [String: Date] = [:]
 
     public init(scope: ViewScope, searchText: String = "", searchWholeLibrary: Bool = false,
                 fulltextItemIds: Set<String>? = nil, includeSubgroupItems: Bool = true, sort: SortState = .manual) {
@@ -42,6 +44,8 @@ public enum ViewResolver {
             return ids.filter { s.items[$0].map { !$0.isTrashed } ?? false }
         case .tag(let id):
             return (s.tagItems[id] ?? []).filter { s.items[$0].map { !$0.isTrashed } ?? false }
+        case .status(let status):
+            return s.items.values.filter { !$0.isTrashed && $0.readStatus == status && s.tracksReading($0) }.map(\.id)
         }
     }
 
@@ -61,7 +65,9 @@ public enum ViewResolver {
             sorted = items.sorted { ($0.trashedAt ?? .distantPast, $0.id) > ($1.trashedAt ?? .distantPast, $1.id) }
         } else {
             let positions = s.orders[effectiveScope.key] ?? [:]
-            func position(_ item: Item) -> Double { positions[item.id] ?? -item.dateAdded.timeIntervalSince1970 }
+            // 在读: the paper read last comes first.
+            let lastRead = effectiveScope == .status(.reading) ? q.lastRead : [:]
+            func position(_ item: Item) -> Double { positions[item.id] ?? -(lastRead[item.id] ?? item.dateAdded).timeIntervalSince1970 }
             sorted = items.sorted {
                 let (pa, pb) = (position($0), position($1))
                 if pa != pb { return pa < pb }
@@ -77,7 +83,7 @@ public enum ViewResolver {
 public enum SidebarCounts {
     public static func compute(_ s: LibrarySnapshot, includeSubgroupItems: Bool) -> [ViewScope: Int] {
         var counts: [ViewScope: Int] = [:]
-        for scope in [ViewScope.all, .unfiled, .trash] {
+        for scope in [ViewScope.all, .unfiled, .trash] + ReadStatus.allCases.map(ViewScope.status) {
             counts[scope] = ViewResolver.members(of: scope, in: s, includeSubgroupItems: includeSubgroupItems).count
         }
         for id in s.groupsById.keys {

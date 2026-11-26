@@ -94,5 +94,12 @@ enum Migrations {
             ALTER TABLE item ADD COLUMN genre TEXT;
             """)
         }
+        // v1.6: how far each file has been read. Windows registers the same migration.
+        migrator.registerMigration("v1.6-readingProgress") { db in
+            try db.execute(sql: """
+            ALTER TABLE readingState ADD COLUMN pageCount INTEGER;
+            ALTER TABLE readingState ADD COLUMN seenPages TEXT;
+            """)
+        }
     }
 }

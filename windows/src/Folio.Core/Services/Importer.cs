@@ -87,38 +87,66 @@ public sealed class Importer
 
     // MARK: Importing
 
-    public static List<string> Expand(IEnumerable<string> paths)
+    /// <summary>Files go to groupId; a folder becomes a group in it (null: at the top level), at index among its groups. Returns the
+    /// group the last folder became.</summary>
+    public async Task<string?> ImportFiles(IEnumerable<string> paths, string? groupId, int? index = null)
     {
-        var result = new List<string>();
-        foreach (var path in paths)
-        {
-            if (Directory.Exists(path))
-                result.AddRange(Directory.EnumerateFiles(path, "*.pdf", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, MatchCasing = MatchCasing.CaseInsensitive })
-                    .Where(f => !Path.GetFileName(f).StartsWith('.')));
-            else if (File.Exists(path)) result.Add(path);
-        }
-        return result;
-    }
-
-    public async Task ImportFiles(IEnumerable<string> paths, string? groupId)
-    {
-        var files = Expand(paths);
-        if (files.Count == 0)
+        var all = paths.ToList();
+        var folders = all.Where(Directory.Exists).ToList();
+        var files = all.Where(File.Exists).ToList();
+        if (folders.Count == 0 && files.Count == 0)
         {
             _ui.Toast(Loc.S("没有找到可导入的文件"), "question");
-            return;
+            return null;
         }
-        var outcomes = await Task.Run(() => Library.ImportFiles(files, groupId));
+        if (files.Count > 0) await Handle(await Task.Run(() => Library.ImportFiles(files, groupId)), groupId, null);
+        string? made = null;
+        foreach (var path in folders)
+        {
+            made = await ImportFolder(path, groupId, index) ?? made;
+            index++;
+        }
+        return made;
+    }
+
+    async Task<string?> ImportFolder(string path, string? parentId, int? index)
+    {
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
+        if (await Task.Run(() => Core.ImportFolder.Scan(path)) is not { } folder)
+        {
+            _ui.Toast(Loc.S("「%@」中没有 PDF 或 Markdown 文件", name), "question");
+            return null;
+        }
+        if (folder.FileCount > 20) _ui.Toast(Loc.S("正在导入「%@」（%lld 个文件）…", name, folder.FileCount), "folder");
+        try
+        {
+            var (groupId, outcomes) = await Task.Run(() => Library.ImportFolder(folder, parentId, index));
+            await Handle(outcomes, groupId ?? parentId, name);
+            return groupId;
+        }
+        catch (Exception e)
+        {
+            _ui.Toast(Loc.S("无法导入「%@」：%@", name, e.Message), "warning");
+            return null;
+        }
+    }
+
+    /// <summary>folder: the name of the folder they were in; what came of them is said once, for all.</summary>
+    async Task Handle(List<ImportOutcome> outcomes, string? groupId, string? folder)
+    {
+        foreach (var imported in outcomes.OfType<ImportOutcome.Imported>())
+        {
+            if (!imported.IsPdf) continue;
+            if (_settings.AutoRetrieveOnImport) Enqueue(imported.ItemId);
+            else Library.SetMetadataState(MetadataState.None, imported.ItemId);
+            IndexFulltext();
+            _ui.PdfImported(imported.ItemId);
+        }
+        if (folder != null) { await Summarize(outcomes, folder); return; }
         foreach (var outcome in outcomes)
         {
             switch (outcome)
             {
-                case ImportOutcome.Imported imported when imported.IsPdf:
-                    if (_settings.AutoRetrieveOnImport) Enqueue(imported.ItemId);
-                    else Library.SetMetadataState(MetadataState.None, imported.ItemId);
-                    IndexFulltext();
-                    _ui.PdfImported(imported.ItemId);
-                    break;
                 case ImportOutcome.DuplicateFile d:
                     var title = Library.Item(d.ExistingItemId)?.Title ?? "";
                     if (d.AddedToGroup && groupId != null && Library.Snapshot().GroupsById.GetValueOrDefault(groupId) is { } g)
@@ -133,6 +161,19 @@ public sealed class Importer
                     break;
             }
         }
+    }
+
+    async Task Summarize(List<ImportOutcome> outcomes, string folder)
+    {
+        int added = outcomes.Count(o => o is ImportOutcome.Imported), known = outcomes.Count(o => o is ImportOutcome.DuplicateFile), failed = outcomes.Count(o => o is ImportOutcome.Failed);
+        var parts = new List<string> { Loc.S("已导入「%@」：%lld 个文件", folder, added) };
+        if (known > 0) parts.Add(Loc.S("%lld 个已在文献库，已加入分组", known));
+        if (failed > 0) parts.Add(Loc.S("%lld 个无法添加", failed));
+        _ui.Toast(string.Join(Loc.S("，"), parts), failed > 0 ? "warning" : "folder");
+        var trashed = outcomes.OfType<ImportOutcome.DuplicateInTrash>().Select(t => t.ExistingItemId).ToList();
+        if (trashed.Count == 0) return;
+        var first = Library.Item(trashed[0])?.Title ?? "";
+        if (await _ui.AskRestore(trashed.Count > 1 ? Loc.S("%@ 等 %lld 篇", first, trashed.Count) : first)) Library.RestoreItems(trashed);
     }
 
     public async Task AttachFiles(IEnumerable<string> paths, string itemId)

@@ -181,6 +181,8 @@ enum SegmentBuilder {
                 // or an address keeps its hyphen, without a space.
                 let word = out.dropLast().split(whereSeparator: \.isWhitespace).last ?? ""
                 if next?.isLowercase == true, !word.contains("-"), !word.contains("/") { out.removeLast() }
+            } else if let last = out.unicodeScalars.last, OCRTextLayer.isCJK(last), let first = block.lines[index + 1].text.unicodeScalars.first, OCRTextLayer.isCJK(first) {
+                // Chinese runs on over the line's end without a space.
             } else if !out.hasSuffix(" ") {
                 out += " "
             }

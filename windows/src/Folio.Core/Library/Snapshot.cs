@@ -52,6 +52,9 @@ public sealed class LibrarySnapshot
 
     public SortState Sort(ViewScope scope) => Sorts.GetValueOrDefault(scope.Key) ?? SortState.Manual;
 
+    /// <summary>Whether the item is something to read through: a paper, or a PDF without metadata yet (a Markdown document is not).</summary>
+    public bool TracksReading(Item item) => item.Kind == ItemKind.Regular || FilesOf(item.Id).Any(f => f.IsPdf);
+
     public List<FileRecord> FilesOf(string itemId) =>
         FilesByItem.TryGetValue(itemId, out var ids) ? ids.Select(id => Files[id]).ToList() : [];
 
@@ -187,6 +190,8 @@ public sealed class LibrarySnapshot
 public sealed record ViewQuery(ViewScope Scope, string SearchText = "", bool SearchWholeLibrary = false,
                                IReadOnlySet<string>? FulltextItemIds = null, bool IncludeSubgroupItems = true, SortState? Sort = null)
 {
+    /// <summary>When each paper was last read: the order of 在读 until it is given one by hand.</summary>
+    public IReadOnlyDictionary<string, DateTime>? LastRead { get; init; }
     public bool IsSearching => SearchText.Trim().Length > 0;
 }
 
@@ -202,6 +207,7 @@ public static class ViewResolver
             .SelectMany(id => s.GroupItems.GetValueOrDefault(id) ?? []).Distinct()
             .Where(id => s.Items.TryGetValue(id, out var i) && !i.IsTrashed).ToList(),
         ViewScope.TagScope t => (s.TagItems.GetValueOrDefault(t.Id) ?? []).Where(id => s.Items.TryGetValue(id, out var i) && !i.IsTrashed).ToList(),
+        ViewScope.StatusScope t => s.Items.Values.Where(i => !i.IsTrashed && i.ReadStatus == t.Status && s.TracksReading(i)).Select(i => i.Id).ToList(),
         _ => [],
     };
 
@@ -224,7 +230,9 @@ public static class ViewResolver
         else
         {
             var positions = s.Orders.GetValueOrDefault(effective.Key) ?? [];
-            double Position(Item i) => positions.TryGetValue(i.Id, out var p) ? p : -(i.DateAdded - DateTime.UnixEpoch).TotalSeconds;
+            double Position(Item i) => positions.TryGetValue(i.Id, out var p) ? p : -(LastRead(i) - DateTime.UnixEpoch).TotalSeconds;
+            // 在读: the paper read last comes first.
+            DateTime LastRead(Item i) => effective is ViewScope.StatusScope { Status: ReadStatus.Reading } && q.LastRead != null && q.LastRead.TryGetValue(i.Id, out var read) ? read : i.DateAdded;
             items.Sort((a, b) =>
             {
                 var (pa, pb) = (Position(a), Position(b));
@@ -294,6 +302,8 @@ public static class SidebarCounts
         var counts = new Dictionary<string, int>();
         foreach (var scope in new[] { ViewScope.All, ViewScope.Unfiled, ViewScope.Trash })
             counts[scope.Key] = ViewResolver.Members(scope, s, includeSubgroupItems).Count;
+        foreach (var status in Enum.GetValues<ReadStatus>())
+            counts[ViewScope.StatusOf(status).Key] = ViewResolver.Members(ViewScope.StatusOf(status), s, includeSubgroupItems).Count;
         foreach (var id in s.GroupsById.Keys) counts[ViewScope.Group(id).Key] = ViewResolver.Members(ViewScope.Group(id), s, includeSubgroupItems).Count;
         foreach (var tag in s.Tags) counts[ViewScope.TagOf(tag.Id).Key] = ViewResolver.Members(ViewScope.TagOf(tag.Id), s, includeSubgroupItems).Count;
         return counts;

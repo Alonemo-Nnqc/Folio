@@ -235,6 +235,13 @@ public sealed class TranslationCoordinator(AppModel model)
                     await model.Ocr.RecognizeAndWait(fileId, p => SetStage(Loc.S("正在识别扫描件文字"), p.Total > 0 ? (double)p.Done / p.Total : null));
                     SetStage(Loc.S("正在启动翻译"), null);
                 }
+                // So has a page scanned into a paper that otherwise has text.
+                else if (!current.Cancelled && await model.Ocr.HasPagesWithoutText(fileId) && !current.Cancelled)
+                {
+                    SetStage(Loc.S("正在识别扫描页文字"), null);
+                    await model.Ocr.RecognizeScannedPages(fileId, p => SetStage(Loc.S("正在识别扫描页文字"), p.Total > 0 ? (double)p.Done / p.Total : null));
+                    SetStage(Loc.S("正在启动翻译"), null);
+                }
             }
             catch (Exception e)
             {

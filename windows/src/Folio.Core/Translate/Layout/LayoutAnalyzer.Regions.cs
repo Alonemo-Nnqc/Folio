@@ -9,7 +9,7 @@ public sealed partial class LayoutAnalyzer
     // MARK: Regions
 
     /// <summary>Tables from their rules: horizontal rules of (nearly) the same extent, two or more stacked.</summary>
-    static List<Rect> TableFrames(List<Rect> rules, List<LayoutLine> lines)
+    static List<Rect> TableFrames(List<Rect> rules, List<LayoutLine> lines, bool scan = false)
     {
         var groups = new List<List<Rect>>();
         foreach (var rule in rules.OrderByDescending(r => r.MaxY))
@@ -23,7 +23,9 @@ public sealed partial class LayoutAnalyzer
             bool Separated(Rect upper, Rect lower) => lines.Any(line =>
             {
                 var c = line.Rect.Center;
-                return c.Y < upper.MinY && c.Y > lower.MaxY && c.X > upper.MinX - 4 && c.X < upper.MaxX + 4 && (IsCaptionStart(line.Text) || ProseWords(line) >= 6);
+                return c.Y < upper.MinY && c.Y > lower.MaxY && c.X > upper.MinX - 4 && c.X < upper.MaxX + 4 && (IsCaptionStart(line.Text) || (ProseWords(line) >= 6
+                    // (A long cell of a scanned table does not start at its left edge.)
+                    && (!scan || line.MinX < upper.MinX + upper.W * 0.08)));
             });
             int start = 0;
             for (int k = 1; k <= group.Count; k++)
@@ -174,7 +176,9 @@ public sealed partial class LayoutAnalyzer
         var rows = new Dictionary<double, int>();
         foreach (var line in inside)
         {
-            var key = Math.Round(line.Baseline / 3);
+            // (The baselines of a scan's lines are measured: cells of one row differ by a little.)
+            var key = !_isScan ? Math.Round(line.Baseline / 3)
+                : rows.Keys.Cast<double?>().FirstOrDefault(k => Math.Abs(k!.Value - line.Baseline) < line.Size * 0.4) ?? line.Baseline;
             rows[key] = rows.GetValueOrDefault(key) + 1 + ColumnGaps(line);
         }
         int wide = rows.Values.Count(v => v >= 2);
@@ -266,6 +270,13 @@ public sealed partial class LayoutAnalyzer
                     int kk = k;
                     bool bridging = near && line.WordCount <= 4 && Enumerable.Range(0, regions.Count).Any(j =>
                         j != kk && regions[j].InsetBy(-reach, -reach).Intersects(r) && Math.Min(regions[j].MaxY, regions[kk].MaxY) > Math.Max(regions[j].MinY, regions[kk].MinY));
+                    // An axis title of a scanned chart may be long, but is small and within the chart.
+                    if (_isScan && near && within && line.Size < BodySize * 0.85 && line.WordCount <= 14 && !ContinuesText(line, lines))
+                    {
+                        var wider = regions[k].Union(r);
+                        if (wider != regions[k]) { regions[k] = wider; changed = true; }
+                        continue;
+                    }
                     bool title = line.WordCount <= 4 && r.MinX >= regions[k].MinX - 2 && r.MaxX <= regions[k].MaxX + 2 && !EndsParagraph(line, lines);
                     if (inside || bridging || (near && (small || title)))
                     {
@@ -390,20 +401,25 @@ public sealed partial class LayoutAnalyzer
 
     static readonly char[] PunctuationChars = Enumerable.Range(0x21, 0x5E).Select(i => (char)i).Where(c => char.IsPunctuation(c)).Concat("“”‘’—–…·•").ToArray();
 
-    /// <summary>Words of three or more letters outside formulas.</summary>
+    /// <summary>Words of three or more letters outside formulas (of Chinese, two characters are a word).</summary>
     static int TextWords(LayoutLine line)
     {
-        int count = 0, run = 0;
+        int count = 0, run = 0, han = 0;
         foreach (var c in line.Chars)
         {
-            if (!c.IsMath && !c.IsSpace && c.Text.Length > 0 && c.Text.EnumerateRunes().All(System.Text.Rune.IsLetter)) run++;
+            if (!c.IsMath && !c.IsSpace && c.Text.Length > 0 && c.Text.EnumerateRunes().All(System.Text.Rune.IsLetter))
+            {
+                run++;
+                if (c.Text.Any(h => h is >= '\u4E00' and <= '\u9FFF')) han++;
+            }
             else
             {
-                if (run >= 3) count++;
+                if (run >= 3 || han >= 2) count++;
                 run = 0;
+                han = 0;
             }
         }
-        return count + (run >= 3 ? 1 : 0);
+        return count + (run >= 3 || han >= 2 ? 1 : 0);
     }
 
     // MARK: Blocks
@@ -419,8 +435,11 @@ public sealed partial class LayoutAnalyzer
         double maxPitch = block.Lines.Count >= 2 ? Math.Min(block.Pitch * 1.35 + 0.5, size * 2.0) : size * 1.9;
         if (drop > maxPitch) return false;
         var r = block.Rect;
-        double overlap = Math.Min(r.MaxX, line.MaxX) - Math.Max(r.MinX, line.MinX);
+        // (A short second line of a paragraph starts left of an indented first one.)
+        double reach = _isScan && block.Lines.Count == 1 && r.MinX - line.MinX < size * 4 ? line.MinX : r.MinX;
+        double overlap = Math.Min(r.MaxX, line.MaxX) - Math.Max(reach, line.MinX);
         if (overlap < Math.Min(r.W, line.InkRect.W) * 0.5) return false;
+        if (_isScan && IsRowOfList(last) && IsRowOfList(line)) return false;
         if (_pageRules.Any(rule => rule.MidY < last.Baseline - last.Size * 0.2 && rule.MidY > line.Baseline + line.Size * 0.6
                 && Math.Min(rule.MaxX, Math.Min(last.MaxX, line.MaxX)) - Math.Max(rule.MinX, Math.Max(last.MinX, line.MinX)) > Math.Min(last.InkRect.W, line.InkRect.W) * 0.3))
             return false;
@@ -429,10 +448,15 @@ public sealed partial class LayoutAnalyzer
         if (IsReferencesHeading(last.Text) || IsReferencesHeading(line.Text)) return false;
         if (last.Font.IsBold && line.Font.IsBold && Math.Abs(last.Size - line.Size) < size * 0.06 && drop <= size * 1.45 && last.InkRect.W > size * 18 && !IsListItem(line.Text))
             return true;
+        // Bold words over a whole line in the middle of a paragraph of a scan (or a line that only looks heavier).
+        if (_isScan && Math.Abs(line.Size - last.Size) < size * 0.06 && drop <= size * 1.75 && Math.Abs(line.MinX - (block.Lines.Count > 1 ? last.MinX : line.MinX)) < size * 0.6
+            && last.InkRect.W > size * 16 && last.MaxX > r.MaxX - size * 1.5 && (block.Lines.Count >= 2 || !last.Font.IsBold)
+            && (StartsLower(line.Text.Trim()) || (block.Lines.Count >= 2 && line.MaxX > r.MaxX - size * 1.5))
+            && !IsListItem(line.Text) && last.Text.Trim() is { Length: > 0 } ending && !".:?!。：".Contains(ending[^1])) return true;
         bool lastHeading = IsHeadingLike(last), lineHeading = IsHeadingLike(line);
         if (lastHeading || lineHeading)
         {
-            bool sameStyle = lastHeading == lineHeading && last.Font.IsBold == line.Font.IsBold && Math.Abs(last.Size - line.Size) < last.Size * 0.06;
+            bool sameStyle = lastHeading == lineHeading && (last.Font.IsBold == line.Font.IsBold || (_isScan && Math.Min(last.Size, line.Size) >= BodySize * 1.15)) && Math.Abs(last.Size - line.Size) < last.Size * 0.06;
             bool numbered = Regex.IsMatch(line.Text, @"^\s*((\d{1,2}(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}");
             if (!sameStyle || numbered || drop > size * 1.45) return false;
             return true;

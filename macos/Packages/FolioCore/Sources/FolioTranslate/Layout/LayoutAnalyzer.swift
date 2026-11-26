@@ -20,13 +20,20 @@ struct LayoutAnalyzer {
     private var inReferences = false
     var bodySize = 10.0
     /// Where the text of the column at a position starts and ends, on the page being analysed.
-    private var columnOf: ((Double) -> (lo: Double, hi: Double))?
+    var columnOf: ((Double) -> (lo: Double, hi: Double))?
     /// How wide the page's lines of body text usually are.
-    private var typicalWidth = Double.infinity
+    var typicalWidth = Double.infinity
     /// Horizontal rules of the page being analysed.
     private var pageRules: [CGRect] = []
     /// The page being analysed.
     private var currentPage = 0
+    /// The page being analysed is a scan with recognised text.
+    private var isScan = false
+    /// The lines of the page being analysed, and the bits of a scan's picture no word was read in.
+    var pageLines: [LayoutLine] = []
+    var pageBits: [CGRect] = []
+    /// What scans have at the head and foot of several pages.
+    var runningLines: Set<String> = []
 
     init(options: Options = Options()) {
         self.options = options
@@ -36,7 +43,7 @@ struct LayoutAnalyzer {
 
     /// Analyses `pages` (1-based numbers) of the document.
     mutating func analyze(document: PDFDocument, cgDocument: CGPDFDocument, pages: [Int]) -> [PageLayout] {
-        var prepared: [(Int, ContentInterpreter, [PageChar])] = []
+        var prepared: [(Int, ContentInterpreter, [PageChar], ScanPage?)] = []
         var sizeCounts = Tally<Double>()
         // Pages before the selection too: the body size is the document's, and whether a page is in the references
         // depends on the pages before it.
@@ -44,36 +51,80 @@ struct LayoutAnalyzer {
         let through = min(pages.max() ?? 0, cgDocument.numberOfPages)
         for number in through > 0 ? Array(1...through) : [] {
             guard let cgPage = cgDocument.page(at: number), let page = document.page(at: number - 1) else { continue }
-            let interpreter = ContentInterpreter()
-            interpreter.run(page: cgPage)
-            let chars = PageText.characters(of: page, interpreter: interpreter)
+            let (interpreter, chars, scan) = autoreleasepool { Self.read(page, cgPage: cgPage) }
+            prepared.append((number, interpreter, chars, scan))
+        }
+        Self.finishScans(&prepared)
+        for (_, _, chars, _) in prepared {
             for c in chars where !c.isSpace && !c.isNewline && !c.isRotated {
                 sizeCounts.add((c.size * 2).rounded() / 2)
             }
-            prepared.append((number, interpreter, chars))
         }
         bodySize = sizeCounts.most ?? 10
         inReferences = false
-        return prepared.compactMap { number, interpreter, chars in
-            let layout = analyzePage(number: number, cgPage: cgDocument.page(at: number)!, interpreter: interpreter, chars: chars)
+        runningLines = Self.runningLines(prepared.compactMap { entry in entry.3.map { ($0.crop, buildLines(entry.2, tables: [], pageWidth: $0.crop.width)) } })
+        return prepared.compactMap { number, interpreter, chars, scan in
+            let layout = analyzePage(number: number, cgPage: cgDocument.page(at: number)!, interpreter: interpreter, chars: chars, scan: scan)
             return selected.contains(number) ? layout : nil
         }
     }
 
+    /// The characters drawn on a page; for a scan with recognised text also what is in its picture (its words become
+    /// characters in `finishScans`), and the interpreter in the space the page is upright in.
+    private static func read(_ page: PDFPage, cgPage: CGPDFPage) -> (ContentInterpreter, [PageChar], ScanPage?) {
+        let interpreter = ContentInterpreter()
+        interpreter.run(page: cgPage)
+        guard interpreter.isRecognizedScan else { return (interpreter, PageText.characters(of: page, interpreter: interpreter), nil) }
+        let (scan, upright) = ScanPage.read(page: cgPage, interpreter: interpreter)
+        return (upright, PageText.characters(of: page, interpreter: upright), scan)
+    }
+
+    private static func finishScans(_ prepared: inout [(Int, ContentInterpreter, [PageChar], ScanPage?)]) {
+        let indices = prepared.indices.filter { prepared[$0].3 != nil }
+        guard !indices.isEmpty else { return }
+        var scans = indices.map { (scan: prepared[$0].3!, interpreter: prepared[$0].1) }
+        ScanPage.finish(&scans)
+        for (k, index) in indices.enumerated() {
+            prepared[index].3 = scans[k].scan
+            // What is drawn as text on the page (a stamp, a page number) comes after the recognised words.
+            prepared[index].2 = scans[k].scan.chars + prepared[index].2
+        }
+    }
+
+    /// One page by itself.
+    static func prepare(_ page: PDFPage, cgPage: CGPDFPage) -> (ContentInterpreter, [PageChar], ScanPage?) {
+        let (interpreter, chars, scan) = read(page, cgPage: cgPage)
+        var prepared = [(1, interpreter, chars, scan)]
+        finishScans(&prepared)
+        return (interpreter, prepared[0].2, prepared[0].3)
+    }
+
     // MARK: Page
 
-    mutating func analyzePage(number: Int, cgPage: CGPDFPage, interpreter: ContentInterpreter, chars rawChars: [PageChar]) -> PageLayout {
+    mutating func analyzePage(number: Int, cgPage: CGPDFPage, interpreter: ContentInterpreter, chars rawChars: [PageChar], scan: ScanPage? = nil) -> PageLayout {
         let media = cgPage.getBoxRect(.mediaBox)
         var crop = cgPage.getBoxRect(.cropBox).intersection(media)
         if crop.isNull || crop.width < 1 { crop = media }
+        let transform = scan?.transform ?? .identity
+        if let scan { crop = scan.crop }
         currentPage = number
+        isScan = interpreter.isRecognizedScan
         var chars = rawChars
-        Self.inkOnPaper(&chars, interpreter: interpreter)
+        if !isScan { Self.inkOnPaper(&chars, interpreter: interpreter) }
         MathDetector.mark(&chars)
-        let links = PageLinks.links(of: cgPage)
+        var links = PageLinks.links(of: cgPage)
+        if transform != .identity {
+            for k in links.indices { links[k].rects = links[k].rects.map { $0.applying(transform) } }
+        }
         PageLinks.assign(links, to: &chars, page: crop)
 
         var marks = interpreter.marks.filter { !$0.isWhite && $0.rect.width * $0.rect.height < crop.width * crop.height * 0.6 }
+        // A scan is one picture (or strips of one): the words stand on it, they are not a drawing's.
+        // Its rules and drawings are the ones found in the picture.
+        if interpreter.isRecognizedScan {
+            marks.removeAll { $0.kind == .image || $0.kind == .shading || $0.hasCurves }
+            marks += scan?.marks ?? []
+        }
         // Regions first, from lines not yet split into cells; then the final lines.
         var lines = buildLines(chars, tables: [], pageWidth: crop.width)
         // Small pictures among the words of a line (an emoji, an icon) are part of it, not drawings.
@@ -93,18 +144,27 @@ struct LayoutAnalyzer {
         // The upright rules of a table drawn with a grid: two cells with a rule between them are two cells, however
         // close their words come to it.
         let uprights = marks.filter { ($0.kind == .fill || $0.kind == .stroke) && !$0.isWhite && $0.rect.width < 2.5 && $0.rect.height > bodySize * 0.8 }.map(\.rect)
-        var frames = Self.tableFrames(rules: rules, lines: lines)
+        var frames = Self.tableFrames(rules: rules, lines: lines, scan: isScan)
         // Tables ruled only between their columns (and under the header): no second level rule to find them by.
         for frame in Self.uprightTableFrames(uprights: uprights, rules: rules, lines: lines, bodySize: bodySize)
             where !frames.contains(where: { $0.insetBy(dx: -2, dy: -2).intersects(frame) }) {
             frames.append(frame)
         }
         var tables = frames.map { Self.trimCaptions($0, lines: lines) }.filter { isTable($0, lines: lines, marks: marks) }
+        if isScan {
+            for rect in captionedFigures(lines, marks: marks, bits: scan?.bits ?? [], tables: tables) {
+                marks.append(GraphicMark(kind: .image, rect: rect, isWhite: false, location: OpLocation(stream: [-1], index: marks.count), hasCurves: false,
+                                         segmentCount: 4, opRange: 0...0))
+            }
+        }
+        if isScan { tables.removeAll { table in marks.contains { $0.kind == .image && $0.rect.intersection(table).area > table.area * 0.6 } } }
         let figures = figureRegions(marks: marks, lines: lines, tables: tables, page: crop)
         tables.removeAll { table in figures.contains { $0.intersection(table).area > table.area * 0.4 } }
         let gutters = tables.map { Self.columnGutters(in: $0, lines: lines) }
         let dividers = tables.map { table in uprights.filter { table.insetBy(dx: -1, dy: -2).intersects($0) } }
-        lines = buildLines(chars, tables: tables, gutters: gutters, dividers: dividers, pageWidth: crop.width).map(Self.markScripts)
+        lines = buildLines(chars, tables: tables, gutters: gutters, dividers: dividers, pageWidth: crop.width)
+        // The heights of recognised characters wobble: nothing in them says a character is a script.
+        if !interpreter.isRecognizedScan { lines = lines.map(Self.markScripts) }
         Self.joinWordFractions(&lines, marks: marks)
         Self.markChips(&lines, marks: marks)
         lines = Self.readingOrder(lines)
@@ -145,6 +205,9 @@ struct LayoutAnalyzer {
         let edges = Self.columnEdges(lines, gutters: columnGutters)
         pageRules = marks.filter { $0.kind != .image && $0.rect.height < 2.5 && $0.rect.width > 8 }.map(\.rect)
         columnOf = edges
+        pageLines = isScan ? flat.filter { line in !figures.contains { $0.insetBy(dx: -1, dy: -1).contains(line.rect.center) } } : []
+        pageBits = scan?.bits ?? []
+        let scanned = isScan ? scanFormulas(lines, marks: marks, bits: pageBits, column: edges) : []
         let bodyWidths = flat.filter { abs($0.size - bodySize) < bodySize * 0.12 }.map(\.inkRect.width).sorted()
         typicalWidth = bodyWidths.count >= 8 ? bodyWidths[bodyWidths.count * 4 / 5] : .infinity
         // The further lines of a caption that a drawing's area took in ("TABLE 8" / "Ablation Study …", or a narrow caption
@@ -174,6 +237,9 @@ struct LayoutAnalyzer {
         var flowing: [LayoutLine] = []
         for (k, line) in lines.enumerated() {
             let center = line.rect.center
+            var line = line
+            // Formulas in the lines of a scan are in its picture: there are no glyphs to set again, only words as read.
+            func wordsOnly() { if interpreter.isRecognizedScan { for c in line.chars.indices { line.chars[c].isMath = false } } }
             if line.isRotated {
                 blocks.append(LayoutBlock(kind: .rotated, lines: [line], translate: false))
             } else if algorithms.contains(where: { $0.insetBy(dx: -1, dy: -2).contains(center) }) || (Self.isAlgorithmStart(line.text)
@@ -184,13 +250,16 @@ struct LayoutAnalyzer {
             } else if pseudocode.contains(k) {
                 blocks.append(LayoutBlock(kind: .code, lines: [line], translate: false))
             } else if tables.contains(where: { $0.insetBy(dx: -1, dy: -2).contains(center) }) {
+                wordsOnly()
                 let translate = options.translateTables && Self.hasWords(line.text) && !line.font.isMonospace && Self.isCellText(line.text)
+                    && (!isScan || Self.isReadCell(line.text))
                 blocks.append(LayoutBlock(kind: .tableCell, lines: [line], translate: translate))
-            } else if isMarginal(line, page: crop, lines: lines) {
+            } else if isMarginal(line, page: crop, lines: lines) || isScan && (isRunningLine(line, page: crop) || isTopNote(line, page: crop, lines: lines)) {
                 blocks.append(LayoutBlock(kind: .header, lines: [line], translate: false))
-            } else if isDisplayMath(line) || equations.contains(k) || numbers.contains(where: { $0.inkRect == line.inkRect }) {
+            } else if isScan ? scanned.contains(k) : isDisplayMath(line) || equations.contains(k) || numbers.contains(where: { $0.inkRect == line.inkRect }) {
                 blocks.append(LayoutBlock(kind: .formula, lines: [line], translate: false))
             } else {
+                wordsOnly()
                 flowing.append(line)
             }
         }
@@ -230,10 +299,11 @@ struct LayoutAnalyzer {
 
         Self.mergeInterleaved(&blocks)
         Self.absorbStrays(&blocks)
-        Self.mergeTableCells(&blocks, tables: tables, rules: rules)
+        Self.mergeTableCells(&blocks, tables: tables, rules: rules, bits: pageBits)
         let graphics = marks.map(\.rect) + figures
         return PageLayout(number: number, mediaBox: media, cropBox: crop, blocks: blocks, figures: figures, tables: tables,
-                          graphics: graphics, runs: interpreter.runs, glyphs: interpreter.glyphs, links: links)
+                          graphics: graphics, runs: interpreter.runs, glyphs: interpreter.glyphs, links: links, isScan: interpreter.isRecognizedScan,
+                          transform: transform, wordInk: scan?.ink ?? [:])
     }
 
     // MARK: Inline pictures
@@ -314,7 +384,7 @@ struct LayoutAnalyzer {
     // MARK: Displays
 
     /// Where each column's text starts and ends, for telling lines set off from it.
-    private static func columnEdges(_ lines: [LayoutLine], gutters: [ClosedRange<Double>]) -> (Double) -> (lo: Double, hi: Double) {
+    static func columnEdges(_ lines: [LayoutLine], gutters: [ClosedRange<Double>]) -> (Double) -> (lo: Double, hi: Double) {
         let flat = lines.filter { !$0.isRotated }
         guard let minX = flat.map(\.minX).min(), let maxX = flat.map(\.maxX).max() else { return { _ in (0, 0) } }
         var bounds = [minX]
@@ -476,7 +546,7 @@ struct LayoutAnalyzer {
     /// Lines of one table cell joined: a cell's text may run over several lines. A line goes with the one above when
     /// it starts or stays in line with it, no rule separates them, and it reads on (or its row has nothing else in it).
     /// Then each cell learns how its column is aligned.
-    static func mergeTableCells(_ blocks: inout [LayoutBlock], tables: [CGRect], rules: [CGRect]) {
+    static func mergeTableCells(_ blocks: inout [LayoutBlock], tables: [CGRect], rules: [CGRect], bits: [CGRect] = []) {
         for table in tables {
             let area = table.insetBy(dx: -1, dy: -2)
             var indices = blocks.indices.filter { blocks[$0].kind == .tableCell && area.contains(blocks[$0].rect.center) }
@@ -514,6 +584,9 @@ struct LayoutAnalyzer {
                     // A line reaching under another cell of the row above spans columns: a row of its own
                     // ("zero-shot transfer methods:"), not the rest of this cell.
                     if upperPeers.contains(where: { $0.minX < lower.maxX - 1 && $0.maxX > lower.minX + 1 }) { break }
+                    // Something in the picture on the lower row, read or not: a row of its own.
+                    if bits.contains(where: { $0.midY > lower.baseline - lower.size * 0.3 && $0.midY < lower.baseline + lower.size * 0.8 && area.contains($0.center)
+                        && ($0.maxX < lower.minX - lower.size || $0.minX > lower.maxX + lower.size) }) { break }
                     let startsLow = lower.text.trimmingCharacters(in: .whitespaces).first?.isLowercase == true
                     let endsOpen = upper.text.range(of: #"(-|,|\b(and|or|of|the|for|to|with|in|on|by|a|an))\s*$"#, options: .regularExpression) != nil
                     guard startsLow || endsOpen || (lowerPeers.isEmpty && !upperPeers.isEmpty) else { break }
@@ -717,7 +790,8 @@ struct LayoutAnalyzer {
                 let sameLine = dy < mainSize * 0.5 || (small && dy < mainSize * 0.9 && overlap > 0)
                 let gap = c.rect.minX - last.rect.maxX
                 let table = tables.firstIndex { $0.insetBy(dx: -1, dy: -2).contains(c.center) }
-                let limit = (table != nil ? 0.75 : 2.2) * max(mainSize, c.size)
+                // (Rows of a scan are whole: what is wide apart on them has something unread in between.)
+                let limit = (table != nil ? 0.75 : isScan && last.run != nil && c.run != nil ? 8 : 2.2) * max(mainSize, c.size)
                 // In a table, a gap over a column gutter ends the cell however narrow it is.
                 let acrossGutter = table.map { t in
                     t < gutters.count && gutters[t].contains { last.rect.maxX <= $0.lowerBound + 0.5 && c.rect.minX >= $0.upperBound - 0.5 }
@@ -740,7 +814,8 @@ struct LayoutAnalyzer {
             current.append(c)
         }
         flush()
-        return Self.regroup(lines, tables: tables, pageWidth: pageWidth)
+        // Recognised lines are whole as they are: no formula or script cut them into pieces to join again.
+        return isScan ? lines : Self.regroup(lines, tables: tables, pageWidth: pageWidth)
     }
 
     /// Repairs PDFKit's lines geometrically: sub- and superscripts go to the line they sit on, and pieces of one
@@ -1297,7 +1372,7 @@ struct LayoutAnalyzer {
     // MARK: Regions
 
     /// Tables from their rules: horizontal rules of (nearly) the same extent, two or more stacked.
-    static func tableFrames(rules: [CGRect], lines: [LayoutLine]) -> [CGRect] {
+    static func tableFrames(rules: [CGRect], lines: [LayoutLine], scan: Bool = false) -> [CGRect] {
         var groups: [[CGRect]] = []
         for rule in rules.sorted(by: { $0.maxY > $1.maxY }) {
             if let g = groups.firstIndex(where: { group in
@@ -1317,7 +1392,9 @@ struct LayoutAnalyzer {
                 lines.contains { line in
                     let c = line.rect.center
                     return c.y < upper.minY && c.y > lower.maxY && c.x > upper.minX - 4 && c.x < upper.maxX + 4
-                        && (isCaptionStart(line.text) || proseWords(line) >= 6)
+                        && (isCaptionStart(line.text) || proseWords(line) >= 6
+                            // (A long cell of a scanned table does not start at its left edge.)
+                            && (!scan || line.minX < upper.minX + upper.width * 0.08))
                 }
             }
             var start = 0
@@ -1454,7 +1531,11 @@ struct LayoutAnalyzer {
         if Double(prose) > Double(chars) * 0.5 { return false }
         // At least two rows with two or more cells: separate lines on one baseline, or wide gaps inside a line.
         var rows: [Double: Int] = [:]
-        for line in inside { rows[(line.baseline / 3).rounded(), default: 0] += 1 + Self.columnGaps(line) }
+        for line in inside {
+            // (The baselines of a scan's lines are measured: cells of one row differ by a little.)
+            let key = isScan ? rows.keys.first { abs($0 - line.baseline) < line.size * 0.4 } ?? line.baseline : (line.baseline / 3).rounded()
+            rows[key, default: 0] += 1 + Self.columnGaps(line)
+        }
         let wide = rows.values.filter { $0 >= 2 }.count
         return wide >= 2 || inside.count >= 6 && wide >= 1
     }
@@ -1546,6 +1627,12 @@ struct LayoutAnalyzer {
                     // A few words between two parts of one drawing belong to it.
                     let bridging = near && line.wordCount <= 4 && regions.indices.contains { j in
                         j != k && regions[j].insetBy(dx: -reach, dy: -reach).intersects(r) && min(regions[j].maxY, regions[k].maxY) > max(regions[j].minY, regions[k].minY)
+                    }
+                    // An axis title of a scanned chart may be long, but is small and within the chart.
+                    if isScan, near, within, line.size < bodySize * 0.85, line.wordCount <= 14, !Self.continuesText(line, in: lines) {
+                        let grown = regions[k].union(r)
+                        if grown != regions[k] { regions[k] = grown; changed = true }
+                        continue
                     }
                     // Axis titles in body type: a few words within the drawing's width, not the end of a paragraph.
                     let title = line.wordCount <= 4 && r.minX >= regions[k].minX - 2 && r.maxX <= regions[k].maxX + 2
@@ -1687,18 +1774,21 @@ struct LayoutAnalyzer {
         }.count
     }
 
-    /// Words of three or more letters outside formulas.
+    /// Words of three or more letters outside formulas (of Chinese, two characters are a word).
     static func textWords(_ line: LayoutLine) -> Int {
-        var count = 0, run = 0
+        var count = 0, run = 0, han = 0
+        func isWord() -> Bool { run >= 3 || han >= 2 }
         for c in line.chars {
             if !c.isMath, !c.isSpace, c.text.unicodeScalars.allSatisfy({ CharacterSet.letters.contains($0) }) {
                 run += 1
+                if c.text.unicodeScalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }) { han += 1 }
             } else {
-                if run >= 3 { count += 1 }
+                if isWord() { count += 1 }
                 run = 0
+                han = 0
             }
         }
-        return count + (run >= 3 ? 1 : 0)
+        return count + (isWord() ? 1 : 0)
     }
 
     // MARK: Blocks
@@ -1712,8 +1802,11 @@ struct LayoutAnalyzer {
         let maxPitch = block.lines.count >= 2 ? min(block.pitch * 1.35 + 0.5, size * 2.0) : size * 1.9
         if drop > maxPitch { return false }
         let r = block.rect
-        let overlap = min(r.maxX, line.maxX) - max(r.minX, line.minX)
+        // (A short second line of a paragraph starts left of an indented first one.)
+        let reach = isScan && block.lines.count == 1 && r.minX - line.minX < size * 4 ? line.minX : r.minX
+        let overlap = min(r.maxX, line.maxX) - max(reach, line.minX)
         if overlap < min(r.width, line.inkRect.width) * 0.5 { return false }
+        if isScan, isRowOfList(last), isRowOfList(line) { return false }
         // A rule between two lines (the row of a table with its own rules, a line above a footnote) keeps them apart.
         if pageRules.contains(where: { rule in
             rule.midY < last.baseline - last.size * 0.2 && rule.midY > line.baseline + line.size * 0.6
@@ -1729,10 +1822,15 @@ struct LayoutAnalyzer {
            last.inkRect.width > size * 18, !Self.isListItem(line.text) {
             return true
         }
+        // Bold words over a whole line in the middle of a paragraph of a scan (or a line that only looks heavier).
+        if isScan, abs(line.size - last.size) < size * 0.06, drop <= size * 1.75, abs(line.minX - (block.lines.count > 1 ? last.minX : line.minX)) < size * 0.6,
+           last.inkRect.width > size * 16, last.maxX > r.maxX - size * 1.5, block.lines.count >= 2 || !last.font.isBold,
+           line.text.trimmingCharacters(in: .whitespaces).first?.isLowercase == true || block.lines.count >= 2 && line.maxX > r.maxX - size * 1.5,
+           !Self.isListItem(line.text), let end = last.text.trimmingCharacters(in: .whitespaces).last, !".:?!。：".contains(end) { return true }
         // Headings stand alone, except a heading (or bold paragraph) that continues in the same style.
         let lastHeading = isHeadingLike(last), lineHeading = isHeadingLike(line)
         if lastHeading || lineHeading {
-            let sameStyle = lastHeading == lineHeading && last.font.isBold == line.font.isBold && abs(last.size - line.size) < last.size * 0.06
+            let sameStyle = lastHeading == lineHeading && (last.font.isBold == line.font.isBold || isScan && min(last.size, line.size) >= bodySize * 1.15) && abs(last.size - line.size) < last.size * 0.06
             let numbered = line.text.range(of: #"^\s*((\d{1,2}(\.\d+)*\.?)|([IVX]+\.)|([A-Z]\.))\s+\p{Lu}"#, options: .regularExpression) != nil
             if !sameStyle || numbered || drop > size * 1.45 { return false }
             return true

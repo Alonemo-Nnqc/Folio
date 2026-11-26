@@ -222,6 +222,13 @@ public sealed class PageLayout
     public List<TextRun> Runs = [];
     public List<Glyph> Glyphs = [];
     public List<PageLink> Links = [];
+    /// <summary>A scan whose text was recognised: the words are in the page's picture, under a hidden text layer.</summary>
+    public bool IsScan;
+    /// <summary>The page's user space → the space this layout is in: a scan may lie on its side or at a slant, and is analysed
+    /// upright (identity otherwise).</summary>
+    public Affine Transform = Affine.Identity;
+    /// <summary>Where the ink of a scan's words is, by the run that wrote them.</summary>
+    public Dictionary<int, Rect> WordInk = [];
 }
 
 /// <summary>A link annotation of a page: a citation, a cross-reference, a web address.</summary>

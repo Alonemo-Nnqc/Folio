@@ -57,12 +57,13 @@ final class LibrarySplitViewController: SmoothSplitViewController {
             self.inspectorPane.backdrop.amount = amount
             self.itemList.setTranslucency(amount)
         })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            self.floatsInspector = self.model.settings.inspectorFloating
+        })
     }
 
-    var isInspectorCollapsed: Bool { inspectorItem?.isCollapsed ?? true }
+    var isInspectorCollapsed: Bool { !isInspectorOpen }
 
-    func showInspector() {
-        guard let inspectorItem, inspectorItem.isCollapsed else { return }
-        setCollapsed(inspectorItem, false)
-    }
+    func showInspector() { if !isInspectorOpen { setInspectorOpen(true) } }
 }

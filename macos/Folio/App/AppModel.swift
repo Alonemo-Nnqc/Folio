@@ -34,6 +34,8 @@ final class AppModel {
     private(set) var rows: [String] = []
     private(set) var counts: [ViewScope: Int] = [:]
     private(set) var loadError: String?
+    /// How far each paper has been read. Apart from the snapshot, so that scrolling a paper never reloads the list.
+    private(set) var readingProgress: [String: ReadingProgress] = [:]
 
     var sidebarSelection: ViewScope = .all {
         didSet {
@@ -76,6 +78,7 @@ final class AppModel {
     var previewExpandRequest: String?
     /// Files currently dragged over the list from Finder; > 0 shows the drop overlay (DND-01).
     var externalDropCount = 0
+    var externalDropHasFolders = false
     var previewExpandAllGroups = false
 
     @ObservationIgnored private var fulltextMatches: Set<String>?
@@ -103,6 +106,8 @@ final class AppModel {
         case identifierAdd
         case manualMatch(itemId: String)
         case zoteroImport
+        case packageExport
+        case packageImport(URL)
         case tagEditor(tagId: String?, applyTo: [String], initialName: String = "")
         case translate(fileIds: [String])
 
@@ -111,6 +116,8 @@ final class AppModel {
             case .identifierAdd: "identifier"
             case .manualMatch(let id): "match-\(id)"
             case .zoteroImport: "zotero"
+            case .packageExport: "package-export"
+            case .packageImport(let url): "package-import-\(url.path)"
             case .tagEditor(let id, _, _): "tag-\(id ?? "new")"
             case .translate(let id): "translate-\(id)"
             }
@@ -210,6 +217,7 @@ final class AppModel {
         let firstLoad = !didLoadLibrary
         didLoadLibrary = true
         snapshot = newSnapshot
+        if firstLoad || newSnapshot.files.count != readingFileCount { reloadReadingProgress() }
         if case .group(let id) = sidebarSelection, snapshot.groupsById[id] == nil { sidebarSelection = .all }
         if case .tag(let id) = sidebarSelection, snapshot.tagsById[id] == nil { sidebarSelection = .all }
         recompute()
@@ -221,6 +229,7 @@ final class AppModel {
         }
         if firstLoad {
             importer.libraryDidLoad()
+            fillInPageCounts()
             readers.restoreTabs()
             PreviewHooks.apply(to: self)
             OnboardingWindowController.showIfNeeded(model: self)
@@ -236,16 +245,39 @@ final class AppModel {
     // MARK: Derived state
 
     func recompute() {
-        let query = ViewQuery(scope: sidebarSelection,
+        var query = ViewQuery(scope: sidebarSelection,
                               searchText: search.isActive ? search.text : "",
                               searchWholeLibrary: search.wholeLibrary,
                               fulltextItemIds: search.includeFulltext ? fulltextMatches : nil,
                               includeSubgroupItems: settings.includeSubgroupItems,
                               sort: snapshot.sort(for: sidebarSelection))
+        if sidebarSelection == .status(.reading) { query.lastRead = readingProgress.mapValues(\.lastRead) }
         rows = ViewResolver.rows(query, in: snapshot)
         counts = SidebarCounts.compute(snapshot, includeSubgroupItems: settings.includeSubgroupItems)
         selectedItemIDs = selectedItemIDs.filter { snapshot.items[$0] != nil }
         selectedFileIDs = selectedFileIDs.filter { snapshot.files[$0] != nil }
+    }
+
+    @ObservationIgnored private var readingFileCount = -1
+
+    /// How far the papers have been read, as saved by the readers.
+    func reloadReadingProgress() {
+        readingFileCount = snapshot.files.count
+        let loaded = (try? library.readingProgress()) ?? [:]
+        if loaded != readingProgress { readingProgress = loaded }
+    }
+
+    /// Papers last read by a version that did not note how many pages they have: looked up once, in the background.
+    func fillInPageCounts() {
+        let library = self.library, records = snapshot.files
+        Task.detached(priority: .utility) { [weak self] in
+            let files = (try? library.filesWithoutPageCount()) ?? []
+            for id in files {
+                guard let file = records[id], let document = CGPDFDocument(library.fileURL(for: file) as CFURL), document.numberOfPages > 0 else { continue }
+                try? library.setPageCount(document.numberOfPages, ofFileLastReadBefore16: id)
+            }
+            if !files.isEmpty { await self?.reloadReadingProgress() }
+        }
     }
 
     private func scheduleFulltextSearch() {
@@ -280,6 +312,7 @@ final class AppModel {
         case .unfiled: String(localized: "未分组")
         case .trash: String(localized: "回收站")
         case .group(let id): snapshot.groupsById[id]?.name ?? String(localized: "分组")
+        case .status(let status): status.displayName
         case .tag(let id): String(localized: "标签：\(snapshot.tagsById[id]?.name ?? "")")
         }
     }

@@ -60,12 +60,10 @@ struct ScanBanner: View {
         }
         .animation(.smooth(duration: 0.25), value: state.isVisible)
         .animation(.smooth(duration: 0.2), value: state.progress == nil)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 10)
     }
 }
 
-private struct GlassCapsule: ViewModifier {
+struct GlassCapsule: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26, *) {
             content.glassEffect(.regular, in: .capsule)
@@ -78,10 +76,8 @@ private struct GlassCapsule: ViewModifier {
     }
 }
 
-/// The banner's host: it takes clicks only on the capsule, so the pages under the empty space stay usable.
+/// The banner's host: as large as the capsule (nothing while it is hidden), so the pages around it stay usable. It does not
+/// look into what SwiftUI draws to tell empty space: SwiftUI's buttons are no views of their own there, and were taken for it.
 final class ScanBannerHost: NSHostingView<ScanBanner> {
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        let hit = super.hitTest(point)
-        return hit === self ? nil : hit
-    }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }

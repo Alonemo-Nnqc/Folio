@@ -74,7 +74,7 @@ final class SettingsWindowController: NSWindowController {
 }
 
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, reading, library, translation, browser, ai
+    case general, reading, markdown, library, translation, browser, ai
 
     var id: String { rawValue }
 
@@ -91,6 +91,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .general: String(localized: "通用")
         case .reading: String(localized: "阅读")
+        case .markdown: "Markdown"
         case .library: String(localized: "文献库")
         case .translation: String(localized: "翻译")
         case .browser: String(localized: "浏览器")
@@ -103,6 +104,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .general: "gearshape"
         case .reading: "book"
+        case .markdown: "text.badge.checkmark"
         case .library: "books.vertical"
         case .translation: "character.book.closed"
         case .browser: "safari"
@@ -143,6 +145,7 @@ struct SettingsRootView: View {
         switch navigation.pane {
         case .general: GeneralSettings(settings: model.settings, model: model)
         case .reading: ReadingSettings(model: model)
+        case .markdown: MarkdownSettingsPane(settings: model.settings)
         case .library: LibrarySettings(model: model)
         case .translation: TranslationSettingsPane(model: model)
         case .browser: BrowserSettingsPane(model: model)
@@ -239,6 +242,10 @@ struct GeneralSettings: View {
                     .frame(maxWidth: 220)
                     .accessibilityIdentifier("backgroundTranslucency")
                 }
+                Picker("右侧栏样式", selection: $settings.inspectorFloating) {
+                    Text("并排").tag(false)
+                    Text("浮空").tag(true)
+                }
                 LabeledContent("边栏图标大小") {
                     Button("在系统设置中更改…") {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Appearance-Settings.extension")!)
@@ -251,7 +258,7 @@ struct GeneralSettings: View {
                 Toggle(isOn: $settings.showTranslatedBadge) {
                     Text("显示“已翻译”标签")
                 }
-                Toggle("显示 Markdown 文档工具栏", isOn: $settings.markdownToolbar)
+                Toggle("在列表中显示阅读进度环", isOn: $settings.showReadingRings)
             }
             LanguageSettingsSection()
             UpdateSettingsSection(updater: AppDelegate.shared.updater)
@@ -286,7 +293,7 @@ private struct LanguageSettingsSection: View {
             .onChange(of: choice) { save(choice) }
             if choice != launchedWith {
                 LabeledContent("重新启动 Folio 后生效") {
-                    Button("立即重新启动", action: relaunch)
+                    Button("立即重新启动", action: AppDelegate.relaunch)
                 }
             }
         } header: {
@@ -301,15 +308,6 @@ private struct LanguageSettingsSection: View {
         } else {
             UserDefaults.standard.set([choice.rawValue], forKey: "AppleLanguages")
         }
-    }
-
-    private func relaunch() {
-        let path = Bundle.main.bundlePath
-        let process = Process()
-        process.executableURL = URL(filePath: "/bin/sh")
-        process.arguments = ["-c", "while kill -0 \(ProcessInfo.processInfo.processIdentifier) 2>/dev/null; do sleep 0.2; done; open \"$0\"", path]
-        try? process.run()
-        NSApp.terminate(nil)
     }
 }
 
@@ -358,6 +356,7 @@ struct ReadingSettings: View {
                     }
                 }
                 Toggle("打开未读的论文时，标为\"在读\"", isOn: $settings.markReadingOnOpen)
+                Toggle("读完时提示标为\"已读\"", isOn: $settings.offerMarkAsRead)
                 Toggle("启动时重新打开上次的论文标签页", isOn: $settings.reopenReaderTabs)
                 Toggle(isOn: $settings.rememberReadingPosition) {
                     Text("记住每篇论文的阅读位置")
@@ -439,6 +438,25 @@ struct LibrarySettings: View {
                 }
             } header: {
                 Text("导入")
+            }
+            Section {
+                LabeledContent {
+                    HStack {
+                        Button("打包导出…") {
+                            AppDelegate.shared.showLibrary(nil)
+                            model.activeSheet = .packageExport
+                        }
+                        Button("导入…") {
+                            AppDelegate.shared.showLibrary(nil)
+                            model.choosePackageToImport()
+                        }
+                    }
+                } label: {
+                    Text("文献库与设置")
+                    Text("打包成一个文件，在另一台 Mac 或 Windows 的 Folio 中导入")
+                }
+            } header: {
+                Text("备份与迁移")
             }
         }
         .formStyle(.grouped)

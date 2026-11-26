@@ -127,6 +127,9 @@ final class AppSettings {
         static let selectionTranslationFallback = "selectionTranslationFallback"
         static let journalMetricsAutoFetch = "journalMetricsAutoFetch"
         static let showTranslatedBadge = "showTranslatedBadge"
+        static let inspectorFloating = "inspectorFloating"
+        static let showReadingRings = "showReadingRings"
+        static let offerMarkAsRead = "offerMarkAsRead"
         static let markdownToolbar = "markdownToolbar"
     }
 
@@ -237,9 +240,23 @@ final class AppSettings {
     /// 设置 ▸ 检索 ▸ 期刊指标: look up the ranks of new and changed items' journals by itself (META-30).
     var journalMetricsAutoFetch: Bool { didSet { save(journalMetricsAutoFetch, Key.journalMetricsAutoFetch) } }
     /// 设置 ▸ 通用 ▸ 列表: the green "已翻译" badge after the title of papers that have a translation.
+    /// 在列表中显示阅读进度环, and the reader's offer to mark a paper read at its end.
+    /// The right panel floats over the content instead of taking room beside it.
+    var inspectorFloating: Bool { didSet { save(inspectorFloating, Key.inspectorFloating) } }
+    var showReadingRings: Bool { didSet { save(showReadingRings, Key.showReadingRings) } }
+    var offerMarkAsRead: Bool { didSet { save(offerMarkAsRead, Key.offerMarkAsRead) } }
     var showTranslatedBadge: Bool { didSet { save(showTranslatedBadge, Key.showTranslatedBadge) } }
     /// Markdown 文档的格式工具栏 (标题、粗体、列表…) above a document in a tab of its own.
     var markdownToolbar: Bool { didSet { save(markdownToolbar, Key.markdownToolbar) } }
+    /// 设置 ▸ Markdown.
+    var markdown: MarkdownPreferences {
+        didSet {
+            guard markdown != oldValue else { return }
+            for (key, value) in markdown.changes(from: oldValue) { save(value, key) }
+            MarkdownPreferences.current = markdown
+            NotificationCenter.default.post(name: .folioMarkdownPreferencesDidChange, object: nil)
+        }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -273,6 +290,9 @@ final class AppSettings {
             Key.selectionTranslationFallback: true,
             Key.journalMetricsAutoFetch: true,
             Key.showTranslatedBadge: true,
+            Key.inspectorFloating: false,
+            Key.showReadingRings: true,
+            Key.offerMarkAsRead: true,
             Key.markdownToolbar: true,
         ])
         openWith = OpenWith(rawValue: defaults.string(forKey: Key.openWith) ?? "") ?? .folio
@@ -331,8 +351,14 @@ final class AppSettings {
         translationParallelTotal = defaults.integer(forKey: Key.translationParallelTotal)
         autoTranslateImports = defaults.bool(forKey: Key.autoTranslateImports)
         journalMetricsAutoFetch = defaults.bool(forKey: Key.journalMetricsAutoFetch)
+        inspectorFloating = defaults.bool(forKey: Key.inspectorFloating)
+        showReadingRings = defaults.bool(forKey: Key.showReadingRings)
+        offerMarkAsRead = defaults.bool(forKey: Key.offerMarkAsRead)
         showTranslatedBadge = defaults.bool(forKey: Key.showTranslatedBadge)
         markdownToolbar = defaults.bool(forKey: Key.markdownToolbar)
+        let markdownPreferences = MarkdownPreferences(defaults)
+        markdown = markdownPreferences
+        MarkdownPreferences.current = markdownPreferences
         backgroundTranslucency = min(1, max(0, defaults.double(forKey: Key.backgroundTranslucency)))
         appearance = Appearance(rawValue: defaults.string(forKey: Key.appearance) ?? "") ?? .system
         // A `-FolioLibraryPath <dir>` launch argument (UI tests) overrides the stored location.

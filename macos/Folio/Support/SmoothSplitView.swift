@@ -37,6 +37,19 @@ final class PaneContainerController: NSViewController {
         ])
         view = container
     }
+
+    /// Puts the content (back) into the pane: it is lent to the floating panel meanwhile.
+    func takeBack() {
+        let content = child.view
+        guard content.superview !== view else { return }
+        content.removeFromSuperview()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: view.topAnchor), content.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            content.leadingAnchor.constraint(equalTo: view.leadingAnchor), content.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+    }
 }
 
 /// A split view controller with one frosted layer behind all its panes, that tells its owner when panes start and
@@ -69,6 +82,23 @@ class SmoothSplitViewController: NSSplitViewController {
             view.frame = splitView.bounds
             view.autoresizingMask = [.width, .height]
             splitView.addSubview(view, positioned: .below, relativeTo: nil)
+        }
+        EdgePointer.shared.add(splitView) { [weak self] in self?.dividerStrips ?? [] }
+    }
+
+    /// Where the dividers are dragged: below the toolbar, whose own places move the window.
+    private var dividerStrips: [NSRect] {
+        let items = splitViewItems
+        guard items.count > 1, let window = view.window else { return [] }
+        let top = splitView.convert(NSPoint(x: 0, y: window.contentLayoutRect.maxY), from: nil).y
+        return items.indices.dropLast().compactMap { index in
+            guard !items[index].isCollapsed, !items[index + 1].isCollapsed, floatingInspector == nil || index != items.count - 2 else { return nil }
+            let left = splitView.arrangedSubviews[index], right = splitView.arrangedSubviews[index + 1]
+            // (The content goes on under a floating pane: the edge is the pane's.)
+            let x = items[index + 1].behavior == .inspector ? right.frame.minX : left.frame.maxX
+            let strip = NSRect(x: x - EdgePointer.reach, y: 0, width: EdgePointer.reach * 2 + 1, height: splitView.bounds.height)
+            return splitView.isFlipped ? strip.intersection(NSRect(x: 0, y: top, width: splitView.bounds.width, height: splitView.bounds.height - top))
+                : strip.intersection(NSRect(x: 0, y: 0, width: splitView.bounds.width, height: top))
         }
     }
 
@@ -119,8 +149,76 @@ class SmoothSplitViewController: NSSplitViewController {
     }
 
     override func toggleInspector(_ sender: Any?) {
-        guard let item = splitViewItems.last(where: { $0.behavior == .inspector }) else { return super.toggleInspector(sender) }
-        setCollapsed(item, !item.isCollapsed)
+        guard inspectorSplitItem != nil else { return super.toggleInspector(sender) }
+        setInspectorOpen(!isInspectorOpen)
+    }
+
+    // MARK: The right panel, beside the content or floating over it
+
+    private var inspectorSplitItem: NSSplitViewItem? { splitViewItems.last(where: { $0.behavior == .inspector }) }
+    private(set) var floatingInspector: FloatingInspector?
+    /// Set by the owner from 设置 ▸ 通用 ▸ 右侧栏样式.
+    var floatsInspector = false { didSet { if floatsInspector != oldValue { applyInspectorStyle() } } }
+    /// Told when the panel opens or closes in its floating style (beside the content, its split item says so).
+    var onFloatingInspectorChanged: () -> Void = {}
+    /// Puts into a new floating panel's header what the toolbar has over the panel beside the content.
+    var onFloatingInspectorMade: (FloatingInspector) -> Void = { _ in }
+    private var floatingOpenKey: String? {
+        guard !UserDefaults.standard.bool(forKey: "FolioUITesting") else { return nil }
+        return splitView.autosaveName.map { "floatingInspectorOpen." + $0 }
+    }
+
+    var isInspectorOpen: Bool { floatingInspector?.isOpen ?? !(inspectorSplitItem?.isCollapsed ?? true) }
+
+    func setInspectorOpen(_ open: Bool) {
+        if let floatingInspector {
+            floatingInspector.setOpen(open, animated: true)
+            if let floatingOpenKey { UserDefaults.standard.set(open, forKey: floatingOpenKey) }
+            onFloatingInspectorChanged()
+        } else if let item = inspectorSplitItem {
+            setCollapsed(item, !open)
+        }
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        // The saved layout is restored by now: the pane under a floating panel stays closed.
+        if floatsInspector, floatingInspector == nil { applyInspectorStyle() }
+        if floatingInspector != nil { inspectorSplitItem?.isCollapsed = true }
+    }
+
+    private func applyInspectorStyle() {
+        guard isViewLoaded, let item = inspectorSplitItem, let pane = item.viewController as? PaneContainerController else { return }
+        let open = isInspectorOpen
+        if floatsInspector {
+            // Over the toolbar too: in the window's frame, above what AppKit has there. (Until there is a window: later.)
+            guard floatingInspector == nil, let frame = view.window?.contentView?.superview else { return }
+            let panel = FloatingInspector(in: frame)
+            panel.onClose = { [weak self] in self?.setInspectorOpen(false) }
+            panel.hold(pane.child.view)
+            onFloatingInspectorMade(panel)
+            floatingInspector = panel
+            item.isCollapsed = true
+            let saved = floatingOpenKey.flatMap { UserDefaults.standard.object(forKey: $0) as? Bool }
+            // Chosen just now, it stays as it is; at launch it is as it was left.
+            panel.setOpen(view.window?.isVisible == true ? open : saved ?? open, animated: false)
+        } else if let panel = floatingInspector {
+            floatingInspector = nil
+            pane.takeBack()
+            panel.removeFromSuperview()
+            item.isCollapsed = !open
+        }
+        onFloatingInspectorChanged()
+    }
+
+    /// Nothing to drag at the window's edge while the pane there is the floating one's.
+    override func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect,
+                            ofDividerAt dividerIndex: Int) -> NSRect {
+        if floatingInspector != nil, dividerIndex == splitViewItems.count - 2 { return .zero }
+        let rect = super.splitView(splitView, effectiveRect: proposedEffectiveRect, forDrawnRect: drawnRect, ofDividerAt: dividerIndex)
+        guard !rect.isEmpty else { return rect }
+        // Enough to be found at once, the same to either side.
+        return NSRect(x: drawnRect.midX - EdgePointer.reach - 0.5, y: rect.minY, width: EdgePointer.reach * 2 + 1, height: rect.height)
     }
 
     /// Opens or closes a pane with AppKit's own slide (its timing, and the glass of a sidebar moving with it, as in

@@ -128,6 +128,21 @@ final class ContentInterpreter {
     /// The same for small filled shapes: the matrix their path was drawn with.
     private(set) var paths: [Int: CGAffineTransform] = [:]
 
+    /// The page is a picture of text with a hidden text layer over it (a scan whose text was recognised, here or by another
+    /// program): the hidden text stands for the words in the picture. Set by `run(page:)`.
+    private(set) var isRecognizedScan = false
+
+    /// The page was found to be one in its own space.
+    func markRecognizedScan() { isRecognizedScan = true }
+
+    private func findScanLayer(_ page: CGPDFPage) {
+        let hidden = glyphs.filter { $0.renderMode == 3 && !$0.isClipped && (ScannedPDF.readableCharacters($0) ?? 0) > 0 }.count
+        guard hidden >= ScannedPDF.minimumCharacters else { return }
+        let drawn = glyphs.filter { $0.isVisible && (ScannedPDF.readableCharacters($0) ?? 0) > 0 }.count
+        let facts = ScannedPDF.facts(self, crop: ScannedPDF.effectiveCrop(page))
+        isRecognizedScan = hidden > drawn * 2 && (facts.imageCoverage >= ScannedPDF.minimumCoverageWithoutText || facts.outlines >= ScannedPDF.minimumOutlines)
+    }
+
     private var fontCache: [Int: Int] = [:]
     private var chainCounter = 0
 
@@ -160,6 +175,7 @@ final class ContentInterpreter {
         streams[[]] = InterpretedStream(source: source, ops: ops, form: nil, resources: resources)
         var state = GState(ctm: pageTransform)
         interpret(ops, path: [], resources: resources, state: &state, depth: 0)
+        if pageTransform == .identity { findScanLayer(page) }
     }
 
     private func interpret(_ ops: [ContentOp], path: StreamPath, resources: CGPDFDictionaryRef?, state initial: inout GState, depth: Int) {

@@ -84,6 +84,7 @@ public sealed class Glyph
     public Pt End => new Pt(Width, 0).Applying(Matrix);
     public double Angle => Math.Atan2(Matrix.B, Matrix.A);
     public bool IsHorizontal => Math.Abs(Angle) < 0.02 && Matrix.A > 0;
+    public Glyph WithSize(double size) { var copy = (Glyph)MemberwiseClone(); copy.Size = size; return copy; }
     public bool IsVisible => RenderMode != 3 && RenderMode != 7 && !IsClipped;
 
     /// <summary>The em box on the baseline (hanging glyphs: from their depth to just above the origin).</summary>
@@ -195,6 +196,23 @@ public sealed class ContentInterpreter
         Streams[StreamPath.Root] = new InterpretedStream { Source = source, Ops = ops, Resources = resources };
         var state = new GState { Ctm = pageTransform ?? Affine.Identity };
         Interpret(ops, StreamPath.Root, resources, state, 0);
+        if (pageTransform == null) FindScanLayer(page);
+    }
+
+    /// <summary>The page is a picture of text with a hidden text layer over it (a scan whose text was recognised, here or by
+    /// another program): the hidden text stands for the words in the picture.</summary>
+    public bool IsRecognizedScan { get; private set; }
+
+    /// <summary>The page was found to be one in its own space.</summary>
+    internal void MarkRecognizedScan() => IsRecognizedScan = true;
+
+    void FindScanLayer(PDict page)
+    {
+        int hidden = Glyphs.Count(g => g.RenderMode == 3 && !g.IsClipped && ScannedPdf.ReadableCharacters(g) is > 0);
+        if (hidden < ScannedPdf.MinimumCharacters) return;
+        int drawn = Glyphs.Count(g => g.IsVisible && ScannedPdf.ReadableCharacters(g) is > 0);
+        var facts = ScannedPdf.Facts(this, PdfComposer.Geometry(page).CropBox);
+        IsRecognizedScan = hidden > drawn * 2 && (facts.ImageCoverage >= ScannedPdf.MinimumCoverageWithoutText || facts.Outlines >= ScannedPdf.MinimumOutlines);
     }
 
     public static readonly HashSet<string> PathConstruction = ["m", "l", "c", "v", "y", "re", "h"];

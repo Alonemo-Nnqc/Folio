@@ -9,6 +9,7 @@ enum ItemMenuCommand: Hashable {
     case newMarkdownAttachment
     case addToGroup(String)
     case toggleTag(String), newTag
+    case rename
     case setReadStatus(ReadStatus), setRating(Int)
     case copyCitation(CitationStyleOption)
     case addFiles, retrieve, manualMatch
@@ -66,6 +67,9 @@ enum ItemMenuBuilder {
             if file.isPDF && file.translationOf == nil {
                 entries.append(translateEntry(translating: context.translatingItemIds.contains(file.itemId)))
             }
+            if file.isMarkdown {
+                entries.append(.action(title: String(localized: "重命名"), symbol: "pencil", command: .rename))
+            }
             entries += [
                 .action(title: String(localized: "在 Finder 中显示"), symbol: "folder", command: .revealInFinder),
                 .separator,
@@ -92,11 +96,13 @@ enum ItemMenuBuilder {
                      entries: groupEntries(items: items, scope: context.scope, snapshot: snapshot, groups: groups)),
             .submenu(title: String(localized: "标签"), symbol: "tag", entries: tagEntries(items: items, snapshot: snapshot)),
         ]
-        if allRegular {
+        if items.allSatisfy(snapshot.tracksReading) {
             entries.append(.submenu(title: String(localized: "阅读状态"), symbol: "book", entries: ReadStatus.allCases.map { status in
                 .action(title: status.displayName, symbol: nil, command: .setReadStatus(status),
                         checked: items.allSatisfy { $0.readStatus == status })
             }))
+        }
+        if allRegular {
             entries.append(.submenu(title: String(localized: "评分"), symbol: "star", entries: (0...5).map { value in
                 .action(title: value == 0 ? String(localized: "无评分") : String(repeating: "★", count: value), symbol: nil,
                         command: .setRating(value), checked: items.allSatisfy { $0.rating == value })
@@ -140,6 +146,9 @@ enum ItemMenuBuilder {
         }
         if items.contains(where: { JournalMetrics.journalName(of: $0) != nil }) {
             entries.append(.action(title: String(localized: "刷新期刊指标"), symbol: "chart.bar.xaxis", command: .refreshJournalMetrics))
+        }
+        if let single, single.kind == .standalone, defaultFile(of: single, snapshot)?.isMarkdown == true {
+            entries.append(.action(title: String(localized: "重命名"), symbol: "pencil", command: .rename))
         }
         entries.append(.action(title: String(localized: "在 Finder 中显示"), symbol: "folder", command: .revealInFinder))
         entries.append(.separator)

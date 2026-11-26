@@ -298,6 +298,14 @@ final class TranslationCoordinator {
                     }
                     self.jobs[next.itemId]?.fraction = nil
                     self.jobs[next.itemId]?.stage = String(localized: "正在启动翻译")
+                } else if await model.ocr.hasPagesWithoutText(fileId: next.fileId), !current.cancelled {
+                    // So has a page scanned into a paper that otherwise has text.
+                    self.jobs[next.itemId]?.stage = String(localized: "正在识别扫描页文字")
+                    await model.ocr.recognizeScannedPages(fileId: next.fileId) { [weak self] progress in
+                        self?.jobs[next.itemId]?.fraction = progress.fraction
+                    }
+                    self.jobs[next.itemId]?.fraction = nil
+                    self.jobs[next.itemId]?.stage = String(localized: "正在启动翻译")
                 }
                 try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
                 let service = TranslationServiceCatalog.service(id: serviceID)

@@ -103,6 +103,20 @@ public final class GlossaryStore: @unchecked Sendable {
         }
     }
 
+    /// Terms of another computer's glossary: what the user wrote there replaces what is here for the same source, what a
+    /// model found there is added where nothing is.
+    public func merge(_ others: [GlossaryTerm]) {
+        lock.withLock {
+            var terms = all()
+            for term in others where !term.source.isEmpty && !term.target.isEmpty {
+                if let index = terms.firstIndex(where: { Self.key($0.language) == Self.key(term.language) && Self.same($0.source, term.source) }) {
+                    if term.origin == .user { terms[index] = term }
+                } else { terms.append(term) }
+            }
+            save(terms)
+        }
+    }
+
     public func remove(_ ids: Set<UUID>) {
         lock.withLock { save(all().filter { !ids.contains($0.id) }) }
     }

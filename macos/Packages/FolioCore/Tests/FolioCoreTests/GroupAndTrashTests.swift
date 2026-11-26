@@ -233,3 +233,53 @@ import Testing
         #expect(try lib.item(recent) != nil)
     }
 }
+
+@Suite struct FolderImportTests {
+    private func folder(_ files: [String: String]) throws -> URL {
+        let root = FileManager.default.temporaryDirectory.appending(path: "folio-folder-\(UUID())/论文")
+        for (path, text) in files {
+            let url = root.appending(path: path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(text.utf8).write(to: url)
+        }
+        return root
+    }
+
+    @Test func foldersBecomeGroups() throws {
+        let library = try Library.temporary()
+        let url = try folder(["a.pdf": "a", "笔记.md": "# n", "x.txt": "no", "SAM/b.pdf": "b", "SAM/v2/c.pdf": "c", "空/说明.txt": "no", ".隐藏/d.pdf": "d"])
+        let found = try #require(ImportFolder.scan(url))
+        #expect(found.fileCount == 4 && found.children.map(\.name) == ["SAM"])
+        let first = try library.createGroup(name: "第一"), last = try library.createGroup(name: "最后")
+        let result = try library.importFolder(found, index: 1)
+        let snapshot = try library.snapshot()
+        let top = try #require(result.groupId)
+        #expect(snapshot.topLevelGroups == [first.id, top, last.id])
+        #expect(snapshot.groupsById[top]?.name == "论文")
+        let sam = try #require(snapshot.childGroups[top]?.first), v2 = try #require(snapshot.childGroups[sam]?.first)
+        #expect(snapshot.groupsById[sam]?.name == "SAM" && snapshot.groupsById[v2]?.name == "v2")
+        #expect(result.outcomes.count == 4)
+        #expect(snapshot.items.values.contains { $0.title == "笔记" }, "a Markdown file has no extension in its title")
+        // Once more: the same groups, nothing twice.
+        let again = try library.importFolder(found)
+        #expect(again.groupId == top)
+        #expect(again.outcomes.allSatisfy { if case .duplicateFile = $0 { true } else { false } })
+        #expect(try library.snapshot().groupsById.count == 5)
+    }
+
+    @Test func groupsGoNoDeeperThanTheyMay() throws {
+        let library = try Library.temporary()
+        let found = try #require(ImportFolder.scan(try folder(["1/2/3/4/5/x.pdf": "x", "1/2/y.pdf": "y"])))
+        let parent = try library.createGroup(name: "上级")
+        _ = try library.importFolder(found, parentId: parent.id)
+        let snapshot = try library.snapshot()
+        #expect(snapshot.groupsById.count == 4)
+        #expect(snapshot.groupsById.values.map(\.name).sorted() == ["1", "2", "上级", "论文"].sorted())
+        let deepest = try #require(snapshot.groupsById.values.first { $0.name == "2" })
+        #expect(snapshot.groupDepth(deepest.id) == LibraryGroup.maximumDepth)
+        // On a group of the last level: its files, no group.
+        let more = try #require(ImportFolder.scan(try folder(["z.pdf": "z"])))
+        let result = try library.importFolder(more, parentId: deepest.id)
+        #expect(result.groupId == nil && result.outcomes.count == 1)
+    }
+}

@@ -90,6 +90,92 @@ public sealed class TranslationRenderer(PdfSource source, string language)
 
     enum Layers { All, Base, Overlay }
 
+    /// <summary>Renders of the scanned pages (by page): where the paper's colour comes from. White without one.</summary>
+    public Dictionary<int, ScanPage.Shown> PageRenders { get; init; } = [];
+
+    /// <summary>Where the translated lines of a scan are in its picture, and the colour of the paper there: piece by piece, for
+    /// paper that is not evenly lit. Rules stay. Words on a dark ground get a light translation.</summary>
+    List<(Rect Rect, RGBColor Color)> ScanPatches(PageLayout layout, HashSet<int> blocks)
+    {
+        var crop = layout.CropBox;
+        var shown = PageRenders.GetValueOrDefault(layout.Number);
+        // Points of the layout → pixels of the render.
+        var map = shown == null ? Affine.Identity : layout.Transform.Inverted().Concatenating(shown.Map);
+        double fine = shown == null ? 1 : Math.Sqrt(Math.Abs(map.A * map.D - map.B * map.C));
+        (double R, double G, double B)? Paper(Rect rect)
+        {
+            if (shown == null) return (1, 1, 1);
+            var colors = new List<(double R, double G, double B)>();
+            double step = Math.Max(1 / Math.Max(fine, 0.01), Math.Sqrt(rect.W * rect.H / 1200));
+            for (double y = rect.MinY + step / 2; y < rect.MaxY; y += step)
+                for (double x = rect.MinX + step / 2; x < rect.MaxX; x += step)
+                {
+                    var p = new Pt(x, y).Applying(map);
+                    int px = (int)Math.Floor(p.X), py = (int)Math.Floor(p.Y);
+                    if (px >= 0 && py >= 0 && px < shown.Bitmap.Width && py < shown.Bitmap.Height) colors.Add(shown.Bitmap.Pixel(px, py));
+                }
+            return colors.Count == 0 ? null : ImageText.Median(colors);
+        }
+        var patches = new List<(Rect, RGBColor)>();
+        foreach (var index in blocks.Order())
+            foreach (var line in layout.Blocks[index].Lines)
+                foreach (var area in ScanAreas(line, layout))
+                {
+                    var rect = area.Intersection(crop);
+                    if (rect.IsNull || rect.W <= 0 || rect.H <= 0 || Paper(rect) is not { } whole) continue;
+                    int count = Math.Max(1, (int)(rect.W / Math.Max(line.Size * 3, 18)));
+                    double width = rect.W / count;
+                    for (int n = 0; n < count; n++)
+                    {
+                        var piece = new Rect(rect.MinX + n * width, rect.MinY, width, rect.H);
+                        var (r, g, b) = count == 1 ? whole : Paper(piece.InsetBy(-width * 0.5, -line.Size * 0.25)) ?? whole;
+                        // (A hair over the next one: no seam shows between them.)
+                        patches.Add((n + 1 < count ? new Rect(piece.MinX, piece.MinY, width + 0.3, piece.H) : piece, new RGBColor(r, g, b)));
+                    }
+                    if (0.299 * whole.R + 0.587 * whole.G + 0.114 * whole.B < 0.45)
+                    {
+                        line.Color = new RGBColor(1, 1, 1);
+                        foreach (var c in line.Chars) c.Color = line.Color;
+                    }
+                }
+        return patches;
+    }
+
+    /// <summary>What of a scan's picture goes with a line: from its first word to its last, as high as their ink, up to the rules
+    /// over, under and between them.</summary>
+    public static List<Rect> ScanAreas(LayoutLine line, PageLayout layout)
+    {
+        var rect = Rect.Null;
+        foreach (var run in line.Chars.Where(c => c.Run != null).Select(c => c.Run!.Value).Distinct())
+            if (layout.WordInk.TryGetValue(run, out var ink)) rect = rect.Union(ink);
+        if (rect.IsNull)
+            foreach (var g in line.Chars.SelectMany(c => c.Glyphs))
+                if (g >= 0 && g < layout.Glyphs.Count) rect = rect.Union(layout.Glyphs[g].Box);
+        if (rect.IsNull) return [];
+        // A word read together with what is above or below it does not take that with it.
+        double low = Math.Max(rect.MinY, line.Baseline - line.Size * 0.28), high = Math.Min(rect.MaxY, line.Baseline + line.Size * 1.05);
+        if (high <= low) return [];
+        double bottom = low - line.Size * 0.08, top = high + line.Size * 0.08;
+        double x0 = Math.Min(rect.MinX, line.MinX) - line.Size * 0.14, x1 = Math.Max(rect.MaxX, line.MaxX) + line.Size * 0.14;
+        foreach (var g in layout.Graphics)
+        {
+            if (g.H >= 3.3 || g.W <= line.Size * 2 || g.MinX >= x1 || g.MaxX <= x0) continue;
+            if (g.MidY >= line.Baseline + line.Size * 0.45 && g.MinY < top) top = Math.Max(g.MinY - 0.4, line.Baseline + line.Size * 0.45);
+            if (g.MidY < line.Baseline + line.Size * 0.1 && g.MaxY > bottom) bottom = Math.Min(g.MaxY + 0.4, line.Baseline + line.Size * 0.1);
+        }
+        var areas = new List<Rect> { new(x0, bottom, x1 - x0, top - bottom) };
+        foreach (var g in layout.Graphics)
+        {
+            if (g.W >= 3.3 || g.H <= line.Size * 1.2 || g.MinX <= x0 || g.MaxX >= x1 || g.MinY >= top || g.MaxY <= bottom) continue;
+            areas = areas.SelectMany(area => g.MinX <= area.MinX || g.MaxX >= area.MaxX ? new[] { area } :
+            [
+                new Rect(area.MinX, area.MinY, g.MinX - 0.4 - area.MinX, area.H),
+                new Rect(g.MaxX + 0.4, area.MinY, area.MaxX - g.MaxX - 0.4, area.H),
+            ]).ToList();
+        }
+        return areas.Where(a => a.Width > 0 && a.Height > 0).ToList();
+    }
+
     /// <summary>Renders the pages of <paramref name="layouts"/>. <paramref name="translations"/> maps segment ids to
     /// translated text; segments without one keep their original text (partial previews).</summary>
     public Output Render(List<PageLayout> layouts, List<TextSegment> segments, IReadOnlyDictionary<string, string> translations,
@@ -141,6 +227,23 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                     if (translatedBlocks.Contains(index)) continue;
                     foreach (var line in layout.Blocks[index].Lines) foreach (var c in line.Chars) kept.UnionWith(c.Glyphs);
                 }
+                // The words of a scan are in its picture: paper-coloured patches take them out, one per line. A scan analysed
+                // upright is drawn on as it lies.
+                canvas.Save();
+                bool turned = layout.Transform != Affine.Identity;
+                var back = layout.Transform.Inverted();
+                if (turned)
+                {
+                    var flip = new Affine(1, 0, 0, -1, 0, pageTop);
+                    var m = flip.Concatenating(back).Concatenating(flip);
+                    canvas.Concat(new SKMatrix((float)m.A, (float)m.C, (float)m.Tx, (float)m.B, (float)m.D, (float)m.Ty, 0, 0, 1));
+                }
+                if (layout.IsScan)
+                    foreach (var (patch, color) in ScanPatches(layout, translatedBlocks))
+                    {
+                        using var paint = new SKPaint { Color = new SKColor((byte)(color.R * 255), (byte)(color.G * 255), (byte)(color.B * 255)), Style = SKPaintStyle.Fill };
+                        canvas.DrawRect((float)patch.MinX, (float)(pageTop - patch.MaxY), (float)patch.W, (float)patch.H, paint);
+                    }
                 var planned = new List<(TextSegment Segment, Rect Frame, Typesetter.Plan Plan, string Text)>();
                 foreach (var original in pageSegments)
                 {
@@ -182,7 +285,8 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                 }
                 // Running text is set in stretches of even lines; the rest fills its own space.
                 var flowing = planned.Select(p => new PageFlow.Entry { Block = p.Segment.Block, Frame = p.Frame, Text = p.Text, Formulas = p.Segment.Formulas, Plan = p.Plan }).ToList();
-                var outcome = PageFlow.LayOut(flowing, layout, typesetter);
+                // (In a scan, each block keeps to its own space: what else is in the picture cannot move out of the way.)
+                var outcome = layout.IsScan ? new PageFlow.Outcome() : PageFlow.LayOut(flowing, layout, typesetter);
                 for (int k = 0; k < planned.Count; k++) planned[k] = (planned[k].Segment, flowing[k].Frame, flowing[k].Plan, planned[k].Text);
                 var pitches = HarmonizedPitches(planned.Select(p => (p.Plan, layout.Blocks[p.Segment.Block])).ToList());
                 // Displayed formulas going along with the text around them are drawn again, like the formulas in lines.
@@ -241,6 +345,15 @@ public sealed class TranslationRenderer(PdfSource source, string language)
                         list.AddRange(LinkPlaces.Of(link, block, result.Lines, entry.Plan.FontSize));
                     }
                     Audit?.Record(layout.Number, entry.Segment.Block, placement?.Frame ?? entry.Frame, result, entry.Plan);
+                }
+                canvas.Restore();
+                if (turned)
+                {
+                    // (What else is done with places happens in the page's own space.)
+                    removal.Rects.Clear();
+                    if (linkPlaces.TryGetValue(layout.Number, out var byLink))
+                        foreach (var list in byLink.Values)
+                            for (int k = 0; k < list.Count; k++) list[k] = list[k].Applying(back);
                 }
                 // Figure labels drawn as text: their glyphs leave the page for their translations.
                 var figureTexts = ImageTexts.GetValueOrDefault(layout.Number) ?? [];
@@ -510,7 +623,7 @@ public sealed class TranslationRenderer(PdfSource source, string language)
         double belowTop = obstacles.Where(o => o.MaxY <= lastBaseline + size * 0.2 && o.MaxX > horizontal.MinX && o.MinX < horizontal.MaxX)
             .Select(o => o.MaxY).DefaultIfEmpty(page.MinY).Max();
         double maxExtension = block.Kind == BlockKind.TableCell ? size * 0.2 : Math.Max(block.Pitch * 2, rect.H * 0.5);
-        double bottom = Math.Max(Math.Min(rect.MinY, belowTop + gap), rect.MinY - maxExtension);
+        double bottom = Math.Max(Math.Min(rect.MinY, belowTop + gap), rect.MinY - (layout.IsScan ? size * 0.3 : maxExtension));
         if (belowTop + gap > rect.MinY) bottom = Math.Min(belowTop + gap, lastBaseline - size * 0.25);
         if (block.Lines.Count > 1)
         {

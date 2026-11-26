@@ -1,5 +1,6 @@
 import AppKit
 import FolioCore
+import FolioTranslate
 import PDFKit
 import SwiftUI
 
@@ -75,6 +76,10 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         updateTitle()
         startObserving()
         configureScanBanner()
+        content.readOffer.accept = { [weak self] in
+            guard let self else { return }
+            self.model.setReadStatus(.read, on: [self.itemId])
+        }
     }
 
     // MARK: Scans (OCR-01)
@@ -289,6 +294,14 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             MainActor.assumeIsolated { self?.updateNotesToolbarItems() }
         }
         // The pages keep their scale while the panes beside them slide, and fit the new width at the end.
+        split.onFloatingInspectorMade = { [weak self] panel in
+            guard let self else { return }
+            let menu = NSHostingView(rootView: ItemDocumentsMenu(model: self.model, itemId: self.itemId, choice: self.notesChoice, titleFont: Self.notesMenuFont))
+            let open = FloatingInspector.iconButton("arrow.up.left.and.arrow.down.right", String(localized: "在标签页中打开"), target: self, action: #selector(self.openNotesDocumentInTab(_:)))
+            menu.safeAreaRegions = []
+            panel.setHeader(leading: menu, trailing: FloatingInspector.toolbarItem(open, fixedWidth: 36))
+        }
+        split.onFloatingInspectorChanged = { [weak self] in self?.updateNotesToolbarItems() }
         split.onAnimationBegan = { [weak self] in self?.content.holdScale() }
         split.onAnimationEnded = { [weak self] in self?.content.releaseScale() }
         window?.contentViewController = split
@@ -350,15 +363,22 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             let amount = self.model.settings.backgroundTranslucency
             self.split.translucency = amount
             self.notesPane.backdrop.amount = amount
+            self.split.floatsInspector = self.model.settings.inspectorFloating
             self.content.setTranslucency(amount)
         })
     }
 
     // MARK: Document
 
+    /// Saving annotations would take the text recognised by an earlier version with it (PDFKit before macOS 27).
+    private static func safeToSave(_ data: Data) -> Data {
+        if #available(macOS 27, *) { return data }
+        return OCRTextLayer.safeToSave(data) ?? data
+    }
+
     /// Reads the file into memory (mapped), so atomic saves can replace it underneath safely.
     private func loadDocument() -> Bool {
-        guard let data = try? Data(contentsOf: fileURL, options: .alwaysMapped), let document = PDFDocument(data: data) else {
+        guard let data = try? Data(contentsOf: fileURL, options: .alwaysMapped), let document = PDFDocument(data: Self.safeToSave(data)) else {
             model.toasts.show(String(localized: "无法打开「\(fileURL.lastPathComponent)」：不是有效的 PDF"), systemImage: "exclamationmark.triangle")
             return false
         }
@@ -384,6 +404,11 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     func restorePosition() {
         guard !restoredPosition, let document = pdfView.document else { return }
         restoredPosition = true
+        // Scrolling within a page (down the last one) does not change the page.
+        if let clip = pdfView.documentView?.enclosingScrollView?.contentView {
+            clip.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(scaleChanged(_:)), name: NSView.boundsDidChangeNotification, object: clip)
+        }
         // The notes panel starts hidden unless a saved layout says otherwise. (Setting this before the
         // first layout has no effect.)
         if UserDefaults.standard.object(forKey: "NSSplitView Subview Frames FolioReaderSplit") == nil {
@@ -530,8 +555,40 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         positionTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
+            self?.noteSeenPages()
             self?.savePosition()
         }
+    }
+
+    var offersMarkAsRead: Bool { content.readOffer.isShown }
+    /// Where 标为已读 is in the window (its button is the part of the capsule between the words and the close mark).
+    func readOfferButtonPoint() -> NSPoint? { content.readOfferPoint() }
+    func acceptMarkAsRead() { content.readOffer.accept(); content.readOffer.isShown = false }
+
+    /// The pages of the paper that were on screen for a moment, this time and before.
+    private var seenPages: SeenPages?
+
+    /// The pages on screen now count as seen. At the end of a paper most of which was seen, the reader offers to mark it read:
+    /// jumping to the last page for its references is not reading it.
+    private func noteSeenPages() {
+        guard let document = pdfView.document else { return }
+        if seenPages?.flags.count != document.pageCount {
+            let saved = try? model.library.readingState(fileId: fileId)
+            let known = saved?.pageCount == document.pageCount || saved?.pageCount == nil
+            seenPages = SeenPages(count: document.pageCount, saved: known ? saved?.seenPages : nil, through: saved?.pageIndex)
+        }
+        // Only in a tab that is in front, and only pages that really show: not the top of the next one.
+        guard window?.isVisible == true else { return }
+        let visible = pdfView.visiblePages.filter { page in
+            let box = pdfView.convert(page.bounds(for: pdfView.displayBox), from: page)
+            let shown = box.intersection(pdfView.bounds)
+            return !shown.isNull && (shown.height > box.height * 0.5 || shown.height > pdfView.bounds.height * 0.5)
+        }.map { document.index(for: $0) }
+        for page in visible { seenPages?.insert(page) }
+        guard model.settings.offerMarkAsRead, !content.readOffer.wasOffered, document.pageCount > 1, visible.contains(document.pageCount - 1),
+              seenPages?.reached == document.pageCount - 1, model.snapshot.items[itemId]?.readStatus == .reading else { return }
+        content.readOffer.wasOffered = true
+        content.readOffer.isShown = true
     }
 
     func savePosition() {
@@ -543,8 +600,20 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
         let point = destination?.page === page ? destination!.point : NSPoint(x: 0, y: page.bounds(for: pdfView.displayBox).maxY)
         let state = ReadingState(fileId: fileId, pageIndex: index, pointX: point.x, pointY: point.y,
                                  scale: pdfView.scaleFactor, autoScale: pdfView.autoScales,
-                                 displayMode: pdfView.displayMode.rawValue)
+                                 displayMode: pdfView.displayMode.rawValue,
+                                 pageCount: pdfView.document?.pageCount, seenPages: seenPages?.stored)
+        // Nothing seen for long enough yet (the paper was closed at once): what was known stays.
+        guard seenPages != nil else {
+            var kept = state
+            let saved = try? model.library.readingState(fileId: fileId)
+            kept.pageCount = saved?.pageCount ?? pdfView.document?.pageCount
+            kept.seenPages = saved == nil ? "" : saved?.seenPages
+                ?? SeenPages(count: kept.pageCount ?? 0, through: saved?.pageIndex).stored
+            try? model.library.saveReadingState(kept)
+            return
+        }
         try? model.library.saveReadingState(state)
+        model.reloadReadingProgress()
     }
 
     // MARK: Title and annotation list
@@ -957,7 +1026,7 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     }
 
     private func showNotes() {
-        if notesItem.isCollapsed { split.setCollapsed(notesItem, false) }
+        if !split.isInspectorOpen { split.setInspectorOpen(true) }
         notesFocusRequest += 1
         notesHost.rootView = ReaderNotesPanel(model: model, itemId: itemId, focusRequest: notesFocusRequest, choice: notesChoice)
     }
@@ -1482,7 +1551,8 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
     /// the panel is open.
     func updateNotesToolbarItems() {
         guard let toolbar = window?.toolbar, let notesItem else { return }
-        let open = !notesItem.isCollapsed
+        // Floating, the panel has its menu and its button itself.
+        let open = !notesItem.isCollapsed && !model.settings.inspectorFloating
         for id in [NSToolbarItem.Identifier.readerNotesOpen, .readerNotesDocument] {
             let index = toolbar.items.firstIndex { $0.itemIdentifier == id }
             if !open, let index { toolbar.removeItem(at: index) }
@@ -1650,8 +1720,15 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
 
     /// Shown over the pages while this paper is being translated.
     private let translationHUD = TranslationProgressHUD()
+    func readOfferPoint() -> NSPoint? {
+        guard readOffer.isShown, readOfferHost.bounds.width > 60 else { return nil }
+        return readOfferHost.convert(NSPoint(x: readOfferHost.bounds.maxX - 70, y: readOfferHost.bounds.midY), to: nil)
+    }
     /// 扫描件: the offer to recognise its text, then the progress (OCR-01).
     let scanBanner = ScanBannerState()
+    /// The offer to mark the paper read, at its end.
+    let readOffer = ReadOfferState()
+    private lazy var readOfferHost = ReadOfferHost(rootView: ReadOfferBanner(state: readOffer))
     private lazy var scanBannerHost = ScanBannerHost(rootView: ScanBanner(state: scanBanner))
     private let backdrop: TranslucentBackdrop = {
         let backdrop = TranslucentBackdrop()
@@ -1691,12 +1768,21 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
         for view in [pdfView, parallelView].compactMap({ $0 }) { view.backgroundColor = background }
     }
 
+    func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect, ofDividerAt dividerIndex: Int) -> NSRect {
+        NSRect(x: drawnRect.midX - EdgePointer.reach - 0.5, y: proposedEffectiveRect.minY, width: EdgePointer.reach * 2 + 1, height: proposedEffectiveRect.height)
+    }
+
     override func loadView() {
         splitView.isVertical = true
+        splitView.delegate = self
         splitView.dividerStyle = .thin
         splitView.addArrangedSubview(pdfView)
+        EdgePointer.shared.add(splitView) { [weak self] in
+            guard let self, self.splitView.arrangedSubviews.count > 1 else { return [] }
+            return [NSRect(x: self.splitView.arrangedSubviews[0].frame.maxX - EdgePointer.reach, y: 0, width: EdgePointer.reach * 2 + 1, height: self.splitView.bounds.height)]
+        }
         let container = NSView()
-        for subview in [backdrop, splitView, translationHUD, scanBannerHost] as [NSView] {
+        for subview in [backdrop, splitView, translationHUD, scanBannerHost, readOfferHost] as [NSView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(subview)
         }
@@ -1713,9 +1799,10 @@ final class ReaderContentViewController: NSViewController, NSSplitViewDelegate {
             translationHUD.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             translationHUD.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20),
             translationHUD.leadingAnchor.constraint(greaterThanOrEqualTo: container.leadingAnchor, constant: 20),
-            scanBannerHost.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            scanBannerHost.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            scanBannerHost.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor),
+            scanBannerHost.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            scanBannerHost.topAnchor.constraint(equalTo: container.safeAreaLayoutGuide.topAnchor, constant: 10),
+            readOfferHost.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            readOfferHost.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -18),
         ])
         view = container
     }

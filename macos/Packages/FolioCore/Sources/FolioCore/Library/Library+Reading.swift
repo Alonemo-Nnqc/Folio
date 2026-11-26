@@ -41,6 +41,47 @@ extension Library {
         }
     }
 
+    /// How far each item has been read: the page reached in the file of it read furthest; `lastRead` is of the one read last.
+    /// Items never opened in the reader are not in it.
+    public func readingProgress() throws -> [String: ReadingProgress] {
+        try writer.read { db in
+            var result: [String: ReadingProgress] = [:]
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT file.itemId AS itemId, file.id AS fileId, readingState.pageIndex AS pageIndex, readingState.pageCount AS pageCount,
+                       readingState.seenPages AS seenPages, readingState.dateModified AS date
+                FROM readingState JOIN file ON file.id = readingState.fileId ORDER BY readingState.dateModified
+                """)
+            for row in rows {
+                guard let id: String = row["itemId"], let file: String = row["fileId"], let date: Date = row["date"], let page: Int = row["pageIndex"] else { continue }
+                let count: Int? = row["pageCount"]
+                let reached = count.flatMap { SeenPages(count: $0, saved: row["seenPages"], through: page).reached }
+                var progress = ReadingProgress(pageIndex: reached ?? 0, pageCount: reached == nil ? nil : count, fileId: file, lastRead: date)
+                if let other = result[id], other.fraction > progress.fraction {
+                    progress.pageIndex = other.pageIndex
+                    progress.pageCount = other.pageCount
+                    progress.fileId = other.fileId
+                }
+                result[id] = progress
+            }
+            return result
+        }
+    }
+
+    /// Files last read by a version before 1.6: how many pages they have was not noted.
+    public func filesWithoutPageCount() throws -> [String] {
+        try writer.read { try String.fetchAll($0, sql: "SELECT fileId FROM readingState WHERE pageCount IS NULL") }
+    }
+
+    /// Notes it: the pages up to where the file was left count as read. The date it was read stays.
+    public func setPageCount(_ count: Int, ofFileLastReadBefore16 fileId: String) throws {
+        try writer.write { db in
+            guard var state = try ReadingState.fetchOne(db, key: fileId), state.pageCount == nil else { return }
+            state.pageCount = count
+            state.seenPages = state.seenPages ?? SeenPages(count: count, through: state.pageIndex).stored
+            try state.update(db)
+        }
+    }
+
     public func saveReadingState(_ state: ReadingState) throws {
         try writer.write { db in
             guard try FileRecord.exists(db, key: state.fileId) else { return }

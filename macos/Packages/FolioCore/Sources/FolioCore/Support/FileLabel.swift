@@ -22,7 +22,7 @@ public enum FileLabel {
             return "\(base) · \(madeAt(file, among: alike))"
         }
         return isOriginal(file, among: files, defaultFileId: defaultFileId)
-            ? String(localized: "原文", bundle: .module) : file.fileName
+            ? String(localized: "原文", bundle: .module) : file.isMarkdown ? file.documentName + "." + (file.relativePath as NSString).pathExtension : file.fileName
     }
 
     /// A reader tab's name: what tells the papers and their translations apart when tabs are narrow, so the kind of

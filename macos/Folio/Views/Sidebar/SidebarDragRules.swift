@@ -7,6 +7,8 @@ enum SidebarDragSource: Equatable {
     case group(id: String, height: Int)
     case items(ids: [String], from: ViewScope)
     case files([URL])
+    /// From Finder, with a folder among them: folders become groups.
+    case folders([URL])
 }
 
 /// Where the pointer is, in sidebar terms.
@@ -29,7 +31,10 @@ enum SidebarDropDecision: Equatable {
     case addItems(ids: [String], groupId: String)
     case trashItems([String])
     case tagItems(ids: [String], tagId: String)
+    case setStatus(ids: [String], ReadStatus)
     case importFiles([URL], groupId: String?)
+    /// `index`: among the groups of `parentId` (nil: the top level); nil: after them.
+    case importFolders([URL], parentId: String?, index: Int?)
 }
 
 /// Pure drop rules for the sidebar (SIDE-12, SIDE-17, DND-02/03).
@@ -60,6 +65,8 @@ enum SidebarDragRules {
             return .addItems(ids: ids, groupId: groupId)
         case let (.items(ids, from), .builtin(.trash)):
             return from == .trash ? .reject : .trashItems(ids)
+        case let (.items(ids, from), .builtin(.status(status))):
+            return from == .trash || from == .status(status) ? .reject : .setStatus(ids: ids, status)
         case let (.items(ids, from), .tag(tagId)):
             return from == .trash ? .reject : .tagItems(ids: ids, tagId: tagId)
         case (.items, _):
@@ -71,6 +78,19 @@ enum SidebarDragRules {
         case let (.files(urls), .builtin(scope)) where scope == .all || scope == .unfiled:
             return .importFiles(urls, groupId: nil)
         case (.files, _):
+            return .reject
+
+        // Folders from Finder: as groups, dropped where they are to be, at any level that has room for one more.
+        case let (.folders(urls), .group(groupId, _)):
+            return .importFolders(urls, parentId: groupId, index: nil)
+        case let (.folders(urls), .topLevelGap(index)):
+            return .importFolders(urls, parentId: nil, index: index)
+        case let (.folders(urls), .childGap(parentId, ancestors, index)):
+            guard ancestors.count + 2 <= LibraryGroup.maximumDepth else { return .reject }
+            return .importFolders(urls, parentId: parentId, index: index)
+        case let (.folders(urls), .builtin(scope)) where scope == .all || scope == .unfiled:
+            return .importFolders(urls, parentId: nil, index: nil)
+        case (.folders, _):
             return .reject
         }
     }

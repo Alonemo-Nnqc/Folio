@@ -127,7 +127,8 @@ final class TranslationRenderer {
         if let consumer = CGDataConsumer(data: overlayData as CFMutableData),
            let context = CGContext(consumer: consumer, mediaBox: nil, nil) {
             let typesetter = Typesetter(language: language)
-            for layout in layouts {
+            for analysed in layouts {
+                var layout = analysed
                 var box = layout.mediaBox
                 let info = [kCGPDFContextMediaBox: Data(bytes: &box, count: MemoryLayout<CGRect>.size)] as CFDictionary
                 context.beginPDFPage(info)
@@ -140,6 +141,8 @@ final class TranslationRenderer {
                 for (index, block) in layout.blocks.enumerated() where !translatedBlocks.contains(index) {
                     for line in block.lines { for c in line.chars { kept.formUnion(c.glyphs) } }
                 }
+                // The words of a scan are in its picture: paper-coloured patches take them out, one per line.
+                let patches = layout.isScan ? scanPatches(&layout, blocks: translatedBlocks) : []
                 var planned: [(segment: TextSegment, frame: CGRect, plan: Typesetter.Plan, text: String)] = []
                 for var segment in pageSegments {
                     guard var text = translations[segment.id] else { continue }
@@ -171,7 +174,8 @@ final class TranslationRenderer {
                 }
                 // Running text is set in stretches of even lines; the rest fills its own space.
                 var flowing = planned.map { PageFlow.Entry(block: $0.segment.block, frame: $0.frame, text: $0.text, formulas: $0.segment.formulas, plan: $0.plan) }
-                let outcome = PageFlow.layOut(&flowing, layout: layout, typesetter: typesetter)
+                // (In a scan, each block keeps to its own space: what else is in the picture cannot move out of the way.)
+                let outcome = layout.isScan ? PageFlow.Outcome() : PageFlow.layOut(&flowing, layout: layout, typesetter: typesetter)
                 let placements = outcome.placements
                 for k in planned.indices {
                     planned[k].plan = flowing[k].plan
@@ -205,6 +209,16 @@ final class TranslationRenderer {
                     }
                     transplants[layout.number, default: []].append(Transplant(formula: span, origin: CGPoint(x: span.rect.minX, y: span.baseline + move.dy), scale: 1))
                 }
+                // A scan analysed upright is drawn on as it lies.
+                context.saveGState()
+                let turned = layout.transform != .identity
+                if turned { context.concatenate(layout.transform.inverted()) }
+                for patch in patches {
+                    // (As read from the render: device colours.)
+                    context.setFillColorSpace(CGColorSpaceCreateDeviceRGB())
+                    context.setFillColor([patch.color.r, patch.color.g, patch.color.b, 1])
+                    context.fill(patch.rect)
+                }
                 for (k, entry) in planned.enumerated() {
                     let block = layout.blocks[entry.segment.block]
                     let placement = placements[k]
@@ -228,6 +242,13 @@ final class TranslationRenderer {
                         linkPlaces[layout.number, default: [:]][link] = LinkText.places(of: link, in: block, lines: result.lines, fontSize: entry.plan.fontSize)
                     }
                     audit?.record(page: layout.number, block: entry.segment.block, frame: placement?.frame ?? entry.frame, result: result, plan: entry.plan)
+                }
+                context.restoreGState()
+                if turned {
+                    // (What else is done with places happens in the page's own space.)
+                    removal.rects = []
+                    let back = layout.transform.inverted()
+                    linkPlaces[layout.number] = linkPlaces[layout.number]?.mapValues { $0.map { $0.applying(back) } }
                 }
                 // Figure labels drawn as text: their glyphs leave the page for their translations.
                 for entry in imageText[layout.number] ?? [] where !entry.line.glyphs.isEmpty {
@@ -341,6 +362,84 @@ final class TranslationRenderer {
         return Output(mono: wantMono ? compose(dual: false) : nil, dual: wantDual ? compose(dual: true) : nil,
                       base: auditLayers ? compose(dual: false, layers: .base) : nil,
                       overlay: auditLayers ? compose(dual: false, layers: .overlay) : nil)
+    }
+
+    /// Where the translated lines of a scan are in its picture, and the colour of the paper there: piece by piece, for paper
+    /// that is not evenly lit. Rules stay. Words on a dark ground get a light translation.
+    private func scanPatches(_ layout: inout PageLayout, blocks: Set<Int>) -> [(rect: CGRect, color: RGBColor)] {
+        guard let page = source.page(at: layout.number) else { return [] }
+        let crop = layout.cropBox
+        let scale = min(3, 1800 / max(crop.width, crop.height, 1))
+        guard let raster = ImageText.render(page: page, rect: crop, scale: scale, transform: layout.transform) else { return [] }
+        func paper(_ rect: CGRect) -> (Double, Double, Double)? {
+            let x0 = max(0, Int((rect.minX - crop.minX) * scale)), x1 = min(raster.width - 1, Int((rect.maxX - crop.minX) * scale))
+            let y0 = max(0, Int((crop.maxY - rect.maxY) * scale)), y1 = min(raster.height - 1, Int((crop.maxY - rect.minY) * scale))
+            guard x1 > x0, y1 > y0 else { return nil }
+            var colors: [(Double, Double, Double)] = []
+            let step = max(1, (x1 - x0) * (y1 - y0) / 1200)
+            var n = 0
+            for y in y0...y1 {
+                for x in x0...x1 {
+                    if n % step == 0 { colors.append(raster.pixel(x, y)) }
+                    n += 1
+                }
+            }
+            return ImageText.median(colors)
+        }
+        var patches: [(rect: CGRect, color: RGBColor)] = []
+        for index in blocks.sorted() {
+            for k in layout.blocks[index].lines.indices {
+                let line = layout.blocks[index].lines[k]
+                for area in Self.scanAreas(of: line, in: layout) {
+                    let rect = area.intersection(crop)
+                    guard !rect.isNull, rect.width > 0, rect.height > 0, let whole = paper(rect) else { continue }
+                    let count = max(1, Int(rect.width / max(line.size * 3, 18)))
+                    let width = rect.width / Double(count)
+                    for n in 0..<count {
+                        let piece = CGRect(x: rect.minX + Double(n) * width, y: rect.minY, width: width, height: rect.height)
+                        let (r, g, b) = count == 1 ? whole : paper(piece.insetBy(dx: -width * 0.5, dy: -line.size * 0.25)) ?? whole
+                        // (A hair over the next one: no seam shows between them.)
+                        patches.append((n + 1 < count ? CGRect(x: piece.minX, y: piece.minY, width: width + 0.3, height: piece.height) : piece, RGBColor(r: r, g: g, b: b)))
+                    }
+                    let (r, g, b) = whole
+                    if 0.299 * r + 0.587 * g + 0.114 * b < 0.45 {
+                        layout.blocks[index].lines[k].color = RGBColor(r: 1, g: 1, b: 1)
+                        for c in layout.blocks[index].lines[k].chars.indices { layout.blocks[index].lines[k].chars[c].color = RGBColor(r: 1, g: 1, b: 1) }
+                    }
+                }
+            }
+        }
+        return patches
+    }
+
+    /// What of a scan's picture goes with a line: from its first word to its last, as high as their ink, up to the rules
+    /// over, under and between them.
+    static func scanAreas(of line: LayoutLine, in layout: PageLayout) -> [CGRect] {
+        let runs = Set(line.chars.compactMap(\.run))
+        var rect = CGRect.null
+        for run in runs.sorted() { if let ink = layout.wordInk[run] { rect = rect.union(ink) } }
+        if rect.isNull {
+            for g in line.chars.flatMap(\.glyphs) where layout.glyphs.indices.contains(g) { rect = rect.union(layout.glyphs[g].box) }
+        }
+        guard !rect.isNull else { return [] }
+        // A word read together with what is above or below it does not take that with it.
+        let low = max(rect.minY, line.baseline - line.size * 0.28), high = min(rect.maxY, line.baseline + line.size * 1.05)
+        guard high > low else { return [] }
+        var bottom = low - line.size * 0.08, top = high + line.size * 0.08
+        let x0 = min(rect.minX, line.minX) - line.size * 0.14, x1 = max(rect.maxX, line.maxX) + line.size * 0.14
+        for g in layout.graphics where g.height < 3.3 && g.width > line.size * 2 && g.minX < x1 && g.maxX > x0 {
+            if g.midY >= line.baseline + line.size * 0.45, g.minY < top { top = max(g.minY - 0.4, line.baseline + line.size * 0.45) }
+            if g.midY < line.baseline + line.size * 0.1, g.maxY > bottom { bottom = min(g.maxY + 0.4, line.baseline + line.size * 0.1) }
+        }
+        var areas = [CGRect(x: x0, y: bottom, width: x1 - x0, height: top - bottom)]
+        for g in layout.graphics where g.width < 3.3 && g.height > line.size * 1.2 && g.minX > x0 && g.maxX < x1 && g.minY < top && g.maxY > bottom {
+            areas = areas.flatMap { area -> [CGRect] in
+                guard g.minX > area.minX, g.maxX < area.maxX else { return [area] }
+                return [CGRect(x: area.minX, y: area.minY, width: g.minX - 0.4 - area.minX, height: area.height),
+                        CGRect(x: g.maxX + 0.4, y: area.minY, width: area.maxX - g.maxX - 0.4, height: area.height)]
+            }
+        }
+        return areas.filter { $0.width > 0 && $0.height > 0 }
     }
 
     /// What else goes from a page along with text taken out of `rects` and formulas moved to `transplants`: thin rules
@@ -499,7 +598,7 @@ final class TranslationRenderer {
         let belowTop = obstacles.filter { $0.maxY <= lastBaseline + size * 0.2 && $0.maxX > horizontal.minX && $0.minX < horizontal.maxX }
             .map(\.maxY).max() ?? page.minY
         let maxExtension = block.kind == .tableCell ? size * 0.2 : max(block.pitch * 2, rect.height * 0.5)
-        var bottom = max(min(rect.minY, belowTop + gap), rect.minY - maxExtension)
+        var bottom = max(min(rect.minY, belowTop + gap), rect.minY - (layout.isScan ? size * 0.3 : maxExtension))
         if belowTop + gap > rect.minY { bottom = min(belowTop + gap, lastBaseline - size * 0.25) }
         // Whatever the original's last line got away with, the lines of a translation stay above a rule right under them.
         if block.lines.count > 1 {

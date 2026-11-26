@@ -123,7 +123,7 @@ enum ImageText {
         let vector = layout.map { vectorLabels($0, interpreter: interpreter) } ?? []
         let media = page.getBoxRect(.mediaBox)
         // Words the page draws as text: not read again from the picture under them.
-        let textBoxes = interpreter.glyphs.filter { $0.isVisible && ($0.text?.contains { $0.isLetter || $0.isNumber } ?? false) }.map(\.box)
+        let textBoxes = interpreter.glyphs.filter { ($0.isVisible || interpreter.isRecognizedScan && $0.renderMode == 3 && !$0.isClipped) && ($0.text?.contains { $0.isLetter || $0.isNumber } ?? false) }.map(\.box)
         var pictures: [CGRect] = []
         // In drawing order: the same on every run (pictures merge, and labels are numbered, in this order).
         for (_, image) in interpreter.images.sorted(by: { $0.key < $1.key }) {
@@ -346,7 +346,7 @@ enum ImageText {
         return pictures.filter { $0.width >= 48 && $0.height >= 24 }.map { $0.insetBy(dx: -18, dy: -6).intersection(media) }
     }
 
-    private static func render(page: CGPDFPage, rect: CGRect, scale: Double) -> Raster? {
+    static func render(page: CGPDFPage, rect: CGRect, scale: Double, transform: CGAffineTransform = .identity) -> Raster? {
         let width = Int(rect.width * scale), height = Int(rect.height * scale)
         guard width > 0, height > 0,
               let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
@@ -355,6 +355,7 @@ enum ImageText {
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         context.scaleBy(x: scale, y: scale)
         context.translateBy(x: -rect.minX, y: -rect.minY)
+        context.concatenate(transform)
         context.drawPDFPage(page)
         guard let data = context.data else { return nil }
         // The context's memory runs from the top row.
@@ -1015,7 +1016,7 @@ enum ImageText {
         return result
     }
 
-    private static func median(_ colors: [(Double, Double, Double)]) -> (Double, Double, Double) {
+    static func median(_ colors: [(Double, Double, Double)]) -> (Double, Double, Double) {
         guard !colors.isEmpty else { return (1, 1, 1) }
         func mid(_ values: [Double]) -> Double { values.sorted()[values.count / 2] }
         return (mid(colors.map(\.0)), mid(colors.map(\.1)), mid(colors.map(\.2)))

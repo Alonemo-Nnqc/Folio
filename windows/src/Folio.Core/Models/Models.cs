@@ -225,6 +225,16 @@ public sealed class FileRecord
     public string? TranslatedBy { get; set; }
 
     public string FileName => RelativePath.Split('/').Last();
+
+    /// <summary>What a document is called: its file's name, without the number the folder all files share may have made it need.</summary>
+    public string DocumentName
+    {
+        get
+        {
+            string name = Path.GetFileNameWithoutExtension(FileName), own = Path.GetFileNameWithoutExtension(OriginalName);
+            return own.Length > 0 && name.StartsWith(own + " ", StringComparison.Ordinal) && int.TryParse(name[(own.Length + 1)..], out _) ? own : name;
+        }
+    }
     public bool IsPdf => Path.GetExtension(RelativePath).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
     /// <summary>A Markdown document Folio edits itself (MD-01).</summary>
     public bool IsMarkdown => Path.GetExtension(RelativePath).ToLowerInvariant() is ".md" or ".markdown";
@@ -274,7 +284,44 @@ public sealed class Tag
 
 /// <summary>Where the reader left a file. Stored apart from the snapshot so scrolling never refreshes the list.</summary>
 public sealed record ReadingState(string FileId, int PageIndex, double PointX, double PointY, double Scale, bool AutoScale,
-                                  int DisplayMode, DateTime DateModified);
+                                  int DisplayMode, DateTime DateModified, int? PageCount = null, string? SeenPages = null);
+
+/// <summary>How far a paper has been read: the page reached (0-based, of how many) in the file of it that was read furthest (its
+/// original or one of its translations), and when any of them was last read.</summary>
+public sealed record ReadingProgress(int PageIndex, int? PageCount, string FileId, DateTime LastRead)
+{
+    public double Fraction => PageCount is > 0 and var n ? Math.Min((PageIndex + 1.0) / n, 1) : 0;
+}
+
+/// <summary>The pages of a document that have been on screen, stored as a string of 0 and 1 (as the macOS app stores them).</summary>
+public sealed class SeenPages
+{
+    readonly bool[] _flags;
+
+    /// <summary>saved null: a file last read before 1.6, whose pages up to through count as seen.</summary>
+    public SeenPages(int count, string? saved = null, int? through = null)
+    {
+        _flags = new bool[Math.Max(count, 0)];
+        for (int k = 0; k < _flags.Length; k++) _flags[k] = saved != null ? k < saved.Length && saved[k] == '1' : k <= (through ?? -1);
+    }
+
+    public void Add(int page) { if (page >= 0 && page < _flags.Length) _flags[page] = true; }
+    public int PageCount => _flags.Length;
+    /// <summary>The page reached: the last one seen with at least half of the pages up to it seen. Pages skimmed over do not hold
+    /// it back; a jump ahead (to the references) does not count as reading up to there.</summary>
+    public int? Reached
+    {
+        get
+        {
+            int seen = 0;
+            int? result = null;
+            for (int page = 0; page < _flags.Length; page++)
+                if (_flags[page] && ++seen * 2 >= page + 1) result = page;
+            return result ?? (seen > 0 ? 0 : null);
+        }
+    }
+    public string Stored => string.Concat(_flags.Select(f => f ? '1' : '0'));
+}
 
 /// <summary>What the middle list shows.</summary>
 public abstract record ViewScope
@@ -284,12 +331,15 @@ public abstract record ViewScope
     public sealed record TrashScope : ViewScope;
     public sealed record GroupScope(string Id) : ViewScope;
     public sealed record TagScope(string Id) : ViewScope;
+    /// <summary>阅读: the papers being read, not read yet, or read.</summary>
+    public sealed record StatusScope(ReadStatus Status) : ViewScope;
 
     public static readonly ViewScope All = new AllScope();
     public static readonly ViewScope Unfiled = new UnfiledScope();
     public static readonly ViewScope Trash = new TrashScope();
     public static ViewScope Group(string id) => new GroupScope(id);
     public static ViewScope TagOf(string id) => new TagScope(id);
+    public static ViewScope StatusOf(ReadStatus status) => new StatusScope(status);
 
     /// <summary>Stable key used for per-view ordering and sort persistence.</summary>
     public string Key => this switch
@@ -299,6 +349,7 @@ public abstract record ViewScope
         TrashScope => "trash",
         GroupScope g => $"group:{g.Id}",
         TagScope t => $"tag:{t.Id}",
+        StatusScope s => $"status:{(int)s.Status}",
         _ => "all",
     };
 

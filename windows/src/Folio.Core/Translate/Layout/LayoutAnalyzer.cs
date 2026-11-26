@@ -32,15 +32,34 @@ public sealed partial class LayoutAnalyzer
     double _typicalWidth = double.PositiveInfinity;
     List<Rect> _pageRules = [];
     int _currentPage;
+    /// <summary>The page being analysed is a scan with recognised text.</summary>
+    bool _isScan;
 
     public LayoutAnalyzer(Options? options = null) { Opts = options ?? new Options(); }
 
     // MARK: Document
 
+    /// <summary>The scanned pages read already (with a render of each: their type is measured in it). Without it a scan's words
+    /// come with the sizes they were recognised at.</summary>
+    public Dictionary<int, (ScanPage Scan, ContentInterpreter Interpreter)> Scans { get; init; } = [];
+
+    /// <summary>The pages (1-based) up to through that are scans with recognised text.</summary>
+    public static List<int> RecognizedScans(PdfSource source, int through)
+    {
+        var found = new List<int>();
+        for (int number = 1; number <= Math.Min(through, source.Pages.Count); number++)
+        {
+            var interpreter = new ContentInterpreter();
+            interpreter.Run(source.Pages[number - 1]);
+            if (interpreter.IsRecognizedScan) found.Add(number);
+        }
+        return found;
+    }
+
     /// <summary>Analyses pages (1-based numbers) of the document.</summary>
     public List<PageLayout> Analyze(PdfSource source, IReadOnlyCollection<int> pages)
     {
-        var prepared = new List<(int Number, ContentInterpreter Interpreter, List<PageChar> Chars)>();
+        var prepared = new List<(int Number, ContentInterpreter Interpreter, List<PageChar> Chars, ScanPage? Scan)>();
         var sizeCounts = new Dictionary<double, int>();
         var selected = pages.ToHashSet();
         int through = Math.Min(pages.Count == 0 ? 0 : pages.Max(), source.Pages.Count);
@@ -49,21 +68,34 @@ public sealed partial class LayoutAnalyzer
             if (KnownBodySize != null && !selected.Contains(number)) continue;
             var interpreter = new ContentInterpreter();
             interpreter.Run(source.Pages[number - 1]);
-            var chars = PageText.Characters(source, number, interpreter);
+            ScanPage? scan = null;
+            if (interpreter.IsRecognizedScan)
+            {
+                if (!Scans.TryGetValue(number, out var read)) read = ScanPage.Read(source.Pages[number - 1], interpreter, null);
+                (scan, interpreter) = read;
+            }
+            prepared.Add((number, interpreter, PageText.Characters(source, number, interpreter), scan));
+        }
+        ScanPage.Finish(prepared.Where(p => p.Scan != null).Select(p => (p.Scan!, p.Interpreter)).ToList());
+        // What is drawn as text on a scan (a stamp, a page number) comes after the recognised words.
+        for (int k = 0; k < prepared.Count; k++)
+            if (prepared[k].Scan is { } scan) prepared[k] = prepared[k] with { Chars = [.. scan.Chars, .. prepared[k].Chars] };
+        foreach (var (_, _, chars, _) in prepared)
+        {
             foreach (var c in chars)
             {
                 if (c.IsSpace || c.IsNewline || c.IsRotated) continue;
                 var key = Math.Round(c.Size * 2) / 2;
                 sizeCounts[key] = sizeCounts.GetValueOrDefault(key) + 1;
             }
-            prepared.Add((number, interpreter, chars));
         }
         BodySize = KnownBodySize ?? (sizeCounts.Count == 0 ? 10 : sizeCounts.MaxBy(kv => kv.Value).Key);
         _inReferences = false;
         var result = new List<PageLayout>();
-        foreach (var (number, interpreter, chars) in prepared)
+        _runningLines = RunningLines(prepared.Where(p => p.Scan != null).Select(p => (p.Scan!.Crop, BuildLines(p.Chars, [], pageWidth: p.Scan!.Crop.W))).ToList());
+        foreach (var (number, interpreter, chars, scan) in prepared)
         {
-            var layout = AnalyzePage(number, source.Pages[number - 1], interpreter, chars);
+            var layout = AnalyzePage(number, source.Pages[number - 1], interpreter, chars, scan);
             if (selected.Contains(number)) result.Add(layout);
         }
         return result;
@@ -85,18 +117,29 @@ public sealed partial class LayoutAnalyzer
         }
     }
 
-    public PageLayout AnalyzePage(int number, PDict page, ContentInterpreter interpreter, List<PageChar> rawChars)
+    public PageLayout AnalyzePage(int number, PDict page, ContentInterpreter interpreter, List<PageChar> rawChars, ScanPage? scan = null)
     {
         var geometry = PdfComposer.Geometry(page);
         var media = geometry.MediaBox;
         var crop = geometry.CropBox;
         _currentPage = number;
+        _isScan = interpreter.IsRecognizedScan;
         var chars = rawChars.Select(c => c.Clone()).ToList();
-        InkOnPaper(chars, interpreter);
+        var transform = scan?.Transform ?? Affine.Identity;
+        if (scan != null) crop = scan.Crop;
+        if (!_isScan) InkOnPaper(chars, interpreter);
         MathDetector.Mark(chars);
         var links = PageLinks.Links(page);
+        if (transform != Affine.Identity) links = links.Select(l => l with { Rects = l.Rects.Select(r => r.Applying(transform)).ToList() }).ToList();
         PageLinks.Assign(links, chars, crop);
         var marks = interpreter.Marks.Where(m => !m.IsWhite && m.Rect.W * m.Rect.H < crop.W * crop.H * 0.6).ToList();
+        // A scan is one picture (or strips of one): the words stand on it, they are not a drawing's.
+        // Its rules and drawings are the ones found in the picture.
+        if (interpreter.IsRecognizedScan)
+        {
+            marks.RemoveAll(m => m.Kind is GraphicMark.MarkKind.Image or GraphicMark.MarkKind.Shading || m.HasCurves);
+            marks.AddRange(scan?.Marks ?? []);
+        }
         var lines = BuildLines(chars, [], pageWidth: crop.W);
         var icons = InlineIcons(interpreter, lines);
         if (icons.Count > 0)
@@ -115,16 +158,23 @@ public sealed partial class LayoutAnalyzer
         // close their words come to it.
         var uprights = marks.Where(m => m.Kind is GraphicMark.MarkKind.Fill or GraphicMark.MarkKind.Stroke && !m.IsWhite && m.Rect.W < 2.5 && m.Rect.H > BodySize * 0.8)
             .Select(m => m.Rect).ToList();
-        var frames = TableFrames(rules, lines);
+        var frames = TableFrames(rules, lines, _isScan);
         // Tables ruled only between their columns (and under the header): no second level rule to find them by.
         foreach (var frame in UprightTableFrames(uprights, rules, lines, BodySize))
             if (!frames.Any(f => f.InsetBy(-2, -2).Intersects(frame))) frames.Add(frame);
         var tables = frames.Select(t => TrimCaptions(t, lines)).Where(t => IsTable(t, lines, marks)).ToList();
+        if (_isScan)
+        {
+            foreach (var rect in CaptionedFigures(lines, marks, scan?.Bits ?? [], tables)) marks.Add(ScanPage.MakeMark(GraphicMark.MarkKind.Image, rect, marks.Count));
+            tables.RemoveAll(table => marks.Any(m => m.Kind == GraphicMark.MarkKind.Image && m.Rect.Intersection(table).Area > table.Area * 0.6));
+        }
         var figures = FigureRegions(marks, lines, tables, crop);
         tables.RemoveAll(table => figures.Any(f => f.Intersection(table).Area > table.Area * 0.4));
         var gutters = tables.Select(t => ColumnGutters(t, lines)).ToList();
         var dividers = tables.Select(t => uprights.Where(u => t.InsetBy(-1, -2).Intersects(u)).ToList()).ToList();
-        lines = BuildLines(chars, tables, gutters, crop.W, dividers).Select(MarkScripts).ToList();
+        lines = BuildLines(chars, tables, gutters, crop.W, dividers);
+        // The heights of recognised characters wobble: nothing in them says a character is a script.
+        if (!interpreter.IsRecognizedScan) lines = lines.Select(MarkScripts).ToList();
         JoinWordFractions(lines, marks);
         MarkChips(lines, marks);
         lines = ReadingOrder(lines);
@@ -165,6 +215,9 @@ public sealed partial class LayoutAnalyzer
         var edges = ColumnEdges(lines, columnGutters);
         _pageRules = marks.Where(m => m.Kind != GraphicMark.MarkKind.Image && m.Rect.H < 2.5 && m.Rect.W > 8).Select(m => m.Rect).ToList();
         _columnOf = edges;
+        _pageLines = _isScan ? flat.Where(l => !figures.Any(f => f.InsetBy(-1, -1).Contains(l.Rect.Center))).ToList() : [];
+        _pageBits = scan?.Bits ?? [];
+        var scanned = _isScan ? ScanFormulas(lines, marks, _pageBits, edges) : [];
         var bodyWidths = flat.Where(l => Math.Abs(l.Size - BodySize) < BodySize * 0.12).Select(l => l.InkRect.W).OrderBy(w => w).ToList();
         _typicalWidth = bodyWidths.Count >= 8 ? bodyWidths[bodyWidths.Count * 4 / 5] : double.PositiveInfinity;
         var captionLines = new HashSet<int>();
@@ -199,6 +252,8 @@ public sealed partial class LayoutAnalyzer
         {
             var line = lines[k];
             var center = line.Rect.Center;
+            // Formulas in the lines of a scan are in its picture: there are no glyphs to set again, only words as read.
+            void WordsOnly() { if (interpreter.IsRecognizedScan) foreach (var c in line.Chars) c.IsMath = false; }
             if (line.IsRotated) blocks.Add(new LayoutBlock { Kind = BlockKind.Rotated, Lines = [line] });
             else if (algorithms.Any(a => a.InsetBy(-1, -2).Contains(center)) || (IsAlgorithmStart(line.Text) && algorithms.Any(a => a.InsetBy(-1, -BodySize * 1.6).Contains(center))))
                 blocks.Add(new LayoutBlock { Kind = BlockKind.Code, Lines = [line] });
@@ -207,13 +262,14 @@ public sealed partial class LayoutAnalyzer
             else if (pseudocode.Contains(k)) blocks.Add(new LayoutBlock { Kind = BlockKind.Code, Lines = [line] });
             else if (tables.Any(t => t.InsetBy(-1, -2).Contains(center)))
             {
-                bool translate = Opts.TranslateTables && HasWords(line.Text) && !line.Font.IsMonospace && IsCellText(line.Text);
+                WordsOnly();
+                bool translate = Opts.TranslateTables && HasWords(line.Text) && !line.Font.IsMonospace && IsCellText(line.Text) && (!_isScan || IsReadCell(line.Text));
                 blocks.Add(new LayoutBlock { Kind = BlockKind.TableCell, Lines = [line], Translate = translate });
             }
-            else if (IsMarginal(line, crop, lines)) blocks.Add(new LayoutBlock { Kind = BlockKind.Header, Lines = [line] });
-            else if (IsDisplayMath(line) || equations.Contains(k) || numbers.Any(n => n.InkRect == line.InkRect))
+            else if (IsMarginal(line, crop, lines) || (_isScan && (IsRunningLine(line, crop) || IsTopNote(line, crop, lines)))) blocks.Add(new LayoutBlock { Kind = BlockKind.Header, Lines = [line] });
+            else if (_isScan ? scanned.Contains(k) : IsDisplayMath(line) || equations.Contains(k) || numbers.Any(n => n.InkRect == line.InkRect))
                 blocks.Add(new LayoutBlock { Kind = BlockKind.Formula, Lines = [line] });
-            else flowing.Add(line);
+            else { WordsOnly(); flowing.Add(line); }
         }
         var textBlocks = new List<LayoutBlock>();
         foreach (var line in flowing)
@@ -250,12 +306,13 @@ public sealed partial class LayoutAnalyzer
         blocks.AddRange(textBlocks);
         MergeInterleaved(blocks);
         AbsorbStrays(blocks);
-        MergeTableCells(blocks, tables, rules);
+        MergeTableCells(blocks, tables, rules, _pageBits);
         var graphics = marks.Select(m => m.Rect).Concat(figures).ToList();
         return new PageLayout
         {
             Number = number, MediaBox = media, CropBox = crop, Blocks = blocks, Figures = figures, Tables = tables, Graphics = graphics,
-            Runs = interpreter.Runs, Glyphs = interpreter.Glyphs, Links = links,
+            Runs = interpreter.Runs, Glyphs = interpreter.Glyphs, Links = links, IsScan = interpreter.IsRecognizedScan,
+            Transform = transform, WordInk = scan?.Ink ?? [],
         };
     }
 

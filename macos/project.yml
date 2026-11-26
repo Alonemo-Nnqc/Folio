@@ -137,9 +137,12 @@ targets:
       - path: Folio/App/CitationStyleOption.swift
       - path: Folio/Support/AppKitExtensions.swift
       - path: Folio/Services/CitationService.swift
+      - path: Folio/Services/SettingsPackage.swift
     dependencies:
       - package: FolioCore
         product: FolioCore
+      - package: FolioCore
+        product: FolioTranslate
       - package: FolioCore
         product: FolioCitation
     settings:

@@ -80,13 +80,18 @@ final class ItemListViewController: NSViewController {
             guard let self else { return }
             _ = (self.model.rows, self.model.snapshot, self.model.selectedItemIDs, self.model.selectedFileIDs,
                  self.model.currentSort, self.model.previewExpandRequest, self.model.translations.jobIDs,
-                 self.model.settings.showTranslatedBadge, self.model.multiSelectMode)
+                 self.model.settings.showTranslatedBadge, self.model.multiSelectMode, self.model.settings.showReadingRings)
             self.controller.update()
         })
         // Progress moves several times a second: only the bars of the rows it concerns follow it.
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
             self.controller.updateTranslationProgress(self.model.translations.jobs)
+        })
+        observers.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            _ = self.model.readingProgress
+            self.controller.updateReadingProgress()
         })
         observers.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -169,7 +174,7 @@ struct ItemListOverlay: View {
         ZStack {
             if model.rows.isEmpty { emptyState }
             if model.externalDropCount > 0 {
-                DropOverlay(fileCount: model.externalDropCount)
+                DropOverlay(fileCount: model.externalDropCount, hasFolders: model.externalDropHasFolders)
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.96).combined(with: .opacity))
             }
         }

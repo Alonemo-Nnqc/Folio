@@ -30,12 +30,12 @@ struct NoteEditor: NSViewRepresentable {
 
     func makeCoordinator() -> MarkdownEditorController { MarkdownEditorController() }
 
-    func makeNSView(context: Context) -> NSScrollView {
-        context.coordinator.scrollView
-    }
+    func makeNSView(context: Context) -> MarkdownPane { MarkdownPane(editor: context.coordinator) }
 
-    func updateNSView(_ nsView: NSScrollView, context: Context) {
+    func updateNSView(_ nsView: MarkdownPane, context: Context) {
         let model = self.model, itemId = self.itemId
+        nsView.showsToolbar = model.settings.markdownToolbar
+        context.coordinator.textView.references = { [weak model] in model?.markdownReferences(matching: $0) ?? [] }
         context.coordinator.load(MarkdownSource(
             key: itemId,
             load: { (try? model.library.note(for: itemId)) ?? "" },
@@ -44,7 +44,7 @@ struct NoteEditor: NSViewRepresentable {
         context.coordinator.focus(request: focusRequest)
     }
 
-    static func dismantleNSView(_ nsView: NSScrollView, coordinator: MarkdownEditorController) {
+    static func dismantleNSView(_ nsView: MarkdownPane, coordinator: MarkdownEditorController) {
         coordinator.saveNow()
     }
 }

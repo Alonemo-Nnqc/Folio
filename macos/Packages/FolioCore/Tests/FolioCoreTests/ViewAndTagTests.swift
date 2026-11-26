@@ -41,6 +41,29 @@ import Testing
         #expect(try lib.rows(.trash) == [gone])
     }
 
+    @Test func statusScopesHoldWhatIsReadAndNothingElse() throws {
+        let lib = try Library.temporary()
+        let a = try lib.importItem("A"), b = try lib.importItem("B"), c = try lib.importItem("C"), gone = try lib.importItem("Gone")
+        try lib.updateItem(a) { $0.readStatus = .reading }
+        try lib.updateItem(b) { $0.readStatus = .reading }
+        try lib.updateItem(c) { $0.readStatus = .read }
+        try lib.updateItem(gone) { $0.readStatus = .reading }
+        try lib.trashItems([gone])
+        // A Markdown document is not something to read through; a PDF without metadata is.
+        _ = try lib.createMarkdownDocument(title: "Notes", inGroup: nil)
+        let snapshot = try lib.snapshot()
+        let counts = SidebarCounts.compute(snapshot, includeSubgroupItems: true)
+        #expect(counts[.status(.reading)] == 2 && counts[.status(.read)] == 1 && counts[.status(.unread)] == 0)
+        // The paper read last comes first, until the order is given by hand.
+        var query = ViewQuery(scope: .status(.reading))
+        query.lastRead = [a: Date(timeIntervalSince1970: 4e9), b: Date(timeIntervalSince1970: 3e9)]
+        #expect(ViewResolver.rows(query, in: snapshot) == [a, b])
+        query.lastRead = [a: Date(timeIntervalSince1970: 3e9), b: Date(timeIntervalSince1970: 4e9)]
+        #expect(ViewResolver.rows(query, in: snapshot) == [b, a])
+        try lib.moveItems([a], inScope: .status(.reading), displayedOrder: [b, a], toIndex: 0)
+        #expect(ViewResolver.rows(query, in: try lib.snapshot()) == [a, b])
+    }
+
     @Test func parentGroupIncludesSubgroupItemsWhenEnabled() throws {
         let lib = try Library.temporary()
         let parent = try lib.createGroup(name: "P")
