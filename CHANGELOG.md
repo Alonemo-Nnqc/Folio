@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-26
+
+### 改进
+- 标签页以论文名开头：译文、双语对照用标签上的小图标区分，只有同一篇论文有多份同类译文时才加上翻译服务名；完整标题、作者和译文信息在鼠标悬停时显示。标签很多、很窄时也能看出是哪篇论文。
+
 ## [1.6.0] - 2026-11-25
 
 ### 新增
@@ -273,7 +278,8 @@
 - 中英双语界面（默认跟随系统语言，可在设置中切换），浏览器插件同样支持英文
 - 支持 macOS 14 Sonoma 及以上；在 macOS 26 上使用 Liquid Glass 外观
 
-[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/Alonemo-Nnqc/Folio/compare/v1.3.0...v1.4.0

@@ -25,8 +25,9 @@ public enum FileLabel {
             ? String(localized: "原文", bundle: .module) : file.isMarkdown ? file.documentName + "." + (file.relativePath as NSString).pathExtension : file.fileName
     }
 
-    /// A reader tab's name: what tells the papers and their translations apart when tabs are narrow, so the kind of
-    /// translation comes first and the paper's short title last: SnakeSAM, 译文 · SnakeSAM, 译文 · Google · SnakeSAM.
+    /// A reader tab's name: the paper's short title, which a narrow tab still shows the start of. A translation says what kind
+    /// it is by the tab's icon (`tabSymbol`), and only what tells it from the others of its kind in words: SnakeSAM,
+    /// SnakeSAM · Google, SnakeSAM · DeepSeek. The rest is in the tooltip.
     public static func tabTitle(of file: FileRecord, item: Item?, among files: [FileRecord]) -> String {
         let stem = (file.fileName as NSString).deletingPathExtension
         guard let item else { return stem }
@@ -37,9 +38,18 @@ public enum FileLabel {
         }
         if let kind = file.translationKind {
             let others = files.filter { $0.id != file.id && $0.translationKind == kind }
-            return ([kindName(kind)] + differences(of: file, from: others) + [paper]).joined(separator: " · ")
+            return ([paper] + differences(of: file, from: others)).joined(separator: " · ")
         }
         return isOriginal(file, among: files, defaultFileId: item.defaultFileId) ? paper : stem
+    }
+
+    /// The tab's icon: a translation's kind (nil for the paper's own files).
+    public static func tabSymbol(of file: FileRecord) -> String? {
+        switch file.translationKind {
+        case .mono: "translate"
+        case .dual: "rectangle.split.2x1"
+        case nil: nil
+        }
     }
 
     /// Only what tells a translation from the others of its kind: the service, the model within a service, or the time.
@@ -69,6 +79,7 @@ public enum FileLabel {
     public static func tabToolTip(of file: FileRecord, item: Item?, among files: [FileRecord]) -> String {
         guard let item else { return file.fileName }
         let citation = item.authors.first.map { [$0.family, item.year.map(String.init)].compactMap { $0 }.joined(separator: " ") }
+        // A translation's kind and who made it, which the tab says only by its icon.
         let details = [citation, title(of: file, among: files, defaultFileId: item.defaultFileId)].compactMap { $0 }
         return "\(item.title)\n\(details.joined(separator: " · "))"
     }

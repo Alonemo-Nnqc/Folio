@@ -1,6 +1,6 @@
 import { UpdateButton } from "../ui/update";
 import { useEffect, useRef, useState } from "react";
-import { PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
+import { Columns2, Languages, PanelLeft, PanelRight, Plus, Settings } from "lucide-react";
 import { call, droppedPaths } from "../rpc";
 import { t } from "../i18n";
 import { closeTab, appMenu } from "../commands";
@@ -74,6 +74,9 @@ export function TabBar() {
               ], e.clientX, e.clientY);
             }}>
             <button className="close" title={t("关闭标签页")} onClick={(e) => { e.stopPropagation(); closeTab(tab.key); }}><XSmall /></button>
+            {/* A translation's kind, which the title leaves to it: the paper's name has the room. */}
+            {file?.translationKind === "mono" && <Languages className="tab-kind" size={13} strokeWidth={1.8} aria-label={t("译文")} />}
+            {file?.translationKind === "dual" && <Columns2 className="tab-kind" size={13} strokeWidth={1.8} aria-label={t("双语对照")} />}
             <span className="ellipsis">{titleOf(tab.fileId, tab.note)}</span>
           </div>
         );

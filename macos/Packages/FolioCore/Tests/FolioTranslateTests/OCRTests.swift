@@ -386,6 +386,29 @@ enum ScanSample {
         #expect(interpreter.isRecognizedScan, "and can still be translated")
     }
 
+    /// Locked against changes with an owner password, as downloaded papers and books often are: recognised when copying is
+    /// allowed (and written out without the lock), left alone when it is not. The Windows version does the same.
+    @Test(arguments: [true, false]) func lockedScan(copyable: Bool) async throws {
+        let data = NSMutableData()
+        var box = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let options: [CFString: Any] = [kCGPDFContextOwnerPassword: "owner", kCGPDFContextAllowsCopying: copyable, kCGPDFContextAllowsPrinting: true]
+        let context = CGContext(consumer: CGDataConsumer(data: data as CFMutableData)!, mediaBox: &box, options as CFDictionary)!
+        context.beginPDFPage(nil)
+        context.draw(ScanSample.bitmap(ScanSample.english, size: box.size, jpeg: true), in: box)
+        context.endPDFPage()
+        context.closePDF()
+        let locked = Self.document(data as Data)
+        #expect(locked.isEncrypted && locked.isUnlocked && locked.allowsCopying == copyable)
+        #expect(ScannedPDF.isScanned(locked) == copyable)
+        if copyable {
+            let (result, written, _) = try await ScanRecognitionTests.recognize(data as Data)
+            #expect(!Self.document(written).isEncrypted)
+            #expect(!result.findString("brown fox", withOptions: .caseInsensitive).isEmpty)
+        } else {
+            await #expect(throws: OCRError.encrypted) { try await ScanRecognitionTests.recognize(data as Data) }
+        }
+    }
+
     @Test func slantedWatermarkDoesNotHideTheScan() {
         let scan = Self.adding("BT /F 40 Tf 0.7 0.7 -0.7 0.7 100 200 Tm (FOR LIBRARY USE ONLY SAMPLE COPY) Tj ET", to: ScanSample.pdf([ScanSample.chinese]))
         #expect(ScannedPDF.isScanned(Self.document(scan)))

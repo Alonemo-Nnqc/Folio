@@ -28,29 +28,28 @@ public class LibraryTests
         var dual = TabFile("d", TranslationKind.Dual, "Google", "p");
         List<FileRecord> files = [original, mono, dual];
         Assert.Equal("SnakeSAM", FileLabel.TabTitle(original, item, files));
-        // The kind comes first, so a narrow tab still shows it, then who translated it.
-        Assert.Equal("译文 · Google · SnakeSAM", FileLabel.TabTitle(mono, item, files));
-        Assert.Equal("双语对照 · Google · SnakeSAM", FileLabel.TabTitle(dual, item, files));
+        // The paper first, so a narrow tab still shows which it is; the kind is the tab's icon, the service in its tooltip.
+        Assert.Equal("SnakeSAM", FileLabel.TabTitle(mono, item, files));
+        Assert.Equal("SnakeSAM", FileLabel.TabTitle(dual, item, files));
+        Assert.Contains("双语对照 · Google", FileLabel.TabToolTip(dual, item, files));
         // Several of a kind: the service tells them apart; the same service: the time.
         var other = TabFile("o", TranslationKind.Mono, "DeepSeek", "p");
-        Assert.Equal("译文 · Google · SnakeSAM", FileLabel.TabTitle(mono, item, [.. files, other]));
-        Assert.Equal("译文 · DeepSeek · SnakeSAM", FileLabel.TabTitle(other, item, [.. files, other]));
+        Assert.Equal("SnakeSAM · Google", FileLabel.TabTitle(mono, item, [.. files, other]));
+        Assert.Equal("SnakeSAM · DeepSeek", FileLabel.TabTitle(other, item, [.. files, other]));
         var again = TabFile("a", TranslationKind.Mono, "Google", "p");
         again.DateAdded = mono.DateAdded.AddHours(3);
         Assert.NotEqual(FileLabel.TabTitle(mono, item, [.. files, again]), FileLabel.TabTitle(again, item, [.. files, again]));
-        Assert.StartsWith("译文 · ", FileLabel.TabTitle(again, item, [.. files, again]));
-        Assert.Contains("Google", FileLabel.TabTitle(again, item, [.. files, again]));
-        Assert.EndsWith(" · SnakeSAM", FileLabel.TabTitle(again, item, [.. files, again]));
+        Assert.StartsWith("SnakeSAM · ", FileLabel.TabTitle(again, item, [.. files, again]));
+        Assert.DoesNotContain("Google", FileLabel.TabTitle(again, item, [.. files, again]));
         // Within one service, the model; the same service and model, the time, and nothing that is the same for all.
         var low = TabFile("l", TranslationKind.Dual, "Agent · low", "p");
         var high = TabFile("h", TranslationKind.Dual, "Agent · high", "p");
-        Assert.Equal("双语对照 · Agent · low · SnakeSAM", FileLabel.TabTitle(low, item, [original, low, high]));
+        Assert.Equal("SnakeSAM · low", FileLabel.TabTitle(low, item, [original, low, high]));
         var later = TabFile("t", TranslationKind.Dual, "Agent · low", "p");
         later.DateAdded = low.DateAdded.AddHours(3);
         var timed = FileLabel.TabTitle(later, item, [original, low, later]);
-        Assert.StartsWith("双语对照 · ", timed);
-        Assert.EndsWith(" · SnakeSAM", timed);
-        Assert.Contains("Agent", timed);
+        Assert.StartsWith("SnakeSAM · ", timed);
+        Assert.DoesNotContain("Agent", timed);
         Assert.DoesNotContain("low", timed);
         Assert.NotEqual(timed, FileLabel.TabTitle(low, item, [original, low, later]));
         // Another file of the paper keeps its own name.
@@ -178,7 +177,7 @@ public class LibraryTests
         var scan = TabFile("scan");
         var translated = TabFile("scan（译文）", TranslationKind.Mono, null, "scan");
         Assert.Equal("scan", FileLabel.TabTitle(scan, item, [scan, translated]));
-        Assert.Equal("译文 · scan", FileLabel.TabTitle(translated, item, [scan, translated]));
+        Assert.Equal("scan", FileLabel.TabTitle(translated, item, [scan, translated]));
         Assert.Equal("scan", FileLabel.TabTitle(scan, null, []));
     }
 

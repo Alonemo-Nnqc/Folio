@@ -251,6 +251,8 @@ public static partial class AnnotationWriter
     internal static void AddTextLayers(string path, IReadOnlyDictionary<int, OcrPageResult> layers)
     {
         if (layers.Count == 0 || layers.Values.All(l => l.Lines.Count == 0)) return;
+        // Locked against changes (an owner password): written out whole without it first, as the Mac writes every recognised file.
+        if (ScannedPdf.IsEncrypted(path)) File.WriteAllBytes(path, ScannedPdf.Decrypted(path));
         // What an earlier recognition left that nobody can read goes.
         var cleaned = new Dictionary<int, byte[]>();
         using (var source = PdfSource.Open(path))
@@ -417,7 +419,7 @@ public static class ScannedPdf
         try
         {
             using var source = PdfSource.Open(path);
-            if (source.Document.IsEncrypted) return false;
+            if (!CanRead(source)) return false;
             int looked = 0, scanned = 0;
             foreach (var number in Sample(source.Pages.Count))
             {
@@ -429,6 +431,48 @@ public static class ScannedPdf
             return scanned > 0 && scanned * 2 >= looked;
         }
         catch { return false; }
+    }
+
+    /// <summary>Open to us: not encrypted, or encrypted with no password to open it and copying allowed (a file locked against changes:
+    /// many downloaded papers and books are), as the Mac's.</summary>
+    public static bool CanRead(PdfSource source)
+    {
+        if (source.Document.Structure.CrossReferenceTable.Trailer.EncryptionToken is not { } token) return true;
+        return source.Resolve(token) is DictionaryToken encryption && encryption.TryGet(NameToken.Create("P"), out NumericToken? permissions)
+            && ((long)permissions.Double & 16) != 0;
+    }
+
+    public static bool IsEncrypted(string path)
+    {
+        using var source = PdfSource.Open(path);
+        return source.Document.Structure.CrossReferenceTable.Trailer.EncryptionToken != null;
+    }
+
+    /// <summary>The document written out whole, without its encryption: pages (with what they inherit), annotations, outline,
+    /// destinations, forms and info.</summary>
+    public static byte[] Decrypted(string path)
+    {
+        using var source = PdfSource.Open(path);
+        var writer = new PdfWriter();
+        var copier = new PdfCopier(writer, source);
+        int pagesNode = writer.Reserve();
+        var objects = source.Pages.Select(page => copier.PageMap[page.Key] = writer.Reserve()).ToList();
+        HashSet<string> inherited = ["Parent", "Resources", "MediaBox", "CropBox", "Rotate"];
+        for (int i = 0; i < objects.Count; i++)
+        {
+            var page = source.Pages[i];
+            var entries = copier.Entries(page, inherited);
+            entries["Parent"] = PdfValue.Ref(pagesNode);
+            foreach (var key in new[] { "Resources", "MediaBox", "CropBox", "Rotate" })
+                if (page.Inherited(key) is { } value) entries[key] = copier.Copy(value);
+            writer.Set(objects[i], PdfValue.Dict(entries));
+        }
+        writer.Set(pagesNode, PdfValue.Dict(new() { ["Type"] = PdfValue.Name("Pages"), ["Kids"] = PdfValue.Array(objects.Select(PdfValue.Ref)), ["Count"] = PdfValue.Int(objects.Count) }));
+        var catalog = source.Catalog is { } root ? copier.Entries(root, new HashSet<string> { "Type", "Pages" }) : [];
+        catalog["Type"] = PdfValue.Name("Catalog");
+        catalog["Pages"] = PdfValue.Ref(pagesNode);
+        int? info = source.Trailer.Dict("Info") is { } dict ? writer.Add(PdfValue.Dict(copier.Entries(dict))) : null;
+        return writer.Finish(writer.Add(PdfValue.Dict(catalog)), info);
     }
 
     /// <summary>Pages spread over the document: the first three, then evenly to the last.</summary>
@@ -477,6 +521,7 @@ public static class ScannedPdf
     public static List<int> PagesNeedingOcr(string path, bool force = false)
     {
         using var source = PdfSource.Open(path);
+        if (!CanRead(source)) throw new InvalidOperationException(Loc.S("PDF 已加密或受密码保护，无法识别文字。"));
         var facts = source.Pages.Select(Facts).ToList();
         var pages = Enumerable.Range(1, facts.Count).Where(n => facts[n - 1].NeedsOcr && !Reads(source, n, facts[n - 1])).ToList();
         if (pages.Count == 0 && force) pages = Enumerable.Range(1, facts.Count).Where(n => facts[n - 1].ImageCoverage >= 0.1).ToList();

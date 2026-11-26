@@ -142,6 +142,52 @@ public class OcrTextLayerTests
         Assert.StartsWith("EA3F30BF2BAE38C4", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(OcrTextLayer.TrueType)));
     }
 
+    static string Fixture(string name)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"folio-{Guid.NewGuid():N}.pdf");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Fixtures", name), path);
+        return path;
+    }
+
+    /// <summary>Locked against changes with an owner password (as downloaded papers and books often are), copying allowed: a scan
+    /// like any other. Written out whole without the lock, as on the Mac.</summary>
+    [Fact]
+    public void LockedScanIsRecognised()
+    {
+        var path = Fixture("scan-locked-copyable.pdf");
+        try
+        {
+            Assert.True(ScannedPdf.IsEncrypted(path));
+            Assert.True(ScannedPdf.IsScanned(path));
+            Assert.Equal([1], ScannedPdf.PagesNeedingOcr(path));
+            OcrTextLayer.Write(path, new Dictionary<int, OcrPageResult> { [1] = Result(1) });
+            Assert.False(ScannedPdf.IsEncrypted(path));
+            using (var pdf = PdfDocument.Open(path))
+            {
+                Assert.Equal(1, pdf.NumberOfPages);
+                Assert.Contains("Hello world", pdf.GetPage(1).Text.Replace("  ", " "));
+                Assert.Contains("扫描件识别", pdf.GetPage(1).Text);
+                Assert.True(pdf.GetPage(1).GetImages().Any(), "the scan is still there");
+            }
+            // (A dozen characters of it: the scan is still one, by the count, until a real recognition fills it.)
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>Copying not allowed: its text is not taken out of it.</summary>
+    [Fact]
+    public void LockedScanThatMayNotBeCopiedIsLeftAlone()
+    {
+        var path = Fixture("scan-locked.pdf");
+        try
+        {
+            Assert.False(ScannedPdf.IsScanned(path));
+            var error = Assert.Throws<InvalidOperationException>(() => ScannedPdf.PagesNeedingOcr(path));
+            Assert.Contains("加密", error.Message);
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public void UnreadableLayerIsReplaced()
     {

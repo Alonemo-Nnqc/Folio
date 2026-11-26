@@ -18,6 +18,7 @@ import Foundation
 ///   -FolioPreviewDrop    <file count>            shows the Finder drop overlay
 ///   -FolioPreviewToast   <text>
 ///   -FolioPreviewOpenReader <title prefix>      opens that item's PDF in a reader tab
+///   -FolioPreviewOpenFiles <prefix>[|<prefix>] opens every PDF of those items in reader tabs
 ///   -FolioTranslateSelfTest <log>               with Select: translate page 1 via the real coordinator
 ///   -FolioPreviewParallel YES                   with OpenReader: turn on 对照阅读
 ///   -FolioPreviewReaderSidebar <tab>            with OpenReader: the sidebar on thumbnails | outline | annotations | search
@@ -192,6 +193,25 @@ enum PreviewHooks {
         if let pane = defaults.string(forKey: "FolioPreviewSettings") {
             AppDelegate.shared.showSettings(nil)
             AppDelegate.shared.settingsWindow?.select(pane: pane)
+        }
+        // `-FolioPreviewOpenFiles <title prefix>[|<title prefix>…]`: every PDF of those items in tabs (their names side by side).
+        if let prefixes = defaults.string(forKey: "FolioPreviewOpenFiles") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                for prefix in prefixes.split(separator: "|") {
+                    guard let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }) else { continue }
+                    for file in s.files(of: item.id) where file.isPDF { model.open(fileId: file.id, mode: .reader) }
+                }
+                // `-FolioPreviewTabLog <path>`: the tabs as they are named, and the icon beside each.
+                if let log = defaults.string(forKey: "FolioPreviewTabLog") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                        let tabs = (AppDelegate.shared.libraryWindowController.window?.tabbedWindows ?? []).map { window in
+                            let icon = (window.tab.accessoryView as? NSImageView)?.image?.accessibilityDescription ?? "-"
+                            return "\(window.tab.title) [\(icon)] {\(window.tab.toolTip?.replacingOccurrences(of: "\n", with: " / ") ?? "")}"
+                        }
+                        try? tabs.joined(separator: "\n").write(toFile: log, atomically: true, encoding: .utf8)
+                    }
+                }
+            }
         }
         if let prefix = defaults.string(forKey: "FolioPreviewOpenReader"),
            let item = s.items.values.first(where: { $0.title.hasPrefix(prefix) }), let file = model.defaultFile(of: item.id) {
