@@ -231,20 +231,22 @@ extension FileLabelTests {
         let dual = tabFile("d", kind: .dual, by: "Google", of: "p")
         let files = [original, mono, dual]
         #expect(FileLabel.tabTitle(of: original, item: item, among: files) == "SnakeSAM")
-        // The kind comes first, so a narrow tab still shows it.
-        #expect(FileLabel.tabTitle(of: mono, item: item, among: files) == "Translation · SnakeSAM")
-        #expect(FileLabel.tabTitle(of: dual, item: item, among: files) == "Bilingual · SnakeSAM")
+        // The paper first, so a narrow tab still shows which it is; the kind is the icon.
+        #expect(FileLabel.tabTitle(of: mono, item: item, among: files) == "SnakeSAM")
+        #expect(FileLabel.tabTitle(of: dual, item: item, among: files) == "SnakeSAM")
+        #expect(FileLabel.tabSymbol(of: mono) == "translate" && FileLabel.tabSymbol(of: dual) == "rectangle.split.2x1" && FileLabel.tabSymbol(of: original) == nil)
+        #expect(FileLabel.tabToolTip(of: dual, item: item, among: files).contains("Bilingual · Google"))
         // Several of a kind: the service tells them apart.
         let other = tabFile("o", kind: .mono, by: "DeepSeek", of: "p")
-        #expect(FileLabel.tabTitle(of: mono, item: item, among: files + [other]) == "Translation · Google · SnakeSAM")
-        #expect(FileLabel.tabTitle(of: other, item: item, among: files + [other]) == "Translation · DeepSeek · SnakeSAM")
+        #expect(FileLabel.tabTitle(of: mono, item: item, among: files + [other]) == "SnakeSAM · Google")
+        #expect(FileLabel.tabTitle(of: other, item: item, among: files + [other]) == "SnakeSAM · DeepSeek")
         // Within one service, the model; the same service and model, the time, and nothing that is the same for all.
         let low = tabFile("l", kind: .dual, by: "Agent · low", of: "p"), high = tabFile("h", kind: .dual, by: "Agent · high", of: "p")
-        #expect(FileLabel.tabTitle(of: low, item: item, among: [original, low, high]) == "Bilingual · low · SnakeSAM")
+        #expect(FileLabel.tabTitle(of: low, item: item, among: [original, low, high]) == "SnakeSAM · low")
         var later = tabFile("t", kind: .dual, by: "Agent · low", of: "p")
         later.dateAdded = low.dateAdded.addingTimeInterval(3 * 3600)
         let timed = FileLabel.tabTitle(of: later, item: item, among: [original, low, later])
-        #expect(timed.hasPrefix("Bilingual · ") && timed.hasSuffix(" · SnakeSAM") && !timed.contains("Agent") && !timed.contains("low"))
+        #expect(timed.hasPrefix("SnakeSAM · ") && !timed.contains("Agent") && !timed.contains("low"))
         #expect(timed != FileLabel.tabTitle(of: low, item: item, among: [original, low, later]))
         // Another file of the paper keeps its own name.
         let supplement = tabFile("Supplement")
@@ -256,7 +258,7 @@ extension FileLabelTests {
         let scan = tabFile("scan")
         let translated = tabFile("scan（译文）", kind: .mono, of: "scan")
         #expect(FileLabel.tabTitle(of: scan, item: item, among: [scan, translated]) == "scan")
-        #expect(FileLabel.tabTitle(of: translated, item: item, among: [scan, translated]) == "Translation · scan")
+        #expect(FileLabel.tabTitle(of: translated, item: item, among: [scan, translated]) == "scan")
         #expect(FileLabel.tabTitle(of: scan, item: nil, among: []) == "scan")
     }
 

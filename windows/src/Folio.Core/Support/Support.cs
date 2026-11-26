@@ -434,8 +434,9 @@ public static class FileLabel
         return IsOriginal(file, files, defaultFileId) ? Loc.S("原文") : file.IsMarkdown ? file.DocumentName + Path.GetExtension(file.RelativePath) : file.FileName;
     }
 
-    /// <summary>A reader tab's name: what tells the papers and their translations apart when tabs are narrow, so the kind of
-    /// translation comes first and the paper's short title last: SnakeSAM, 译文 · Google · SnakeSAM, 双语对照 · DeepSeek · SnakeSAM.</summary>
+    /// <summary>A reader tab's name: the paper's short title, which a narrow tab still shows the start of. A translation says what
+    /// kind it is by the tab's icon, and only what tells it from the others of its kind in words: SnakeSAM, SnakeSAM · Google,
+    /// SnakeSAM · DeepSeek. The rest is in the tooltip (as the Mac's).</summary>
     public static string TabTitle(FileRecord file, Item? item, IReadOnlyList<FileRecord> files)
     {
         var stem = Path.GetFileNameWithoutExtension(file.FileName);
@@ -446,7 +447,7 @@ public static class FileLabel
         if (file.TranslationKind is { } kind)
         {
             var others = files.Where(f => f.Id != file.Id && f.TranslationKind == kind).ToList();
-            return string.Join(" · ", [KindName(kind), .. Differences(file, others), paper]);
+            return string.Join(" · ", [paper, .. Differences(file, others)]);
         }
         return IsOriginal(file, files, item.DefaultFileId) ? paper : stem;
     }
@@ -463,8 +464,7 @@ public static class FileLabel
         var sameService = others.Where(f => Parts(f).Service == own.Service).ToList();
         var sameModel = sameService.Where(f => Parts(f).Model == own.Model).ToList();
         var result = new List<string>();
-        // Who translated it is always worth seeing (on Windows the tab is all a reader shows); the model and the time only to tell it from the others.
-        if (own.Service.Length > 0) result.Add(own.Service);
+        if (sameService.Count < others.Count && own.Service.Length > 0) result.Add(own.Service);
         if (sameModel.Count < sameService.Count && own.Model.Length > 0) result.Add(own.Model);
         if (sameModel.Count > 0) result.Add(MadeAt(file, sameModel));
         return result;

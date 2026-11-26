@@ -634,6 +634,17 @@ final class ReaderWindowController: FolioWindowController, NSToolbarDelegate, NS
             let files = model.snapshot.files(of: itemId)
             window.tab.title = FileLabel.tabTitle(of: file, item: item, among: files)
             window.tab.toolTip = FileLabel.tabToolTip(of: file, item: item, among: files)
+            // A translation's kind, which the title leaves to it: the paper's name has the room.
+            if let symbol = FileLabel.tabSymbol(of: file) {
+                let icon = (window.tab.accessoryView as? NSImageView) ?? NSImageView()
+                icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: file.translationKind.map(FileLabel.kindName))?
+                    .withSymbolConfiguration(.init(pointSize: 11, weight: .medium))
+                icon.contentTintColor = .secondaryLabelColor
+                icon.toolTip = window.tab.toolTip
+                if window.tab.accessoryView !== icon { window.tab.accessoryView = icon }
+            } else if window.tab.accessoryView != nil {
+                window.tab.accessoryView = nil
+            }
         } else {
             window.tab.title = fileURL.lastPathComponent
             window.tab.toolTip = window.title
